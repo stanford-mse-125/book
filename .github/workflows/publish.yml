@@ -18,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -41,13 +41,34 @@ jobs:
             quarto convert "$f" --output "notebooks/${f%.qmd}.ipynb"
           done
 
-      - name: Fix notebook DATA_DIR for Colab
+      - name: Fix notebooks for Colab (DATA_DIR, YAML frontmatter)
         run: |
           python3 - << 'PYEOF'
-          import json, glob, os
+          import json, glob, os, yaml
+
           for nb_path in sorted(glob.glob("notebooks/lec*.ipynb")):
               with open(nb_path) as f:
                   nb = json.load(f)
+
+              # --- Fix YAML frontmatter in first cell → markdown heading ---
+              if nb["cells"] and nb["cells"][0]["cell_type"] == "markdown":
+                  src = "".join(nb["cells"][0]["source"])
+                  if src.startswith("---"):
+                      parts = src.split("---", 2)
+                      if len(parts) >= 3:
+                          fm_text = parts[1]
+                          remainder = parts[2].strip()
+                          try:
+                              fm = yaml.safe_load(fm_text)
+                          except yaml.YAMLError:
+                              fm = {}
+                          title = fm.get("title", "")
+                          heading = f"# {title}" if title else ""
+                          new_src = heading + ("\n\n" + remainder if remainder else "") + "\n"
+                          nb["cells"][0]["source"] = [new_src]
+                          print(f"  Converted frontmatter to heading in {os.path.basename(nb_path)}")
+
+              # --- Fix DATA_DIR for Colab ---
               for cell in nb["cells"]:
                   if cell["cell_type"] == "code":
                       cell["source"] = [
@@ -55,6 +76,7 @@ jobs:
                                .replace("pd.read_csv(f'{DATA_DIR}/", "pd.read_csv(f'{DATA_DIR}/")
                           for line in cell["source"]
                       ]
+
               with open(nb_path, "w") as f:
                   json.dump(nb, f, indent=1)
               print(f"  Patched {os.path.basename(nb_path)}")
@@ -79,7 +101,7 @@ jobs:
         run: cp -r notebooks _book/notebooks
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: _book
 
