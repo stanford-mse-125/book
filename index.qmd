@@ -20,8 +20,6 @@ This online textbook accompanies MS&E 125. Each chapter is a self-contained lect
 
 The course has three acts:
 
-1. **Data + Models** (Lectures 1--7): From raw data to regression, with linear algebra as the foundation.
-2. **Inference + Testing** (Lectures 8--12): What can we actually conclude? Sampling, bootstrap, hypothesis tests, and the multiple testing trap.
-3. **Complex Models + Special Topics** (Lectures 13--17): Classification, PCA, clustering, backtesting, and the future of data analysis with AI.
-
-Plus a standalone unit on **Causal Inference** (Lectures 18--19).
+1. **Build Models** (Lectures 1--7): From raw data to regression and random forests, with linear algebra as the foundation.
+2. **Trust Models** (Lectures 8--13): What can we actually conclude? Bootstrap, permutation tests, hypothesis testing, and classification.
+3. **See Further** (Lectures 14--19): PCA, clustering, backtesting, AI tools, and causal inference.
