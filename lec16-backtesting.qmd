@@ -1,0 +1,590 @@
+---
+title: "Lecture 16: Backtesting and Time Series Validation"
+execute:
+  enabled: true
+jupyter: python3
+---
+
+You build a model to predict tomorrow's air quality. It scores R² = 0.85 on your test set. You deploy it. It's terrible. *What happened?*
+
+The problem isn't your model — it's how you evaluated it. When data has a **temporal structure**, the standard random train/test split silently lies to you. Today we'll see exactly how, quantify the damage, and learn the right way to validate time series models.
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score, mean_absolute_error
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['font.size'] = 12
+
+DATA_DIR = 'data'
+```
+
+## Air quality in California
+
+The EPA publishes daily Air Quality Index (AQI) measurements for every U.S. county. AQI measures how polluted the air is — 0 is pristine, 50 is "good," and anything above 150 is "unhealthy." In California, wildfire smoke can push AQI into the thousands.
+
+Let's load four years of data and focus on a few counties with good coverage.
+
+```{python}
+# Load all four years of EPA data, filtered to California
+dfs = []
+for year in range(2021, 2025):
+    df_year = pd.read_csv(f'{DATA_DIR}/epa-air-quality/daily_aqi_by_county_{year}.csv')
+    df_year = df_year[df_year['State Name'] == 'California']
+    dfs.append(df_year)
+
+aqi = pd.concat(dfs, ignore_index=True)
+aqi['Date'] = pd.to_datetime(aqi['Date'])
+aqi = aqi.sort_values(['county Name', 'Date']).reset_index(drop=True)
+
+print(f"California records: {len(aqi):,}")
+print(f"Counties: {aqi['county Name'].nunique()}")
+print(f"Date range: {aqi['Date'].min().date()} to {aqi['Date'].max().date()}")
+```
+
+```{python}
+# Pick 3 counties with good daily coverage and interesting patterns
+counties = ['Los Angeles', 'Sacramento', 'Mono']
+aqi_sub = aqi[aqi['county Name'].isin(counties)].copy()
+
+# Check coverage
+for county in counties:
+    n = aqi_sub[aqi_sub['county Name'] == county].shape[0]
+    print(f"{county}: {n} daily observations")
+```
+
+### What does air quality look like over time?
+
+Before modeling anything, let's look at the data. Notice the **seasonal pattern** — summer and fall have worse air quality (wildfire season). And notice the **spikes**: these are smoke events that dwarf normal variation.
+
+```{python}
+fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+
+for ax, county in zip(axes, counties):
+    county_data = aqi_sub[aqi_sub['county Name'] == county]
+    ax.plot(county_data['Date'], county_data['AQI'], linewidth=0.5, alpha=0.8)
+    ax.set_ylabel('AQI')
+    ax.set_title(f'{county} County')
+    ax.axhline(y=150, color='red', linestyle='--', alpha=0.5, label='Unhealthy threshold')
+    ax.legend(loc='upper right')
+
+axes[-1].set_xlabel('Date')
+fig.suptitle('Daily AQI in California Counties (2021–2024)', fontsize=14, y=1.01)
+plt.tight_layout()
+plt.show()
+```
+
+Mono County is wild — AQI values above 1,000 (and once above 8,000!) from extreme dust storms near Mono Lake. Los Angeles and Sacramento show the typical California pattern: seasonal wildfire spikes layered on top of baseline urban pollution.
+
+This is **non-stationary** data — the mean and variance change over time, and extreme events (wildfire spikes) appear unpredictably. This is a concept we haven't seen before in the course; we'll explore why it matters throughout this lecture.
+
+## Building a prediction model
+
+Let's try to predict tomorrow's AQI. A natural approach: use **lag features** — yesterday's AQI, the 7-day average, etc. This is just the feature engineering from Lecture 6, applied to time.
+
+We'll focus on Los Angeles for a clean demonstration.
+
+```{python}
+# Work with Los Angeles
+la = aqi_sub[aqi_sub['county Name'] == 'Los Angeles'][['Date', 'AQI']].copy()
+la = la.sort_values('Date').reset_index(drop=True)
+
+# Create lag features
+la['aqi_lag1'] = la['AQI'].shift(1)       # yesterday
+la['aqi_lag7_avg'] = la['AQI'].rolling(7).mean().shift(1)  # 7-day average (as of yesterday)
+la['aqi_lag3_avg'] = la['AQI'].rolling(3).mean().shift(1)  # 3-day average
+la['day_of_year'] = la['Date'].dt.dayofyear  # seasonality feature
+
+# Drop rows with NaN from lagging
+la = la.dropna().reset_index(drop=True)
+print(f"LA dataset: {len(la)} days with features")
+la.head(10)
+```
+
+## The naive mistake: random train/test split
+
+In Lecture 7, we used random train/test splits and k-fold cross-validation. That worked because the data had no temporal structure. Here, it doesn't.
+
+Here's what most tutorials (and most AI tools) would do — randomly shuffle the data and split 80/20. Let's see how well it works.
+
+```{python}
+# Random 80/20 split -- THE NAIVE APPROACH
+np.random.seed(42)
+features = ['aqi_lag1', 'aqi_lag7_avg', 'aqi_lag3_avg', 'day_of_year']
+
+mask = np.random.rand(len(la)) < 0.8
+train_naive = la[mask]
+test_naive = la[~mask]
+
+model_naive = LinearRegression()
+model_naive.fit(train_naive[features], train_naive['AQI'])
+
+pred_naive = model_naive.predict(test_naive[features])
+r2_naive = r2_score(test_naive['AQI'], pred_naive)
+mae_naive = mean_absolute_error(test_naive['AQI'], pred_naive)
+
+print(f"Random split results:")
+print(f"  R-squared = {r2_naive:.3f}")
+print(f"  MAE = {mae_naive:.1f}")
+print(f"  Train size: {len(train_naive)}, Test size: {len(test_naive)}")
+print()
+print("Looks great! Ship it?")
+```
+
+R² around 0.85 and a low MAE — this looks like a strong model. But there's a hidden problem.
+
+**Think about it**: with a random split, your test set includes days *from the middle* of the time series. A test-set day from June 2022 has its neighbors (June 1, June 3, ...) in the training set. The lag features — "yesterday's AQI" — are computed from data that's *right next to* training points.
+
+This is a form of **data leakage** — not because test data enters the training set directly, but because the random split makes test observations highly correlated with nearby training observations. The lag feature "yesterday's AQI" for a test-set day was likely in the training set.
+
+## Proper backtesting: temporal split
+
+The fix is simple: **train on the past, test on the future**. This mimics how the model would actually be used — you'd train it on historical data and deploy it to predict tomorrow. The diagram below shows the difference: random splitting scatters test points throughout the timeline, while a temporal split draws a clean boundary.
+
+```{python}
+# Visualize random vs temporal split
+fig, axes = plt.subplots(2, 1, figsize=(10, 3), sharex=True)
+
+dates = la['Date'].values
+n = len(dates)
+
+# Random split
+colors_random = np.where(mask[:n], 'steelblue', 'orange')
+axes[0].scatter(dates, np.ones(n), c=colors_random, s=2, alpha=0.6)
+axes[0].set_yticks([])
+axes[0].set_ylabel('Random\nsplit', rotation=0, ha='right', va='center')
+axes[0].set_title('Train (blue) vs Test (orange): Random Split vs Temporal Split')
+
+# Temporal split
+cutoff = pd.Timestamp('2023-01-01')
+colors_temporal = np.where(la['Date'] < cutoff, 'steelblue', 'orange')
+axes[1].scatter(dates, np.ones(n), c=colors_temporal, s=2, alpha=0.6)
+axes[1].axvline(x=cutoff, color='black', linewidth=1.5, linestyle='--', label='Train/test boundary')
+axes[1].set_yticks([])
+axes[1].set_ylabel('Temporal\nsplit', rotation=0, ha='right', va='center')
+axes[1].legend(loc='upper right')
+
+plt.tight_layout()
+plt.show()
+
+print("Top: random split scatters test points everywhere (leakage!).")
+print("Bottom: temporal split puts all test points in the future (correct).")
+```
+
+**Think about it:** We're about to train on 2021--2022 and test on 2023. Will R-squared be higher, lower, or about the same as the random split? Why?
+
+Let's train on 2021–2022 and test on 2023.
+
+```{python}
+# Temporal split -- THE RIGHT APPROACH
+train_temporal = la[la['Date'] < '2023-01-01']
+test_temporal = la[(la['Date'] >= '2023-01-01') & (la['Date'] < '2024-01-01')]
+
+model_temporal = LinearRegression()
+model_temporal.fit(train_temporal[features], train_temporal['AQI'])
+
+pred_temporal = model_temporal.predict(test_temporal[features])
+r2_temporal = r2_score(test_temporal['AQI'], pred_temporal)
+mae_temporal = mean_absolute_error(test_temporal['AQI'], pred_temporal)
+
+print(f"Temporal split results (train: 2021-2022, test: 2023):")
+print(f"  R-squared = {r2_temporal:.3f}")
+print(f"  MAE = {mae_temporal:.1f}")
+print(f"  Train size: {len(train_temporal)}, Test size: {len(test_temporal)}")
+```
+
+```{python}
+# Side-by-side comparison
+print("=" * 50)
+print(f"{'Method':<25} {'R-sq':>8} {'MAE':>8}")
+print("=" * 50)
+print(f"{'Random split (WRONG)':<25} {r2_naive:>8.3f} {mae_naive:>8.1f}")
+print(f"{'Temporal split (RIGHT)':<25} {r2_temporal:>8.3f} {mae_temporal:>8.1f}")
+print("=" * 50)
+print(f"{'Leakage gap':<25} {r2_naive - r2_temporal:>8.3f} {mae_temporal - mae_naive:>8.1f}")
+print()
+print("The R-squared gap is the leakage you avoided.")
+print("The naive split was lying to you -- the model isn't that good.")
+```
+
+The performance drop is substantial. The random split made the model look much better than it actually is. That's the **leakage** — by testing on days surrounded by training data, the model gets to cheat.
+
+Before building a fancy model, we should always check the simplest possible forecast: **tomorrow = today**. This **naive baseline** is the bar any model must clear.
+
+```{python}
+# Naive forecast baseline: predict "same as yesterday"
+naive_pred = test_temporal['aqi_lag1']  # yesterday's AQI IS the naive forecast
+mae_naive_baseline = mean_absolute_error(test_temporal['AQI'], naive_pred)
+r2_naive_baseline = r2_score(test_temporal['AQI'], naive_pred)
+
+print(f"Naive baseline (same as yesterday):")
+print(f"  R-squared = {r2_naive_baseline:.3f}")
+print(f"  MAE = {mae_naive_baseline:.1f}")
+print()
+print(f"Linear model (temporal split):")
+print(f"  R-squared = {r2_temporal:.3f}")
+print(f"  MAE = {mae_temporal:.1f}")
+print()
+print("The naive baseline is surprisingly hard to beat!")
+print("This is common in time series: yesterday is a strong predictor of today.")
+```
+
+This is why backtesting matters. In production, your model only ever sees the past. Your evaluation should reflect that.
+
+## Walk-forward validation
+
+A single temporal split gives you one number. But model performance can *change over time*. **Walk-forward validation** trains on an expanding window and tests on the next period, giving you a performance curve. In the forecasting literature, this is called **time series cross-validation** — the same idea as k-fold cross-validation, but respecting temporal order.
+
+Here's the idea. Each row is one "fold." The training set (blue) expands forward in time, and the model is tested on the next month (orange):
+
+```
+Fold 1: [===== TRAIN =====][TEST]
+Fold 2: [======= TRAIN =======][TEST]
+Fold 3: [========= TRAIN =========][TEST]
+Fold 4: [=========== TRAIN ===========][TEST]
+         2021              2022              2023
+```
+
+We used an **expanding window** here (all past data). An alternative is a **sliding window** (fixed-width training set that moves forward), which can be better when very old data is from a different regime — exactly the distribution shift problem we'll see later.
+
+This is especially important when the data has regime changes — like wildfire season.
+
+```{python}
+# Walk-forward: train on expanding window, test on next month
+# (freq='MS' = month start: generates the 1st of each month)
+results = []
+test_months = pd.date_range('2023-01-01', '2024-01-01', freq='MS')
+
+for i, test_start in enumerate(test_months[:-1]):
+    test_end = test_months[i + 1]
+
+    train_wf = la[la['Date'] < test_start]
+    test_wf = la[(la['Date'] >= test_start) & (la['Date'] < test_end)]
+
+    if len(test_wf) < 10 or len(train_wf) < 100:
+        continue
+
+    model_wf = LinearRegression()
+    model_wf.fit(train_wf[features], train_wf['AQI'])
+    pred_wf = model_wf.predict(test_wf[features])
+
+    month_mae = mean_absolute_error(test_wf['AQI'], pred_wf)
+    month_r2 = r2_score(test_wf['AQI'], pred_wf)
+    results.append({
+        'month': test_start,
+        'mae': month_mae,
+        'r2': month_r2,
+        'n_test': len(test_wf),
+        'max_aqi': test_wf['AQI'].max()
+    })
+    print(f"  {test_start.strftime('%b %Y')}: MAE = {month_mae:.1f}, R² = {month_r2:.3f}")
+
+wf_results = pd.DataFrame(results)
+wf_results['month_label'] = wf_results['month'].dt.strftime('%b %Y')
+print(wf_results[['month_label', 'mae', 'r2', 'max_aqi']].to_string(index=False))
+```
+
+```{python}
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
+
+ax1.bar(wf_results['month_label'], wf_results['mae'], color='steelblue', alpha=0.8)
+ax1.set_ylabel('MAE')
+ax1.set_title('Walk-Forward Validation: Monthly MAE (Los Angeles, 2023)')
+ax1.axhline(y=mae_temporal, color='red', linestyle='--', alpha=0.5,
+            label=f'Full-year MAE = {mae_temporal:.1f}')
+ax1.legend()
+
+ax2.bar(wf_results['month_label'], wf_results['max_aqi'], color='coral', alpha=0.8)
+ax2.set_ylabel('Max AQI in Month')
+ax2.set_title('Worst Air Quality Day Each Month')
+ax2.axhline(y=150, color='red', linestyle='--', alpha=0.5, label='Unhealthy threshold')
+ax2.legend()
+
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+```
+
+Notice how the model's error **spikes during summer months** when wildfire smoke events push AQI to extremes. The model was trained on mostly "normal" air quality patterns and hasn't seen enough extreme events to handle them.
+
+This is the value of walk-forward validation: it reveals *when* your model breaks, not just how well it does on average.
+
+## Lag features are just feature engineering
+
+Recall from Lecture 6 that feature engineering transforms raw data into more useful predictors. Lag features are the same idea applied to time:
+
+| Feature | What it captures |
+|---------|-----------------|
+| Yesterday's AQI | Short-term momentum |
+| 3-day average | Recent trend |
+| 7-day average | Weekly baseline |
+| Day of year | Seasonal pattern |
+| Same day last year | Year-over-year pattern |
+
+Let's see which features matter most.
+
+```{python}
+# Which features contribute most?
+print("Feature coefficients (temporal model):")
+for feat, coef in zip(features, model_temporal.coef_):
+    print(f"  {feat:<20s} {coef:+.4f}")
+print(f"  {'intercept':<20s} {model_temporal.intercept_:+.4f}")
+print()
+print("Yesterday's AQI dominates -- AQI is highly autocorrelated.")
+print("The seasonal feature (day_of_year) adds a small boost.")
+```
+
+## Same lesson, different domain: NBA performance prediction
+
+You might be thinking: "This is an air quality problem. My field is tech/finance/sports." But the temporal leakage trap appears anywhere data has a time dimension. Let's see if the same pattern holds in a completely different domain.
+
+If you could reliably predict how many points an NBA player will score tonight, you could make a fortune betting. Let's try — predicting a player's performance from their last 5 games. Can we randomly split games? No — that would let the model peek at future games.
+
+```{python}
+# Load NBA data
+nba = pd.read_csv(f'{DATA_DIR}/nba/nba_load_management.csv')
+nba['GAME_DATE'] = pd.to_datetime(nba['GAME_DATE'])
+nba = nba.sort_values(['PLAYER_NAME', 'GAME_DATE']).reset_index(drop=True)
+
+# Focus on players with enough games across all 3 seasons
+games_per_player = nba.groupby('PLAYER_NAME').size()
+active_players = games_per_player[games_per_player >= 150].index
+nba_active = nba[nba['PLAYER_NAME'].isin(active_players)].copy()
+
+print(f"Active players (150+ games): {len(active_players)}")
+print(f"Records: {len(nba_active):,}")
+print(f"Seasons: {nba_active['SEASON'].unique()}")
+```
+
+```{python}
+# Create rolling features: last-5-game averages
+nba_active = nba_active.sort_values(['PLAYER_NAME', 'GAME_DATE']).reset_index(drop=True)
+nba_active['pts_lag1'] = nba_active.groupby('PLAYER_NAME')['PTS'].shift(1)
+nba_active['pts_lag5_avg'] = nba_active.groupby('PLAYER_NAME')['PTS'].transform(
+    lambda x: x.rolling(5).mean().shift(1)
+)
+nba_active['min_lag5_avg'] = nba_active.groupby('PLAYER_NAME')['MIN'].transform(
+    lambda x: x.rolling(5).mean().shift(1)
+)
+
+nba_model = nba_active.dropna(subset=['pts_lag1', 'pts_lag5_avg', 'min_lag5_avg']).copy()
+nba_features = ['pts_lag1', 'pts_lag5_avg', 'min_lag5_avg', 'HOME']
+
+print(f"Modeling dataset: {len(nba_model):,} player-games")
+```
+
+```{python}
+# Naive random split vs temporal split
+np.random.seed(42)
+mask_nba = np.random.rand(len(nba_model)) < 0.8
+
+# Random split
+model_r = LinearRegression()
+model_r.fit(nba_model[mask_nba][nba_features], nba_model[mask_nba]['PTS'])
+pred_r = model_r.predict(nba_model[~mask_nba][nba_features])
+r2_r = r2_score(nba_model[~mask_nba]['PTS'], pred_r)
+
+# Temporal split: train on seasons 1-2, test on season 3
+train_nba = nba_model[nba_model['SEASON'].isin(['2021-22', '2022-23'])]
+test_nba = nba_model[nba_model['SEASON'] == '2023-24'].copy()
+
+model_t = LinearRegression()
+model_t.fit(train_nba[nba_features], train_nba['PTS'])
+pred_t = model_t.predict(test_nba[nba_features])
+r2_t = r2_score(test_nba['PTS'], pred_t)
+
+print(f"NBA prediction (points scored):")
+print(f"  Random split R-squared:   {r2_r:.3f}")
+print(f"  Temporal split R-squared: {r2_t:.3f}")
+print(f"  Gap:                      {r2_r - r2_t:.3f}")
+print()
+print("Same story -- the random split is optimistically biased.")
+```
+
+## Backtesting a betting strategy
+
+Here's where backtesting gets really interesting. Suppose you use the model to bet: if the model predicts a player will score above their season average, bet the "over."
+
+A few terms you'll need: Sportsbooks charge a fee called the **vig** (short for vigorish). At standard **-110 odds**, you risk \$110 to win \$100. That means you need to win about 52.4% of your bets just to break even. A **unit** is one standard bet amount — we'll track profit/loss in units so the math is clean.
+
+We'll use the player's trailing season average as a rough proxy for the sportsbook line. Real lines incorporate much more information (injuries, matchups, rest days), so this is a generous setup for our model.
+
+**Think about it:** Will this strategy make money? Our model has decent R-squared on the temporal split. Is that enough?
+
+```{python}
+# Simple betting backtest on the temporal test set
+test_nba['predicted'] = pred_t
+
+# "Line" = player's trailing season average (simple proxy for the sportsbook line)
+test_nba['line'] = test_nba.groupby('PLAYER_NAME')['PTS'].transform(
+    lambda x: x.expanding().mean().shift(1)
+)
+test_nba = test_nba.dropna(subset=['line'])
+
+# Strategy: bet "over" when model predicts above the line
+test_nba['bet_over'] = (test_nba['predicted'] > test_nba['line']).astype(int)
+test_nba['actual_over'] = (test_nba['PTS'] > test_nba['line']).astype(int)
+
+# Simple P/L: win +1, lose -1.1 (the -1.1 reflects the "vig" -- sportsbook's cut)
+test_nba['pl'] = np.where(
+    test_nba['bet_over'] == test_nba['actual_over'], 1.0, -1.1
+)
+test_nba['cumulative_pl'] = test_nba['pl'].cumsum()
+
+win_rate = (test_nba['bet_over'] == test_nba['actual_over']).mean()
+print(f"Win rate: {win_rate:.1%}")
+print(f"Need ~52.4% to break even (with -110 vig)")
+print(f"Final P/L: {test_nba['cumulative_pl'].iloc[-1]:+.0f} units")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(test_nba['cumulative_pl'].values, linewidth=0.8, alpha=0.8)
+ax.axhline(y=0, color='black', linewidth=0.5)
+ax.set_xlabel('Bet number')
+ax.set_ylabel('Cumulative P/L (units)')
+ax.set_title('Betting Backtest: "Bet Over When Model Says Over"')
+ax.annotate(f'Final: {test_nba["cumulative_pl"].iloc[-1]:+.0f}',
+            xy=(len(test_nba), test_nba['cumulative_pl'].iloc[-1]),
+            fontsize=11, color='red')
+plt.tight_layout()
+plt.show()
+
+print("Even a model with decent R-squared doesn't necessarily make money.")
+print("The market is efficient -- the line already accounts for recent performance.")
+```
+
+This is the **backtesting illusion**. In-sample performance does not equal out-of-sample performance. Sportsbooks already factor in rest days, recent form, and home/away. Your model isn't finding an edge — it's rediscovering information the market already knows.
+
+## The surprise: when the future doesn't look like the past
+
+Let's go back to air quality and look at something the model has *never seen*.
+
+Mono County, near Mono Lake in eastern California, occasionally experiences extreme dust/wildfire events that push AQI into the thousands — sometimes above 8,000. That's roughly 16x the "Hazardous" threshold of 500.
+
+**Think about it:** If we train a model on "normal" days (AQI below 300), what would it predict for an AQI of 8,000? How far off would it be?
+
+```{python}
+# Mono County extremes
+mono = aqi_sub[aqi_sub['county Name'] == 'Mono'][['Date', 'AQI']].copy()
+mono = mono.sort_values('Date').reset_index(drop=True)
+
+# Create lag features
+mono['aqi_lag1'] = mono['AQI'].shift(1)
+mono['aqi_lag7_avg'] = mono['AQI'].rolling(7).mean().shift(1)
+mono['aqi_lag3_avg'] = mono['AQI'].rolling(3).mean().shift(1)
+mono['day_of_year'] = mono['Date'].dt.dayofyear
+mono = mono.dropna().reset_index(drop=True)
+
+print("Mono County AQI distribution:")
+print(mono['AQI'].describe().to_string())
+print(f"\nDays above 500: {(mono['AQI'] > 500).sum()}")
+print(f"Max AQI: {mono['AQI'].max()}")
+```
+
+```{python}
+# Train a model on "normal" data (AQI < 300) and see what it predicts for extremes
+normal_mono = mono[mono['AQI'] < 300]
+extreme_mono = mono[mono['AQI'] >= 300]
+
+model_mono = LinearRegression()
+model_mono.fit(normal_mono[features], normal_mono['AQI'])
+
+if len(extreme_mono) > 0:
+    pred_extreme = model_mono.predict(extreme_mono[features])
+
+    print("Model predictions vs reality during extreme events:")
+    print(f"{'Actual AQI':>12} {'Predicted':>12} {'Error':>12}")
+    print("-" * 40)
+    for actual, pred in list(zip(extreme_mono['AQI'].values, pred_extreme))[:10]:
+        print(f"{actual:>12.0f} {pred:>12.0f} {actual - pred:>12.0f}")
+    print()
+    print("The model can't extrapolate to values it's never seen.")
+    print("This is DISTRIBUTION SHIFT -- the future can be fundamentally")
+    print("different from the past.")
+else:
+    print("No extreme events found in Mono County subset.")
+```
+
+```{python}
+# Visualize the model's failure during extreme events
+fig, ax = plt.subplots(figsize=(10, 5))
+
+ax.plot(mono['Date'], mono['AQI'], linewidth=0.5, alpha=0.7, label='Actual AQI')
+
+# Predict on all data
+pred_all = model_mono.predict(mono[features])
+ax.plot(mono['Date'], pred_all, linewidth=0.5, alpha=0.7, color='orange',
+        label='Model prediction')
+
+ax.axhline(y=500, color='red', linestyle='--', alpha=0.5, label='Hazardous (500)')
+ax.set_ylabel('AQI')
+ax.set_xlabel('Date')
+ax.set_title('Mono County: Model vs Reality During Extreme Events')
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+print("The orange line (predictions) can't reach the spikes.")
+print("A linear model trained on normal conditions extrapolates nonsensically.")
+```
+
+This is **distribution shift** — a severe form of the non-stationarity we saw at the start of this lecture. Not just gradual changes in the mean, but a fundamentally different regime that the training data never captured. It's the deepest problem in time series forecasting:
+
+- Your training data covers *normal* conditions
+- The events that matter most — wildfires, pandemics, financial crashes — are precisely the ones your model has never seen
+- No amount of clever cross-validation alone fixes this; it's a fundamental limitation of purely data-driven models
+
+> "Prediction is very difficult, especially about the future." — attr. Niels Bohr
+
+In Lecture 10, we saw that a clinical trial on adults can't tell you about children. Same idea here: a model trained on AQI 0--300 can't tell you what happens at AQI 8,000. You can't extrapolate beyond the range of your data.
+
+In Lecture 17, we'll see that AutoML tools often make this same mistake — they use standard cross-validation by default and don't know your data is temporal.
+
+## Key takeaways
+
+- **Never randomly split time series data.** Use temporal splits: train on the past, test on the future.
+
+- **Walk-forward validation** reveals *when* your model breaks, not just how well it does on average.
+
+- **Lag features are feature engineering** — yesterday's value, rolling averages, same-day-last-year are all transformations of the raw data.
+
+- **Backtesting is not prediction.** A strategy that looks profitable in backtest may fail in production because the market already knows the same signals.
+
+- **Distribution shift is the hardest problem.** Models trained on normal conditions fail during extreme events.
+
+## Study guide
+
+### Key definitions
+
+- **Backtesting (temporal split):** Evaluating a model by training on past data and testing on future data, mimicking real deployment.
+- **Data leakage:** When information from the future (or the test set) contaminates training, producing optimistically biased results.
+- **Lag features:** Predictors constructed from past values of the time series (e.g., yesterday's value, 7-day rolling average).
+- **Non-stationarity:** A time series whose statistical properties (mean, variance) change over time.
+- **Walk-forward validation (time series cross-validation):** Repeatedly training on an expanding (or sliding) window of past data and testing on the next period.
+- **Distribution shift:** When future data comes from a fundamentally different regime than the training data.
+
+### Key ideas
+
+- Random train/test splits create data leakage in time series because test observations are correlated with nearby training observations.
+- Walk-forward validation reveals *when* a model fails, not just its average performance.
+- The naive baseline ("same as yesterday") is surprisingly hard to beat and should always be checked.
+- Backtesting a strategy does not guarantee future profitability — markets already incorporate public information.
+- Distribution shift means models trained on normal conditions cannot predict unprecedented events.
+
+### Computational tools
+
+- `pd.Series.shift(n)` — create lag features by shifting values forward or backward
+- `pd.Series.rolling(k).mean()` — compute rolling window averages
+- Temporal train/test split: filter by date (`df[df['Date'] < cutoff]`)
+- Walk-forward loop: iterate over time periods with an expanding training window
+
+### For the quiz
+
+You should be able to: (1) explain why random splitting fails for time series data, (2) implement a temporal train/test split given a date cutoff, (3) describe walk-forward validation (expanding and sliding window variants), and (4) explain what distribution shift is and why no cross-validation method can fully address it.

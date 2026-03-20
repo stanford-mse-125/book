@@ -1,0 +1,27 @@
+---
+title: "Welcome"
+---
+
+# MS&E 125: Applied Statistics
+
+**Stanford University, Spring 2026**
+
+This online textbook accompanies MS&E 125. Each chapter is a self-contained lecture with runnable code, real data, and at least one genuine surprise.
+
+## How to use this book
+
+**Reading online:** Browse the chapters using the sidebar. Code is folded by default — click "Code" to expand any cell. Figures and outputs are shown inline.
+
+**In class:** Each chapter is also a Jupyter notebook. Download it, open in JupyterLab, clear outputs, and run cells live.
+
+**Datasets:** All analyses use real data — hospital readmissions (CMS), Airbnb listings (Inside Airbnb), NBA game logs, clinical trials (ACTG 175), Framingham Heart Study, EPA air quality, College Scorecard, and John Snow's cholera investigation.
+
+## Structure
+
+The course has three acts:
+
+1. **Data + Models** (Lectures 1--7): From raw data to regression, with linear algebra as the foundation.
+2. **Inference + Testing** (Lectures 8--12): What can we actually conclude? Sampling, bootstrap, hypothesis tests, and the multiple testing trap.
+3. **Complex Models + Special Topics** (Lectures 13--17): Classification, PCA, clustering, backtesting, and the future of data analysis with AI.
+
+Plus a standalone unit on **Causal Inference** (Lectures 18--19).

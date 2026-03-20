@@ -1,0 +1,432 @@
+---
+title: "Lecture 2: Exploratory Data Analysis & Visualization"
+execute:
+  enabled: true
+jupyter: python3
+---
+
+## A hospital is about to be fined \$350,000 for high readmission rates. Is that fair?
+
+An Airbnb host is losing bookings to cheaper listings. How should she reprice? Both questions start the same way: **look at the data** before you jump to conclusions.
+
+**Exploratory Data Analysis (EDA)** is the practice of getting to know your data before you do anything fancy with it. It's the most important step in any analysis — and the one most often skipped.
+
+Today we'll explore two real datasets: hospital readmissions and NYC Airbnb listings. Along the way, we'll find **outliers**, missing data patterns, and a genuine surprise.
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['font.size'] = 12
+
+# Load data
+DATA_DIR = 'data'
+```
+
+### Why "always visualize"? Anscombe's quartet
+
+Before we dive in, here's the single best argument for plotting your data. These four datasets have *identical* means, standard deviations, correlations, and regression lines:
+
+```{python}
+# Anscombe's quartet: same summary stats, wildly different shapes
+anscombe = sns.load_dataset('anscombe')
+g = sns.lmplot(data=anscombe, x='x', y='y', col='dataset',
+               col_wrap=2, ci=None, height=3,
+               scatter_kws={'s': 40, 'edgecolor': 'white'})
+g.set_titles('Dataset {col_name}')
+g.figure.suptitle("Anscombe's Quartet: identical summary statistics, very different data", y=1.02)
+plt.tight_layout()
+plt.show()
+```
+
+Same mean of *x*. Same mean of *y*. Same correlation. Same regression line. Completely different stories. **Summary statistics can lie. Always visualize.**
+
+## Part 1: Hospital readmissions
+
+Let's start with the CMS Hospital Readmissions Reduction Program data. Recall from Lecture 1 that this dataset tracks how often patients are readmitted within 30 days, for six medical conditions, across about 3,000 U.S. hospitals.
+
+The EDA checklist is always the same: (1) **Shape** — how many rows and columns? (2) **Types** — what are the column types? Any surprises? (3) **Distributions** — what does each variable look like? (4) **Missing data** — how much, and why? (5) **Relationships** — how do variables relate to each other?
+
+```{python}
+hrrp = pd.read_csv(f'{DATA_DIR}/hospital-readmissions/hrrp_full.csv')
+print(f"Shape: {hrrp.shape}")
+print(f"Columns: {list(hrrp.columns)}")
+```
+
+```{python}
+# Always start here: what does the data look like?
+hrrp.head()
+```
+
+```{python}
+# Quick summary of numeric columns
+hrrp[['Excess Readmission Ratio', 'Predicted Readmission Rate',
+      'Expected Readmission Rate']].describe()
+```
+
+### Shape, types, and first impressions
+
+Every EDA starts the same way: How many rows? How many columns? What types are they? Are there surprises?
+
+```{python}
+# Data types and non-null counts
+hrrp.info()
+```
+
+Scan the `Dtype` column in the output. Most columns are `float64` (numbers), but `Number of Readmissions` is `object` (string). That's our first clue that something is weird. And `Number of Discharges` has fewer non-null values than other columns. Let's investigate.
+
+### Distributions: what does "normal" look like?
+
+The **Excess Readmission Ratio** is the key metric. It's the ratio of a hospital's predicted readmission rate to its expected rate (ERR = predicted / expected). A value of 1.0 means a hospital's readmission rate matches what's expected given its **patient mix** (the age, health conditions, and severity of the patients it treats). Above 1.0 means more readmissions than expected.
+
+Let's see its distribution.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Overall distribution
+hrrp['Excess Readmission Ratio'].dropna().hist(bins=50, ax=axes[0], edgecolor='white')
+axes[0].axvline(x=1.0, color='red', linestyle='--', linewidth=2)
+axes[0].set_xlabel('Excess Readmission Ratio')
+axes[0].set_ylabel('Count')
+axes[0].set_title('All Conditions Combined')
+
+# By condition
+for condition in hrrp['Measure Name'].unique():
+    subset = hrrp[hrrp['Measure Name'] == condition]['Excess Readmission Ratio'].dropna()
+    label = condition.replace('READM-30-', '').replace('-HRRP', '')
+    axes[1].hist(subset, bins=30, alpha=0.5, label=label, edgecolor='white')
+axes[1].set_xlabel('Excess Readmission Ratio')
+axes[1].set_ylabel('Count')
+axes[1].set_title('By Condition')
+axes[1].legend(fontsize=9)
+
+plt.tight_layout()
+plt.show()
+```
+
+The distributions look roughly symmetric and unimodal, centered near 1.0 (though with a slight right skew — we'll revisit what "normal" really means in Lecture 8). But notice the spread differs by condition — heart failure (HF) has more variation than hip/knee replacement.
+
+**Think about it:** Why might some conditions have more variability in hospital performance than others?
+
+### Missing data: is it random?
+
+This is where EDA gets interesting. How much of the data do you think is missing? 1%? 10%? 50%? Let's count.
+
+```{python}
+# Missing data summary
+missing = hrrp.isnull().sum()
+missing_pct = (missing / len(hrrp) * 100).round(1)
+pd.DataFrame({'Missing': missing, '% Missing': missing_pct}).query('Missing > 0')
+```
+
+About 15% of `Excess Readmission Ratio` and `Predicted Readmission Rate` are missing. But is this random?
+
+Let's check the `Number of Readmissions` column — the one stored as a string.
+
+```{python}
+# What non-numeric values are in Number of Readmissions?
+hrrp['Number of Readmissions'].value_counts().tail(5)
+```
+
+```{python}
+# How many "Too Few to Report" entries, by condition?
+too_few = hrrp[hrrp['Number of Readmissions'] == 'Too Few to Report']
+# :, adds commas to large numbers; :.1f rounds to 1 decimal
+print(f"'Too Few to Report' entries: {len(too_few):,} ({len(too_few)/len(hrrp)*100:.1f}%)")
+print()
+too_few_by_condition = too_few.groupby('Measure Name').size()
+total_by_condition = hrrp.groupby('Measure Name').size()
+pct_missing = (too_few_by_condition / total_by_condition * 100).round(1)
+pd.DataFrame({'Too Few': too_few_by_condition, 'Total': total_by_condition, '% Missing': pct_missing})
+```
+
+```{python}
+# Visualize the missingness pattern
+fig, ax = plt.subplots(figsize=(8, 4))
+pct_missing.sort_values().plot.barh(ax=ax, color='coral', edgecolor='white')
+ax.set_xlabel('% Suppressed ("Too Few to Report")')
+ax.set_title('Missingness varies dramatically by condition')
+ax.axvline(x=pct_missing.mean(), color='black', linestyle='--',
+           linewidth=1, label=f'Average: {pct_missing.mean():.0f}%')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+This is a critical finding. Statisticians distinguish three patterns of missingness:
+
+- **Missing Completely At Random (MCAR)**: no pattern at all — like a lab assistant randomly spilling coffee on some data sheets.
+- **Missing At Random (MAR)**: missingness depends on other *observed* data (e.g., smaller hospitals are more likely to have suppressed data, and we can see hospital size).
+- **Missing Not At Random (MNAR)**: missingness depends on the *unobserved value itself* (e.g., hospitals with very high readmission rates might be more likely to have suppressed data).
+
+Here, CMS suppresses data when counts are too small to report — the data is missing *because* the counts are small. This is **MNAR**, and it's the most dangerous kind because you can't fully correct for it using other variables.
+
+CABG (coronary artery bypass graft surgery) has ~50% missing because fewer hospitals perform this complex procedure. The hospitals with missing data are systematically different: smaller, often rural, with fewer specialized services.
+
+If you drop these rows (which an AI tool would do silently), you're analyzing only the large, urban hospitals. Your conclusions would be biased. For now, we're just diagnosing — noticing what's going on. In the next lecture (Lecture 3), we'll decide what to do about it.
+
+**Think about it:** If you drop all the "Too Few to Report" rows, what kind of hospitals are left in your dataset? What conclusions might change?
+
+> **Key principle**: Before you handle missing data, you must understand *why* it's missing. The "why" determines the "how."
+
+## Part 2: Airbnb listings
+
+We've seen how missing data can hide systematic bias in healthcare. Now let's see how outliers and skewness can mislead in a completely different domain — showing that EDA principles are universal.
+
+We'll work with 29,000+ Airbnb listings in New York City. We'll return to this Airbnb data in Lecture 5, where we'll try to predict price from these features using regression.
+
+```{python}
+# Load Airbnb data
+# low_memory=False prevents mixed-type warnings for large files
+airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
+print(f"Shape: {airbnb.shape}")
+
+# Select key columns for exploration
+cols = ['name', 'neighbourhood_group_cleansed', 'neighbourhood_cleansed',
+        'room_type', 'price', 'bedrooms', 'beds',
+        'number_of_reviews', 'review_scores_rating', 'accommodates']
+airbnb_slim = airbnb[cols].copy()
+
+# Price is often stored as "$1,200.00" — strip symbols and convert to float
+airbnb_slim['price'] = (airbnb_slim['price']
+                        .replace(r'[\$,]', '', regex=True)
+                        .astype(float))
+
+airbnb_slim.head()
+```
+
+### The price distribution: beware the right tail
+
+Let's look at the distribution of nightly prices.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Raw distribution
+airbnb_slim['price'].hist(bins=100, ax=axes[0], edgecolor='white')
+axes[0].set_xlabel('Price ($)')
+axes[0].set_ylabel('Count')
+axes[0].set_title('All prices')
+
+# Zoomed in
+airbnb_slim[airbnb_slim['price'].between(1, 500)]['price'].hist(bins=50, ax=axes[1], edgecolor='white')
+axes[1].set_xlabel('Price ($)')
+axes[1].set_ylabel('Count')
+axes[1].set_title('Prices $1–$500 (zoomed in)')
+
+plt.tight_layout()
+plt.show()
+```
+
+Look at the left plot: the distribution is so skewed that you can barely see anything. A few very expensive listings (some over \$10,000/night!) dominate the scale.
+
+Now look at the zoomed-in version on the right. Most listings are \$50–\$200/night, with a peak around \$100. Much more informative.
+
+The distribution is clearly right-skewed. **Think about it:** Will the mean be higher or lower than the median? What happens if we naively compute the mean?
+
+```{python}
+print(f"Mean price:   ${airbnb_slim['price'].mean():.0f}/night")
+print(f"Median price: ${airbnb_slim['price'].median():.0f}/night")
+print(f"Listings at $0: {(airbnb_slim['price'] == 0).sum()}")
+print(f"Max price: ${airbnb_slim['price'].max():,.0f}")
+print(f"Listings over $1000: {(airbnb_slim['price'] > 1000).sum()}")
+```
+
+The mean is about \$33 higher than the median. That gap is driven entirely by the right tail — a few hundred expensive listings pull the average up. If you're an Airbnb host trying to price a typical apartment, the mean is misleading. The median is a better summary here.
+
+> **Key principle**: When a distribution has a heavy tail, the mean doesn't represent a typical value. Always look at the distribution before relying on any single number.
+
+### Categorical variables: room types and boroughs
+
+Not all data is numeric. Let's look at the categorical variables. So far we've used **histograms** to see the shape of a single numeric variable. Now we need different tools:
+
+- One categorical variable → **bar chart** (count per category)
+- One numeric variable across groups → **box plot** (compare distributions)
+- Two numeric variables → **scatter plot** (reveal relationships)
+
+Choosing the right plot for the question is half the battle.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Room type
+room_counts = airbnb_slim['room_type'].value_counts()
+room_counts.plot.bar(ax=axes[0], color=sns.color_palette()[:len(room_counts)], edgecolor='white')
+axes[0].set_title('Listings by Room Type')
+axes[0].set_ylabel('Count')
+axes[0].tick_params(axis='x', rotation=0)
+
+# Borough
+borough_counts = airbnb_slim['neighbourhood_group_cleansed'].value_counts()
+borough_counts.plot.bar(ax=axes[1], color=sns.color_palette()[3:8], edgecolor='white')
+axes[1].set_title('Listings by Borough')
+axes[1].set_ylabel('Count')
+axes[1].tick_params(axis='x', rotation=45)
+
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+# Price by room type and borough
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Price by room type (cap at $500 for visibility)
+filtered = airbnb_slim[airbnb_slim['price'].between(1, 500)]
+sns.boxplot(data=filtered, x='room_type', y='price', ax=axes[0])
+axes[0].set_title('Price by Room Type')
+axes[0].set_ylabel('Price ($)')
+
+# Price by borough
+sns.boxplot(data=filtered, x='neighbourhood_group_cleansed', y='price', ax=axes[1])
+axes[1].set_title('Price by Borough')
+axes[1].set_ylabel('Price ($)')
+axes[1].tick_params(axis='x', rotation=45)
+
+plt.tight_layout()
+plt.show()
+```
+
+Two patterns jump out:
+
+1. **Entire homes/apartments** cost roughly 2x more than private rooms, which makes intuitive sense.
+2. **Manhattan** is the most expensive borough. But notice the overlap — there are cheap Manhattan listings and expensive Brooklyn listings.
+
+**Think about it:** If someone told you "Manhattan Airbnbs cost more," is that the full story? What if Manhattan has more entire homes and Brooklyn has more private rooms? The comparison might be confounded by room type.
+
+## Ranking hospitals: a cautionary tale
+
+Let's go back to the hospital data for the punchline of today's lecture.
+
+Quick reference for the three metrics we'll use:
+
+- **Expected Rate** = what CMS predicts *should* happen given the patient mix
+- **Predicted Rate** = the hospital's actual estimated rate
+- **Excess Ratio** = Predicted / Expected (above 1.0 = worse than expected)
+
+Suppose you want to find the hospitals with the highest readmission rates. A naive approach: just rank by `Predicted Readmission Rate`.
+
+```{python}
+# Focus on Heart Failure (most common condition, least missing data)
+hf = hrrp[hrrp['Measure Name'] == 'READM-30-HF-HRRP'].dropna(
+    subset=['Predicted Readmission Rate', 'Expected Readmission Rate', 'Excess Readmission Ratio'])
+
+print(f"Heart failure records: {len(hf):,}")
+print()
+print(f"Top 10 hospitals by PREDICTED readmission rate:")
+top_predicted = hf.nlargest(10, 'Predicted Readmission Rate')[
+    ['Facility Name', 'State', 'Predicted Readmission Rate',
+     'Expected Readmission Rate', 'Excess Readmission Ratio']]
+top_predicted
+```
+
+Now look carefully at the `Expected Readmission Rate` column. These hospitals have *high expected rates* — meaning CMS's model predicts they *should* have high readmissions, given the patients they treat.
+
+The `Excess Readmission Ratio` tells a different story. Let's compare the two rankings.
+
+Here's what to look for in the next plot: the expected rate is on the x-axis, the predicted rate is on the y-axis, and color shows the excess ratio. If predicted = expected, the point falls on the dashed line. Points above the line are doing *worse* than expected; points below are doing *better*.
+
+```{python}
+# Scatter: Predicted vs Expected rate, colored by Excess Ratio
+fig, ax = plt.subplots(figsize=(8, 6))
+scatter = ax.scatter(hf['Expected Readmission Rate'],
+                     hf['Predicted Readmission Rate'],
+                     c=hf['Excess Readmission Ratio'],
+                     cmap='coolwarm', alpha=0.5, s=15, vmin=0.85, vmax=1.15)
+plt.colorbar(scatter, label='Excess Readmission Ratio')
+
+# Add the y=x line
+lims = [hf['Expected Readmission Rate'].min(), hf['Expected Readmission Rate'].max()]
+ax.plot(lims, lims, 'k--', alpha=0.5, linewidth=1, label='Predicted = Expected')
+
+ax.set_xlabel('Expected Readmission Rate (%)')
+ax.set_ylabel('Predicted Readmission Rate (%)')
+ax.set_title('Heart Failure: Are "high-rate" hospitals actually underperforming?')
+ax.legend()
+
+# Annotate regions
+ax.text(0.02, 0.95, 'Worse than\nexpected', transform=ax.transAxes,
+        fontsize=10, color='gray', va='top', style='italic')
+ax.text(0.85, 0.05, 'Better than\nexpected', transform=ax.transAxes,
+        fontsize=10, color='gray', va='bottom', style='italic')
+
+plt.tight_layout()
+plt.show()
+```
+
+This is a crucial insight. The hospitals with the highest *raw* readmission rates are often treating the sickest patients. Their expected rates are high too. When you adjust for patient mix (using the Excess Ratio), many of these hospitals are performing *at or below* expectations.
+
+Conversely, some hospitals with modest raw rates are actually doing *worse than expected* given their healthier patient mix.
+
+```{python}
+# Make it concrete: compare rankings
+hf_ranked = hf.copy()
+hf_ranked['Rank by Predicted Rate'] = hf_ranked['Predicted Readmission Rate'].rank(ascending=False).astype(int)
+hf_ranked['Rank by Excess Ratio'] = hf_ranked['Excess Readmission Ratio'].rank(ascending=False).astype(int)
+# Rank change shows how much the naive ranking disagrees with the adjusted ranking
+hf_ranked['Rank Change'] = hf_ranked['Rank by Predicted Rate'] - hf_ranked['Rank by Excess Ratio']
+
+# Hospitals that move the most
+print("Hospitals that look MUCH WORSE in naive ranking than adjusted ranking:")
+print("(Rank change > 0 means the naive ranking is harsher)")
+print()
+big_movers = hf_ranked.nlargest(5, 'Rank Change')[
+    ['Facility Name', 'State', 'Predicted Readmission Rate',
+     'Excess Readmission Ratio', 'Rank by Predicted Rate', 'Rank by Excess Ratio']]
+big_movers
+```
+
+These hospitals are being unfairly judged by the naive ranking. They have high raw rates because they treat complex patients — but after adjustment, they're performing fine.
+
+This is a preview of **Simpson's paradox** and **confounding**, topics we'll return to throughout the course. (It's like comparing average salaries between two companies without accounting for job titles — the company with more senior engineers will look like it pays better.) For now, the lesson is simpler:
+
+> **Don't rank before you adjust.** The "worst" hospitals might just be the ones treating the hardest cases.
+
+We'll revisit this hospital data in Lecture 18 when we ask: *is this causal?* Does the penalty actually reduce readmissions, or does it just punish hospitals that serve vulnerable populations?
+
+## Key Takeaways
+
+- **Always look at your data before modeling.** Use `.shape`, `.head()`, `.info()`, `.describe()` as your first moves.
+- **Distributions matter.** The mean can be misleading when distributions are skewed. Always plot a histogram.
+- **Missing data tells a story.** Data that's Missing Not At Random (MNAR) can bias your analysis if you just drop it. Ask *why* it's missing.
+- **Outliers and confounders make naive comparisons misleading.** A few extreme values can distort means and conclusions. When you compare groups without adjusting for context (patient severity, room type, etc.), you can reach the wrong conclusion.
+
+## Study guide
+
+### Key definitions
+
+- **Exploratory Data Analysis (EDA)**: Getting to know your data — shape, types, distributions, missingness, relationships — before modeling.
+- **Distribution**: The pattern of values a variable takes. Described by shape (symmetric, skewed), center (mean, median), and spread.
+- **Histogram**: Shows the shape of one numeric variable by binning values and counting.
+- **Box plot**: Compares distributions across groups, showing median, quartiles, and outliers.
+- **Scatter plot**: Reveals relationships between two numeric variables.
+- **Outlier**: An observation far from the bulk of the data. Can be real (a penthouse) or an error.
+- **Missing Not At Random (MNAR)**: Data is missing for reasons related to the missing value itself — the most dangerous pattern.
+
+### Key ideas
+
+- Always visualize before summarizing. Summary statistics can hide wildly different data (Anscombe's quartet).
+- When a distribution is skewed, the mean doesn't represent a typical value — the median is more informative.
+- Missing data is a signal, not just a nuisance. Ask *why* it's missing before deciding how to handle it.
+- Naive rankings can be unfair: the "worst" hospitals may just be treating the hardest cases.
+
+### Computational tools
+
+- `df.shape` — number of rows and columns
+- `df.head()` — first few rows
+- `df.info()` — column types and non-null counts
+- `df.describe()` — summary statistics for numeric columns
+- `df['col'].hist()` — histogram of one column
+- `df['col'].value_counts()` — frequency table for categorical data
+- `sns.boxplot()` — box plot comparing groups
+- `df.isnull().sum()` — count missing values per column
+
+### For the quiz
+
+You should be able to: (1) describe the EDA workflow and why each step matters, (2) explain the difference between MCAR, MAR, and MNAR with an example, (3) explain why the mean is misleading for skewed data, (4) interpret a histogram, box plot, and scatter plot, and (5) explain why adjusting for context matters when comparing groups.

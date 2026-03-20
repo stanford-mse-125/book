@@ -1,0 +1,673 @@
+---
+title: "Lecture 12: Regression Inference + Diagnostics"
+execute:
+  enabled: true
+jupyter: python3
+---
+
+## Should an NBA team restructure its schedule around rest?
+
+An NBA team's analytics department says resting players boosts performance by 0.3 points
+per game. They want to restructure the schedule around it. Should the front office invest
+in roster flexibility based on this finding? We'll also look at Airbnb listings to see
+what happens when the effect IS real and large. Same tools, very different conclusions.
+
+In Act 1, we learned regression finds the best fit. In Act 2, we learned hypothesis testing
+asks "is this real?" Now we combine them: **is each piece of our model doing real work?**
+We'll also check whether our model's assumptions hold using **regression diagnostics**.
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['font.size'] = 12
+
+DATA_DIR = 'data'
+```
+
+## Building a regression model for NBA performance
+
+Recall from Lecture 11 that the raw correlation between rest and points was misleading --
+Simpson's paradox showed that bench players dominate the extended-rest group.
+Can regression help us **control for** player quality and isolate the rest effect?
+
+Let's build a model step by step.
+
+```{python}
+# Load NBA data
+nba = pd.read_csv(f'{DATA_DIR}/nba/nba_load_management.csv')
+nba['GAME_DATE'] = pd.to_datetime(nba['GAME_DATE'])
+nba_games = nba.dropna(subset=['REST_DAYS']).copy()
+
+# Cap rest days at 7 to avoid long injury absences
+nba_games = nba_games[nba_games['REST_DAYS'] <= 7].copy()
+
+# Compute player-season averages as a measure of player quality
+nba_games['PLAYER_SEASON_AVG'] = nba_games.groupby(
+    ['PLAYER_ID', 'SEASON']
+)['GAME_SCORE'].transform('mean')
+
+# Compute opponent strength (opponent's average GAME_SCORE allowed)
+opp_strength = nba_games.groupby('OPPONENT')['GAME_SCORE'].mean()
+nba_games['OPP_STRENGTH'] = nba_games['OPPONENT'].map(opp_strength)
+
+print(f"Observations: {len(nba_games):,}")
+print(f"Players: {nba_games['PLAYER_NAME'].nunique()}")
+print()
+print("Variables for regression:")
+print(f"  GAME_SCORE (response): mean={nba_games['GAME_SCORE'].mean():.2f}, std={nba_games['GAME_SCORE'].std():.2f}")
+print(f"  REST_DAYS: mean={nba_games['REST_DAYS'].mean():.2f}")
+print(f"  PLAYER_SEASON_AVG: mean={nba_games['PLAYER_SEASON_AVG'].mean():.2f}")
+print(f"  HOME: {nba_games['HOME'].mean():.2%} home games")
+```
+
+Before fitting any model, let's look at the data. Is there a visible relationship
+between rest days and performance?
+
+```{python}
+# Visualize: game score by rest days
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+sns.boxplot(x='REST_DAYS', y='GAME_SCORE', data=nba_games, ax=axes[0], color='steelblue')
+axes[0].set_xlabel('Rest Days')
+axes[0].set_ylabel('Game Score')
+axes[0].set_title('Game Score by Rest Days')
+
+# Scatter with player quality on x-axis, colored by rest
+axes[1].scatter(nba_games['PLAYER_SEASON_AVG'], nba_games['GAME_SCORE'],
+               alpha=0.02, s=5, color='steelblue')
+axes[1].set_xlabel('Player Season Average')
+axes[1].set_ylabel('Game Score')
+axes[1].set_title('Game Score vs Player Quality\n(the dominant predictor)')
+
+plt.tight_layout()
+plt.show()
+
+print("The box plots look almost identical across rest days.")
+print("Player quality clearly matters more. Can regression disentangle these effects?")
+```
+
+## Step-by-step model building: what does "controlling for" mean?
+
+One of the most important ideas in regression is **controlling for** other variables.
+Let's see this in action by building the model one predictor at a time and watching
+how the REST_DAYS coefficient changes.
+
+**Think about it:** Before looking at the numbers, do you think the rest effect will
+be positive or negative? Large or small?
+
+```{python}
+# Model 1: naive — just rest days
+model_1 = smf.ols('GAME_SCORE ~ REST_DAYS', data=nba_games).fit()
+
+# Model 2: add player quality
+model_2 = smf.ols('GAME_SCORE ~ REST_DAYS + PLAYER_SEASON_AVG', data=nba_games).fit()
+
+# Model 3: full model with all controls
+model_full = smf.ols(
+    'GAME_SCORE ~ REST_DAYS + PLAYER_SEASON_AVG + HOME + OPP_STRENGTH',
+    data=nba_games
+).fit()
+
+print("REST_DAYS coefficient as we add controls:")
+print(f"  Model 1 (REST_DAYS only):           {model_1.params['REST_DAYS']:+.4f}  (p = {model_1.pvalues['REST_DAYS']:.4f})")
+print(f"  Model 2 (+ PLAYER_SEASON_AVG):      {model_2.params['REST_DAYS']:+.4f}  (p = {model_2.pvalues['REST_DAYS']:.4f})")
+print(f"  Model 3 (+ HOME + OPP_STRENGTH):    {model_full.params['REST_DAYS']:+.4f}  (p = {model_full.pvalues['REST_DAYS']:.4f})")
+print()
+print("Watch how the coefficient changes as we add controls!")
+print("This is what 'controlling for' means — isolating the rest effect")
+print("from confounders like player quality.")
+```
+
+## The full regression model
+
+We'll predict game score from:
+- **REST_DAYS**: our variable of interest
+- **PLAYER_SEASON_AVG**: controls for player quality
+- **HOME**: home court advantage
+- **OPP_STRENGTH**: how good is the opponent?
+
+$$\text{GAME\_SCORE}_i = \beta_0 + \beta_1 \cdot \text{REST\_DAYS}_i + \beta_2 \cdot \text{PLAYER\_SEASON\_AVG}_i + \beta_3 \cdot \text{HOME}_i + \beta_4 \cdot \text{OPP\_STRENGTH}_i + \varepsilon_i$$
+
+```{python}
+# Full model summary
+print(model_full.summary().tables[1])
+print()
+print(f"R-squared: {model_full.rsquared:.4f}")
+print(f"Observations: {int(model_full.nobs)}")
+```
+
+## Interpreting the coefficients
+
+Each coefficient has a specific interpretation: **"Holding everything else constant,** a one-unit
+increase in $x_j$ is associated with a $\hat{\beta}_j$ change in game score."
+
+This interpretation describes what the model estimates -- it doesn't mean we can literally
+hold everything else constant in the real world. We'll explore this distinction in Lecture 18.
+
+**Think about it:** Before looking at the numbers, which variable do you think has the
+biggest effect on game score? The smallest?
+
+```{python}
+# Extract and interpret coefficients
+coefs = model_full.params
+ses = model_full.bse
+pvals = model_full.pvalues
+
+print("Coefficient interpretations:")
+print()
+print(f"  REST_DAYS:        {coefs['REST_DAYS']:+.3f}")
+print(f"    -> One more day of rest is associated with {coefs['REST_DAYS']:.3f} more game score points")
+print(f"    -> Over a 3-day difference: {coefs['REST_DAYS']*3:.2f} points")
+print()
+print(f"  PLAYER_SEASON_AVG: {coefs['PLAYER_SEASON_AVG']:+.3f}")
+print(f"    -> Better players score more (unsurprisingly)")
+print()
+print(f"  HOME:             {coefs['HOME']:+.3f}")
+print(f"    -> Home court advantage is worth ~{coefs['HOME']:.1f} game score points")
+print()
+print(f"  OPP_STRENGTH:     {coefs['OPP_STRENGTH']:+.3f}")
+print(f"    -> Facing a stronger opponent (by 1 GS point avg) shifts your score by {coefs['OPP_STRENGTH']:.2f}")
+```
+
+## T-test for a single coefficient: is this distinguishable from zero?
+
+Look at the REST_DAYS coefficient and its **standard error** (the uncertainty in our estimate).
+The coefficient is small. The SE tells us how much that estimate would bounce around
+across different samples. Is the coefficient "big" relative to its uncertainty?
+
+```{python}
+# The coefficient and its SE
+beta_rest = coefs['REST_DAYS']
+se_rest = ses['REST_DAYS']
+# df_resid = degrees of freedom of the residuals (not a DataFrame!)
+df_resid = model_full.df_resid
+
+print(f"REST_DAYS coefficient: {beta_rest:.4f}")
+print(f"Standard error:        {se_rest:.4f}")
+print(f"Ratio (coef / SE):     {beta_rest / se_rest:.4f}")
+print()
+print("The ratio is about 2 -- the coefficient is roughly 2 SEs away from zero.")
+print("Is that enough to conclude the effect is real, not just noise?")
+```
+
+This ratio has a name -- the **t-statistic** -- and we know its distribution under the null hypothesis.
+
+For each coefficient, we test:
+
+$$H_0: \beta_j = 0 \quad \text{vs} \quad H_a: \beta_j \neq 0$$
+
+The test statistic is:
+
+$$t = \frac{\hat{\beta}_j}{\text{SE}(\hat{\beta}_j)}$$
+
+Under $H_0$, this follows a $t$-distribution with $n - p - 1$ degrees of freedom.
+(This assumes errors are approximately normal -- reasonable here given our large sample
+size, $n > 100{,}000$. With smaller samples, you'd want to check a residual Q-Q plot.)
+
+```{python}
+# T-test for REST_DAYS coefficient — verify by hand
+t_stat = beta_rest / se_rest
+p_value = 2 * stats.t.sf(abs(t_stat), df_resid)
+
+print("T-test for REST_DAYS coefficient (by hand):")
+print(f"  t = {beta_rest:.4f} / {se_rest:.4f} = {t_stat:.4f}")
+print(f"  df = {df_resid:.0f}")
+print(f"  p-value = {p_value:.4f}")
+print()
+print("From statsmodels:")
+print(f"  t = {model_full.tvalues['REST_DAYS']:.4f}")
+print(f"  p = {model_full.pvalues['REST_DAYS']:.4f}")
+print()
+print("They match!")
+```
+
+## Confidence interval for a coefficient
+
+A 95% **confidence interval** for $\beta_j$:
+
+$$\hat{\beta}_j \pm t^* \times \text{SE}(\hat{\beta}_j)$$
+
+where $t^*$ is the critical value from the $t$-distribution.
+
+```{python}
+# 95% CI for REST_DAYS coefficient
+t_star = stats.t.ppf(0.975, df_resid)
+ci_lower = beta_rest - t_star * se_rest
+ci_upper = beta_rest + t_star * se_rest
+
+print(f"95% CI for REST_DAYS coefficient:")
+print(f"  {beta_rest:.4f} +/- {t_star:.3f} x {se_rest:.4f}")
+print(f"  [{ci_lower:.4f}, {ci_upper:.4f}]")
+print()
+print(f"Interpretation: we're 95% confident that one extra day of rest is associated")
+print(f"with between {ci_lower:.3f} and {ci_upper:.3f} additional game score points.")
+print()
+print(f"From statsmodels: {model_full.conf_int().loc['REST_DAYS'].values}")
+```
+
+```{python}
+# Visualize CIs for all coefficients (exclude intercept for scale)
+fig, ax = plt.subplots(figsize=(8, 5))
+ci = model_full.conf_int().drop('Intercept')
+coef_vals = model_full.params.drop('Intercept')
+
+# Standardize: multiply each coefficient by its predictor's SD
+predictor_sds = nba_games[['REST_DAYS', 'PLAYER_SEASON_AVG', 'HOME', 'OPP_STRENGTH']].std()
+std_coefs = coef_vals * predictor_sds
+std_ci_lower = ci[0] * predictor_sds
+std_ci_upper = ci[1] * predictor_sds
+
+labels = ['Rest Days', 'Player Quality\n(Season Avg)', 'Home Court', 'Opponent\nStrength']
+y_pos = range(len(labels))
+
+ax.barh(y_pos, std_coefs.values, xerr=[
+    std_coefs.values - std_ci_lower.values,
+    std_ci_upper.values - std_coefs.values
+], color='steelblue', edgecolor='black', capsize=5, alpha=0.7)
+ax.axvline(x=0, color='red', linestyle='--', linewidth=1)
+ax.set_yticks(list(y_pos))
+ax.set_yticklabels(labels)
+ax.set_xlabel('Effect of 1 SD Change in Predictor (Game Score Points)')
+ax.set_title('Standardized Regression Coefficients with 95% CIs')
+plt.tight_layout()
+plt.show()
+
+print("Player quality dominates. REST_DAYS is barely distinguishable from zero.")
+print("(Coefficients are standardized: each bar shows the effect of a 1-SD change in the predictor.)")
+```
+
+## Regression diagnostics: checking the model's assumptions
+
+The t-tests and confidence intervals above assume that residuals are approximately
+normal with constant variance. Before trusting those results, we should **check**.
+Diagnostics are how we look under the hood of a regression model.
+
+### Residual plot: do residuals have constant spread?
+
+A **residual plot** shows residuals (observed $-$ predicted) vs. fitted values. We want
+to see a random scatter with no pattern. If the spread of residuals changes with the
+fitted value, that's **heteroscedasticity** -- the model's uncertainty isn't uniform.
+
+```{python}
+# Residual plot for the NBA model
+fitted_vals = model_full.fittedvalues
+residuals = model_full.resid
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Residuals vs fitted
+axes[0].scatter(fitted_vals, residuals, alpha=0.02, s=5, color='steelblue')
+axes[0].axhline(y=0, color='red', linestyle='--', linewidth=1)
+axes[0].set_xlabel('Fitted Values')
+axes[0].set_ylabel('Residuals')
+axes[0].set_title('Residuals vs Fitted Values')
+
+# Add a LOWESS smoother to highlight any trend
+from statsmodels.nonparametric.smoothers_lowess import lowess
+smooth = lowess(residuals, fitted_vals, frac=0.1)
+axes[0].plot(smooth[:, 0], smooth[:, 1], color='orange', linewidth=2, label='LOWESS smooth')
+axes[0].legend()
+
+# Scale-location plot: sqrt of |standardized residuals| vs fitted
+std_resid = model_full.get_influence().resid_studentized_internal
+axes[1].scatter(fitted_vals, np.sqrt(np.abs(std_resid)), alpha=0.02, s=5, color='steelblue')
+axes[1].set_xlabel('Fitted Values')
+axes[1].set_ylabel('√|Standardized Residuals|')
+axes[1].set_title('Scale-Location Plot\n(check for heteroscedasticity)')
+smooth2 = lowess(np.sqrt(np.abs(std_resid)), fitted_vals, frac=0.1)
+axes[1].plot(smooth2[:, 0], smooth2[:, 1], color='orange', linewidth=2)
+
+plt.tight_layout()
+plt.show()
+
+print("If the spread of residuals fans out (or narrows) across fitted values,")
+print("that's heteroscedasticity — the model's uncertainty varies with the prediction.")
+print("Here the spread looks roughly constant, which is reassuring.")
+```
+
+### Q-Q plot: are residuals approximately normal?
+
+A **Q-Q plot** compares residual quantiles to what we'd expect from a normal distribution.
+Points on the diagonal = normal. Deviations in the tails = heavy tails or skew.
+
+```{python}
+# Q-Q plot
+fig, ax = plt.subplots(figsize=(6, 6))
+sm.qqplot(residuals, line='45', ax=ax, alpha=0.02, markerfacecolor='steelblue',
+          markeredgecolor='steelblue', markersize=3)
+ax.set_title('Q-Q Plot of Residuals\n(NBA regression model)')
+ax.set_xlabel('Theoretical Quantiles (Normal)')
+ax.set_ylabel('Sample Quantiles (Residuals)')
+plt.tight_layout()
+plt.show()
+
+print("The middle of the distribution follows the normal line closely.")
+print("The tails deviate — there are more extreme game scores than a normal")
+print("distribution would predict. This is common in sports data.")
+```
+
+### When diagnostics reveal problems
+
+If residuals show strong non-normality or heteroscedasticity, the formula-based
+standard errors and p-values may be unreliable. What can you do?
+
+- **Bootstrap confidence intervals** (Lecture 8) don't assume normality -- they let
+  the data speak for itself. When residuals aren't normal, bootstrap CIs are more
+  reliable than formula CIs.
+- **Robust standard errors** adjust for heteroscedasticity without changing the
+  coefficient estimates.
+- **Transform the response** (e.g., log price) to stabilize variance.
+
+For the NBA model, our sample is large ($n > 100{,}000$) and the Q-Q plot is
+reasonable in the middle, so the formula-based inference is trustworthy here.
+But with smaller samples or heavier tails, you'd want bootstrap CIs.
+
+## The significance-vs-importance tension
+
+**Think about it:** The t-test says REST_DAYS is "statistically significant" ($p \approx 0.04$).
+But look at that tiny bar in the plot above. The model barely changes when we add rest days.
+Should we care?
+
+This is the tension between **statistical significance** and **practical importance**.
+
+## Association is not causation
+
+**Important:** Our regression **controls for** player quality, home court, and opponent
+strength, but it does NOT estimate a **causal effect** of rest. Coaches choose when to
+rest players for strategic reasons we can't observe in the data. The coefficient tells
+us about association, not causation.
+
+We'll formalize this distinction in Lecture 18 using causal DAGs. For now, remember:
+regression can adjust for measured confounders, but it cannot eliminate unmeasured ones.
+
+## Regression inference on Airbnb data
+
+The NBA example showed statistical significance without practical importance. But regression
+inference isn't always disappointing -- sometimes the effect IS real and large.
+Let's see what that looks like with Airbnb pricing.
+
+The question: **is the price premium for an extra bathroom statistically significant,
+and is it large enough to matter?**
+
+```{python}
+# Load and clean Airbnb data
+airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
+
+# Convert price to numeric (handles both numeric and "$150.00" string formats)
+airbnb['price_clean'] = pd.to_numeric(
+    airbnb['price'].astype(str).str.replace(r'[\$,]', '', regex=True),
+    errors='coerce'
+)
+
+# Filter to reasonable listings
+airbnb_clean = airbnb[
+    (airbnb['price_clean'] > 0) &
+    (airbnb['price_clean'] <= 500) &
+    (airbnb['bathrooms'].notna()) &
+    (airbnb['bedrooms'].notna()) &
+    (airbnb['room_type'] == 'Entire home/apt')
+].copy()
+
+print(f"Airbnb listings (filtered): {len(airbnb_clean):,}")
+print(f"Price range: ${airbnb_clean['price_clean'].min():.0f} - ${airbnb_clean['price_clean'].max():.0f}")
+print(f"Bathrooms range: {airbnb_clean['bathrooms'].min():.0f} - {airbnb_clean['bathrooms'].max():.0f}")
+```
+
+Before modeling, let's visualize. The `neighbourhood_group_cleansed` column represents
+NYC boroughs (Manhattan, Brooklyn, Queens, Bronx, Staten Island).
+
+```{python}
+# Visualize price by bathrooms
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+sns.boxplot(x='bathrooms', y='price_clean', data=airbnb_clean, ax=axes[0], color='steelblue')
+axes[0].set_xlabel('Number of Bathrooms')
+axes[0].set_ylabel('Price per Night ($)')
+axes[0].set_title('Airbnb Price by Bathrooms')
+
+sns.boxplot(x='neighbourhood_group_cleansed', y='price_clean',
+            data=airbnb_clean, ax=axes[1], color='steelblue')
+axes[1].set_xlabel('Borough')
+axes[1].set_ylabel('Price per Night ($)')
+axes[1].set_title('Airbnb Price by Borough')
+axes[1].tick_params(axis='x', rotation=30)
+
+plt.tight_layout()
+plt.show()
+
+print("More bathrooms = higher price. But does this hold after controlling for bedrooms and borough?")
+```
+
+```{python}
+# Regression: price ~ bathrooms + bedrooms + borough
+# C(...) tells statsmodels to treat borough as categorical (one-hot encoding, as in Lec 6)
+airbnb_model = smf.ols(
+    'price_clean ~ bathrooms + bedrooms + C(neighbourhood_group_cleansed)',
+    data=airbnb_clean
+).fit()
+
+print(airbnb_model.summary().tables[1])
+```
+
+```{python}
+# Focus on the bathrooms coefficient
+beta_bath = airbnb_model.params['bathrooms']
+se_bath = airbnb_model.bse['bathrooms']
+ci_bath = airbnb_model.conf_int().loc['bathrooms']
+p_bath = airbnb_model.pvalues['bathrooms']
+
+print(f"Bathrooms coefficient: ${beta_bath:.2f} per night")
+print(f"95% CI: [${ci_bath[0]:.2f}, ${ci_bath[1]:.2f}]")
+print(f"p-value: {p_bath:.2e}")
+print()
+print(f"Interpretation: controlling for bedrooms and borough, each additional bathroom")
+print(f"is associated with ${beta_bath:.2f} more per night.")
+print()
+print("This IS practically meaningful -- unlike the NBA rest effect!")
+```
+
+## Bonus: interaction terms -- does the bathroom premium vary by borough?
+
+Maybe an extra bathroom matters more in Manhattan than in the Bronx. We can test this
+with an **interaction term** (recall these from Lecture 6).
+
+```{python}
+# Model with interaction: bathrooms x borough
+airbnb_interact = smf.ols(
+    'price_clean ~ bathrooms * C(neighbourhood_group_cleansed) + bedrooms',
+    data=airbnb_clean
+).fit()
+
+# Extract bathroom effects by borough (main effect + interaction)
+# statsmodels names interaction terms like 'bathrooms:C(borough)[T.Manhattan]'
+boroughs = sorted(airbnb_clean['neighbourhood_group_cleansed'].unique())
+base_borough = boroughs[0]
+base_effect = airbnb_interact.params['bathrooms']
+
+print("Bathroom premium by borough:")
+print("=" * 50)
+print(f"  {base_borough} (baseline): ${base_effect:.2f}/night per bathroom")
+for b in boroughs[1:]:
+    key = f'bathrooms:C(neighbourhood_group_cleansed)[T.{b}]'
+    if key in airbnb_interact.params:
+        interaction = airbnb_interact.params[key]
+        total = base_effect + interaction
+        p_int = airbnb_interact.pvalues[key]
+        print(f"  {b}: ${total:.2f}/night per bathroom (interaction p = {p_int:.4f})")
+```
+
+## The surprise: "significant" does not mean "important"
+
+> "A small p-value does not mean a big effect."
+
+Let's return to the NBA. Our REST_DAYS coefficient was statistically significant ($p \approx 0.04$).
+But look at the **effect size**.
+
+```{python}
+# Effect size for REST_DAYS in NBA model
+rest_coef = model_full.params['REST_DAYS']
+rest_se = model_full.bse['REST_DAYS']
+game_score_std = nba_games['GAME_SCORE'].std()
+
+# Standardized effect size: coefficient divided by outcome SD
+# This is analogous to Cohen's d — expressing the effect in SD units
+std_effect = rest_coef / game_score_std
+
+print("=== NBA Rest Effect: Significance vs Importance ===")
+print()
+print(f"Coefficient: {rest_coef:.3f} game score points per rest day")
+print(f"Standard deviation of game score: {game_score_std:.2f}")
+print(f"Standardized effect size: {std_effect:.4f} SD")
+print(f"p-value: {model_full.pvalues['REST_DAYS']:.4f}")
+print()
+print("For context, Cohen's d benchmarks for effect sizes:")
+print("  Small effect:  d = 0.2")
+print("  Medium effect: d = 0.5")
+print("  Large effect:  d = 0.8")
+print(f"  Our effect:    {std_effect:.4f}  <-- essentially zero")
+print()
+print(f"A standardized effect of {std_effect:.4f} means rest shifts the distribution")
+print(f"by {abs(std_effect)*100:.1f}% of a standard deviation. If you lined up 100 games,")
+print(f"you couldn't pick out which ones had the extra rest day.")
+print()
+print(f"With n = {len(nba_games):,} observations, we can detect effects that are")
+print(f"completely negligible in practice.")
+```
+
+```{python}
+# Visualize: comparing effect sizes in the model
+fig, ax = plt.subplots(figsize=(8, 5))
+
+effects = {
+    'One rest day': rest_coef,
+    'Home court': model_full.params['HOME'],
+    '1 SD player quality': model_full.params['PLAYER_SEASON_AVG'] * nba_games['PLAYER_SEASON_AVG'].std(),
+}
+colors = ['#e74c3c', '#3498db', '#2ecc71']
+bars = ax.bar(effects.keys(), effects.values(), color=colors, edgecolor='black')
+ax.set_ylabel('Effect on Game Score')
+ax.set_title('Comparing Effect Sizes\n(rest effect is tiny)')
+for bar, val in zip(bars, effects.values()):
+    ax.text(bar.get_x() + bar.get_width()/2, val + 0.1, f'{val:.2f}',
+            ha='center', fontsize=10)
+plt.tight_layout()
+plt.show()
+
+print("The rest effect is dwarfed by player quality and even home court advantage.")
+print("Would you bet real money on a 0.3-point edge? Probably not.")
+```
+
+**Think about it:** A sports analytics team comes to you and says "We've proven rest helps
+performance -- the p-value is 0.04!" What questions should you ask?
+
+1. How big is the effect? (Tiny -- 0.3 points, standardized effect near zero)
+2. Is there confounding? (Yes -- coaches strategically rest players)
+3. Does the model capture all relevant factors? (No -- schedule difficulty, travel, etc.)
+4. Would this hold out of sample? (Uncertain)
+
+Statistical significance with large samples can detect effects **too small to matter**.
+
+## Putting it together: NBA vs Airbnb
+
+Both analyses used the same tools -- t-tests and confidence intervals on regression
+coefficients. But the conclusions are very different.
+
+```{python}
+# Side-by-side comparison
+# With n > 100,000 the t critical value is essentially 1.96
+print("=" * 60)
+print(f"{'':30s} {'NBA Rest':>12s}  {'Airbnb Bath':>12s}")
+print("=" * 60)
+print(f"{'Coefficient':30s} {rest_coef:12.3f}  {beta_bath:12.2f}")
+print(f"{'SE':30s} {rest_se:12.4f}  {se_bath:12.2f}")
+print(f"{'p-value':30s} {model_full.pvalues['REST_DAYS']:12.4f}  {p_bath:12.2e}")
+ci_rest = model_full.conf_int().loc['REST_DAYS']
+print(f"{'95% CI lower':30s} {ci_rest[0]:12.3f}  {ci_bath[0]:12.2f}")
+print(f"{'95% CI upper':30s} {ci_rest[1]:12.3f}  {ci_bath[1]:12.2f}")
+std_effect_label = "Standardized effect (coef/SD)"
+print(f"{std_effect_label:30s} {std_effect:12.4f}  {beta_bath/airbnb_clean['price_clean'].std():12.4f}")
+print(f"{'n':30s} {len(nba_games):12,d}  {int(airbnb_model.nobs):12,d}")
+print(f"{'Practically meaningful?':30s} {'No':>12s}  {'Yes':>12s}")
+print("=" * 60)
+print()
+print("Both are 'statistically significant.' Only one matters.")
+```
+
+## Key takeaways
+
+1. **Regression inference asks: is each feature doing real work?** The **coefficient t-test**
+   tests $H_0: \beta_j = 0$, asking whether the variable contributes *above noise*.
+
+2. **Building models step by step reveals what "controlling for" means.** Watch how
+   coefficients change as you add predictors -- this makes the idea concrete.
+
+3. **Confidence intervals tell you the range of plausible effect sizes.** A CI that barely
+   excludes zero should make you cautious.
+
+4. **Statistical significance $\neq$ practical importance.** With large $n$, you can detect
+   effects too small to matter. Always report **effect sizes** alongside p-values.
+
+5. **Context matters.** The bathroom premium (\$30+/night) is actionable for Airbnb hosts.
+   The rest effect (0.3 game score points) is not actionable for NBA coaches.
+
+6. **Regression estimates associations, not causal effects** (unless all confounders are
+   controlled for -- more in Lecture 18).
+
+We'll revisit this in Lecture 18 when we ask: coaches *choose* when to rest players --
+so is the "rest effect" actually a "coaching strategy" effect? That's a causal question,
+and regression alone can't answer it.
+
+**Next up:** Lecture 13 is the Act 2 capstone on classification, where we apply
+inference ideas to categorical outcomes.
+
+## Study guide
+
+**Key definitions:**
+
+- **Coefficient t-test**: Tests whether a single regression coefficient is significantly different from zero. $t = \hat{\beta}_j / \text{SE}(\hat{\beta}_j)$.
+- **Standard error (of a coefficient)**: The estimated standard deviation of $\hat{\beta}_j$ across repeated samples. Measures uncertainty in the coefficient estimate.
+- **Controlling for** / **holding constant**: The regression interpretation -- the effect of one predictor after accounting for the others in the model.
+- **Practical significance**: Whether an effect is large enough to matter in context, regardless of the p-value.
+- **Effect size**: A standardized measure of how large an effect is (e.g., coefficient divided by the outcome's SD).
+- **Residual plot**: Scatter plot of residuals vs. fitted values; used to check for patterns, non-linearity, and heteroscedasticity.
+- **Q-Q plot**: Quantile-quantile plot comparing residual quantiles to a normal distribution; points on the diagonal indicate normality.
+- **Heteroscedasticity**: When the variance of residuals changes across fitted values (the spread "fans out"). Violates the constant-variance assumption of OLS inference.
+
+**Key ideas (one sentence each):**
+
+- The t-test for a coefficient asks: is this predictor doing real work, or could the observed coefficient be due to noise?
+- A confidence interval for a coefficient gives the range of plausible effect sizes, not just a yes/no answer.
+- Building models step by step (adding one predictor at a time) reveals what "controlling for" actually does to coefficients.
+- Statistical significance with large n can detect effects too small to matter -- always check effect size.
+- Regression controls for measured confounders but does not establish causation.
+- Residual plots and Q-Q plots check whether the model's assumptions (constant variance, normality) hold; when they don't, use bootstrap CIs (Lecture 8) instead of formula CIs.
+
+**Computational tools:**
+
+- `smf.ols('y ~ x1 + x2', data=df).fit()` -- fit an OLS regression with formula syntax
+- `model.summary()` -- full regression output including coefficients, SEs, t-stats, p-values
+- `model.params` -- dictionary of fitted coefficients
+- `model.pvalues` -- dictionary of p-values for each coefficient's t-test
+- `model.conf_int()` -- 95% confidence intervals for all coefficients
+- `model.bse` -- standard errors of all coefficients
+- `model.fittedvalues`, `model.resid` -- fitted values and residuals for diagnostic plots
+- `sm.qqplot(residuals, line='45')` -- Q-Q plot to check normality of residuals
+
+**For the quiz:**
+
+- Be able to interpret a coefficient table: read off coefficients, SEs, t-statistics, and p-values.
+- Know what "controlling for" means in a regression context and how adding a predictor can change other coefficients.
+- Distinguish statistical significance (small p-value) from practical importance (large effect size).
+- Know the formula $t = \hat{\beta}_j / \text{SE}(\hat{\beta}_j)$ and what it tests.
+- Be able to interpret a confidence interval for a regression coefficient in context.
+- Know what a residual plot and Q-Q plot show, and what patterns indicate problems (heteroscedasticity, non-normality).
+- Know that bootstrap CIs (Lecture 8) are a fallback when normality assumptions fail.

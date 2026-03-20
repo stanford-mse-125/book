@@ -1,0 +1,48 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "MS&E 125: Applied Statistics"
+  author: "Madeleine Udell"
+  date: "Spring 2026"
+  chapters:
+    - index.qmd
+    - part: "Act 1: Build Models"
+      chapters:
+        - lec01-intro.qmd
+        - lec02-eda.qmd
+        - lec03-munging.qmd
+        - lec04-linear-algebra.qmd
+        - lec05-regression.qmd
+        - lec06-feature-engineering.qmd
+        - lec07-trees-validation.qmd
+    - part: "Act 2: Trust Models"
+      chapters:
+        - lec08-sampling.qmd
+        - lec09-permutation-tests.qmd
+        - lec10-hypothesis-testing.qmd
+        - lec11-multiple-testing.qmd
+        - lec12-regression-inference.qmd
+        - lec13-classification.qmd
+    - part: "Act 3: See Further"
+      chapters:
+        - lec14-pca.qmd
+        - lec15-clustering.qmd
+        - lec16-backtesting.qmd
+        - lec17-automl-llms.qmd
+        - lec18-causal-inference-1.qmd
+        - lec19-causal-inference-2.qmd
+
+format:
+  html:
+    theme: cosmo
+    code-fold: true
+    code-tools: true
+    toc: true
+    number-sections: false
+    fontsize: 1.05em
+    mainfont: "system-ui, -apple-system, sans-serif"
+
+execute:
+  freeze: auto

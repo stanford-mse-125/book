@@ -1,0 +1,7 @@
+data/airbnb/listings.csv filter=lfs diff=lfs merge=lfs -text
+data/epa-air-quality/*.csv filter=lfs diff=lfs merge=lfs -text
+data/nba/*.csv filter=lfs diff=lfs merge=lfs -text
+data/epa-air-quality/*.csv filter=lfs diff=lfs merge=lfs -text
+data/nba/*.csv filter=lfs diff=lfs merge=lfs -text
+data/epa-air-quality/*.csv filter=lfs diff=lfs merge=lfs -text
+data/nba/*.csv filter=lfs diff=lfs merge=lfs -text

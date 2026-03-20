@@ -1,0 +1,470 @@
+---
+title: "Lecture 11: Multiple Testing and Correlation"
+execute:
+  enabled: true
+jupyter: python3
+---
+
+## The intern who "discovered" load management
+
+An NBA analytics intern tests whether each of 431 players performs better after rest.
+They find 30 "significant" results and write a report:
+*"These 30 players benefit from load management."*
+
+Their boss isn't convinced. What did the intern miss?
+
+> *"If you torture the data long enough, it will confess to anything."*
+> — Ronald Coase
+
+Salsburg warns about exactly this in *The Lady Tasting Tea*. By the mid-20th century, hypothesis testing had become a ritual: collect data, compute a p-value, publish if $p < 0.05$, move on. Researchers stopped asking whether the question was worth testing and started treating the 0.05 threshold as a stamp of scientific truth. Salsburg calls this the "idol of the Qu" — the worship of quantitative methods for their own sake, divorced from scientific thinking. The intern's analysis is a textbook case: 431 p-values, no scientific question, no correction for the fact that most "discoveries" are noise. (See Salsburg, *The Lady Tasting Tea*, Ch. 20.)
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['font.size'] = 12
+
+DATA_DIR = 'data'
+```
+
+## The setup: 431 hypothesis tests
+
+Recall from Lecture 10 that we test at significance level $\alpha = 0.05$, accepting a 5% false positive rate for a *single* test. But what happens when we run hundreds of tests?
+
+We have three seasons of NBA game logs (2021--2024). For each player, we can compute how many
+days of rest they had before each game. The question: *does rest help?*
+
+Let's load the data and take a look.
+
+```{python}
+# Load NBA load management data
+nba = pd.read_csv(f'{DATA_DIR}/nba/nba_load_management.csv')
+nba['GAME_DATE'] = pd.to_datetime(nba['GAME_DATE'])
+print(f"Shape: {nba.shape}")
+print(f"Unique players: {nba['PLAYER_NAME'].nunique()}")
+print(f"Games with rest info: {nba['REST_DAYS'].notna().sum():,}")
+nba[['PLAYER_NAME', 'GAME_DATE', 'PTS', 'REST_DAYS', 'REST_CATEGORY']].head(8)
+```
+
+```{python}
+# How are rest days distributed?
+df = nba.dropna(subset=['REST_DAYS']).copy()
+
+fig, ax = plt.subplots(figsize=(8, 4))
+rest_capped = df['REST_DAYS'].clip(upper=10)
+ax.hist(rest_capped, bins=range(1, 12), edgecolor='black', alpha=0.7, color='steelblue')
+ax.set_xlabel('Days Since Previous Game')
+ax.set_ylabel('Count')
+ax.set_title('Distribution of Rest Days')
+ax.set_xticks(range(1, 11))
+plt.tight_layout()
+plt.show()
+
+print(f"Most games follow a normal 2-day schedule ({(df['REST_DAYS']==2).mean():.0%} of games)")
+```
+
+## The intern's analysis: one t-test per player
+
+The intern's approach is straightforward:
+1. For each player with enough games, split into "back-to-back" (1 day rest) vs "rested" (2+ days)
+2. Run a two-sample t-test on points scored
+3. If $p < 0.05$, declare the player "benefits from rest"
+
+This is the **multiple testing** problem: running many hypothesis tests on the same dataset. Let's do exactly what the intern did.
+
+```{python}
+# Run a Welch's t-test for each player with >= 20 games in each category
+min_games = 20
+
+results = []
+for player_id, group in df.groupby('PLAYER_ID'):
+    btb = group[group['REST_DAYS'] == 1]['PTS']
+    rested = group[group['REST_DAYS'] >= 2]['PTS']
+
+    if len(btb) >= min_games and len(rested) >= min_games:
+        t_stat, p_val = stats.ttest_ind(rested, btb)  # Welch's t-test (no equal-variance assumption)
+        results.append({
+            'PLAYER_NAME': group['PLAYER_NAME'].iloc[0],
+            'n_btb': len(btb), 'n_rested': len(rested),
+            'mean_btb': btb.mean(), 'mean_rested': rested.mean(),
+            'diff': rested.mean() - btb.mean(),
+            't_stat': t_stat, 'p_value': p_val
+        })
+
+results_df = pd.DataFrame(results).sort_values('p_value')
+```
+
+```{python}
+n_players = len(results_df)
+n_sig = (results_df['p_value'] < 0.05).sum()
+
+print(f"Players tested: {n_players}")
+print(f"'Significant' at p < 0.05: {n_sig} ({n_sig/n_players*100:.1f}%)")
+print(f"\nThe intern's report: '{n_sig} players benefit from load management!'")
+```
+
+## Wait — how many should we *expect* by chance?
+
+**Think about it:** If rest has zero effect on *every* player, how many of our tests would you expect to come back "significant" at $\alpha = 0.05$?
+
+Here's the key insight. If rest has **no effect on any player**, the expected number of false positives is:
+
+$$\text{Expected false positives} = m \times \alpha$$
+
+where $m$ is the number of tests. (This follows from linearity of expectation and holds regardless of dependence between tests.)
+
+```{python}
+expected_false_positives = n_players * 0.05
+sd_under_null = np.sqrt(n_players * 0.05 * 0.95)
+
+print(f"Number of tests: {n_players}")
+print(f"Expected false positives under the null: {expected_false_positives:.1f}")
+print(f"Std dev under null (Binomial): {sd_under_null:.1f}")
+print(f"Actual 'significant' results: {n_sig}")
+print(f"\nGetting {n_sig} is only ~{(n_sig - expected_false_positives)/sd_under_null:.1f} SDs above {expected_false_positives:.0f}.")
+print(f"The intern's 'discovery' is probably noise.")
+```
+
+## The p-value histogram: a powerful diagnostic
+
+**Think about it:** If the null is true for every player, what should the histogram of p-values look like?
+
+Under the null hypothesis (no effect for any player), p-values should follow a **Uniform(0, 1)** distribution.
+That means the **p-value histogram** should be flat.
+
+If there are real effects, we'll see a spike near 0 — those are the genuine discoveries hiding
+among the noise. Let's look.
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.hist(results_df['p_value'], bins=20, edgecolor='black', alpha=0.7, color='steelblue')
+ax.axhline(y=n_players/20, color='red', linestyle='--', linewidth=2,
+           label=f'Expected under null ({n_players/20:.0f} per bin)')
+ax.axvspan(0, 0.05, alpha=0.15, color='red', label='Rejection region (p < 0.05)')
+ax.set_xlabel('p-value')
+ax.set_ylabel('Count')
+ax.set_title(f'Distribution of {n_players} p-values\n'
+             f'(Flat = no real effect; spike near 0 = real effects)')
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+print("The histogram is approximately uniform — consistent with NO widespread rest effect.")
+print("The slight bump near 0 could be a few real effects, or just sampling variability.")
+```
+
+## Correction 1: Bonferroni
+
+The simplest fix: if you run $m$ tests, divide your significance level by $m$.
+
+$$\alpha_{\text{Bonferroni}} = \frac{\alpha}{m}$$
+
+This is the **Bonferroni correction**. It controls the **family-wise error rate (FWER)** — the probability of *any* false positive across all tests. It's conservative — meaning it may miss real effects — but it guarantees the probability of *any* false positive stays below $\alpha$, no matter how the tests are correlated.
+
+```{python}
+alpha = 0.05
+bonferroni_threshold = alpha / n_players
+
+print(f"Original threshold: {alpha}")
+print(f"Bonferroni threshold: {bonferroni_threshold:.6f}")
+print(f"That's {1/bonferroni_threshold:.0f}x more stringent!\n")
+
+n_bonf = (results_df['p_value'] < bonferroni_threshold).sum()
+print(f"Significant after Bonferroni: {n_bonf} (down from {n_sig})")
+
+if n_bonf > 0:
+    survivors = results_df[results_df['p_value'] < bonferroni_threshold]
+    print("\nSurvivors:")
+    print(survivors[['PLAYER_NAME', 'mean_btb', 'mean_rested', 'diff', 'p_value']].to_string(index=False))
+else:
+    print("\nNone survive. The intern's entire report just evaporated.")
+```
+
+## Correction 2: Benjamini-Hochberg (FDR control)
+
+Bonferroni killed every result. But is that too aggressive? Maybe some players really do benefit from rest — we just can't tell because Bonferroni demands an extremely low p-value for each test. Can we find a middle ground that allows a controlled fraction of false discoveries?
+
+The **Benjamini-Hochberg (BH) procedure** controls the **false discovery rate (FDR)** —
+the expected *proportion* of false positives among rejected hypotheses.
+
+The BH procedure:
+1. Sort p-values: $p_{(1)} \le p_{(2)} \le \cdots \le p_{(m)}$
+2. Find the largest $k$ such that $p_{(k)} \le \frac{k}{m} \alpha$
+3. Reject hypotheses $1, 2, \ldots, k$
+
+This guarantees that among your "discoveries," at most a fraction $\alpha$ are false.
+
+```{python}
+# Step-by-step Benjamini-Hochberg
+sorted_pvals = results_df.sort_values('p_value').copy()
+sorted_pvals['rank'] = range(1, len(sorted_pvals) + 1)
+sorted_pvals['BH_threshold'] = sorted_pvals['rank'] / n_players * alpha
+
+# Step-up rule: find the largest k where p_(k) <= k/m * alpha,
+# then reject ALL hypotheses 1 through k
+reject_mask = sorted_pvals['p_value'] <= sorted_pvals['BH_threshold']
+if reject_mask.any():
+    max_k = sorted_pvals.loc[reject_mask, 'rank'].max()
+    sorted_pvals['reject_BH'] = sorted_pvals['rank'] <= max_k
+else:
+    sorted_pvals['reject_BH'] = False
+```
+
+```{python}
+# Show the procedure for the top 15 p-values
+display_cols = ['PLAYER_NAME', 'p_value', 'rank', 'BH_threshold', 'reject_BH']
+print("Benjamini-Hochberg procedure (first 15 sorted p-values):")
+print(sorted_pvals.head(15)[display_cols].to_string(index=False))
+
+n_bh = sorted_pvals['reject_BH'].sum()
+print(f"\nSignificant after BH correction: {n_bh}")
+print(f"  Uncorrected:  {n_sig}")
+print(f"  Bonferroni:   {n_bonf}")
+print(f"  BH (FDR):     {n_bh}")
+```
+
+Use Bonferroni when *any* false positive is costly (e.g., drug safety). Use BH when you can tolerate some false discoveries (e.g., screening genes for further study). This connects to the dollar-sign decisions from Lecture 10: the stakes determine the correction.
+
+```{python}
+# Visualize the BH procedure
+fig, ax = plt.subplots(figsize=(8, 5))
+top_n = 50  # show first 50 sorted p-values
+subset = sorted_pvals.head(top_n)
+
+ax.scatter(subset['rank'], subset['p_value'], color='steelblue', s=30, label='Observed p-values')
+ax.plot(subset['rank'], subset['BH_threshold'], 'r--', linewidth=2, label='BH threshold (i/m × α)')
+ax.axhline(y=bonferroni_threshold, color='orange', linestyle=':', linewidth=2, label='Bonferroni threshold')
+ax.annotate(f'Bonferroni = {bonferroni_threshold:.5f}', xy=(top_n*0.6, bonferroni_threshold),
+            xytext=(top_n*0.6, bonferroni_threshold + 0.01),
+            arrowprops=dict(arrowstyle='->', color='orange'), fontsize=9, color='orange')
+ax.set_xlabel('Rank (sorted by p-value)')
+ax.set_ylabel('p-value')
+ax.set_title('Benjamini-Hochberg Procedure')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+This same problem arises whenever you run many tests: a genomics lab testing 20,000 genes for association with a disease, a tech company running hundreds of A/B tests per week, or a pharmaceutical trial measuring many endpoints. Any time you run many tests, you need **multiple testing correction**.
+
+## From testing to correlation
+
+So far we've been testing each player separately — a binary question (*does rest help this player?*). But maybe we're asking the wrong question. Instead of 431 yes/no answers, can we measure one continuous relationship: how does rest relate to performance across all players?
+
+> *"Correlation is not causation."*
+
+Let's see this in action. First, the picture.
+
+```{python}
+# Cap rest at 7 days to avoid long injury absences
+games_corr = df[df['REST_DAYS'] <= 7].copy()
+
+# Violin plot by rest day (avoids overplotting vs raw scatter)
+fig, ax = plt.subplots(figsize=(8, 5))
+rest_vals = sorted(games_corr['REST_DAYS'].unique())
+bp_data = [games_corr[games_corr['REST_DAYS'] == d]['PTS'].values for d in rest_vals]
+parts = ax.violinplot(bp_data, positions=rest_vals, showmedians=True, widths=0.7)
+for pc in parts['bodies']:
+    pc.set_facecolor('steelblue')
+    pc.set_alpha(0.5)
+
+# Overlay mean points by rest day
+means = games_corr.groupby('REST_DAYS')['PTS'].mean()
+ax.plot(means.index, means.values, 'ro-', markersize=8, linewidth=2, label='Mean PTS')
+ax.set_xlabel('Rest Days')
+ax.set_ylabel('Points Scored')
+ax.set_title('Rest Days vs Points Scored')
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+print("Notice: the means trend DOWNWARD. More rest → fewer points?!")
+print("That can't be right... or can it?")
+```
+
+Now let's quantify this with the **Pearson correlation** $r$, which measures the *linear* association between two variables (you may have seen this in MS&E 120):
+
+$$r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2 \sum (y_i - \bar{y})^2}}$$
+
+$r$ ranges from $-1$ to $+1$. Important: $r = 0$ means no *linear* relationship, not no relationship at all. Two variables can be strongly related (e.g., quadratic) and still have $r$ near 0.
+
+```{python}
+r, p = stats.pearsonr(games_corr['REST_DAYS'], games_corr['PTS'])
+print(f"Correlation (rest days vs points): r = {r:.4f}")
+print(f"p-value: {p:.6f}")
+print(f"\nWith n = {len(games_corr):,} observations, even tiny correlations are")
+print(f"*statistically* significant — but that doesn't mean the correlation is meaningful.")
+```
+
+## Correlation is not causation: the confounding problem
+
+That negative correlation seems backward. Rest *hurts* performance?
+
+**Think about it:** Before reading on — why might more rest be associated with fewer points? What's different about players who get extended rest? Discuss with your neighbor.
+
+Coaches don't randomly assign rest. Consider:
+
+- Star players play almost every game (short rest, high points)
+- Bench players are more likely to miss games (extended rest, low points)
+- Players returning from minor injuries get extended rest
+- Back-to-backs cluster during road trips (schedule-driven)
+
+The **reason** for rest is **confounded** with the **outcome** of rest. We'll formalize this idea in Lecture 18 using causal diagrams (DAGs), which make it precise to say exactly which variables are confounders.
+
+```{python}
+# Who gets extended rest? Compare player quality across rest categories.
+player_stats = df.groupby('PLAYER_NAME').agg(
+    ppg=('PTS', 'mean'),
+    games=('PTS', 'count'),
+    mean_rest=('REST_DAYS', 'mean')
+).query('games >= 50')
+
+ext_rest = df[df['REST_DAYS'] >= 4].groupby('PLAYER_NAME').size().reset_index(name='ext_rest_games')
+player_stats = player_stats.reset_index().merge(ext_rest, on='PLAYER_NAME', how='left')
+player_stats['ext_rest_games'] = player_stats['ext_rest_games'].fillna(0)
+player_stats['ext_rest_frac'] = player_stats['ext_rest_games'] / player_stats['games']
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.scatter(player_stats['ppg'], player_stats['ext_rest_frac'],
+           alpha=0.4, s=player_stats['games']/5, color='steelblue')
+ax.set_xlabel('Points Per Game (player quality)')
+ax.set_ylabel('Fraction of Games with Extended Rest (4+ days)')
+ax.set_title('Who Gets Extended Rest?\n(size = number of games)')
+plt.tight_layout()
+plt.show()
+
+r_qual, p_qual = stats.pearsonr(player_stats['ppg'], player_stats['ext_rest_frac'])
+print(f"Correlation between PPG and extended rest fraction: r = {r_qual:.3f}")
+print("Low-scoring players have MORE extended rest — they're the ones sitting out!")
+```
+
+## The surprise: Simpson's paradox in rest data
+
+This is **Simpson's paradox** (named after Edward Simpson, 1951): the aggregate comparison shows rest *hurts* by several points, but within individual players, the effect is essentially zero. The aggregate pattern was entirely driven by *who* gets rest, not by rest itself.
+
+Let's see this directly.
+
+```{python}
+# Aggregate comparison (MISLEADING)
+print("=== Aggregate Comparison (MISLEADING) ===")
+agg_means = df.groupby('REST_CATEGORY')['PTS'].mean()
+print(agg_means.round(2))
+print(f"\nExtended rest: {agg_means.iloc[-1]:.1f} PPG  vs  Back-to-back: {agg_means.iloc[0]:.1f} PPG")
+print(f"Looks like rest HURTS by {agg_means.iloc[0] - agg_means.iloc[-1]:.1f} points!")
+```
+
+The fix is to compare each player to *themselves*. For each player-season, we subtract their average points. Now a value of +2 means "this player scored 2 points above their own average." This removes player quality from the comparison.
+
+```{python}
+# Compute each player-season's average points
+player_season_avg = df.groupby(['PLAYER_ID', 'SEASON'])['PTS'].transform('mean')
+# Subtract to get within-player deviation
+df['PTS_DEMEANED'] = df['PTS'] - player_season_avg
+
+print("=== Within-Player Comparison (CORRECT) ===")
+within_means = df.dropna(subset=['REST_CATEGORY']).groupby('REST_CATEGORY')['PTS_DEMEANED'].mean()
+print(within_means.round(3))
+print(f"\nWithin-player, extended rest effect: {within_means.iloc[-1]:+.3f} points")
+print("Almost zero! The aggregate effect was entirely driven by WHO gets rest.")
+```
+
+```{python}
+# Visualize the paradox
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
+
+# Left: aggregate (misleading)
+axes[0].bar(range(len(agg_means)), agg_means.values, color=colors, edgecolor='black')
+axes[0].set_xticks(range(len(agg_means)))
+axes[0].set_xticklabels(agg_means.index, rotation=15, fontsize=9)
+axes[0].set_ylabel('Mean Points')
+axes[0].set_ylim(bottom=0)
+axes[0].set_title('Aggregate: Rest Looks Harmful\n(Simpson\'s paradox!)')
+
+# Right: within-player (correct)
+sems = df.dropna(subset=['REST_CATEGORY']).groupby('REST_CATEGORY')['PTS_DEMEANED'].sem()
+axes[1].bar(range(len(within_means)), within_means.values,
+            yerr=sems.values * 1.96, color=colors, edgecolor='black', capsize=5)
+axes[1].set_xticks(range(len(within_means)))
+axes[1].set_xticklabels(within_means.index, rotation=15, fontsize=9)
+axes[1].axhline(y=0, color='black', linewidth=0.5)
+axes[1].set_ylabel('Mean Points (relative to player avg)')
+axes[1].set_title('Within-Player: Almost No Effect\n(error bars = 95% CI)')
+plt.tight_layout()
+plt.show()
+
+print("Left: misleading. Right: the real story.")
+print("Always ask: WHY were these groups different to begin with?")
+```
+
+## Key takeaways
+
+Both halves of today's lecture share a theme: statistical results can be deeply misleading when you don't account for the structure of your analysis.
+
+**Multiple testing:**
+
+1. **Multiple testing inflates false positives.** If you test $m$ hypotheses at level $\alpha$,
+   you expect $m \alpha$ false positives. Testing 431 players guarantees ~22 "significant" results
+   even when rest has zero effect.
+
+2. **Always correct for multiple comparisons.** Bonferroni ($\alpha/m$) controls the family-wise
+   error rate; Benjamini-Hochberg controls the false discovery rate. Both dramatically reduce
+   spurious findings.
+
+3. **The p-value histogram is your friend.** Under the null, p-values are uniform. A spike near 0
+   suggests real effects; a flat histogram suggests noise.
+
+**Correlation and confounding:**
+
+4. **Correlation is not causation.** The negative correlation between rest and points exists because
+   of *who* gets rest, not because rest hurts performance. Confounding variables drive the pattern.
+
+5. **Simpson's paradox is real and common.** Aggregate comparisons can reverse the individual-level
+   story when groups are heterogeneous. Always ask what's driving the comparison.
+
+In Lecture 12, we'll use regression to estimate the effect of rest while controlling for player quality, schedule difficulty, and fatigue — and we'll test whether that coefficient is statistically significant.
+
+## Study guide
+
+**Key definitions:**
+
+- **Multiple testing (multiple comparisons):** Running many hypothesis tests on the same data, inflating the chance of false positives.
+- **Family-wise error rate (FWER):** The probability of making *any* false positive across all tests. Bonferroni controls this.
+- **False discovery rate (FDR):** The expected *proportion* of rejected hypotheses that are false. BH controls this.
+- **Bonferroni correction:** Test each hypothesis at $\alpha / m$ instead of $\alpha$.
+- **Benjamini-Hochberg (BH) procedure:** Sort p-values; find the largest $k$ where $p_{(k)} \le (k/m) \alpha$; reject hypotheses $1, \ldots, k$.
+- **p-value histogram:** Diagnostic tool; uniform under the null, spike near 0 if signal exists.
+- **Pearson correlation ($r$):** Measures linear association between two variables. Ranges from $-1$ to $+1$.
+- **Confounding:** When a third variable influences both the treatment and the outcome, creating a spurious association.
+- **Simpson's paradox:** An aggregate trend reverses (or disappears) when you look within subgroups.
+
+**Key ideas (one sentence each):**
+
+- Running $m$ tests at $\alpha = 0.05$ produces $\sim m \times 0.05$ false positives even when nothing is real.
+- Bonferroni is safe but conservative; BH is more powerful but allows a controlled fraction of false discoveries.
+- A flat p-value histogram means no widespread effect; a spike near 0 means some discoveries are real.
+- Correlation between two variables can be driven entirely by a confounder — always ask *who* is in each group.
+- Within-group analysis (demeaning) removes confounders that differ between groups.
+
+**Computational tools:**
+
+- `scipy.stats.ttest_ind(a, b)` — Welch's two-sample t-test
+- `scipy.stats.pearsonr(x, y)` — Pearson correlation and p-value
+- BH procedure: sort p-values, compute thresholds $k/m \times \alpha$, apply step-up rule
+- `.groupby().transform('mean')` — compute group means aligned to original rows (for demeaning)
+
+**For the quiz:**
+
+- Be able to compute the expected number of false positives given $m$ and $\alpha$.
+- Know when to use Bonferroni vs. BH (stakes determine the correction).
+- Be able to interpret a p-value histogram.
+- Explain why a correlation can be misleading due to confounding.
+- Recognize Simpson's paradox: aggregate trend differs from within-group trend.

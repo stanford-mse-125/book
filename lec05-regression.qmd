@@ -1,0 +1,510 @@
+---
+title: "Lecture 5: Linear Regression as Projection"
+execute:
+  enabled: true
+jupyter: python3
+---
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.linear_model import LinearRegression
+from mpl_toolkits.mplot3d import Axes3D
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['font.size'] = 12
+
+# Load data
+DATA_DIR = 'data'
+```
+
+## How much is a bathroom worth?
+
+An Airbnb host adds a second bathroom. How much more should they charge per night?
+Regression gives the answer — and linear algebra tells us **WHY** it works.
+
+You may have *used* the regression formula before. Today you'll understand it geometrically — and that geometric view will be essential when we add many features, diagnose problems, and eventually ask causal questions. The punchline: regression is a **projection**.
+
+### Why is it called "regression"?
+
+The name comes from Francis Galton, who in the 1880s studied the heights of fathers and sons. He noticed that unusually tall fathers tended to have sons who were tall — but *less* tall than their fathers. Unusually short fathers had sons who were short — but *less* short. Heights "regressed toward the mean." Galton's method for quantifying this — fitting a line through the data — became "regression," and the name stuck even though we now use it for problems that have nothing to do with reverting to averages. (For the full story, see Salsburg, *The Lady Tasting Tea*, Ch. 4.)
+
+## The data
+
+Let's load the NYC Airbnb dataset and focus on listings with reasonable prices.
+
+```{python}
+# Load and clean Airbnb data
+airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
+
+# Parse price (handles both "$1,200.00" strings and numeric formats)
+airbnb['price_clean'] = (airbnb['price'].astype(str)
+                          .str.replace('[$,]', '', regex=True)
+                          .astype(float))
+
+# Working subset
+cols = ['bedrooms', 'bathrooms', 'beds', 'price_clean',
+        'accommodates', 'number_of_reviews', 'room_type']
+df = airbnb[cols].dropna()
+df = df[(df['price_clean'] > 0) & (df['price_clean'] <= 500)]
+print(f"{len(df):,} listings, price range: ${df['price_clean'].min():.0f} – ${df['price_clean'].max():.0f}")
+df.head()
+```
+
+## Simple regression: price ~ bedrooms
+
+Let's start simple. How does price change with the number of bedrooms?
+
+```{python}
+# Scatter plot + regression line
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.scatter(df['bedrooms'], df['price_clean'], alpha=0.05, s=10)
+
+# Fit simple regression
+model_simple = LinearRegression()
+model_simple.fit(df[['bedrooms']], df['price_clean'])
+x_line = np.linspace(0, 6, 100)
+y_line = model_simple.predict(x_line.reshape(-1, 1))
+ax.plot(x_line, y_line, 'r-', lw=2.5, label=f'ŷ = {model_simple.intercept_:.0f} + {model_simple.coef_[0]:.0f} × bedrooms')
+
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Price ($/night)')
+ax.set_title('Simple regression: price ~ bedrooms')
+ax.legend(fontsize=12)
+plt.tight_layout()
+plt.show()
+
+print(f"Each additional bedroom is associated with ${model_simple.coef_[0]:.0f} more per night.")
+```
+
+That's the regression line. But *why* this line? There are infinitely many lines we could draw through this cloud. Regression picks the one that minimizes the total squared distance from the data to the line. But why squared distances, not absolute distances or something else?
+
+**Think about it:** Why minimize *squared* errors? Two reasons: (1) Squared error leads to a linear algebra problem — the projection — with a clean closed-form solution. (2) It estimates the conditional mean. We could choose a different loss function (and we will, in Lecture 13 for classification). For now, squared error gives us beautiful geometry.
+
+## The geometric view: prediction lives in the column space
+
+Here's the key idea from Lecture 4:
+
+- Your feature matrix $X$ has columns $x_1, x_2, \ldots$
+- Any prediction $\hat{y} = X\beta$ is a **linear combination** of those columns
+- So $\hat{y}$ must live in the **column space** of $X$
+
+The true prices $y$ probably do NOT live in the column space. So regression finds the **closest point** in the column space to $y$. That closest point is the **projection** of $y$ onto $\text{col}(X)$.
+
+As George Box put it: **"All models are wrong, but some are useful."** The prediction $\hat{y}$ won't equal $y$ exactly — the model is wrong — but projection gives us the *best approximation* within the column space.
+
+**Think about it:** If $\hat{y}$ is the closest point in the column space to $y$, what direction must $y - \hat{y}$ point? (Hint: think about the closest point on a line to a point not on the line.)
+
+```{python}
+# Visualization code — focus on the output, not the plotting details.
+# This draws a 2D cartoon: y is a point, col(X) is a line,
+# and ŷ is the projection of y onto that line.
+
+fig, ax = plt.subplots(figsize=(7, 6))
+
+# The column space (a line through the origin in this picture)
+t = np.linspace(-0.5, 2.5, 100)
+ax.plot(t, 0.5 * t, 'C0-', lw=2, label='Column space of $X$')
+
+# y (the target)
+y_pt = np.array([1.5, 1.8])
+ax.plot(*y_pt, 'ro', ms=10, zorder=5)
+ax.annotate('$y$ (true prices)', xy=y_pt, fontsize=13,
+            xytext=(15, 10), textcoords='offset points', color='red')
+
+# ŷ (the projection)
+# Project y onto the line (direction [1, 0.5])
+d = np.array([1, 0.5])
+d_unit = d / np.linalg.norm(d)
+yhat_pt = np.dot(y_pt, d_unit) * d_unit
+ax.plot(*yhat_pt, 'C0o', ms=10, zorder=5)
+ax.annotate('$\hat{y}$ (prediction)', xy=yhat_pt, fontsize=13,
+            xytext=(-80, -25), textcoords='offset points', color='C0')
+
+# Residual (orthogonal)
+ax.annotate('', xy=y_pt, xytext=yhat_pt,
+            arrowprops=dict(arrowstyle='->', color='green', lw=2, ls='--'))
+ax.text(1.25, 1.3, '$e = y - \hat{y}$\n(residual)', fontsize=12, color='green')
+
+# Right angle marker
+from matplotlib.patches import Rectangle
+angle_size = 0.1
+corner = yhat_pt
+perp = (y_pt - yhat_pt)
+perp_unit = perp / np.linalg.norm(perp)
+par_unit = d_unit
+sq = np.array([corner, corner + angle_size*par_unit,
+               corner + angle_size*par_unit + angle_size*perp_unit,
+               corner + angle_size*perp_unit, corner])
+ax.plot(sq[:, 0], sq[:, 1], 'k-', lw=1)
+
+ax.set_xlim(-0.5, 2.5)
+ax.set_ylim(-0.5, 2.5)
+ax.set_aspect('equal')
+ax.set_xlabel('Dimension 1')
+ax.set_ylabel('Dimension 2')
+ax.set_title('Regression = projection onto column space')
+ax.legend(loc='lower right', fontsize=11)
+plt.tight_layout()
+plt.show()
+```
+
+The **residual** $e = y - \hat{y}$ is **orthogonal** to the column space. This is the defining property of the least squares solution.
+
+Why orthogonal? Because that makes $\hat{y}$ the *closest* point in the column space to $y$ — just like dropping a perpendicular from a point to a line gives the closest point on the line.
+
+## Normal equations: orthogonality in algebra
+
+We're about to derive a formula for the regression coefficients that explains WHY sklearn gives the answer it does. The key insight: requiring the residual to be orthogonal to $X$ gives us exactly one equation to solve.
+
+"The residual is orthogonal to the column space" translates to:
+
+$$X^T(y - X\beta) = 0$$
+
+This says: the residual $e = y - X\beta$ has zero dot product with every column of $X$. Rearranging:
+
+$$X^T X \beta = X^T y \qquad \Longrightarrow \qquad \beta = (X^T X)^{-1} X^T y$$
+
+These are the **normal equations** — the formula for the least squares solution. This requires $X^TX$ to be invertible, which means the columns of $X$ must be linearly independent (recall Lecture 4). If you have perfectly collinear features, this matrix is singular and there's no unique solution.
+
+You may have heard "regression minimizes the sum of squared errors." Now you can see *why*: the prediction that minimizes $\|y - \hat{y}\|^2$ is exactly the orthogonal projection of $y$ onto $\text{col}(X)$.
+
+The normal equations give us the exact solution in one step. For larger problems or different loss functions where no closed-form solution exists, we'll need an iterative approach called gradient descent (Lecture 13).
+
+```{python}
+# Verify: the normal equations give the same answer as sklearn
+
+# Simple regression with an intercept: y = beta0 + beta1 * bedrooms
+X_manual = np.column_stack([np.ones(len(df)), df['bedrooms'].values])
+y = df['price_clean'].values
+
+# Normal equations: beta = (X^T X)^{-1} X^T y
+# We use np.linalg.solve rather than np.linalg.inv — computing matrix
+# inverses explicitly is numerically unstable.
+beta_normal = np.linalg.solve(X_manual.T @ X_manual, X_manual.T @ y)
+
+print("Normal equations:  intercept = {:.2f}, slope = {:.2f}".format(*beta_normal))
+print("sklearn:           intercept = {:.2f}, slope = {:.2f}".format(
+    model_simple.intercept_, model_simple.coef_[0]))
+```
+
+```{python}
+# Verify orthogonality: residuals are orthogonal to each column of X
+y_hat = X_manual @ beta_normal
+residuals = y - y_hat
+
+dot_with_ones = np.dot(residuals, X_manual[:, 0])     # dot with intercept column
+dot_with_bedrooms = np.dot(residuals, X_manual[:, 1])  # dot with bedrooms column
+
+print("Residuals dot (column of 1s):  {:.6f}  (≈ 0 ✓)".format(dot_with_ones))
+print("Residuals dot (bedrooms):      {:.6f}  (≈ 0 ✓)".format(dot_with_bedrooms))
+print()
+print("The residual is orthogonal to every column of X.")
+print("This IS the normal equation: X^T(y - Xβ) = 0.")
+print("The errors have no pattern left that could be captured by the features.")
+```
+
+## Seeing projection in 3D
+
+Let's make the geometry concrete with 3 data points and 1 feature. The true $y$ is a vector in $\mathbb{R}^3$. The column space of $X$ is a plane in $\mathbb{R}^3$. The prediction $\hat{y}$ is the shadow of $y$ onto that plane.
+
+```{python}
+# Visualization code — focus on the output, not the plotting details.
+# 3D projection: col(X) is a plane in R^3. ŷ is the shadow of y onto that plane.
+
+y_3 = np.array([3, 5, 4])
+X_3 = np.array([[1, 1], [1, 2], [1, 3]])  # intercept + feature
+
+beta_3 = np.linalg.solve(X_3.T @ X_3, X_3.T @ y_3)
+yhat_3 = X_3 @ beta_3
+e_3 = y_3 - yhat_3
+
+fig = plt.figure(figsize=(8, 7))
+ax = fig.add_subplot(111, projection='3d')
+
+# Draw the column space plane
+s = np.linspace(-1, 2, 10)
+t = np.linspace(-1, 2, 10)
+S, T = np.meshgrid(s, t)
+plane_x = S * X_3[0, 0] + T * X_3[0, 1]
+plane_y = S * X_3[1, 0] + T * X_3[1, 1]
+plane_z = S * X_3[2, 0] + T * X_3[2, 1]
+ax.plot_surface(plane_x, plane_y, plane_z, alpha=0.15, color='blue')
+
+# y
+ax.scatter(*y_3, color='red', s=100, zorder=5)
+ax.text(y_3[0], y_3[1], y_3[2]+0.2, '$y$', fontsize=14, color='red')
+
+# ŷ
+ax.scatter(*yhat_3, color='blue', s=100, zorder=5)
+ax.text(yhat_3[0], yhat_3[1], yhat_3[2]-0.3, '$\hat{y}$', fontsize=14, color='blue')
+
+# Residual line
+ax.plot([yhat_3[0], y_3[0]], [yhat_3[1], y_3[1]], [yhat_3[2], y_3[2]],
+        'g--', lw=2)
+ax.text((y_3[0]+yhat_3[0])/2 + 0.2, (y_3[1]+yhat_3[1])/2,
+        (y_3[2]+yhat_3[2])/2, '$e$', fontsize=14, color='green')
+
+ax.set_xlabel('$y_1$')
+ax.set_ylabel('$y_2$')
+ax.set_zlabel('$y_3$')
+ax.set_title('Projection: $\hat{y}$ is the closest point\nin col($X$) to $y$')
+plt.tight_layout()
+plt.show()
+
+print(f"y    = {y_3}")
+print(f"ŷ    = [{', '.join(f'{v:.2f}' for v in yhat_3)}]")
+print(f"e    = [{', '.join(f'{v:.2f}' for v in e_3)}]")
+print(f"||e|| = {np.linalg.norm(e_3):.3f}")
+```
+
+## Multiple regression: more features, bigger column space
+
+Our model says each bedroom adds some amount per night. But wait — bigger apartments also have more bathrooms and can accommodate more guests. The bedroom coefficient might be picking up the effect of all of these. To isolate the bedroom effect, we need to *hold other features constant*.
+
+Each new (independent) feature expands the column space, giving us a richer set of possible predictions.
+
+Think of regression as having two choices: (1) the column space — which features to include, determining what predictions the model can make — and (2) the loss function — squared error, which gives us the projection. Change the features and you change what the model can express. Change the loss and you change what "best" means. We'll explore both directions in later lectures.
+
+```{python}
+# Multiple regression: price ~ bedrooms + bathrooms + room_type
+# One-hot encode room_type
+df_model = df.copy()
+df_model = pd.get_dummies(df_model, columns=['room_type'], drop_first=True, dtype=float)
+
+features = ['bedrooms', 'bathrooms', 'room_type_Private room', 'room_type_Shared room']
+X_multi = df_model[features]
+y_multi = df_model['price_clean']
+
+model_multi = LinearRegression()
+model_multi.fit(X_multi, y_multi)
+
+print("Multiple regression: price ~ bedrooms + bathrooms + room_type")
+print(f"  Intercept: ${model_multi.intercept_:.2f}")
+print()
+for feat, coef in zip(features, model_multi.coef_):
+    print(f"  {feat:30s}  ${coef:+.2f}")
+```
+
+**Coefficient interpretation:**
+
+- Each additional bedroom is associated with about \$21 more per night, **holding other features constant**.
+- Each additional bathroom is associated with about \$41 more per night.
+- A private room costs roughly \$68 *less* than an entire home/apt, all else equal.
+
+The "holding constant" part is crucial — it's what multiple regression gives you that simple regression doesn't. Concretely: the coefficient on bedrooms means that if we compare two listings with the same number of bathrooms, the same room type, and the same everything else — but one has one more bedroom — the model predicts the extra bedroom is worth about \$21/night.
+
+We can go even further: adding polynomial features, interactions, or other transformations expands the column space without leaving the linear regression framework. We'll explore this in Lecture 6.
+
+```{python}
+# Compare simple vs multiple regression
+model_bed_only = LinearRegression().fit(df[['bedrooms']], df['price_clean'])
+y_hat_simple = model_bed_only.predict(df[['bedrooms']])
+y_hat_multi = model_multi.predict(X_multi)
+
+r2_simple = 1 - np.sum((y_multi - y_hat_simple)**2) / np.sum((y_multi - y_multi.mean())**2)
+r2_multi = 1 - np.sum((y_multi - y_hat_multi)**2) / np.sum((y_multi - y_multi.mean())**2)
+
+print(f"R² with bedrooms only:                          {r2_simple:.3f}")
+print(f"R² with bedrooms + bathrooms + room_type:        {r2_multi:.3f}")
+print()
+print("More independent features → larger column space → better projection → higher R²")
+```
+
+## $R^2$ as a projection ratio
+
+After centering $y$ (subtracting the mean), we can decompose:
+
+$$\|y - \bar{y}\|^2 = \|\hat{y} - \bar{y}\|^2 + \|e\|^2$$
+
+This is the Pythagorean theorem! (Because $\hat{y} - \bar{y}$ and $e$ are orthogonal.) This decomposition holds when the model includes an intercept (which ours does). The intercept ensures residuals sum to zero — that's the normal equation $\mathbf{1}^T e = 0$.
+
+$$R^2 = \frac{\|\hat{y} - \bar{y}\|^2}{\|y - \bar{y}\|^2} = 1 - \frac{\|e\|^2}{\|y - \bar{y}\|^2}$$
+
+**$R^2$** is the fraction of variance "explained" — geometrically, it's the squared cosine of the angle between the centered response $y - \bar{y}$ and the centered predictions $\hat{y} - \bar{y}$.
+
+```{python}
+# Verify the Pythagorean decomposition
+y_vals = y_multi.values
+y_bar = y_vals.mean()
+y_hat_vals = y_hat_multi
+
+ss_total = np.sum((y_vals - y_bar)**2)        # ||y - ȳ||²
+ss_model = np.sum((y_hat_vals - y_bar)**2)    # ||ŷ - ȳ||²
+ss_resid = np.sum((y_vals - y_hat_vals)**2)   # ||e||²
+
+print(f"SS_total = {ss_total:,.0f}")
+print(f"SS_model = {ss_model:,.0f}")
+print(f"SS_resid = {ss_resid:,.0f}")
+print(f"SS_model + SS_resid = {ss_model + ss_resid:,.0f}  (≈ SS_total ✓)")
+print()
+print(f"R² = SS_model / SS_total = {ss_model/ss_total:.4f}")
+print(f"R² = 1 - SS_resid/SS_total = {1 - ss_resid/ss_total:.4f}")
+```
+
+An R-squared around 0.15 means our model explains about 15% of the variation in prices. That means 85% comes from things we didn't include — neighborhood, amenities, photos, host reputation, etc. This is typical for real data. The world is messy.
+
+**Think about it:** Can R-squared ever *decrease* when you add a feature? Why or why not? (We'll answer this in a moment.)
+
+## Checking the residuals
+
+The normal equations guarantee $X^Te = 0$ — that's a mathematical fact. But a good model should also have residuals that look like random noise. The orthogonality is guaranteed; the randomness is not. Let's check.
+
+```{python}
+# Residual plot
+residuals_multi = y_multi - y_hat_multi
+
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+
+axes[0].scatter(y_hat_multi, residuals_multi, alpha=0.05, s=10)
+axes[0].axhline(0, color='red', lw=1.5)
+axes[0].set_xlabel('Predicted price ($)')
+axes[0].set_ylabel('Residual ($)')
+axes[0].set_title('Residuals vs predicted values')
+
+axes[1].hist(residuals_multi, bins=60, edgecolor='white', alpha=0.7)
+axes[1].set_xlabel('Residual ($)')
+axes[1].set_ylabel('Count')
+axes[1].set_title('Distribution of residuals')
+
+plt.tight_layout()
+plt.show()
+
+print("Notice: the spread of residuals increases with predicted price.")
+print("This is heteroscedasticity — the model's errors are not constant.")
+```
+
+## The surprise: does popularity cause higher prices?
+
+Let's add `number_of_reviews` as a feature. More reviews might mean a listing is more popular. Does that predict higher prices?
+
+```{python}
+# Add number_of_reviews to the model
+features_plus = features + ['number_of_reviews']
+X_plus = df_model[features_plus]
+
+model_plus = LinearRegression()
+model_plus.fit(X_plus, y_multi)
+
+y_hat_plus = model_plus.predict(X_plus)
+r2_plus = 1 - np.sum((y_multi - y_hat_plus)**2) / np.sum((y_multi - y_multi.mean())**2)
+
+print("Model with number_of_reviews added:")
+print(f"  R² = {r2_plus:.4f}  (was {r2_multi:.4f})")
+print()
+for feat, coef in zip(features_plus, model_plus.coef_):
+    print(f"  {feat:30s}  ${coef:+.2f}")
+```
+
+```{python}
+# The coefficient on number_of_reviews
+coef_reviews = model_plus.coef_[-1]
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.scatter(df['number_of_reviews'], df['price_clean'], alpha=0.05, s=10)
+ax.set_xlabel('Number of reviews')
+ax.set_ylabel('Price ($/night)')
+ax.set_title(f'Price vs number of reviews (regression coef = ${coef_reviews:.2f}/review)')
+plt.tight_layout()
+plt.show()
+
+print(f"The coefficient is ${coef_reviews:.2f} per review.")
+print("Listings with MORE reviews tend to be slightly CHEAPER.")
+print()
+print("Wait — does getting more reviews CAUSE a listing to be cheaper?")
+print("Of course not. This is correlation, not causation.")
+print("Cheaper listings get booked more → more reviews.")
+print("We'll revisit this when we study causal inference.")
+```
+
+**Training** $R^2$ went up when we added `number_of_reviews`. The column space got bigger, so the projection got closer to $y$. **Training $R^2$ can NEVER decrease when you add a feature** — that's a mathematical fact about projections (a bigger column space means a closer projection). But this doesn't mean the model is better at predicting *new* data. We'll see this distinction clearly in Lecture 7.
+
+But does `number_of_reviews` *cause* higher or lower prices? No. Think about it: a \$50/night studio in Manhattan gets booked 200 nights a year. A \$400/night penthouse gets booked 30 nights a year. More bookings means more guests means more reviews. Price drives both bookings and review count. This is a preview of **confounding** — a hidden common cause creates a misleading association. We'll formalize this with DAGs in Lecture 18.
+
+**Think about it:** If you wanted to know whether adding a bathroom *causes* a price increase, how would you design a study? (We'll answer this in the causal inference lectures.)
+
+## Preview: does more features = better predictions?
+
+Training R-squared always goes up when you add features. But what about predictions on *new* data? Let's do a quick check with a **train/test split**.
+
+```{python}
+# Split data: train on 80%, test on 20%
+from sklearn.model_selection import train_test_split
+
+train, test = train_test_split(df_model, test_size=0.2, random_state=42)
+
+# Fit models on training data only
+features_small = ['bedrooms']
+features_big = features_plus  # bedrooms + bathrooms + room_type + number_of_reviews
+
+from sklearn.linear_model import LinearRegression
+
+model_small = LinearRegression().fit(train[features_small], train['price_clean'])
+model_big = LinearRegression().fit(train[features_big], train['price_clean'])
+
+# Evaluate on BOTH train and test
+for name, mod, feats in [("bedrooms only", model_small, features_small),
+                          ("all features", model_big, features_big)]:
+    r2_train = mod.score(train[feats], train['price_clean'])
+    r2_test = mod.score(test[feats], test['price_clean'])
+    print(f"{name:20s}  train R² = {r2_train:.4f},  test R² = {r2_test:.4f}")
+```
+
+Training R-squared goes up with more features — guaranteed. Test R-squared *usually* goes up too, but not always, and not by as much. When the gap between train and test R-squared is large, the model may be **overfitting** — fitting noise in the training data that doesn't generalize. We'll develop this idea fully in Lecture 7 with cross-validation.
+
+## Key takeaways
+
+- **Regression is projection.** The prediction $\hat{y}$ is the orthogonal projection of $y$ onto the column space of $X$.
+- **The residual is orthogonal to the column space:** $X^Te = 0$. This IS the normal equation.
+- **The normal equations** $\beta = (X^TX)^{-1}X^Ty$ give the least squares solution (when $X^TX$ is invertible). Now you know *why* it works.
+- **$R^2$** is the fraction of variance explained — the squared cosine between $y - \bar{y}$ and $\hat{y} - \bar{y}$.
+- **More features → higher training $R^2$**, guaranteed. But higher training $R^2$ does NOT mean better predictions on new data or causal understanding.
+- Regression finds the **best approximation** to $y$ in the column space of $X$. "All models are wrong, but some are useful" (Box).
+
+Next time: can we make this model more powerful? With the right features — dummies, polynomials, interactions — a linear model can capture surprisingly complex patterns. And we'll meet decision trees, which engineer features automatically. (Lecture 6: Feature Engineering.)
+
+## Connections
+
+- **EE103/CME103 (VMLS):** This is least squares from Ch 13, applied to real data.
+- **ORIE 4741 framing:** We chose a model family (linear functions) and a loss (squared error). The normal equations solve the optimization problem. ORIE 4741 solves this same problem via gradient descent — a different route to the same answer.
+- **Coming up:** Feature engineering — polynomials, interactions, trees (Lecture 6), validation and the bias-variance tradeoff (Lecture 7), bootstrap CIs (Lecture 8), regression diagnostics and inference (Lecture 12), and eventually: when does correlation imply causation? (Lectures 18–19).
+
+## Study guide
+
+**Key definitions:**
+
+- **Projection** — the closest point in a subspace to a given vector
+- **Residual** — the error $e = y - \hat{y}$; orthogonal to the column space
+- **Orthogonality** — residual $\perp$ column space, i.e., $X^T e = 0$
+- **Normal equations** — $X^TX\beta = X^Ty$, the algebraic form of the orthogonality condition
+- **$R^2$** — fraction of variance explained; $R^2 = 1 - \|e\|^2 / \|y - \bar{y}\|^2$
+- **Coefficient interpretation** — "holding other features constant," the predicted change in $y$ per unit change in one feature
+
+**Key ideas (one sentence each):**
+
+1. Regression finds the orthogonal projection of $y$ onto the column space of $X$.
+2. The residual is orthogonal to every column of $X$ — that's the normal equation.
+3. $R^2$ is the fraction of variance explained; it always increases with more features (on training data).
+4. A regression coefficient measures association, not causation.
+
+**Computational tools:**
+
+- `LinearRegression()` — create a linear regression model
+- `.fit(X, y)` — fit the model to data
+- `.predict(X)` — generate predictions
+- `.coef_` — fitted coefficients (slopes)
+- `.intercept_` — fitted intercept
+- `np.linalg.solve(A, b)` — solve $Ax = b$ without forming $A^{-1}$
+- `pd.get_dummies()` — one-hot encode categorical variables
+- `train_test_split()` — split data into training and test sets
+
+**For the quiz:**
+
+- Be able to write the normal equations and explain what they mean geometrically.
+- Given a regression output, interpret a coefficient in context ("holding other features constant...").
+- Explain why training $R^2$ can never decrease when you add a feature.
+- Distinguish association from causation in a regression example.

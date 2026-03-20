@@ -1,0 +1,606 @@
+---
+title: "Lecture 7: Trees, Validation, and Bias-Variance"
+execute:
+  enabled: true
+jupyter: python3
+---
+
+You've built powerful features and met trees. But how do you know your model works on *new* data? Today: the discipline of model evaluation, and a surprising discovery about what happens when models get very complex.
+
+In [Lecture 6](lec06-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. We also met decision trees and random forests, which engineer features automatically. But we've been measuring performance on the *same data we trained on*. That's like grading a student on the questions they've already seen. Today we confront the most important question in applied modeling: **does this model generalize?**
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.linear_model import LinearRegression, Lasso
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.metrics import r2_score, mean_squared_error
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['font.size'] = 12
+
+DATA_DIR = 'data'
+```
+
+## Section 1: When more features = worse predictions
+
+Adding features always improves training $R^2$. But does it improve predictions on *new* data?
+
+Let's find out. We'll build feature matrices at six different complexity levels — from minimal (just bedrooms and bathrooms) to kitchen-sink (all pairwise interactions) — and track performance on both the training and test sets.
+
+```{python}
+# Load Airbnb data (same setup as Lecture 6)
+listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
+
+cols = ['price', 'bedrooms', 'bathrooms', 'room_type', 'neighbourhood_group_cleansed']
+df = listings[cols].dropna().copy()
+df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
+
+# Clean price column
+df['price'] = df['price'].astype(str).str.replace('[$,]', '', regex=True).astype(float)
+
+# Filter to reasonable prices
+df = df[df['price'].between(10, 500)].reset_index(drop=True)
+y = df['price']
+
+print(f"{len(df):,} listings")
+df.head()
+```
+
+Here's the plan: six levels of model complexity, each one adding to the previous.
+
+| Level | What it adds | Intuition |
+|-------|-------------|-----------|
+| 1 | bedrooms + bathrooms | Raw numeric features only |
+| 2 | + room type dummies | Different baseline by listing type |
+| 3 | + borough dummies | Different baseline by location |
+| 4 | + bedroom x borough interactions | Different slopes by location |
+| 5 | + polynomial features (degree 3) | Nonlinear numeric effects |
+| 6 | all pairwise interactions | Everything interacts with everything |
+
+```{python}
+def build_features(data, level):
+    """Build feature matrices at different complexity levels."""
+    num = data[['bedrooms', 'bathrooms']].copy()
+
+    if level == 1:
+        return num
+
+    room = pd.get_dummies(data['room_type'], drop_first=True, prefix='room')
+    if level == 2:
+        return pd.concat([num, room], axis=1)
+
+    borough = pd.get_dummies(data['borough'], drop_first=True, prefix='boro')
+    if level == 3:
+        return pd.concat([num, room, borough], axis=1)
+
+    # Level 4: add bedroom x borough interactions
+    inter = borough.multiply(data['bedrooms'], axis=0)
+    inter.columns = [f'{c}_x_bed' for c in inter.columns]
+    if level == 4:
+        return pd.concat([num, room, borough, inter], axis=1)
+
+    # Level 5: add polynomial features (degree 3) on numeric columns
+    poly = PolynomialFeatures(degree=3, include_bias=False)
+    num_poly = pd.DataFrame(
+        poly.fit_transform(num),
+        columns=[f'poly_{i}' for i in range(poly.n_output_features_)],
+        index=data.index
+    )
+    if level == 5:
+        return pd.concat([num_poly, room, borough, inter], axis=1)
+
+    # Level 6: kitchen-sink — all pairwise interactions
+    base = pd.concat([num, room, borough], axis=1)
+    poly_all = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+    all_inter = pd.DataFrame(poly_all.fit_transform(base), index=data.index)
+    return all_inter
+```
+
+Now the critical step: **split the data before fitting any models.** We train on 70% and evaluate on the held-out 30%. The test set simulates "new data" we haven't seen.
+
+```{python}
+# Split into train and test FIRST — before looking at any results
+np.random.seed(42)
+train_idx, test_idx = train_test_split(range(len(df)), test_size=0.3, random_state=42)
+
+df_train = df.iloc[train_idx].reset_index(drop=True)
+df_test = df.iloc[test_idx].reset_index(drop=True)
+y_train = df_train['price']
+y_test = df_test['price']
+
+print(f"Train: {len(df_train):,}  |  Test: {len(df_test):,}")
+```
+
+```{python}
+model_names = [
+    '1: bedrooms+bath',
+    '2: + room_type',
+    '3: + borough',
+    '4: + interactions',
+    '5: + polynomials',
+    '6: all pairwise'
+]
+
+train_r2s = []
+test_r2s = []
+n_features_list = []
+
+for level in range(1, 7):
+    X_tr = build_features(df_train, level)
+    X_te = build_features(df_test, level)
+
+    m = LinearRegression().fit(X_tr, y_train)
+
+    train_r2s.append(m.score(X_tr, y_train))
+    test_r2s.append(r2_score(y_test, m.predict(X_te)))
+    n_features_list.append(X_tr.shape[1])
+
+results_df = pd.DataFrame({
+    'Model': model_names,
+    'Features': n_features_list,
+    'Train R²': [f'{r:.4f}' for r in train_r2s],
+    'Test R²': [f'{r:.4f}' for r in test_r2s]
+})
+print(results_df.to_string(index=False))
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 5))
+
+x_pos = range(len(model_names))
+ax.plot(x_pos, train_r2s, 'o-', color='steelblue', linewidth=2, markersize=8, label='Train R²')
+ax.plot(x_pos, test_r2s, 's-', color='orangered', linewidth=2, markersize=8, label='Test R²')
+
+ax.set_xticks(x_pos)
+ax.set_xticklabels([f'{n}\n({nf} feat)' for n, nf in zip(
+    ['bed+bath', '+room', '+boro', '+interact', '+poly', 'all pairs'],
+    n_features_list)], fontsize=10)
+ax.set_ylabel('R²')
+ax.set_title('Training R² keeps going up, but test R² can go DOWN')
+ax.legend(fontsize=12)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+Look at the gap between the blue line (train) and the red line (test). The training $R^2$ keeps climbing — more features always give the model more flexibility to fit the training data. But the test $R^2$ peaks and then degrades. The most complex model has the **worst** test performance. It has memorized the training data, including all its noise and quirks, and none of that memorization helps on new data.
+
+*Think about it:* why does the training $R^2$ always go up? Because adding a feature can only help the model fit the training data better — in the worst case, the model can set that feature's coefficient to zero.
+
+### A dramatic demonstration
+
+Let's drive the point home with a more extreme example. We'll use a smaller sample (500 listings) and increase the polynomial degree from 1 to 7. With a small sample and many features, the overfitting is dramatic.
+
+```{python}
+np.random.seed(42)
+
+# Smaller sample — overfitting is more dramatic with less data
+df_small = df.sample(500, random_state=42).reset_index(drop=True)
+y_small = df_small['price']
+train_i, test_i = train_test_split(range(len(df_small)), test_size=0.4, random_state=42)
+
+# Base features: numeric + dummies
+base_cat = pd.get_dummies(df_small[['room_type', 'borough']], drop_first=True)
+X_base_small = pd.concat([df_small[['bedrooms', 'bathrooms']], base_cat], axis=1)
+
+degrees = [1, 2, 3, 4, 5, 6, 7]
+train_scores_poly = []
+test_scores_poly = []
+n_feat_poly = []
+
+for deg in degrees:
+    poly = PolynomialFeatures(degree=deg, include_bias=False)
+    X_poly = pd.DataFrame(poly.fit_transform(X_base_small))
+    n_feat_poly.append(X_poly.shape[1])
+
+    X_tr = X_poly.iloc[train_i]
+    X_te = X_poly.iloc[test_i]
+    y_tr = y_small.iloc[train_i]
+    y_te = y_small.iloc[test_i]
+
+    m = LinearRegression().fit(X_tr, y_tr)
+    train_scores_poly.append(m.score(X_tr, y_tr))
+    test_r2 = r2_score(y_te, m.predict(X_te))
+    test_scores_poly.append(test_r2)
+
+    print(f"Degree {deg}: {X_poly.shape[1]:5d} features | "
+          f"Train R² = {train_scores_poly[-1]:.3f} | Test R² = {test_r2:.3f}")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 6))
+
+ax.plot(degrees, train_scores_poly, 'o-', color='steelblue', linewidth=2.5, markersize=10,
+        label='Training R²', zorder=3)
+ax.plot(degrees, test_scores_poly, 's-', color='orangered', linewidth=2.5, markersize=10,
+        label='Test R²', zorder=3)
+
+# Shade the overfitting region
+best_test_idx = np.argmax(test_scores_poly)
+if best_test_idx < len(degrees) - 1:
+    ax.axvspan(degrees[best_test_idx] + 0.5, degrees[-1] + 0.5, alpha=0.1, color='red',
+               label='Overfitting zone')
+
+ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+ax.set_xlabel('Polynomial degree')
+ax.set_ylabel('R²')
+ax.set_title('Training R² approaches 1. Test R² goes NEGATIVE.\nMore features ≠ better predictions.')
+ax.legend(fontsize=11)
+ax.set_xticks(degrees)
+ax.set_xticklabels([f'Degree {d}\n({n} feat)' for d, n in zip(degrees, n_feat_poly)],
+                   fontsize=8)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+The training $R^2$ approaches 1 — the model nearly perfectly memorizes the training data. Meanwhile, the test $R^2$ plummets, eventually going *negative*.
+
+Wait — can $R^2$ be negative? Yes, on test data. Recall that $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$. On test data, a model's residuals can be *worse* than just predicting the mean for every observation. A negative test $R^2$ means the model is worse than the trivial baseline. That's a clear sign of catastrophic overfitting.
+
+
+## Section 2: The bias-variance tradeoff
+
+Why does test error first decrease and then increase as models get more complex? This is one of the most important ideas in all of applied statistics: the **bias-variance tradeoff**.
+
+Two sources of prediction error:
+
+- **Bias** is the error from oversimplifying. The model can't capture the true pattern. This is **underfitting** — like trying to fit a straight line through a curved relationship.
+- **Variance** is the error from over-complicating. The model is so flexible that it's too sensitive to the particular training data it happened to see. This is **overfitting** — the model learns noise as if it were signal.
+
+| | Too few features | Just right | Too many features |
+|---|---|---|---|
+| **Bias** | High (underfitting) | Low | Low |
+| **Variance** | Low | Low | High (overfitting) |
+| **Test error** | High | **Low** | High |
+
+The total test error is (roughly) bias$^2$ + variance (this decomposition holds for mean squared error). Simple models have high bias but low variance. Complex models have low bias but high variance. The best model minimizes the sum — and that's somewhere in the middle.
+
+> "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk." — John von Neumann
+
+Von Neumann's warning applies directly: a model with enough parameters can fit *anything*, including complete nonsense. The fact that a model fits the training data well tells you nothing about whether it captures genuine patterns.
+
+*Think about it:* in the polynomial experiment above, which degrees had high bias? Which had high variance? Where was the sweet spot?
+
+
+## Section 3: Cross-validation
+
+A single train/test split is noisy — we might get lucky or unlucky. Maybe our test set happened to contain easy-to-predict listings, or maybe the opposite. How do we get a more stable estimate of out-of-sample performance?
+
+**Cross-validation** (CV) solves this problem by systematically rotating which data serves as the test set.
+
+### How 5-fold CV works
+
+1. Split the data randomly into 5 equal-sized **folds**
+2. For each fold $k = 1, \ldots, 5$:
+   - Train the model on the other 4 folds
+   - Test on fold $k$ and record the score
+3. Report the average of the 5 test scores
+
+```
+Fold 1:  [TEST ]  [train]  [train]  [train]  [train]   → score_1
+Fold 2:  [train]  [TEST ]  [train]  [train]  [train]   → score_2
+Fold 3:  [train]  [train]  [TEST ]  [train]  [train]   → score_3
+Fold 4:  [train]  [train]  [train]  [TEST ]  [train]   → score_4
+Fold 5:  [train]  [train]  [train]  [train]  [TEST ]   → score_5
+                                                  Average → CV score
+```
+
+Every observation is in the test set exactly once. The average of 5 scores is much more stable than any single train/test split.
+
+Let's apply 5-fold CV to our six complexity levels:
+
+```{python}
+cv_results = []
+for level in range(1, 7):
+    X_all = build_features(df, level)
+    scores = cross_val_score(LinearRegression(), X_all, y, cv=5, scoring='r2')
+    cv_results.append({
+        'model': model_names[level-1],
+        'features': X_all.shape[1],
+        'cv_mean': scores.mean(),
+        'cv_std': scores.std()
+    })
+    print(f"Level {level}: CV R² = {scores.mean():.4f} ± {scores.std():.4f}  ({X_all.shape[1]} features)")
+
+cv_df = pd.DataFrame(cv_results)
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.bar(range(len(cv_df)), cv_df['cv_mean'], yerr=cv_df['cv_std'],
+       capsize=5, color='steelblue', alpha=0.8, edgecolor='white')
+ax.set_xticks(range(len(cv_df)))
+ax.set_xticklabels([f'{r["model"]}\n({r["features"]} feat)' for _, r in cv_df.iterrows()],
+                   fontsize=9)
+ax.set_ylabel('Cross-validated R²')
+ax.set_title('Cross-validation picks the right model complexity')
+plt.tight_layout()
+plt.show()
+
+best = cv_df.loc[cv_df['cv_mean'].idxmax()]
+print(f"\nBest model by CV: {best['model']} (CV R² = {best['cv_mean']:.4f})")
+```
+
+Cross-validation correctly identifies the sweet spot: enough features to capture real patterns, but not so many that we overfit. Notice that the error bars (standard deviations across folds) give us a sense of how much variability there is — if two models have overlapping error bars, they're essentially tied.
+
+**An important caveat:** CV works because we can shuffle the data randomly — each fold is representative of the whole. This breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Lecture 16](lec16-backtesting.qmd).
+
+
+## Section 4: Lasso (regularization)
+
+We've seen two strategies for handling overfitting:
+
+1. **Manually choose** the right number of features using cross-validation
+2. But what if we have hundreds of candidate features and don't know which ones matter?
+
+There's a more elegant approach: let the model *automatically* shrink or eliminate unimportant features. That's **Lasso** (Least Absolute Shrinkage and Selection Operator), which adds an L1 penalty to the regression objective:
+
+$$\min_\beta \sum_{i=1}^n (y_i - x_i^T \beta)^2 + \alpha \sum_{j=1}^p |\beta_j|$$
+
+The penalty term $\alpha \sum |\beta_j|$ punishes large coefficients. The key property of L1: it drives some coefficients to *exactly zero*, effectively selecting features automatically.
+
+**Practical motivation:** Imagine you're building a medical screening tool. A model that requires 200 blood tests is impractical — it's expensive, slow, and fatiguing for patients. A model that needs 5 blood tests can actually be deployed in a clinic. Lasso finds the parsimonious model automatically.
+
+```{python}
+# Use the kitchen-sink polynomial features (degree 3) on the small sample
+poly_ks = PolynomialFeatures(degree=3, include_bias=False)
+X_ks_small = pd.DataFrame(poly_ks.fit_transform(X_base_small))
+
+X_ks_tr = X_ks_small.iloc[train_i]
+X_ks_te = X_ks_small.iloc[test_i]
+y_tr = y_small.iloc[train_i]
+y_te = y_small.iloc[test_i]
+
+# OLS on the same features (for comparison)
+ols_ks = LinearRegression().fit(X_ks_tr, y_tr)
+
+# Lasso automatically shrinks/eliminates features
+lasso = Lasso(alpha=1.0, random_state=42).fit(X_ks_tr, y_tr)
+
+n_total = X_ks_small.shape[1]
+n_nonzero = (lasso.coef_ != 0).sum()
+
+print(f"Kitchen-sink features: {n_total}")
+print(f"Lasso keeps: {n_nonzero} features (zeroed out {n_total - n_nonzero})")
+print()
+print(f"OLS   — Train R²: {ols_ks.score(X_ks_tr, y_tr):.3f}  Test R²: {r2_score(y_te, ols_ks.predict(X_ks_te)):.3f}")
+print(f"Lasso — Train R²: {lasso.score(X_ks_tr, y_tr):.3f}  Test R²: {r2_score(y_te, lasso.predict(X_ks_te)):.3f}")
+```
+
+```{python}
+# Visualize: Lasso coefficients vs OLS coefficients
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+axes[0].stem(range(len(ols_ks.coef_)), ols_ks.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
+axes[0].set_title(f'OLS coefficients ({n_total} features, all nonzero)')
+axes[0].set_xlabel('Feature index')
+axes[0].set_ylabel('Coefficient')
+
+axes[1].stem(range(len(lasso.coef_)), lasso.coef_, linefmt='orangered', markerfmt='o', basefmt='gray')
+axes[1].set_title(f'Lasso coefficients ({n_nonzero} nonzero out of {n_total})')
+axes[1].set_xlabel('Feature index')
+axes[1].set_ylabel('Coefficient')
+
+plt.tight_layout()
+plt.show()
+```
+
+OLS uses all features and overfits badly — its test $R^2$ may be negative. Lasso aggressively zeros out the noise, keeping only the features that genuinely help prediction. It resolves the overfitting problem automatically: instead of manually choosing how many features to include, let the regularization penalty figure it out.
+
+*Think about it:* the Lasso penalty strength $\alpha$ controls the bias-variance tradeoff. Large $\alpha$ = more regularization = more features zeroed out = simpler model (higher bias, lower variance). Small $\alpha$ = less regularization = closer to OLS (lower bias, higher variance). You can choose $\alpha$ by cross-validation.
+
+
+## Section 5: The modern view — averaging overfit trees
+
+The classical story we just told has a satisfying narrative: more complexity eventually leads to overfitting, so we need to regularize. But there's a puzzle.
+
+Random forests use *lots* of parameters — each tree can have thousands of leaves, and we grow hundreds of trees. By the classical logic, they should overfit terribly. But they don't. Why?
+
+### Demo 1: more trees never hurts
+
+Let's train random forests with increasing numbers of trees and track test performance.
+
+```{python}
+# Use the full dataset for this demo
+X_rf = build_features(df, 3)  # bedrooms, bathrooms, room_type, borough dummies
+X_rf_train = build_features(df_train, 3)
+X_rf_test = build_features(df_test, 3)
+
+n_trees_list = [1, 5, 10, 25, 50, 100, 200, 500]
+rf_test_scores = []
+
+for n_trees in n_trees_list:
+    rf = RandomForestRegressor(n_estimators=n_trees, random_state=42, n_jobs=-1)
+    rf.fit(X_rf_train, y_train)
+    score = rf.score(X_rf_test, y_test)
+    rf_test_scores.append(score)
+    print(f"n_estimators = {n_trees:>3d}: Test R² = {score:.4f}")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 5))
+
+ax.plot(n_trees_list, rf_test_scores, 'o-', color='forestgreen', linewidth=2.5, markersize=10)
+ax.set_xlabel('Number of trees (n_estimators)')
+ax.set_ylabel('Test R²')
+ax.set_title('Random forest: more trees = better or flat — never worse')
+ax.set_xscale('log')
+ax.set_xticks(n_trees_list)
+ax.set_xticklabels(n_trees_list)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+No U-shape! The test $R^2$ increases and then plateaus. Adding more trees never hurts — it just stops helping. This is fundamentally different from the polynomial story, where more complexity eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in Lecture 17, adding too many trees *can* overfit.)
+
+### Demo 2: individual trees are overfit; their average is smooth
+
+To understand why, let's look at what individual trees actually predict. We'll train 5 decision trees on bootstrap samples and plot their predictions along a 1D slice: price vs. bedrooms, holding other features at their median values.
+
+```{python}
+# Create a 1D prediction slice: vary bedrooms, hold everything else at median
+median_features = X_rf_train.median()
+
+bedroom_range = np.arange(0, 7, 0.1)
+X_slice = pd.DataFrame(
+    np.tile(median_features.values, (len(bedroom_range), 1)),
+    columns=X_rf_train.columns
+)
+X_slice['bedrooms'] = bedroom_range
+
+# Train 5 individual trees on bootstrap samples
+np.random.seed(42)
+fig, ax = plt.subplots(figsize=(10, 6))
+
+individual_preds = []
+for i in range(5):
+    # Bootstrap sample
+    boot_idx = np.random.choice(len(X_rf_train), size=len(X_rf_train), replace=True)
+    X_boot = X_rf_train.iloc[boot_idx]
+    y_boot = y_train.iloc[boot_idx]
+
+    tree = DecisionTreeRegressor(max_depth=None, random_state=i)
+    tree.fit(X_boot, y_boot)
+    preds = tree.predict(X_slice)
+    individual_preds.append(preds)
+    ax.plot(bedroom_range, preds, alpha=0.4, linewidth=1.2, label=f'Tree {i+1}')
+
+# Average prediction
+avg_preds = np.mean(individual_preds, axis=0)
+ax.plot(bedroom_range, avg_preds, color='black', linewidth=3, label='Average (5 trees)', zorder=5)
+
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Predicted price ($)')
+ax.set_title('Each tree is overfit and wiggly. Their average is smooth.')
+ax.legend(fontsize=10, loc='upper left')
+ax.set_xlim(0, 6)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+Each individual tree (thin colored lines) is wiggly and overfit — it has memorized the quirks of its particular bootstrap sample. But their *errors point in different directions*. One tree might predict too high for 3-bedroom listings while another predicts too low. When we average them, the noise cancels out, and what remains is the genuine signal.
+
+This is the core insight of **bagging** (bootstrap aggregating): averaging many overfit models reduces variance without increasing bias. It's the same principle behind asking 100 people to estimate the weight of a cow at a county fair — individual guesses vary wildly, but the average is remarkably accurate.
+
+One sentence looking ahead: this same principle — overparameterize, then regularize implicitly through averaging — is part of why large language models work. We'll revisit this connection in [Lecture 17](lec17-automl-llms.qmd).
+
+**The punchline:** the classical advice "regularize and cross-validate" still works. But now you know there's another path: build many diverse models and average them. The bias-variance tradeoff isn't wrong — it's just not the whole story.
+
+
+## Section 6: When R² is low — hospital data
+
+We've seen $R^2$ go up and down with model complexity. But what if $R^2$ is low no matter what you do? Does that mean you're doing something wrong, or that the problem is genuinely hard? Let's find out with a different dataset.
+
+```{python}
+hosp = pd.read_csv(f'{DATA_DIR}/hospital-readmissions/hrrp_with_hospital_info.csv')
+
+# Aggregate to hospital level: mean readmission rate and characteristics
+hosp_agg = hosp.groupby('Facility ID').agg({
+    'Excess Readmission Ratio': 'mean',
+    'Number of Discharges': 'sum',
+    'Hospital overall rating': 'first',
+    'Hospital Type': 'first',
+    'Hospital Ownership': 'first',
+    'Emergency Services': 'first',
+    'State': 'first'
+}).dropna().reset_index()
+
+hosp_agg = hosp_agg.rename(columns={'Excess Readmission Ratio': 'readmission_ratio'})
+
+# Convert rating to numeric
+hosp_agg['Hospital overall rating'] = pd.to_numeric(
+    hosp_agg['Hospital overall rating'], errors='coerce')
+hosp_agg = hosp_agg.dropna(subset=['Hospital overall rating']).reset_index(drop=True)
+
+print(f"{len(hosp_agg)} hospitals")
+hosp_agg.head()
+```
+
+Three feature levels, evaluated with cross-validation:
+
+```{python}
+y_hosp = hosp_agg['readmission_ratio']
+
+# Level 1: just rating
+X_h1 = hosp_agg[['Hospital overall rating']].copy()
+
+# Level 2: + discharges (log scale — raw counts are highly skewed)
+X_h2 = X_h1.copy()
+X_h2['log_discharges'] = np.log1p(hosp_agg['Number of Discharges'])
+
+# Level 3: + hospital type and ownership dummies
+type_dum = pd.get_dummies(hosp_agg['Hospital Type'], drop_first=True, prefix='type')
+own_dum = pd.get_dummies(hosp_agg['Hospital Ownership'], drop_first=True, prefix='own')
+emerg = (hosp_agg['Emergency Services'] == 'Yes').astype(int)
+X_h3 = pd.concat([X_h2, type_dum, own_dum, pd.DataFrame({'emergency': emerg})], axis=1)
+
+print("Cross-validated R² at each feature level:\n")
+for name, X_h in [('Rating only', X_h1), ('+ log(discharges)', X_h2),
+                   ('+ type/ownership', X_h3)]:
+    scores = cross_val_score(LinearRegression(), X_h, y_hosp, cv=5, scoring='r2')
+    print(f"  {name:25s}: CV R² = {scores.mean():.4f} ± {scores.std():.4f}  ({X_h.shape[1]} features)")
+```
+
+Even with thoughtful feature engineering, hospital readmission rates are hard to predict from hospital-level characteristics alone. The $R^2$ is low across all levels.
+
+*Think about it:* does a low $R^2$ mean the model is bad, or that the outcome is inherently hard to predict from the available features? Much of the variation in readmission rates likely comes from **patient-level** factors — age, comorbidities, social determinants of health — that hospital-level data simply doesn't capture. A model can only be as good as the information it receives.
+
+
+## Key takeaways
+
+- **Always evaluate on held-out data.** Training $R^2$ is a measure of memory, not understanding. A model that memorizes the training set perfectly can fail catastrophically on new data.
+
+- **Cross-validation for stable model comparison.** A single train/test split is noisy. CV rotates which fold is held out and averages the results, picking the sweet spot between under- and overfitting.
+
+- **Bias-variance tradeoff: the classical U-shape.** Too simple (high bias, underfitting) is bad. Too complex (high variance, overfitting) is bad. The goal is to minimize the sum.
+
+- **Lasso: automatic feature selection via regularization.** Instead of manually choosing features, let the L1 penalty shrink unimportant coefficients to exactly zero.
+
+- **Modern view: averaging overfit trees reduces variance — no U-shape for `n_estimators`.** Each tree is overfit, but their errors point in different directions. Averaging cancels noise without losing signal.
+
+- **Forward references:** [Lecture 8](lec08-sampling.qmd) (bootstrap — can we trust our estimates?), [Lecture 12](lec12-regression-inference.qmd) (regression inference — which features are statistically significant?), [Lecture 16](lec16-backtesting.qmd) (temporal validation — why CV breaks for time series), [Lecture 17](lec17-automl-llms.qmd) (trees deep dive — how random forests actually work).
+
+
+## Study guide
+
+### Key definitions
+
+- **Train/test split** — holding out part of the data to evaluate model performance on unseen data
+- **Validation set** — data used to choose model complexity (distinct from the final test set)
+- **Cross-validation (k-fold)** — rotating which of $k$ folds is held out, averaging test scores for a more stable estimate of out-of-sample performance
+- **Overfitting** — the model memorizes training data (including noise) and performs poorly on new data
+- **Underfitting** — the model is too simple to capture the real pattern in the data
+- **Bias-variance tradeoff** — the tension between underfitting (high bias) and overfitting (high variance); total error is approximately bias$^2$ + variance
+- **Lasso (L1 regularization)** — adds a penalty $\alpha \sum |\beta_j|$ that shrinks some coefficients to exactly zero, performing automatic feature selection
+- **Regularization** — constraining model complexity to reduce overfitting
+- **Bagging** — bootstrap aggregating: training many models on bootstrap samples and averaging their predictions to reduce variance
+
+### Key ideas (one sentence each)
+
+- Training $R^2$ always improves with more features; test $R^2$ eventually degrades — the gap is overfitting.
+- Cross-validation rotates which fold is held out for stable model comparison, averaging over the randomness of a single split.
+- Bias = underfitting; Variance = overfitting; the goal is to minimize their sum.
+- Lasso zeroes out unimportant features automatically, finding a parsimonious model without manual feature selection.
+- Averaging many overfit trees reduces variance without increasing bias — more trees never hurts.
+
+### Computational tools
+
+- `train_test_split(X, y, test_size=0.3)` — splits data into training and test sets
+- `cross_val_score(model, X, y, cv=5)` — performs 5-fold cross-validation and returns scores per fold
+- `Lasso(alpha=1.0).fit(X, y)` — fits a Lasso regression with regularization strength `alpha`
+- `RandomForestRegressor(n_estimators=100).fit(X, y)` — fits a random forest; more trees = better or flat, never worse
+
+### For the quiz
+
+You are responsible for: train/test split, cross-validation (how it works and why it's better than a single split), overfitting concept, bias-variance tradeoff (the classical U-shape), Lasso concept (what it does, not the optimization details), and why random forest test error plateaus rather than showing a U-shape. You are NOT responsible for double descent details.

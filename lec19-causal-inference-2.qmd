@@ -1,0 +1,545 @@
+---
+title: "Lecture 19: Causal Inference II — Natural Experiments and A/B Tests"
+execute:
+  enabled: true
+jupyter: python3
+---
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import statsmodels.api as sm
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['font.size'] = 12
+
+# Load data
+DATA_DIR = 'data'
+np.random.seed(42)
+```
+
+A hospital faces a $300,000 CMS penalty for high readmission rates. They implement a new discharge protocol and readmission rates drop 3 percentage points. The CFO asks: can we tell CMS this was our doing? Or were readmission rates already falling everywhere?
+
+Last lecture we drew DAGs to map causal structure and identify confounders. Today we see what to do when you *can't* observe the confounders — or when you can bypass them entirely through experimental design.
+
+## Difference-in-Differences: The Economist's Workhorse
+
+The idea behind **difference-in-differences (DiD)** is beautifully simple: compare how a treatment group changed relative to a control group. If both groups were on the same trajectory before the treatment, any *divergence* afterward must be caused by the treatment.
+
+Let's simulate a hospital that adopts a new discharge protocol while a comparison hospital does not.
+
+```{python}
+# Simulate DiD: hospital adopts new discharge protocol
+np.random.seed(42)
+
+quarters = np.arange(1, 13)  # 12 quarters (3 years)
+intervention_q = 7  # Protocol starts in Q7
+
+# Common trend: readmission rates declining 0.3pp per quarter (national trend)
+common_trend = 18.0 - 0.3 * (quarters - 1)
+
+# Treatment effect: additional 3pp drop after intervention
+treatment_effect = np.where(quarters >= intervention_q, -3.0, 0)
+
+# Treated hospital (slightly higher baseline)
+treated = common_trend + 2.0 + treatment_effect + np.random.normal(0, 0.3, 12)
+# Control hospital
+control = common_trend + np.random.normal(0, 0.3, 12)
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(quarters, treated, 'o-', color='#1f77b4', lw=2, markersize=8,
+        label='Hospital A (new protocol)')
+ax.plot(quarters, control, 'o-', color='#ff7f0e', lw=2, markersize=8,
+        label='Hospital B (no change)')
+ax.axvline(x=intervention_q - 0.5, color='gray', ls='--', alpha=0.7,
+           label='Protocol introduced')
+
+# Show counterfactual
+counterfactual = common_trend[intervention_q-1:] + 2.0
+ax.plot(quarters[intervention_q-1:], counterfactual, 's--', color='#1f77b4',
+        alpha=0.3, markersize=6, label='Hospital A counterfactual')
+
+ax.set_xlabel('Quarter')
+ax.set_ylabel('Readmission Rate (%)')
+ax.set_title('Difference-in-Differences: New Discharge Protocol', fontsize=14)
+ax.legend(loc='upper right', fontsize=10)
+plt.tight_layout()
+plt.show()
+```
+
+The dashed line shows the **counterfactual** — what *would have happened* to Hospital A without the new protocol. We can never observe the counterfactual directly, but DiD gives us a way to estimate it by using Hospital B's trajectory as a stand-in.
+
+Because this is simulated data, we know the true effect is -3.0 percentage points and can verify that DiD recovers it. In real data, you never have this luxury — you must rely on the parallel trends assumption.
+
+> **Think about it:** Looking at the plot, how would you quantify the effect of the new protocol? What two comparisons would you make?
+
+### The DiD Formula
+
+$$\text{Causal Effect} = (\bar{Y}_{\text{treated, after}} - \bar{Y}_{\text{treated, before}}) - (\bar{Y}_{\text{control, after}} - \bar{Y}_{\text{control, before}})$$
+
+The first difference captures the change in the treated group. The second difference subtracts out any common time trend. What's left is the treatment effect.
+
+```{python}
+# Compute DiD estimate
+pre_idx = quarters < intervention_q
+post_idx = quarters >= intervention_q
+
+treated_before = treated[pre_idx].mean()
+treated_after = treated[post_idx].mean()
+control_before = control[pre_idx].mean()
+control_after = control[post_idx].mean()
+
+did_estimate = (treated_after - treated_before) - (control_after - control_before)
+
+did_table = pd.DataFrame({
+    'Before': [treated_before, control_before],
+    'After': [treated_after, control_after],
+    'Change': [treated_after - treated_before, control_after - control_before]
+}, index=['Hospital A (treated)', 'Hospital B (control)'])
+
+print("Difference-in-Differences Table")
+print("=" * 55)
+print(did_table.round(2))
+print("-" * 55)
+print(f"DiD estimate: {did_estimate:.2f} percentage points")
+print(f"True effect:  -3.00 percentage points")
+```
+
+### The Key Assumption: Parallel Trends
+
+DiD only works if the treatment and control groups would have followed the **same trajectory** absent the treatment. This is the **parallel trends assumption**.
+
+You can't test this assumption directly (you never observe the counterfactual), but you *can* check whether the groups had parallel trends in the pre-treatment period. Pre-treatment parallel trends are encouraging but don't *prove* the assumption holds — the trends could diverge after treatment for reasons unrelated to the treatment itself. This is the fundamental limitation of DiD.
+
+```{python}
+# Event study: check pre-treatment parallel trends
+# For each quarter, compute the treatment-control difference
+diffs = treated - control
+pre_diffs = diffs[pre_idx]
+post_diffs = diffs[post_idx]
+
+fig, ax = plt.subplots(figsize=(10, 5))
+# Pre-treatment differences with CIs (using bootstrapped SEs as illustration)
+ax.scatter(quarters[pre_idx], pre_diffs, color='#1f77b4', s=60, zorder=5)
+ax.scatter(quarters[post_idx], post_diffs, color='#d62728', s=60, zorder=5)
+
+# Add error bars (approximate SE from noise level)
+se_approx = 0.3 * np.sqrt(2)  # SE of difference between two noisy series
+for q, d in zip(quarters[pre_idx], pre_diffs):
+    ax.plot([q, q], [d - 1.96*se_approx, d + 1.96*se_approx],
+            color='#1f77b4', lw=1.5)
+for q, d in zip(quarters[post_idx], post_diffs):
+    ax.plot([q, q], [d - 1.96*se_approx, d + 1.96*se_approx],
+            color='#d62728', lw=1.5)
+
+ax.axvline(x=intervention_q - 0.5, color='gray', ls='--', alpha=0.7)
+ax.axhline(y=2.0, color='gray', ls=':', alpha=0.5, label='Baseline gap (no effect)')
+ax.set_xlabel('Quarter')
+ax.set_ylabel('Treated - Control Difference')
+ax.set_title('Event Study: Pre-Trend Check for Parallel Trends', fontsize=14)
+ax.legend(['Pre-treatment', 'Post-treatment', '', '', 'Intervention', 'Baseline gap'])
+plt.tight_layout()
+plt.show()
+
+print("Pre-treatment: differences are roughly flat (parallel trends holds).")
+print("Post-treatment: differences jump down — that's the treatment effect.")
+```
+
+> **Think about it:** What would this event study plot look like if the parallel trends assumption were *violated*? What if Hospital A was already improving faster than Hospital B before the intervention?
+
+### DiD as a Regression
+
+We can estimate DiD with a regression: $Y = \beta_0 + \beta_1 \cdot \text{Treated} + \beta_2 \cdot \text{Post} + \beta_3 \cdot \text{Treated} \times \text{Post} + \varepsilon$. The coefficient $\beta_3$ on the interaction term is the DiD estimate.
+
+```{python}
+# DiD as a regression: Y ~ treated + post + treated*post
+did_data = pd.DataFrame({
+    'readmission_rate': np.concatenate([treated, control]),
+    'is_treated': np.array([1]*12 + [0]*12),
+    'is_post': np.array([int(q >= intervention_q) for q in quarters] * 2),
+    'quarter': np.tile(quarters, 2)
+})
+did_data['treated_x_post'] = did_data['is_treated'] * did_data['is_post']
+```
+
+```{python}
+# OLS regression with statsmodels (consistent with Lecture 12)
+X = sm.add_constant(did_data[['is_treated', 'is_post', 'treated_x_post']])
+model = sm.OLS(did_data['readmission_rate'], X).fit()
+print(model.summary().tables[1])
+
+print(f"\nThe coefficient on treated_x_post ({model.params['treated_x_post']:.2f})")
+print(f"is the DiD estimate, with 95% CI: [{model.conf_int().loc['treated_x_post', 0]:.2f}, "
+      f"{model.conf_int().loc['treated_x_post', 1]:.2f}]")
+print("It captures the causal effect of the protocol on readmissions.")
+```
+
+### John Snow's Natural Experiment: The Most Famous DiD in History
+
+Last lecture we learned that John Snow's most powerful evidence for waterborne cholera was *not* his famous map — it was his comparison of water companies. Let's compute the actual numbers.
+
+In the 1850s, two water companies served intermingled houses on the same streets of South London. Lambeth Company moved its water intake upstream (away from sewage) in 1852. Southwark & Vauxhall kept drawing from the polluted Thames. Because houses were served essentially at random based on which company had laid pipes, this is a **natural experiment** — nature created near-random assignment.
+
+```{python}
+# Load Snow's water company data
+snow = pd.read_csv(f'{DATA_DIR}/john-snow/snow_water_companies.csv')
+print("John Snow's Water Company Comparison (1854 cholera epidemic)")
+print("=" * 60)
+print(snow.to_string(index=False))
+print(f"\nRelative risk: {snow.loc[snow['company'] == 'Southwark & Vauxhall', 'death_rate_per_10000'].values[0] / snow.loc[snow['company'] == 'Lambeth', 'death_rate_per_10000'].values[0]:.1f}x")
+print("Houses served by the polluted company had 8x the death rate.")
+```
+
+```{python}
+# Two-proportion z-test: is the difference statistically significant?
+sv = snow[snow['company'] == 'Southwark & Vauxhall'].iloc[0]
+lam = snow[snow['company'] == 'Lambeth'].iloc[0]
+
+p_sv = sv['deaths'] / sv['houses']
+p_lam = lam['deaths'] / lam['houses']
+n_sv, n_lam = sv['houses'], lam['houses']
+
+p_pool = (sv['deaths'] + lam['deaths']) / (n_sv + n_lam)
+se = np.sqrt(p_pool * (1 - p_pool) * (1/n_sv + 1/n_lam))
+z = (p_sv - p_lam) / se
+p_val = 2 * (1 - stats.norm.cdf(abs(z)))
+
+print(f"Death rate (Southwark & Vauxhall): {p_sv*10000:.0f} per 10,000")
+print(f"Death rate (Lambeth):              {p_lam*10000:.0f} per 10,000")
+print(f"Difference:                        {(p_sv - p_lam)*10000:.0f} per 10,000")
+print(f"\nz = {z:.1f}, p < 0.0001")
+print("\nSame streets. Same neighborhoods. Different water. Massively different death rates.")
+print("This is the power of a natural experiment.")
+```
+
+Why is this a natural experiment rather than just an observational comparison? Because the two companies served *intermingled* houses on the same streets. A household's water company was determined by which company happened to have laid pipes to that address — essentially arbitrary. This eliminates confounding by neighborhood poverty, crowding, or sanitation.
+
+> **Think about it:** Why can't we frame Snow's water company comparison as a standard DiD with before/after data? (Hint: we only have data from the 1854 epidemic, not from before Lambeth moved its intake.) What assumption are we making instead?
+
+## RCTs: The Gold Standard Revisited
+
+The cleanest way to estimate a causal effect is to **randomly assign** treatment. Recall ACTG 175 from Lecture 10 — the clinical trial that randomized HIV-positive patients into different drug regimens.
+
+In Lecture 10, we used ACTG 175 to practice hypothesis testing. Now we can appreciate *why* randomization made those tests valid: it eliminated confounding. In DAG terms, randomization means the treatment has no parents except the random assignment mechanism. With no parents, there are no backdoor paths to close. A simple comparison of means IS the causal effect.
+
+```{python}
+trial = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
+
+# Treatment arms
+arm_labels = {0: 'ZDV mono', 1: 'ZDV+ddI', 2: 'ZDV+ddC', 3: 'ddI mono'}
+trial['arm_label'] = trial['arms'].map(arm_labels)
+trial['cd4_change'] = trial['cd420'] - trial['cd40']
+
+print(f"Patients: {len(trial):,}")
+print(f"\nPatients per arm:")
+print(trial['arm_label'].value_counts().sort_index())
+```
+
+```{python}
+# Check baseline balance across treatment arms
+covariates = ['age', 'wtkg', 'cd40', 'cd80', 'karnof', 'gender', 'race']
+cov_labels = ['Age', 'Weight (kg)', 'Baseline CD4', 'Baseline CD8',
+              'Karnofsky score', 'Male (%)', 'Non-white (%)']
+
+balance = trial.groupby('arm_label')[covariates].mean()
+balance.columns = cov_labels
+print("Mean baseline characteristics by treatment arm:")
+print(balance.round(1).T)
+print("\nNotice how similar the columns are -- that's randomization at work.")
+print("No confounder can explain away any difference in outcomes.")
+```
+
+> **Think about it:** The balance table shows the groups are *nearly* identical, but not *perfectly* identical. Why doesn't randomization guarantee perfect balance? (Hint: think about sample size and the law of large numbers.)
+
+The groups are nearly identical on every baseline characteristic. That's not a coincidence — it's the *design*. Randomization ensures that any confounder, whether we measured it or not, is balanced across groups on average.
+
+```{python}
+# The causal estimate is just a comparison of means
+fig, ax = plt.subplots(figsize=(8, 5))
+
+arm_order = ['ZDV mono', 'ZDV+ddI', 'ZDV+ddC', 'ddI mono']
+means = trial.groupby('arm_label')['cd4_change'].mean()[arm_order]
+sems = trial.groupby('arm_label')['cd4_change'].sem()[arm_order]
+
+colors = sns.color_palette("colorblind", 4)
+bars = ax.bar(range(4), means, yerr=1.96 * sems, capsize=5,
+              color=colors, edgecolor='black', alpha=0.8)
+ax.set_xticks(range(4))
+ax.set_xticklabels(arm_order, fontsize=11)
+ax.set_ylabel('Mean CD4 Change at 20 Weeks', fontsize=12)
+ax.set_title('ACTG 175: Treatment Effect on CD4 Count', fontsize=14)
+ax.axhline(y=0, color='black', linewidth=0.5, linestyle='--')
+plt.tight_layout()
+plt.show()
+
+print(f"ZDV monotherapy (control): {means['ZDV mono']:+.1f} CD4 cells")
+print(f"ZDV + ddI (best combo):    {means['ZDV+ddI']:+.1f} CD4 cells")
+print(f"Causal effect:             {means['ZDV+ddI'] - means['ZDV mono']:+.1f} CD4 cells")
+print(f"\nBecause of randomization, this IS the causal effect. No adjustment needed.")
+```
+
+## A/B Testing: An RCT by Another Name
+
+An **A/B test** is just a randomized experiment run on a website or app. Your company's conversion rate is 12%. A 2 percentage point lift means $2M in additional annual revenue. Is the observed lift real, or should you keep testing?
+
+The logic is identical to a clinical trial — randomization eliminates confounders. But A/B tests come with practical pitfalls.
+
+```{python}
+# Simulate an A/B test: website conversion rate
+np.random.seed(42)
+n_control, n_treatment = 5000, 5000
+true_control_rate, true_treatment_rate = 0.12, 0.14  # 2pp lift
+
+control_conv = np.random.binomial(1, true_control_rate, n_control)
+treatment_conv = np.random.binomial(1, true_treatment_rate, n_treatment)
+
+print("A/B Test Results:")
+print(f"  Control (A):   {control_conv.sum():,}/{n_control:,} = {control_conv.mean():.3f}")
+print(f"  Treatment (B): {treatment_conv.sum():,}/{n_treatment:,} = {treatment_conv.mean():.3f}")
+print(f"  Lift:          {treatment_conv.mean() - control_conv.mean():.3f} "
+      f"({(treatment_conv.mean()/control_conv.mean() - 1)*100:.1f}% relative)")
+```
+
+```{python}
+# Hypothesis test: is the lift statistically significant?
+p1, p2 = control_conv.mean(), treatment_conv.mean()
+n1, n2 = n_control, n_treatment
+
+# Two-proportion z-test (pooled SE under H0)
+p_pool = (control_conv.sum() + treatment_conv.sum()) / (n1 + n2)
+se = np.sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2))
+z_stat = (p2 - p1) / se
+p_value = 2 * (1 - stats.norm.cdf(abs(z_stat)))
+
+# 95% CI for the difference (unpooled SE — no assumption about equality)
+se_diff = np.sqrt(p1*(1-p1)/n1 + p2*(1-p2)/n2)
+ci = (p2 - p1 - 1.96*se_diff, p2 - p1 + 1.96*se_diff)
+
+print(f"Two-proportion z-test:")
+print(f"  z = {z_stat:.3f}, p = {p_value:.4f}")
+print(f"  95% CI for lift: [{ci[0]:.4f}, {ci[1]:.4f}]")
+print(f"\n  {'Reject H0: the new design increases conversions!' if p_value < 0.05 else 'Cannot reject H0'}")
+```
+
+### The Peeking Problem
+
+Your PM checks the dashboard every morning. On day 5, p = 0.03. "Ship it!" they say. But you know better...
+
+**Peeking** — checking results repeatedly and stopping at the first significant result — inflates your false positive rate far beyond 5%. It's related to the multiple testing problem from Lecture 11: each peek is another chance for a false positive. But it's actually worse, because test statistics at successive peeks are correlated, making standard corrections like Bonferroni overly conservative. Tech companies use sequential testing methods designed for exactly this situation.
+
+```{python}
+# Simulate peeking: A/A test where there's NO real effect
+np.random.seed(123)
+n_total = 10000
+aa_control = np.random.binomial(1, 0.12, n_total)
+aa_treatment = np.random.binomial(1, 0.12, n_total)  # Same rate!
+
+# Peek every 500 users (e.g., checking dashboard daily)
+peek_at = range(500, n_total + 1, 500)
+p_values_peek = []
+for n in peek_at:
+    c, t = aa_control[:n], aa_treatment[:n]
+    p_pool = (c.sum() + t.sum()) / (2 * n)
+    if p_pool == 0 or p_pool == 1:
+        p_values_peek.append(1.0)
+        continue
+    se = np.sqrt(p_pool * (1 - p_pool) * (2/n))
+    z = (t.mean() - c.mean()) / se
+    p_values_peek.append(2 * (1 - stats.norm.cdf(abs(z))))
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(list(peek_at), p_values_peek, 'o-', color='steelblue', markersize=5)
+ax.axhline(y=0.05, color='#d62728', linestyle='--', lw=1.5, label='alpha = 0.05')
+sig_peeks = [(n, p) for n, p in zip(peek_at, p_values_peek) if p < 0.05]
+if sig_peeks:
+    ax.scatter([s[0] for s in sig_peeks], [s[1] for s in sig_peeks],
+               color='#d62728', s=80, zorder=5, label='"Significant" peeks')
+    # Annotate the first false alarm
+    ax.annotate('False alarm!\n(No real effect exists)',
+                xy=(sig_peeks[0][0], sig_peeks[0][1]),
+                xytext=(sig_peeks[0][0] + 1500, sig_peeks[0][1] + 0.15),
+                arrowprops=dict(arrowstyle='->', color='#d62728'),
+                fontsize=10, color='#d62728')
+ax.set_xlabel('Sample Size (per group)')
+ax.set_ylabel('p-value')
+ax.set_title('Peeking at an A/A Test (No Real Effect)', fontsize=14)
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+n_sig = sum(1 for p in p_values_peek if p < 0.05)
+print(f"With NO real effect, {n_sig}/{len(p_values_peek)} peeks crossed p < 0.05.")
+print("If you stop at the first significant peek, you'll ship a change that does nothing.")
+```
+
+### Other A/B Testing Pitfalls
+
+- **Network effects**: If users interact (social networks, marketplaces), treating user A affects user B. The independence assumption fails. This is a violation of **SUTVA** (Stable Unit Treatment Value Assumption) — the assumption that one person's treatment doesn't affect another's outcome.
+- **Novelty effects**: Users might click a new design just because it's different. Effects fade over time.
+- **Small effects need large samples**: A 0.5% lift in conversion requires millions of users to detect reliably.
+
+> **Think about it:** You're running an A/B test on a social media feed. Treatment users see more local news. But they share those stories with control users. What happens to your estimate?
+
+## Beyond DiD: Other Quasi-Experimental Methods
+
+### Instrumental Variables: A Brief Introduction
+
+Sometimes the confounder is completely unobserved. You can't control for it in regression. One clever trick: find an **instrumental variable (IV)** — something that acts like a coin flip, pushing people toward treatment but having no other path to the outcome.
+
+IV requires two assumptions: (1) **relevance** — the instrument must actually affect the treatment, and (2) **validity** (the exclusion restriction) — the instrument must affect the outcome only through the treatment. In practice, arguing that an instrument is valid is the hardest part. Clever researchers spend most of their effort on this argument.
+
+**The Vietnam draft lottery** (Angrist, 1990):
+
+- The instrument: draft lottery number (randomly assigned)
+- Affects treatment: low numbers were drafted into military service
+- No direct effect: your lottery number doesn't affect your earnings except through whether you served
+
+We won't go deep into IV estimation — that's a full course in econometrics — but the idea of finding "clever randomization" in the world is the core of modern causal inference.
+
+### Regression Discontinuity: Exploiting Cutoffs
+
+Another powerful design is **regression discontinuity (RD)** — when treatment is assigned at a sharp cutoff (e.g., a test score threshold for a scholarship), comparing people just above and below the cutoff is like a local randomized experiment. Students scoring 89 vs. 91 on a 90-point threshold are nearly identical, yet one gets the scholarship and the other doesn't. That sharp jump at the cutoff identifies the causal effect.
+
+We won't work through RD in detail, but you should know it exists as a major tool in the quasi-experimental toolkit alongside DiD and IV.
+
+## The Surprise: An NBA Natural Experiment
+
+Let's look for a natural experiment in our NBA data. The NBA introduced the "play-in tournament" starting with the 2020-21 season. Teams seeded 7-10 now must compete in a mini-tournament to earn a playoff spot, changing incentives for teams near the cutoff. Did this affect how teams manage their star players' minutes?
+
+We'll attempt a DiD-style analysis: compare teams near the cutoff ("treatment" — seeds 7-10, affected by play-in incentives) to teams firmly in or firmly out of playoff contention ("control" — unaffected).
+
+```{python}
+nba = pd.read_csv(f'{DATA_DIR}/nba/nba_game_logs_2022_2024.csv')
+nba['GAME_DATE'] = pd.to_datetime(nba['GAME_DATE'])
+
+print(f"Games: {len(nba):,}")
+print(f"Players: {nba['PLAYER_NAME'].nunique():,}")
+print(f"Seasons: {nba['SEASON'].unique()}")
+```
+
+```{python}
+# Identify star players (high-minutes starters)
+player_avg_min = nba.groupby('PLAYER_NAME')['MIN'].mean()
+stars = player_avg_min[player_avg_min > 30].index
+star_games = nba[nba['PLAYER_NAME'].isin(stars)].copy()
+star_games['month'] = star_games['GAME_DATE'].dt.month
+
+# Focus on game months only (Oct-Apr)
+def classify_period(m):
+    if m in [10, 11, 12, 1]:
+        return 'Early (Oct-Jan)'
+    elif m in [2, 3, 4]:
+        return 'Late (Feb-Apr)'
+    else:
+        return 'Other'
+
+star_games['period'] = star_games['month'].map(classify_period)
+star_games = star_games[star_games['period'] != 'Other']
+```
+
+```{python}
+# Compare minutes: early vs late season
+period_stats = star_games.groupby('period')['MIN'].agg(['mean', 'std', 'count'])
+print("Star player minutes by season period:")
+print(period_stats.round(1))
+
+early = star_games[star_games['period'] == 'Early (Oct-Jan)']['MIN']
+late = star_games[star_games['period'] == 'Late (Feb-Apr)']['MIN']
+t_stat, p_val = stats.ttest_ind(early, late)
+print(f"\nt-test: t = {t_stat:.2f}, p = {p_val:.4f}")
+```
+
+```{python}
+# Monthly trend by season — filter to game months only
+star_games['season_str'] = star_games['SEASON'].astype(str)
+game_months = [10, 11, 12, 1, 2, 3, 4]
+monthly = (star_games[star_games['month'].isin(game_months)]
+           .groupby(['season_str', 'month'])['MIN'].mean().reset_index())
+
+fig, ax = plt.subplots(figsize=(10, 5))
+for season, grp in monthly.groupby('season_str'):
+    # Sort by season order (Oct=10, Nov=11, ..., Apr=4)
+    grp = grp.copy()
+    grp['order'] = grp['month'].map({10:0, 11:1, 12:2, 1:3, 2:4, 3:5, 4:6})
+    grp = grp.sort_values('order')
+    ax.plot(grp['order'], grp['MIN'], 'o-', markersize=6, lw=2, label=f'Season {season}')
+
+ax.set_xlabel('Month')
+ax.set_ylabel('Average Minutes (star players)')
+ax.set_title('Star Player Minutes by Month Across Seasons', fontsize=14)
+ax.legend()
+ax.set_xticks(range(7))
+ax.set_xticklabels(['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'])
+plt.tight_layout()
+plt.show()
+```
+
+Here's the honest takeaway: this analysis is *descriptive*, not causal. We compared star minutes early vs. late in the season and across seasons, but we didn't cleanly separate teams affected by the play-in from those unaffected. The "treatment" isn't sharply assigned — a team's proximity to the cutoff changes game by game. And many things change between seasons besides the play-in tournament.
+
+This is common in practice. Causal inference is as much about acknowledging what your data *can't* tell you as about producing estimates. Contrast this with Snow's water companies, where the natural experiment was clean, or the ACTG 175 trial, where randomization made the causal inference airtight.
+
+> **Think about it:** How would you redesign this NBA analysis to be a *real* DiD? What would be your treatment group, control group, and pre/post periods? What threats to parallel trends would you worry about?
+
+## Key Takeaways
+
+- The **counterfactual** is what would have happened without the treatment. We never observe it directly — all of causal inference is about estimating it.
+
+- **Difference-in-differences** compares *changes* between treatment and control groups. The key assumption is **parallel trends**: both groups would have followed the same trajectory absent the treatment.
+
+- **Randomized experiments (RCTs, A/B tests) are the gold standard.** Randomization balances all confounders — measured and unmeasured.
+
+- **Natural experiments** exploit situations where treatment is assigned "as if" randomly. Snow's water companies are the canonical example.
+
+- **A/B tests require discipline.** Don't peek at results. Be wary of network effects and novelty effects.
+
+- **When you read a causal claim**, ask: what's the source of variation? Is it plausibly exogenous? What could confound this?
+
+**Further reading:** For more on DiD and natural experiments, see Huntington-Klein, *The Effect*, Chapters 16-18.
+
+## Study guide
+
+### Key definitions
+
+- **Counterfactual**: What would have happened to the treated group without the treatment. Never directly observed.
+- **Difference-in-differences (DiD)**: A method that estimates causal effects by comparing before/after changes across treatment and control groups.
+- **Parallel trends assumption**: The assumption that treatment and control groups would have followed the same trajectory absent the treatment.
+- **Randomized Controlled Trial (RCT)**: An experiment where treatment is randomly assigned, eliminating confounding.
+- **A/B test**: An RCT run in a tech/business setting (e.g., website variants).
+- **Natural experiment**: A situation where some external event or policy creates near-random assignment to treatment.
+- **Treatment effect**: The causal impact of the treatment on the outcome.
+- **Instrumental variable (IV)**: A variable that affects treatment assignment but has no direct effect on the outcome except through treatment.
+- **Regression discontinuity (RD)**: A design that exploits sharp cutoffs in treatment assignment.
+
+### Key Ideas
+
+- DiD removes confounding from shared time trends by differencing twice: within groups across time, then across groups.
+- Randomization is powerful because it closes all backdoor paths in the DAG — no confounder adjustment needed.
+- Pre-treatment parallel trends are suggestive evidence for the parallel trends assumption, but cannot prove it.
+- Peeking at A/B test results inflates false positive rates far beyond the nominal 5%.
+- Snow's water company comparison is the most famous natural experiment — same streets, different water, 8x death rate difference.
+
+### Computational Tools
+
+- `statsmodels.OLS` for DiD regression with standard errors and confidence intervals
+- Two-proportion z-test for comparing rates (A/B tests, Snow data)
+- Event study plots for assessing parallel trends visually
+
+### For the Quiz
+
+You should be able to:
+
+- Set up and compute a DiD estimate from a 2x2 table (before/after, treatment/control)
+- Write the DiD regression specification and interpret the interaction coefficient
+- Explain why randomization eliminates confounding (in DAG terms: no backdoor paths)
+- Identify whether a study is an RCT, natural experiment, or observational comparison
+- Explain the parallel trends assumption and what an event study plot checks
+- Describe why peeking inflates false positives in A/B tests

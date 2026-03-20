@@ -1,0 +1,322 @@
+---
+title: "Lecture 9: Permutation Tests"
+execute:
+  enabled: true
+jupyter: python3
+---
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['font.size'] = 12
+
+DATA_DIR = 'data'
+np.random.seed(42)
+```
+
+In [Lecture 8](lec08-sampling.qmd), we answered the question "how precise is our estimate?" using bootstrap confidence intervals and the normal approximation. Today we ask a sharper question: **is the effect *real*, or could it be zero?**
+
+The distinction matters. The bootstrap measures **precision** — how much our estimate would vary if we repeated the experiment. The permutation test measures **significance** — whether the observed effect is distinguishable from pure chance. These two tools are complementary: one gives you a confidence interval, the other gives you a p-value.
+
+### The Lady Tasting Tea
+
+The permutation test has a famous origin story. In the 1920s, at a tea party at the Rothamsted agricultural research station in England, a colleague named Muriel Bristol claimed she could tell whether the milk or the tea had been poured into the cup first. Most people laughed. But R.A. Fisher — one of the founders of modern statistics — took her seriously. He designed a proper experiment: eight cups, four milk-first, four tea-first, presented in random order. Bristol was asked to identify which four were milk-first.
+
+Fisher realized he didn't need any assumptions about probability distributions. He could compute the exact probability of getting all four right *by chance alone* — just by counting how many ways to choose 4 cups out of 8. This is the logic of the permutation test: enumerate what could happen under the null (no ability to distinguish), then ask how extreme the observed result is. (Bristol got all eight correct.) This story gives its name to Salsburg's history of 20th-century statistics, *The Lady Tasting Tea* — because it captures the moment when hypothesis testing took its modern form.
+
+## Setup: The Treatment Effect
+
+Let's reload the ACTG 175 clinical trial data and compute the observed treatment effect.
+
+```{python}
+df = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
+df['cd4_change'] = df['cd420'] - df['cd40']
+
+control = df[df['treat'] == 0]['cd4_change'].dropna()
+treatment = df[df['treat'] == 1]['cd4_change'].dropna()
+
+observed_effect = treatment.mean() - control.mean()
+print(f"Control mean:        {control.mean():.1f} CD4 cells")
+print(f"Treatment mean:      {treatment.mean():.1f} CD4 cells")
+print(f"Observed effect:     {observed_effect:.1f} CD4 cells")
+print(f"Control n:           {len(control)}")
+print(f"Treatment n:         {len(treatment)}")
+```
+
+In [Lecture 8](lec08-sampling.qmd), we computed a bootstrap 95% confidence interval for this treatment effect and found it was entirely above zero — suggestive evidence that the drug works. But can we test this more rigorously? Can we quantify exactly how surprising this result would be if the drug had no effect at all?
+
+## The Permutation Test Idea
+
+Here is the key insight: **if the drug has NO effect, then it doesn't matter which group a patient was in.** The treatment labels are meaningless — every patient would have had the same outcome regardless of which group they were assigned to.
+
+So what would happen if we **shuffled the labels**? If the drug truly does nothing, randomly reassigning patients to "control" and "treatment" should produce treatment effects that look just like the one we observed. But if our observed effect is much larger than what shuffling produces, that's evidence the drug works.
+
+This is the **permutation test**. The distribution of fake effects we get from shuffling is called the **null distribution** — it shows what the test statistic looks like when the null hypothesis (no effect) is true.
+
+Why is shuffling valid here? Because patients in ACTG 175 were **randomly assigned** to treatment groups. Random assignment makes the labels **exchangeable** under the null: if the drug does nothing, swapping labels doesn't change anything about the data. This is what gives the permutation test its logical foundation.
+
+### Step by step
+
+1. Combine all CD4 changes into one pool (ignoring labels)
+2. Randomly assign $n_{\text{control}}$ patients to "control" and the rest to "treatment"
+3. Compute the fake treatment effect
+4. Repeat many times
+
+```{python}
+# Combine all CD4 changes and record group sizes
+all_cd4 = df['cd4_change'].dropna().values
+all_labels = df.loc[df['cd4_change'].notna(), 'treat'].values
+
+n_ctrl = (all_labels == 0).sum()
+n_trt = (all_labels == 1).sum()
+
+print(f"Total patients: {len(all_cd4)}")
+print(f"Control: {n_ctrl}, Treatment: {n_trt}")
+```
+
+```{python}
+def permutation_effect(cd4_values, n_control):
+    """One permutation of treatment labels. Returns a fake treatment effect."""
+    shuffled = np.random.permutation(cd4_values)
+    perm_ctrl = shuffled[:n_control]
+    perm_trt = shuffled[n_control:]
+    return perm_trt.mean() - perm_ctrl.mean()
+
+# Show 5 permutations
+print("Five random permutations:")
+for i in range(5):
+    fake = permutation_effect(all_cd4, n_ctrl)
+    print(f"  Permutation {i+1}: fake effect = {fake:+.1f} CD4 cells")
+
+print(f"\nObserved effect:                    {observed_effect:+.1f} CD4 cells")
+```
+
+The fake effects bounce around zero — small positive, small negative. Our observed effect of ~71 looks very different.
+
+*Think about it:* If the drug really works, where will our observed effect of 71 fall relative to the null distribution? Will it be in the middle or out in the tail?
+
+## Building the Null Distribution
+
+Five permutations gave us a rough sense. To compute a reliable p-value, we need thousands.
+
+```{python}
+n_perms = 10_000
+perm_effects = np.array([
+    permutation_effect(all_cd4, n_ctrl)
+    for _ in range(n_perms)
+])
+
+print(f"Null distribution summary:")
+print(f"  Mean:   {perm_effects.mean():.2f}")
+print(f"  SD:     {perm_effects.std():.2f}")
+print(f"  Min:    {perm_effects.min():.1f}")
+print(f"  Max:    {perm_effects.max():.1f}")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.hist(perm_effects, bins=50, density=True, color='lightgray', edgecolor='white',
+        label='Null distribution')
+ax.axvline(observed_effect, color='red', lw=2, ls='--',
+           label=f'Observed effect = {observed_effect:.1f}')
+ax.axvline(-observed_effect, color='red', lw=2, ls=':', alpha=0.5,
+           label=f'−Observed (two-sided)')
+ax.set_xlabel('Treatment Effect Under Null (CD4 cells)')
+ax.set_ylabel('Density')
+ax.set_title('Permutation Null Distribution')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+The observed effect of ~71 CD4 cells is **way out in the tail** — not even close to what random shuffling produces. Under the null, effects cluster tightly around zero with a standard deviation of about 12–15 cells. Our observed effect is several standard deviations away.
+
+## The p-Value
+
+The **p-value** answers this question: if there were truly no effect, how often would we see something this extreme?
+
+We compute a **two-sided** p-value because we would be surprised by a large effect in *either* direction — a drug that dramatically helps or dramatically hurts patients would both be noteworthy.
+
+```{python}
+# Count how many permutations produced an effect as extreme as observed
+# Use absolute values for two-sided test
+n_extreme = np.sum(np.abs(perm_effects) >= np.abs(observed_effect))
+
+# Conservative estimator: (n_extreme + 1) / (n_perms + 1)
+# This avoids reporting p = 0 exactly (Phipson & Smyth, 2010)
+p_value = (n_extreme + 1) / (n_perms + 1)
+
+print(f"Permutations with |effect| >= |{observed_effect:.1f}|: {n_extreme}")
+print(f"p-value: {p_value:.4f}")
+```
+
+A p-value this small means: under 10,000 random shufflings, essentially **none** produced an effect as large as what we observed. The data are extremely surprising under the null hypothesis of no effect. The treatment works.
+
+*Think about it:* Why do we add 1 to both the numerator and denominator? Because with a finite number of permutations, we can't know for certain that the true p-value is exactly zero. The conservative estimator honestly reflects our uncertainty.
+
+## What the p-Value Is NOT
+
+The p-value is one of the most misinterpreted quantities in statistics. Before we go further, let's clear up the most common misconceptions:
+
+1. **The p-value is NOT the probability that the null hypothesis is true.** It's the probability of seeing data this extreme *if* the null were true. The direction of the conditional matters enormously.
+
+2. **The p-value is NOT the probability that the result will replicate.** A small p-value doesn't guarantee that a new experiment will find the same thing.
+
+3. **A small p-value does NOT mean the effect is large.** With enough data, you can get a tiny p-value for a tiny effect. Statistical significance and practical significance are different things.
+
+4. **p = 0.049 and p = 0.051 are not meaningfully different.** The conventional threshold of 0.05 is arbitrary. Treat the p-value as a continuous measure of evidence, not a binary verdict.
+
+We'll formalize hypothesis testing in [Lecture 10](lec10-hypothesis-testing.qmd). For now, think of the p-value as measuring how *surprising* the data are under the null.
+
+## A Second Example: Airbnb Prices by Borough
+
+Let's practice the full permutation test workflow on a different dataset. Is there a real difference in Airbnb listing prices between Manhattan and Brooklyn?
+
+```{python}
+# Load Airbnb data — just the columns we need
+airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv',
+                      usecols=['neighbourhood_group_cleansed', 'price'],
+                      low_memory=False)
+airbnb.columns = ['borough', 'price']
+
+# Filter to Manhattan and Brooklyn, drop missing
+airbnb = airbnb[airbnb['borough'].isin(['Manhattan', 'Brooklyn'])].dropna()
+
+# Sample 500 from each borough for speed (and to make the test more interesting)
+manhattan = airbnb[airbnb['borough'] == 'Manhattan']['price'].sample(500, random_state=42)
+brooklyn = airbnb[airbnb['borough'] == 'Brooklyn']['price'].sample(500, random_state=42)
+
+obs_diff = manhattan.mean() - brooklyn.mean()
+print(f"Manhattan mean price: ${manhattan.mean():.2f}")
+print(f"Brooklyn mean price:  ${brooklyn.mean():.2f}")
+print(f"Observed difference:  ${obs_diff:.2f}")
+```
+
+```{python}
+# Full permutation test workflow
+all_prices = np.concatenate([manhattan.values, brooklyn.values])
+n_manhattan = len(manhattan)
+
+n_perms_airbnb = 10_000
+perm_diffs = np.empty(n_perms_airbnb)
+for i in range(n_perms_airbnb):
+    shuffled = np.random.permutation(all_prices)
+    perm_diffs[i] = shuffled[:n_manhattan].mean() - shuffled[n_manhattan:].mean()
+```
+
+```{python}
+n_extreme_airbnb = np.sum(np.abs(perm_diffs) >= np.abs(obs_diff))
+p_value_airbnb = (n_extreme_airbnb + 1) / (n_perms_airbnb + 1)
+
+print(f"Observed difference: ${obs_diff:.2f}")
+print(f"Permutation p-value: {p_value_airbnb:.4f}")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.hist(perm_diffs, bins=50, density=True, color='lightgray', edgecolor='white',
+        label='Null distribution')
+ax.axvline(obs_diff, color='red', lw=2, ls='--',
+           label=f'Observed diff = ${obs_diff:.0f}')
+ax.axvline(-obs_diff, color='red', lw=2, ls=':', alpha=0.5)
+ax.set_xlabel('Price Difference: Manhattan − Brooklyn ($)')
+ax.set_ylabel('Density')
+ax.set_title('Permutation Test: Manhattan vs Brooklyn Airbnb Prices')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+Manhattan listings are significantly more expensive than Brooklyn listings — the observed difference falls far into the tail of the null distribution. The permutation test confirms what you probably already suspected, but now we have a rigorous number to back it up.
+
+## Bootstrap vs Permutation: When to Use Which
+
+These two simulation-based tools answer different questions:
+
+| | Bootstrap | Permutation test |
+|---|---|---|
+| **Question** | How precise is my estimate? | Is the effect real? |
+| **Produces** | Confidence interval | p-value |
+| **Null hypothesis** | Not needed | Required |
+| **Key assumption** | i.i.d. sample | Exchangeability under null |
+| **Best for** | Any statistic | Comparing groups |
+| **Resampling method** | With replacement (from each group) | Without replacement (shuffle labels) |
+
+**Bootstrap = precision. Permutation = significance. Use both.**
+
+A bootstrap CI that excludes zero and a small permutation p-value are telling you the same story from different angles. When they agree — as they do for the ACTG 175 data — you can be confident in the conclusion.
+
+## Connection to the Normal Approximation
+
+Just as the bootstrap CI has a normal approximation (the CLT-based interval from [Lecture 8](lec08-sampling.qmd)), the permutation test has an analytical counterpart: the **two-sample t-test**.
+
+```{python}
+# Two-sample t-test on the ACTG 175 data
+t_stat, t_pvalue = stats.ttest_ind(treatment, control)
+print(f"Two-sample t-test:")
+print(f"  t-statistic: {t_stat:.2f}")
+print(f"  p-value:     {t_pvalue:.6f}")
+print(f"\nPermutation test:")
+print(f"  p-value:     {p_value:.4f}")
+print(f"\nBoth are very small — same conclusion.")
+```
+
+The t-test assumes the data are approximately normal. The permutation test makes no such assumption — it only requires exchangeability under the null. For large samples (like ACTG 175), the two approaches give nearly identical results. For small or skewed samples, the permutation test is more reliable.
+
+```{python}
+# Same comparison for the Airbnb data
+t_stat_airbnb, t_pvalue_airbnb = stats.ttest_ind(manhattan, brooklyn)
+print(f"Airbnb two-sample t-test:")
+print(f"  t-statistic: {t_stat_airbnb:.2f}")
+print(f"  p-value:     {t_pvalue_airbnb:.6f}")
+print(f"\nAirbnb permutation test:")
+print(f"  p-value:     {p_value_airbnb:.4f}")
+```
+
+The t-test is faster (no simulation needed) but assumes normality. The permutation test is assumption-free but requires computation. In practice, they agree when samples are large. We'll explore the formal testing framework — null and alternative hypotheses, significance levels, Type I and Type II errors, and power — in [Lecture 10](lec10-hypothesis-testing.qmd).
+
+## Key Takeaways
+
+- **Permutation test**: shuffle group labels to simulate the null hypothesis, then measure how often chance produces something as extreme as what you observed.
+- **The p-value** measures surprise under the null — it is NOT the probability the null is true.
+- Permutation tests work for comparing groups **without distributional assumptions** — they only require exchangeability (e.g., random assignment).
+- **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). Use both.
+- The **two-sample t-test** is the normal approximation analog of the permutation test, just as the CLT-based CI is the analog of the bootstrap CI.
+- **Next**: [Lecture 10](lec10-hypothesis-testing.qmd) formalizes hypothesis testing — $H_0$, $H_1$, $\alpha$, Type I/II errors, and power.
+
+## Study Guide
+
+**Key definitions:**
+
+- **Permutation test**: A hypothesis test that builds the null distribution by shuffling group labels and recomputing the test statistic.
+- **Null distribution**: The distribution of a test statistic under the assumption that the null hypothesis is true.
+- **Null hypothesis**: The default claim being tested — typically "there is no effect" or "no difference between groups."
+- **p-value**: The probability of observing a result as extreme as (or more extreme than) what you got, assuming the null hypothesis is true.
+- **Exchangeability**: The property that swapping labels between groups doesn't change the joint distribution under the null. Random assignment guarantees this.
+- **Two-sided test**: A test that counts extreme values in both tails (large positive or large negative effects).
+- **Test statistic**: The quantity computed from the data to measure the effect (here, difference in means).
+
+**Key ideas (one sentence each):**
+
+- A permutation test shuffles group labels to build what the test statistic would look like if the null (no effect) were true.
+- The p-value is the fraction of permutation samples that produce an effect as extreme as observed.
+- Permutation tests require exchangeability (e.g., random assignment); bootstrap requires i.i.d. sampling.
+- The two-sample t-test is the parametric (normal approximation) analog of the permutation test.
+
+**Computational tools:**
+
+- `np.random.permutation(data)` — shuffle an array (for permutation tests)
+- `np.sum(np.abs(perm_effects) >= np.abs(observed))` — count extreme permutations
+- `(n_extreme + 1) / (n_perms + 1)` — conservative p-value estimator
+- `stats.ttest_ind(group1, group2)` — two-sample t-test (parametric analog)
+
+**For the quiz:**
+
+You are responsible for: the permutation test procedure, null distributions, p-value computation (given a null distribution), two-sided vs one-sided reasoning, when a permutation test is valid (exchangeability), and distinguishing bootstrap from permutation tests. You are NOT responsible for: exact exchangeability proofs or t-test derivations.
