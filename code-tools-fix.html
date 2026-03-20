@@ -1,0 +1,16 @@
+<script>
+// Fix for Quarto 1.8 code-tools "Show All Code" / "Hide All Code" bug.
+// The built-in JS uses ".cell > details > .sourceCode" but Quarto 1.8
+// wraps code in ".code-copy-outer-scaffold", breaking the direct child selector.
+document.addEventListener("DOMContentLoaded", function() {
+  function toggleAllCode(show) {
+    document.querySelectorAll(".cell > details.code-fold").forEach(function(details) {
+      details.open = show;
+    });
+  }
+  var showBtn = document.getElementById("quarto-show-all-code");
+  var hideBtn = document.getElementById("quarto-hide-all-code");
+  if (showBtn) showBtn.addEventListener("click", function() { toggleAllCode(true); });
+  if (hideBtn) hideBtn.addEventListener("click", function() { toggleAllCode(false); });
+});
+</script>

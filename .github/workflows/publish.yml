@@ -5,7 +5,7 @@ on:
 name: Render and deploy Quarto book
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -34,8 +34,49 @@ jobs:
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
+      - name: Convert .qmd to .ipynb notebooks
+        run: |
+          mkdir -p notebooks
+          for f in lec*.qmd; do
+            quarto convert "$f" --output "notebooks/${f%.qmd}.ipynb"
+          done
+
+      - name: Fix notebook DATA_DIR for Colab
+        run: |
+          python3 - << 'PYEOF'
+          import json, glob, os
+          for nb_path in sorted(glob.glob("notebooks/lec*.ipynb")):
+              with open(nb_path) as f:
+                  nb = json.load(f)
+              for cell in nb["cells"]:
+                  if cell["cell_type"] == "code":
+                      cell["source"] = [
+                          line.replace("DATA_DIR = 'data'", "DATA_DIR = 'https://raw.githubusercontent.com/stanford-mse-125/book/main/data'")
+                               .replace("pd.read_csv(f'{DATA_DIR}/", "pd.read_csv(f'{DATA_DIR}/")
+                          for line in cell["source"]
+                      ]
+              with open(nb_path, "w") as f:
+                  json.dump(nb, f, indent=1)
+              print(f"  Patched {os.path.basename(nb_path)}")
+          PYEOF
+
+      - name: Commit notebooks to main branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add notebooks/
+          if git diff --cached --quiet; then
+            echo "No notebook changes to commit"
+          else
+            git commit -m "Auto-generate Jupyter notebooks from .qmd sources"
+            git push
+          fi
+
       - name: Render Quarto book
         run: quarto render --execute
+
+      - name: Copy notebooks into book output
+        run: cp -r notebooks _book/notebooks
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

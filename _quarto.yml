@@ -34,6 +34,9 @@ book:
         - lec18-causal-inference-1.qmd
         - lec19-causal-inference-2.qmd
 
+filters:
+  - _notebook-links.lua
+
 format:
   html:
     theme: cosmo
@@ -43,6 +46,8 @@ format:
     number-sections: false
     fontsize: 1.05em
     mainfont: "system-ui, -apple-system, sans-serif"
+    include-after-body:
+      - code-tools-fix.html
 
 execute:
   freeze: auto
