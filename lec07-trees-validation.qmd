@@ -29,7 +29,7 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-## Section 1: When more features = worse predictions
+## When more features = worse predictions
 
 Adding features always improves training $R^2$. But does it improve predictions on *new* data?
 
@@ -173,7 +173,10 @@ plt.show()
 
 Look at the gap between the blue line (train) and the red line (test). The training $R^2$ keeps climbing — more features always give the model more flexibility to fit the training data. But the test $R^2$ peaks and then degrades. The most complex model has the **worst** test performance. It has memorized the training data, including all its noise and quirks, and none of that memorization helps on new data.
 
-*Think about it:* why does the training $R^2$ always go up? Because adding a feature can only help the model fit the training data better — in the worst case, the model can set that feature's coefficient to zero.
+:::{.callout-tip}
+## Think About It
+Why does the training $R^2$ always go up? Because adding a feature can only help the model fit the training data better — in the worst case, the model can set that feature's coefficient to zero.
+:::
 
 ### A dramatic demonstration
 
@@ -247,14 +250,17 @@ The training $R^2$ approaches 1 — the model nearly perfectly memorizes the tra
 Wait — can $R^2$ be negative? Yes, on test data. Recall that $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$. On test data, a model's residuals can be *worse* than just predicting the mean for every observation. A negative test $R^2$ means the model is worse than the trivial baseline. That's a clear sign of catastrophic overfitting.
 
 
-## Section 2: The bias-variance tradeoff
+## The bias-variance tradeoff
 
 Why does test error first decrease and then increase as models get more complex? This is one of the most important ideas in all of applied statistics: the **bias-variance tradeoff**.
 
+:::{.callout-important}
+## Definition: Bias and Variance
 Two sources of prediction error:
 
 - **Bias** is the error from oversimplifying. The model can't capture the true pattern. This is **underfitting** — like trying to fit a straight line through a curved relationship.
 - **Variance** is the error from over-complicating. The model is so flexible that it's too sensitive to the particular training data it happened to see. This is **overfitting** — the model learns noise as if it were signal.
+:::
 
 | | Too few features | Just right | Too many features |
 |---|---|---|---|
@@ -264,14 +270,20 @@ Two sources of prediction error:
 
 The total test error is (roughly) bias$^2$ + variance (this decomposition holds for mean squared error). Simple models have high bias but low variance. Complex models have low bias but high variance. The best model minimizes the sum — and that's somewhere in the middle.
 
-> "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk." — John von Neumann
+:::{.callout-note}
+## Von Neumann's Warning
+"With four parameters I can fit an elephant, and with five I can make him wiggle his trunk." — John von Neumann
 
 Von Neumann's warning applies directly: a model with enough parameters can fit *anything*, including complete nonsense. The fact that a model fits the training data well tells you nothing about whether it captures genuine patterns.
+:::
 
-*Think about it:* in the polynomial experiment above, which degrees had high bias? Which had high variance? Where was the sweet spot?
+:::{.callout-tip}
+## Think About It
+In the polynomial experiment above, which degrees had high bias? Which had high variance? Where was the sweet spot?
+:::
 
 
-## Section 3: Cross-validation
+## Cross-validation
 
 A single train/test split is noisy — we might get lucky or unlucky. Maybe our test set happened to contain easy-to-predict listings, or maybe the opposite. How do we get a more stable estimate of out-of-sample performance?
 
@@ -294,7 +306,7 @@ Fold 5:  [train]  [train]  [train]  [train]  [TEST ]   → score_5
                                                   Average → CV score
 ```
 
-Every observation is in the test set exactly once. The average of 5 scores is much more stable than any single train/test split.
+Every observation is in the test set exactly once. The average of 5 scores is much more stable than any single train/test split. (The extreme case is **leave-one-out CV** (LOO-CV), where $k = n$ — every observation gets its own fold. LOO-CV has low bias but high variance across folds, and is computationally expensive for large datasets. Five or ten folds is the usual practical choice.)
 
 Let's apply 5-fold CV to our six complexity levels:
 
@@ -332,10 +344,14 @@ print(f"\nBest model by CV: {best['model']} (CV R² = {best['cv_mean']:.4f})")
 
 Cross-validation correctly identifies the sweet spot: enough features to capture real patterns, but not so many that we overfit. Notice that the error bars (standard deviations across folds) give us a sense of how much variability there is — if two models have overlapping error bars, they're essentially tied.
 
-**An important caveat:** CV works because we can shuffle the data randomly — each fold is representative of the whole. This breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Lecture 16](lec16-backtesting.qmd).
+:::{.callout-warning}
+## CV Assumes Exchangeable Data
+CV works because we can shuffle the data randomly — each fold is representative of the whole. This breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Lecture 16](lec16-backtesting.qmd).
+:::
 
+<!-- FLAG: The assigned reading (IMS Ch 8-10) covers model selection criteria AIC, BIC, and adjusted R² as alternatives to cross-validation. Consider adding a short subsection or comparison table contrasting CV with these information-criterion approaches. -->
 
-## Section 4: Lasso (regularization)
+## Lasso (regularization)
 
 We've seen two strategies for handling overfitting:
 
@@ -347,6 +363,8 @@ There's a more elegant approach: let the model *automatically* shrink or elimina
 $$\min_\beta \sum_{i=1}^n (y_i - x_i^T \beta)^2 + \alpha \sum_{j=1}^p |\beta_j|$$
 
 The penalty term $\alpha \sum |\beta_j|$ punishes large coefficients. The key property of L1: it drives some coefficients to *exactly zero*, effectively selecting features automatically.
+
+A close relative is **ridge regression** (L2 regularization), which penalizes $\alpha \sum \beta_j^2$ instead. Ridge shrinks all coefficients toward zero but never sets them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features contribute small effects (ridge) or only a few features matter (lasso).
 
 **Practical motivation:** Imagine you're building a medical screening tool. A model that requires 200 blood tests is impractical — it's expensive, slow, and fatiguing for patients. A model that needs 5 blood tests can actually be deployed in a clinic. Lasso finds the parsimonious model automatically.
 
@@ -396,10 +414,13 @@ plt.show()
 
 OLS uses all features and overfits badly — its test $R^2$ may be negative. Lasso aggressively zeros out the noise, keeping only the features that genuinely help prediction. It resolves the overfitting problem automatically: instead of manually choosing how many features to include, let the regularization penalty figure it out.
 
-*Think about it:* the Lasso penalty strength $\alpha$ controls the bias-variance tradeoff. Large $\alpha$ = more regularization = more features zeroed out = simpler model (higher bias, lower variance). Small $\alpha$ = less regularization = closer to OLS (lower bias, higher variance). You can choose $\alpha$ by cross-validation.
+:::{.callout-tip}
+## Think About It
+The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff. Large $\alpha$ = more regularization = more features zeroed out = simpler model (higher bias, lower variance). Small $\alpha$ = less regularization = closer to OLS (lower bias, higher variance). You can choose $\alpha$ by cross-validation.
+:::
 
 
-## Section 5: The modern view — averaging overfit trees
+## The modern view — averaging overfit trees
 
 The classical story we just told has a satisfying narrative: more complexity eventually leads to overfitting, so we need to regularize. But there's a puzzle.
 
@@ -498,7 +519,7 @@ One sentence looking ahead: this same principle — overparameterize, then regul
 **The punchline:** the classical advice "regularize and cross-validate" still works. But now you know there's another path: build many diverse models and average them. The bias-variance tradeoff isn't wrong — it's just not the whole story.
 
 
-## Section 6: When R² is low — hospital data
+## When R² is low — hospital data
 
 We've seen $R^2$ go up and down with model complexity. But what if $R^2$ is low no matter what you do? Does that mean you're doing something wrong, or that the problem is genuinely hard? Let's find out with a different dataset.
 
@@ -554,7 +575,10 @@ for name, X_h in [('Rating only', X_h1), ('+ log(discharges)', X_h2),
 
 Even with thoughtful feature engineering, hospital readmission rates are hard to predict from hospital-level characteristics alone. The $R^2$ is low across all levels.
 
-*Think about it:* does a low $R^2$ mean the model is bad, or that the outcome is inherently hard to predict from the available features? Much of the variation in readmission rates likely comes from **patient-level** factors — age, comorbidities, social determinants of health — that hospital-level data simply doesn't capture. A model can only be as good as the information it receives.
+:::{.callout-tip}
+## Think About It
+Does a low $R^2$ mean the model is bad, or that the outcome is inherently hard to predict from the available features? Much of the variation in readmission rates likely comes from **patient-level** factors — age, comorbidities, social determinants of health — that hospital-level data simply doesn't capture. A model can only be as good as the information it receives.
+:::
 
 
 ## Key takeaways
@@ -574,25 +598,19 @@ Even with thoughtful feature engineering, hospital readmission rates are hard to
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
-- **Train/test split** — holding out part of the data to evaluate model performance on unseen data
-- **Validation set** — data used to choose model complexity (distinct from the final test set)
-- **Cross-validation (k-fold)** — rotating which of $k$ folds is held out, averaging test scores for a more stable estimate of out-of-sample performance
-- **Overfitting** — the model memorizes training data (including noise) and performs poorly on new data
-- **Underfitting** — the model is too simple to capture the real pattern in the data
-- **Bias-variance tradeoff** — the tension between underfitting (high bias) and overfitting (high variance); total error is approximately bias$^2$ + variance
-- **Lasso (L1 regularization)** — adds a penalty $\alpha \sum |\beta_j|$ that shrinks some coefficients to exactly zero, performing automatic feature selection
-- **Regularization** — constraining model complexity to reduce overfitting
-- **Bagging** — bootstrap aggregating: training many models on bootstrap samples and averaging their predictions to reduce variance
-
-### Key ideas (one sentence each)
-
-- Training $R^2$ always improves with more features; test $R^2$ eventually degrades — the gap is overfitting.
-- Cross-validation rotates which fold is held out for stable model comparison, averaging over the randomness of a single split.
-- Bias = underfitting; Variance = overfitting; the goal is to minimize their sum.
-- Lasso zeroes out unimportant features automatically, finding a parsimonious model without manual feature selection.
-- Averaging many overfit trees reduces variance without increasing bias — more trees never hurts.
+- **Train/test split** — holding out part of the data to evaluate model performance on unseen data.
+- **Validation set** — data used to choose model complexity (distinct from the final test set).
+- **Cross-validation (k-fold)** — rotating which of $k$ folds is held out, averaging test scores for a more stable estimate of out-of-sample performance.
+- **Overfitting** — the model memorizes training data (including noise) and performs poorly on new data. Training $R^2$ always improves with more features; test $R^2$ eventually degrades — the gap is overfitting.
+- **Underfitting** — the model is too simple to capture the real pattern in the data.
+- **Bias-variance tradeoff** — the tension between underfitting (high bias) and overfitting (high variance); total error is approximately bias$^2$ + variance. The goal is to minimize the sum.
+- **Lasso (L1 regularization)** — adds a penalty $\alpha \sum |\beta_j|$ that shrinks some coefficients to exactly zero, performing automatic feature selection.
+- **Ridge (L2 regularization)** — adds a penalty $\alpha \sum \beta_j^2$ that shrinks coefficients toward zero but does not set them exactly to zero; useful when many features contribute small effects.
+- **Regularization** — constraining model complexity to reduce overfitting. Lasso and ridge are the two main forms for linear regression.
+- **Bagging** — bootstrap aggregating: training many models on bootstrap samples and averaging their predictions to reduce variance. More trees never hurts.
+- **Leave-one-out CV (LOO-CV)** — the extreme case of $k$-fold CV where $k = n$; each observation gets its own fold. Low bias but high variance and computationally expensive.
 
 ### Computational tools
 

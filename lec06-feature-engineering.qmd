@@ -49,7 +49,7 @@ print(f"Working with {len(df):,} listings")
 df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 ```
 
-## Section 1: One-hot encoding
+## One-hot encoding
 
 Regression needs numbers. But two of our most informative features — `borough` and `room_type` — are strings:
 
@@ -60,7 +60,10 @@ print("room_type values:", df['room_type'].unique())
 
 We can't feed "Manhattan" or "Private room" into a regression equation. The solution is **one-hot encoding**: turn each category into a binary (0/1) column. A listing in Manhattan gets a 1 in the `borough_Manhattan` column and 0s elsewhere.
 
-We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't in any of the other boroughs, it *must* be in the dropped category (the reference). Including all dummies would make the columns sum to the intercept column — a linearly dependent column space (recall the column space from [Lecture 4](lec04-linear-algebra.qmd)).
+:::{.callout-important}
+## Definition: Reference level
+We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't in any of the other boroughs, it *must* be in the dropped category (the **reference level**). Including all dummies would make the columns sum to the intercept column — a linearly dependent column space (recall the column space from [Lecture 4](lec04-linear-algebra.qmd)). The dropped category becomes the baseline that all other coefficients are measured against.
+:::
 
 ```{python}
 # One-hot encode categorical features
@@ -108,7 +111,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-## Section 2: Polynomial features
+## Polynomial features
 
 What if the relationship isn't linear in the original features? Maybe the jump from 1 to 2 bedrooms matters more than from 4 to 5. We can capture this by adding **polynomial features**: $x$, $x^2$, $x^3$.
 
@@ -170,9 +173,12 @@ plt.tight_layout()
 plt.show()
 ```
 
-*Think about it:* why do polynomial features on bedrooms alone give such small improvements? What other sources of variation in price are we ignoring?
+:::{.callout-tip}
+## Think About It
+Why do polynomial features on bedrooms alone give such small improvements? What other sources of variation in price are we ignoring?
+:::
 
-## Section 3: Interaction terms
+## Interaction terms
 
 Is an extra bedroom worth the same in Manhattan and the Bronx? So far our model assumes yes — there's one `bedrooms` coefficient that applies everywhere. An **interaction term** lets the effect of one feature depend on another:
 
@@ -243,9 +249,16 @@ plt.show()
 
 **Feature engineering is where domain knowledge meets statistics.** Knowing that location affects the value of space is domain knowledge; encoding it as an interaction term is statistics.
 
-> "All models are wrong, but some are useful." — George Box
+As we add more features, R^2 can only go up — even if the new features are noise. **Adjusted R^2** corrects for this by penalizing model complexity: $R^2_{adj} = 1 - \frac{s^2_{\text{residuals}} / (n-k-1)}{s^2_{\text{outcome}} / (n-1)}$, where $k$ is the number of predictors. A feature that doesn't help prediction will increase $k$ without sufficiently reducing the residual variance, causing adjusted R^2 to drop. This makes it a useful guide for deciding which features to keep.
 
-## Section 4: A different approach — decision trees
+<!-- FLAG: IMS Ch 8 covers model selection strategies (forward selection, backward elimination, stepwise) and Ch 10 covers multicollinearity and VIF in detail. These are not included here. Consider whether multicollinearity / VIF deserves a section — the lecture mentions collinearity only in the context of drop_first. Stepwise selection could fit in a model-building lecture. -->
+
+:::{.callout-note}
+## George Box on models
+"All models are wrong, but some are useful." — George Box
+:::
+
+## A different approach — decision trees
 
 Engineering features by hand is creative but tedious. What if the model could find the right splits on its own?
 
@@ -292,9 +305,12 @@ plt.show()
 
 Each leaf shows the predicted price (the mean of training examples that land there) and how many samples it contains. The tree automatically discovers that room type and borough matter — no one-hot encoding intuition required.
 
-*Think about it:* the tree picks its own split points. Look at the first split — does it match your intuition about what matters most for price?
+:::{.callout-tip}
+## Think About It
+The tree picks its own split points. Look at the first split — does it match your intuition about what matters most for price?
+:::
 
-## Section 5: Random forests as benchmark
+## Random forests as benchmark
 
 One tree overfits. What about averaging many trees?
 
@@ -317,7 +333,7 @@ The forest beats our hand-engineered linear model — and we didn't engineer a s
 
 How does this work? We'll understand the key idea in [Lecture 7](lec07-trees-validation.qmd) (averaging reduces variance) and go deep on tree-based methods in Lecture 17.
 
-## Section 6: Classification with trees
+## Classification with trees
 
 So far we've predicted prices — a continuous number. What about predicting categories?
 
@@ -353,7 +369,7 @@ print(f"  (Baseline — always guess majority class: {max(y_class.mean(), 1-y_cl
 
 A random forest classifier uses majority vote instead of averaging: each tree votes for a class, and the forest picks the most popular answer. You now have a classification tool for your projects. We'll build a deeper, more statistical understanding of classification with logistic regression in Lecture 13.
 
-## Section 7: LLM-based featurization
+## LLM-based featurization
 
 What about unstructured data like text? Our Airbnb listings have names and descriptions that might contain useful information — mentions of luxury, cleanliness, neighborhood character — but a regression can't read English.
 
@@ -463,7 +479,10 @@ plt.tight_layout()
 plt.show()
 ```
 
-LLM featurization is a powerful modern technique: instead of building a natural language processing pipeline from scratch, you write a prompt and let the model extract structured information. The resulting features are imperfect — LLMs can be wrong — but cross-validation tells you whether they help.
+:::{.callout-warning}
+## LLM features can be wrong
+LLM featurization is a powerful modern technique: instead of building a natural language processing pipeline from scratch, you write a prompt and let the model extract structured information. The resulting features are imperfect — LLMs can hallucinate or misinterpret text — but cross-validation tells you whether they help. Always validate LLM-extracted features before trusting them in a model.
+:::
 
 ## Key takeaways
 
@@ -477,23 +496,16 @@ LLM featurization is a powerful modern technique: instead of building a natural 
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
-- **Feature engineering** — creating new input variables from raw data to improve a model's predictions
-- **One-hot encoding** — converting a categorical variable with $k$ categories into $k-1$ binary (0/1) columns, one per category (drop one to avoid collinearity)
-- **Polynomial features** — powers of a variable ($x^2, x^3, \ldots$) that let a linear model capture curved relationships
-- **Interaction term** — a product of two features (e.g., bedrooms $\times$ $\mathbb{1}_{\text{Manhattan}}$) that lets one feature's effect depend on another
-- **Decision tree** — a model that recursively splits the feature space into regions, predicting the mean (regression) or majority class (classification) in each region
-- **Random forest** — an ensemble of many decision trees trained on random subsets of data and features; predictions are averaged (regression) or majority-voted (classification)
-- **Weak supervision** — using noisy, programmatic labels (e.g., from an LLM) instead of expensive hand labels
-
-### Key ideas (one sentence each)
-
-- One-hot encoding lets categorical variables enter a regression as shifts in the intercept for each group.
-- Polynomial and interaction features make a "linear" model capture nonlinear patterns — it's linear in $\beta$, not in $x$.
-- Decision trees learn if/then splits automatically, handling nonlinearities and interactions without manual engineering.
-- Random forests average many trees to reduce overfitting — more trees never hurts.
-- LLM featurization converts unstructured text into structured features using a single prompt, enabling weak supervision at scale.
+- **Feature engineering** — creating new input variables from raw data to improve a model's predictions.
+- **One-hot encoding** converts a categorical variable with $k$ categories into $k-1$ binary (0/1) columns (the dropped category is the **reference level**). Each dummy coefficient measures a shift relative to that baseline.
+- **Polynomial features** — powers of a variable ($x^2, x^3, \ldots$) that let a linear model capture curved relationships. The model is still linear in $\beta$, not in $x$.
+- **Interaction terms** — products of two features (e.g., bedrooms $\times$ $\mathbb{1}_{\text{Manhattan}}$) that let one feature's effect depend on another.
+- **Adjusted R^2** penalizes model complexity, preventing R^2 from rewarding useless features. Use it to compare models with different numbers of predictors.
+- **Decision trees** recursively split the feature space into regions, predicting the mean (regression) or majority class (classification) in each region — no manual feature engineering needed.
+- **Random forests** average many decision trees trained on random subsets of data and features, reducing overfitting. More trees never hurts.
+- **Weak supervision** — using noisy, programmatic labels (e.g., from an LLM) instead of expensive hand labels. LLM featurization converts unstructured text into structured features using a single prompt.
 
 ### Computational tools
 

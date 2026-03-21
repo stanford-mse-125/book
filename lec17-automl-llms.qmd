@@ -68,11 +68,17 @@ plt.tight_layout()
 plt.show()
 ```
 
-You saw trees in Lecture 6, but we didn't explain how they choose their splits. Here's the mechanism: **recursive partitioning**. At each **node**, the algorithm tries every feature and every possible threshold, and picks the split that minimizes the prediction error (mean squared error for regression, Gini impurity or entropy for classification). It keeps splitting until it reaches a **leaf**, where it predicts the average outcome for all data points in that group.
+:::{.callout-important}
+## Definition: Recursive Partitioning
+At each **node**, the algorithm tries every feature and every possible threshold, and picks the split that minimizes the prediction error (mean squared error for regression, Gini impurity or entropy for classification). It keeps splitting until it reaches a **leaf**, where it predicts the average outcome for all data points in that group.
+:::
 
 Read the tree top-down. The first split asks: is `SAT_AVG` above or below a threshold? The algorithm chose this split because it produces the largest reduction in MSE across all possible first splits. Each subsequent split refines the prediction further.
 
-> **Think about it:** Why might a tree choose SAT_AVG as its first split? What does that tell you about which feature is most informative for predicting earnings?
+:::{.callout-tip}
+## Think About It
+Why might a tree choose SAT_AVG as its first split? What does that tell you about which feature is most informative for predicting earnings?
+:::
 
 ### Why trees are useful (recap from Lecture 6)
 
@@ -131,7 +137,10 @@ print(f"bootstrap samples + feature subsets decorrelate the trees,")
 print(f"so averaging reduces variance without increasing bias.")
 ```
 
-> **Think about it:** Why does averaging many overfitting trees produce a good model? Hint: each tree overfits to *different* noise because it sees different bootstrap samples and different feature subsets.
+:::{.callout-tip}
+## Think About It
+Why does averaging many overfitting trees produce a good model? Hint: each tree overfits to *different* noise because it sees different bootstrap samples and different feature subsets.
+:::
 
 ### Gradient boosting: learning from mistakes
 
@@ -154,7 +163,10 @@ Now you know what's inside the black box. Let's see how AutoML uses these tools 
 
 ## The AutoML promise
 
+:::{.callout-important}
+## Definition: AutoML
 **AutoML** (automated machine learning) takes this further: tools like auto-sklearn, H2O AutoML, and Google Vertex AI automatically try hundreds of model configurations — including trees, forests, gradient boosting, and others — and pick the best one. No feature engineering, no hyperparameter tuning.
+:::
 
 Under the hood, some AutoML systems also try additive models and splines — smooth nonlinear models that are more interpretable than random forests but more flexible than linear regression.
 
@@ -212,7 +224,10 @@ plt.show()
 
 Not bad! Gradient Boosting likely wins. AutoML *works* — for the modeling step.
 
-> **Think about it:** Before we continue — what did AutoML NOT do here? What decisions did *we* make before any model was fit?
+:::{.callout-tip}
+## Think About It
+Before we continue — what did AutoML NOT do here? What decisions did *we* make before any model was fit?
+:::
 
 ## What AutoML can't do
 
@@ -393,15 +408,21 @@ print("The LLM didn't check.")
 
 ### Problem 4: Hallucinated confidence
 
+:::{.callout-warning}
+## LLMs Don't Calibrate Confidence
 LLMs don't reliably calibrate their confidence. They may hedge on a simple calculation and then present a complex causal claim with the same confident tone. An LLM will:
 
 - Report a p-value without checking if the test's assumptions are met
 - Claim a result is "statistically significant" without considering multiple comparisons
 - Make causal claims from observational data
+:::
 
-> **Think about it:** Would you trust a colleague who never says "I don't know"? What would you do differently if you knew your analysis tool couldn't distinguish what it knows from what it's guessing?
+:::{.callout-tip}
+## Think About It
+Would you trust a colleague who never says "I don't know"? What would you do differently if you knew your analysis tool couldn't distinguish what it knows from what it's guessing?
+:::
 
-## The surprise: LLM analysis vs. your analysis
+## LLM analysis vs. your analysis
 
 Let's test this concretely. If you asked an LLM "Do NBA players perform better after rest?", here's roughly what it would do.
 
@@ -434,7 +455,10 @@ if rested.mean() < not_rested.mean():
 
 Wait — rested players score *fewer* points? That's backwards from what you'd expect.
 
-> **Think about it:** Why might this be backwards? Think about *which* players tend to have many rest days, and *which* players play on back-to-backs. Take 30 seconds before reading on.
+:::{.callout-tip}
+## Think About It
+Why might this be backwards? Think about *which* players tend to have many rest days, and *which* players play on back-to-backs. Take 30 seconds before reading on.
+:::
 
 This is **Simpson's paradox** from Lectures 11-12. The aggregate comparison is *backwards* because rest is confounded with player quality:
 
@@ -523,7 +547,10 @@ AI tools are getting better fast. But some things remain fundamentally human:
 
 **Asking the right question.** "What predicts earnings?" is a different question from "What *causes* higher earnings?" or "Which schools provide the most *value-added*?" The data can't tell you which question to ask.
 
-> "Far better an approximate answer to the right question, which is often vague, than an exact answer to the wrong question, which can always be made precise." — John Tukey
+:::{.callout-note}
+## Tukey on Asking the Right Question
+"Far better an approximate answer to the right question, which is often vague, than an exact answer to the wrong question, which can always be made precise." — John Tukey
+:::
 
 **Knowing the domain.** Why are for-profit schools missing SAT data? Why do bench players have more rest days? Why does AQI spike in August? Domain knowledge is the difference between a plausible-looking wrong answer and a correct one.
 
@@ -533,7 +560,10 @@ AI tools are getting better fast. But some things remain fundamentally human:
 
 **Communicating uncertainty honestly.** LLMs project confidence. Good statisticians communicate uncertainty. "The model suggests X, but the confidence interval is wide and the data is missing for the most vulnerable populations" is more honest — and more useful — than "X."
 
-> **Think about it:** Which of these skills could an AI eventually learn? Which require human judgment that no amount of training data can replace?
+:::{.callout-tip}
+## Think About It
+Which of these skills could an AI eventually learn? Which require human judgment that no amount of training data can replace?
+:::
 
 ## A practical guide: using AI tools well
 
@@ -562,7 +592,10 @@ Don't ask an LLM to "analyze this dataset." Break the task into smaller steps wh
 
 Each step gives you a checkpoint. If the LLM silently drops 60% of the data in step 1, you catch it before it propagates through the entire analysis.
 
-> **Think about it:** You've probably used AI tools for homework this quarter. Think of a time the AI gave you something that looked right but wasn't — or a time you caught a mistake the AI missed. What course concept helped you catch it?
+:::{.callout-tip}
+## Think About It
+You've probably used AI tools for homework this quarter. Think of a time the AI gave you something that looked right but wasn't — or a time you caught a mistake the AI missed. What course concept helped you catch it?
+:::
 
 ## Reflecting on the course
 
@@ -588,11 +621,14 @@ You now have the vocabulary to be a sophisticated consumer — and critic — of
 
 - **AI tools are powerful assistants.** Use them for drafting code, trying models, and generating hypotheses. But always apply your statistical judgment before trusting results.
 
-> The goal of this course was never to make you compute faster than a machine. It was to make you *think* better than one.
+:::{.callout-note}
+## The Goal
+The goal of this course was never to make you compute faster than a machine. It was to make you *think* better than one.
+:::
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
 - **Decision tree:** a model that recursively partitions the feature space by splitting on one feature at a time, predicting the average outcome in each leaf.
 - **Node, split, leaf:** a node is a decision point in the tree; a split is the threshold that divides data at a node; a leaf is a terminal node that makes a prediction.
@@ -602,15 +638,12 @@ You now have the vocabulary to be a sophisticated consumer — and critic — of
 - **AutoML:** automated machine learning — systematic search over models, features, and hyperparameters with cross-validation.
 - **Selection bias:** systematic exclusion of certain groups from an analysis, leading to conclusions that don't generalize.
 - **LLM (Large Language Model):** an AI model trained on text that can generate code and analysis, but lacks the ability to check statistical assumptions or reason causally.
-
-### Key ideas (one sentence each)
-
-1. Decision trees partition the feature space into rectangular regions by recursively splitting on single features.
-2. Deep trees overfit; random forests fix this by averaging many trees trained on different bootstrap samples.
-3. Gradient boosting trains trees sequentially on residuals, connecting to the gradient descent idea from Lecture 13.
-4. AutoML automates model selection but cannot frame the question, check data quality, or interpret results.
-5. LLMs produce working code quickly but systematically fail at checking assumptions, recognizing confounding, and calibrating uncertainty.
-6. Decomposing an analysis into small, verifiable prompts lets you catch AI errors before they propagate.
+- Decision trees partition the feature space into rectangular regions by recursively splitting on single features.
+- Deep trees overfit; random forests fix this by averaging many trees trained on different bootstrap samples.
+- Gradient boosting trains trees sequentially on residuals, connecting to the gradient descent idea from Lecture 13.
+- AutoML automates model selection but cannot frame the question, check data quality, or interpret results.
+- LLMs produce working code quickly but systematically fail at checking assumptions, recognizing confounding, and calibrating uncertainty.
+- Decomposing an analysis into small, verifiable prompts lets you catch AI errors before they propagate.
 
 ### Computational tools
 

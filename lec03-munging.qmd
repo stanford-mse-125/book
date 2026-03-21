@@ -51,7 +51,10 @@ print(f"Hospital Info unique IDs:   {hospital_info['Facility ID'].nunique():,}")
 
 The **join key** is `Facility ID`. But notice: the two datasets have different numbers of unique hospitals. What happens when we join?
 
-> **Think about it:** Before we run the join — predict: will the **inner join** have more rows, fewer rows, or the same number as the HRRP table? What about a **left join**?
+:::{.callout-tip}
+## Think About It
+Before we run the join — predict: will the **inner join** have more rows, fewer rows, or the same number as the HRRP table? What about a **left join**?
+:::
 
 ```{python}
 # Inner join: only hospitals that appear in BOTH datasets
@@ -77,7 +80,10 @@ The inner join dropped some hospitals that appear in the readmissions data but n
 
 **This is a decision, not a default.** Every join type gives a different answer. If you use an inner join without checking, you might silently lose data.
 
-> **Key principle**: After every join, check your row counts. Did you gain rows (duplicates in the join key)? Lose rows (unmatched keys)? Either one is a signal worth investigating.
+:::{.callout-important}
+## Key Principle
+After every join, check your row counts. Did you gain rows (duplicates in the join key)? Lose rows (unmatched keys)? Either one is a signal worth investigating.
+:::
 
 ```{python}
 # What hospitals are in HRRP but NOT in hospital_info?
@@ -155,7 +161,10 @@ Approaches 1 and 3 are actually the same thing — pandas ignores NaN by default
 
 You might be thinking: if they all give the same answer, who cares? Here's where it matters — when we compare groups.
 
-> **Think about it:** If we drop all rows with missing readmission data, which types of hospitals do you think we lose the most of? Why?
+:::{.callout-tip}
+## Think About It
+If we drop all rows with missing readmission data, which types of hospitals do you think we lose the most of? Why?
+:::
 
 ```{python}
 # Are the missing values evenly distributed across ownership types?
@@ -183,7 +192,10 @@ The missing data is *not* evenly distributed across ownership types. Some types 
 
 Here's a vivid example from another domain: in ambulance data, if a patient's heart rate is missing, it often means the EMTs were too busy saving their life to record vitals. The missing value *is* the signal. This is the opposite of random missingness.
 
-Statisticians distinguish three patterns: Missing Completely At Random (MCAR), Missing At Random (MAR), and Missing Not At Random (MNAR). Here, the missingness depends on hospital characteristics — that's MNAR, and it's the hardest to deal with. Every handling strategy introduces bias. The question is which bias you can live with.
+:::{.callout-important}
+## Definition: Missing Data Patterns
+Statisticians distinguish three patterns: **Missing Completely At Random (MCAR)** — missingness is unrelated to any variable; **Missing At Random (MAR)** — missingness depends on observed variables but not on the missing value itself; **Missing Not At Random (MNAR)** — missingness depends on the unobserved value or on other unobserved variables. Here, the missingness depends on hospital characteristics — that's MNAR, and it's the hardest to deal with. Every handling strategy introduces bias. The question is which bias you can live with.
+:::
 
 ## Part 3: Data types gone wrong
 
@@ -250,7 +262,10 @@ print(hospital_info['Hospital overall rating'].value_counts().sort_index())
 
 "Not Available" is mixed in with the numbers. If you convert this to numeric without checking, those hospitals get NaN. If you label-encode it (1, 2, 3, 4, 5, 6), you've just told your model that "Not Available" is better than 5 stars.
 
+:::{.callout-warning}
+## Type Errors Are Silent
 These type issues seem trivial. They're not. They're the #1 source of silent errors in data analysis.
+:::
 
 ## Part 4: AI Gotchas — When the machine is confidently wrong
 
@@ -302,7 +317,10 @@ The state distribution shifts. States with many small/rural hospitals lose a lar
 
 ### Gotcha #2: Wrong ranking metric
 
-> **Think about it:** If you were ranking hospitals by readmission performance, which column would you use — `Predicted Readmission Rate` or `Excess Readmission Ratio`? Why?
+:::{.callout-tip}
+## Think About It
+If you were ranking hospitals by readmission performance, which column would you use — `Predicted Readmission Rate` or `Excess Readmission Ratio`? Why?
+:::
 
 An AI asked to "find hospitals with the worst readmission rates" would likely rank by `Predicted Readmission Rate`. But the Predicted Rate reflects both patient severity and hospital performance. To isolate hospital performance, CMS computes the `Excess Readmission Ratio`, which adjusts for patient mix.
 
@@ -356,11 +374,17 @@ plt.show()
 
 ### Gotcha #3: Data leakage
 
-> **Think about it:** Look at the columns in the hospital data: `Predicted Readmission Rate`, `Expected Readmission Rate`, `Excess Readmission Ratio`. If you wanted to predict Excess Readmission Ratio, which columns would be dangerous to include as inputs?
+:::{.callout-tip}
+## Think About It
+Look at the columns in the hospital data: `Predicted Readmission Rate`, `Expected Readmission Rate`, `Excess Readmission Ratio`. If you wanted to predict Excess Readmission Ratio, which columns would be dangerous to include as inputs?
+:::
 
 Here's a subtler trap. Suppose the AI builds a model to predict the Excess Readmission Ratio. It would naturally include all numeric columns as features — including `Expected Readmission Rate`.
 
-But there's a mathematical relationship: **Excess Ratio = Predicted / Expected**. Including Expected Rate as a feature is **data leakage** — the feature contains the answer by construction, like using tomorrow's stock price to "predict" today's return.
+:::{.callout-important}
+## Definition: Data Leakage
+**Data leakage** occurs when your model's input features contain information that wouldn't be available at prediction time, or that is mathematically derived from the target. Here, **Excess Ratio = Predicted / Expected**, so including Expected Rate as a feature is leakage — the feature contains the answer by construction, like using tomorrow's stock price to "predict" today's return.
+:::
 
 We can see the leakage directly: Expected Rate and Excess Ratio are nearly perfectly correlated, because one is computed from the other.
 
@@ -453,23 +477,16 @@ AI assistants are remarkably good at writing code. They'll load your data, compu
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
-- **Data munging / wrangling** — the process of cleaning, transforming, and preparing raw data for analysis
-- **Inner join** — combines two tables, keeping only rows with matching keys in *both* tables
-- **Left join** — combines two tables, keeping all rows from the left table and adding matched data from the right (NaN where no match)
-- **Join key** — the column(s) used to match rows between tables
-- **Mean imputation** — filling missing values with the mean of the non-missing values; preserves the mean but shrinks variance
-- **Selection bias** — systematic difference between the sample you analyze and the population you care about, caused here by dropping rows
-- **Informative missingness** — when the fact that data is missing tells you something about the value (e.g., small hospitals can't report)
-- **MNAR (Missing Not At Random)** — missingness depends on the unobserved value itself or on other variables; the hardest missing-data pattern
-- **Data leakage** — including information in your model that wouldn't be available at prediction time, or that is mathematically derived from the target
-
-### Key ideas (one sentence each)
-
-- Every data cleaning choice is a decision that changes your conclusions — there is no "neutral" default.
+- **Data munging / wrangling** — the process of cleaning, transforming, and preparing raw data for analysis. Every cleaning choice is a decision that changes your conclusions — there is no "neutral" default.
+- **Inner join** — combines two tables, keeping only rows with matching keys in *both* tables. **Left join** — keeps all rows from the left table and adds matched data from the right (NaN where no match). The **join key** is the column(s) used to match rows.
 - After every join, check row counts: gaining rows means duplicate keys; losing rows means unmatched keys.
+- **Mean imputation** — filling missing values with the column mean; preserves the mean but shrinks variance and distorts relationships.
+- **Selection bias** — systematic difference between the sample you analyze and the population you care about, caused here by dropping rows.
+- **Informative missingness** — when the fact that data is missing tells you something about the value (e.g., small hospitals can't report). **MNAR (Missing Not At Random)** — missingness depends on the unobserved value itself or on other variables; the hardest missing-data pattern.
 - Missing data patterns are often informative: *which* data is missing can be as important as the values themselves.
+- **Data leakage** — including information in your model that wouldn't be available at prediction time, or that is mathematically derived from the target.
 - AI assistants produce plausible-looking analyses but systematically fail to question their own data-cleaning decisions.
 
 ### Computational tools
@@ -480,6 +497,9 @@ AI assistants are remarkably good at writing code. They'll load your data, compu
 - `.fillna(value)` — fill NaN with a specified value
 - `.isna()` / `.notna()` — boolean mask for missing / non-missing values
 - `.value_counts()` — count unique values (useful for spotting unexpected entries like "Not Available")
+- `.str.replace(pat, repl, regex=True)` — apply string operations element-wise on a Series (also `.str.lower()`, `.str.strip()`, `.str.contains()`, etc.)
+- `.groupby(col).agg(...)` — split data by groups and compute summary statistics; `.agg()` accepts functions like `'mean'`, `'count'`, `'sum'`, or lists/dicts of them
+- `.astype(dtype)` — cast a Series to a specified type (e.g., `float`, `int`, `str`, `'category'`)
 
 ### For the quiz
 

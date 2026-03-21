@@ -80,9 +80,12 @@ We went from 96 columns to 23 numeric ones. But 23 dimensions is still a lot. Ca
 
 Imagine plotting listings in 23-dimensional space (one axis per feature). The points form a cloud. Some directions in this cloud have lots of spread (variance) — those directions carry the most information. Other directions have very little spread — those are mostly noise.
 
+:::{.callout-important}
+## Definition: Principal Component Analysis (PCA)
 **PCA finds the directions of maximum variance.** The first **principal component** (PC1) is the direction of maximum spread. PC2 is the direction of maximum spread *orthogonal* (perpendicular) to PC1. And so on.
 
 PCA finds the best $k$-dimensional subspace to project your data onto. "Best" means it minimizes the total squared distance between the original points and their projections — the same idea as regression minimizing squared residuals, but now the residuals are *perpendicular* to the fitted subspace, not vertical.
+:::
 
 In Lecture 5, regression projected $y$ onto a fixed set of features $X$. PCA asks: what if we could *choose* the subspace to make that projection as good as possible?
 
@@ -90,7 +93,10 @@ In Lecture 5, regression projected $y$ onto a fixed set of features $X$. PCA ask
 
 Let's see what happens if we run PCA on the raw (unstandardized) data. This is what an AI assistant would typically do.
 
-**Think about it:** Before looking at the output — which feature do you think PC1 will pick up, and why?
+:::{.callout-tip}
+## Think About It
+Before looking at the output — which feature do you think PC1 will pick up, and why?
+:::
 
 ```{python}
 # PCA without standardization
@@ -119,7 +125,10 @@ for col in raw_var.head(5).index:
 
 PCA on unstandardized data just picks up whichever column has the biggest numbers. PC1 is basically "maximum_nights" — that's not a useful summary of anything.
 
-This is a critical lesson: **PCA is dominated by scale.**
+:::{.callout-warning}
+## PCA is dominated by scale
+This is a critical lesson: without standardization, PCA is dominated by whichever feature has the largest scale.
+:::
 
 ## The fix: standardize first
 
@@ -192,7 +201,10 @@ Still, the first few PCs do capture meaningful structure. Let's interpret them.
 
 Each PC is a weighted combination of the original features. The **loadings** — the weights — tell us what each PC represents.
 
-**Think about it:** Now that we've standardized, what groupings of features do you expect PCA to find? Think about which Airbnb features tend to be correlated with each other.
+:::{.callout-tip}
+## Think About It
+Now that we've standardized, what groupings of features do you expect PCA to find? Think about which Airbnb features tend to be correlated with each other.
+:::
 
 ```{python}
 # PC loadings heatmap for first 5 PCs
@@ -279,6 +291,8 @@ else:
 
 ## The math behind PCA: SVD
 
+<!-- FLAG: Reading assignment VMLS Ch 16 may not align with PCA content — consider reassigning -->
+
 Now that you've seen PCA work, let's look under the hood. PCA is powered by the **SVD** (**Singular Value Decomposition**). If you've taken EE103, see VMLS Chapter 16 for a deeper treatment.
 
 The exact SVD of the centered data matrix is:
@@ -293,7 +307,10 @@ $$X \approx U_k S_k V_k^T$$
 - The diagonal of $S$ contains the **singular values** — the fraction of total variance captured by PC$i$ is $\sigma_i^2 / \sum_j \sigma_j^2$
 - The columns of $US$ are the **PC scores** (each listing's coordinates in the new basis)
 
-The **Eckart-Young-Mirsky theorem** guarantees this: among all rank-$k$ approximations to $X$, the truncated SVD has the smallest total squared error. No other $k$-dimensional summary can do better.
+:::{.callout-important}
+## Definition: Eckart-Young-Mirsky Theorem
+Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest total squared error. No other $k$-dimensional summary can do better.
+:::
 
 ## PCA as regression onto optimal covariates
 
@@ -357,7 +374,7 @@ Room types show some separation along PC2 (the size/luxury axis): entire homes t
 
 Boroughs show less separation in these first two PCs. Geography isn't the dominant source of variance in the standardized data — review patterns and listing size matter more.
 
-## The surprise: standardization changes everything
+## Standardization changes everything
 
 Let's put the two PCA results side by side.
 
@@ -389,21 +406,26 @@ plt.show()
 
 **Completely different!** Without standardization, PC1 is dominated by `maximum_nights` and `availability_365` — just because those columns have big numbers. With standardization, PC1 captures the review quality pattern we identified earlier.
 
-This is one of the most common PCA mistakes in practice. Always check whether your data has been standardized.
-
-**Rule of thumb:** always standardize before PCA, unless you have a specific reason not to (e.g., all features are already on the same scale).
+:::{.callout-warning}
+## Always standardize before PCA
+This is one of the most common PCA mistakes in practice. Always check whether your data has been standardized. Standardize before PCA unless you have a specific reason not to (e.g., all features are already on the same scale).
+:::
 
 ## PCA vs. feature selection
 
-**Think about it:** Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Lecture 7)?
+:::{.callout-tip}
+## Think About It
+Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Lecture 7)?
+:::
 
 PCA creates *new* features that are combinations of the originals — it's **dimensionality reduction**. Lasso picks a subset of existing features — that's **feature selection**. PCA is especially useful when your original features are correlated (like the six review scores), because it creates uncorrelated summaries that capture more information per component.
 
-## A caution: PCA on mixed data
-
+:::{.callout-warning}
+## PCA on mixed data
 We only used numeric columns. PCA requires numeric input — if you one-hot encode categoricals and run PCA, you're mixing binary (0/1) columns with continuous columns. The geometry of binary data is very different (all points land on vertices of a hypercube), so standard PCA doesn't handle this well.
 
 For this course, just use the numeric columns. If you're curious about mixed data, look up Multiple Correspondence Analysis — but that's beyond our scope.
+:::
 
 ## Key Takeaways
 
@@ -423,9 +445,9 @@ In **Lecture 15**, we'll move from summarizing data to *grouping* data. **K-mean
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
-- **PCA (Principal Component Analysis)**: finds the directions of maximum variance in high-dimensional data, producing a lower-dimensional summary.
+- **PCA (Principal Component Analysis)** finds the directions of maximum variance in high-dimensional data, producing a lower-dimensional summary.
 - **Principal component**: a new axis (direction) found by PCA. Each PC is a weighted combination of the original features.
 - **Loading**: the weight of an original feature in a principal component. High loadings tell you which features drive that PC.
 - **SVD (Singular Value Decomposition)**: the matrix factorization $X = USV^T$ that powers PCA. The columns of $V$ are the PC directions, the diagonal of $S$ holds the singular values, and $US$ gives the PC scores.
@@ -434,14 +456,11 @@ In **Lecture 15**, we'll move from summarizing data to *grouping* data. **K-mean
 - **Scree plot**: bar chart of explained variance by component, used to decide how many PCs to keep.
 - **Elbow method**: choosing the number of PCs at the "elbow" where the scree plot levels off.
 - **Standardization (z-score)**: subtracting the mean and dividing by the standard deviation so all features have mean 0 and variance 1.
-
-### Key ideas (one sentence each)
-
-1. PCA finds the best low-dimensional linear summary of your data by maximizing captured variance (equivalently, minimizing reconstruction error).
-2. PCA is regression where you also get to choose the features — it finds the optimal covariates AND coefficients simultaneously.
-3. Always standardize before PCA, or the result is dominated by whichever column has the biggest numbers.
-4. The Eckart-Young-Mirsky theorem guarantees that the SVD gives the best rank-$k$ approximation — no other $k$-dimensional summary can do better.
-5. PCA creates new combined features (dimensionality reduction), while Lasso selects a subset of existing features (feature selection).
+- PCA finds the best low-dimensional linear summary of your data by maximizing captured variance (equivalently, minimizing reconstruction error).
+- PCA is regression where you also get to choose the features — it finds the optimal covariates AND coefficients simultaneously.
+- Always standardize before PCA, or the result is dominated by whichever column has the biggest numbers.
+- The Eckart-Young-Mirsky theorem guarantees that the SVD gives the best rank-$k$ approximation — no other $k$-dimensional summary can do better.
+- PCA creates new combined features (dimensionality reduction), while Lasso selects a subset of existing features (feature selection).
 
 ### Computational tools
 

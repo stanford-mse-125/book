@@ -67,17 +67,23 @@ print(f"Shape: {readmissions.shape[0]:,} rows x {readmissions.shape[1]} columns"
 readmissions.head(10)
 ```
 
-Each row is one hospital-condition pair: a hospital's readmission performance for a specific condition (heart attack, pneumonia, heart failure, etc.). Let's see what conditions are tracked.
+Each row is one hospital-condition pair: a hospital's readmission performance for a specific condition (heart attack, pneumonia, heart failure, etc.). Tables like this — rectangular grids of rows and columns — are the fundamental data structure in data science. Nearly every dataset you'll encounter in this course lives in a table (or *DataFrame*, in pandas terminology). Let's see what conditions are tracked.
 
 ```{python}
 readmissions['Measure Name'].value_counts()
 ```
 
-The key column is the **Excess Readmission Ratio (ERR)**. CMS uses a statistical model that accounts for how sick each hospital's patients are. The ERR is the ratio of a hospital's predicted readmissions to its expected number, after adjusting for patient risk. A value above 1.0 means more readmissions than expected given the hospital's patient mix.
+:::{.callout-important}
+## Definition: Excess Readmission Ratio (ERR)
+The **Excess Readmission Ratio (ERR)** is a CMS measure that compares a hospital's predicted readmissions to its expected number, after adjusting for patient risk. A value above 1.0 means more readmissions than expected given the hospital's patient mix.
+:::
 
 But here's the first lesson of applied statistics:
 
-> **More data doesn't automatically mean better answers.** It depends on what's *in* the data — and what's missing.
+:::{.callout-warning}
+## More data is not automatically better
+More data doesn't automatically mean better answers. It depends on what's *in* the data — and what's missing.
+:::
 
 ```{python}
 # Distribution of Excess Readmission Ratios
@@ -96,7 +102,10 @@ plt.show()
 
 Notice the distribution is centered near 1.0 — hospitals with ratios above 1.0 have more readmissions than expected, and those below have fewer. But there's real spread.
 
-**Think about it:** If you ran a hospital and saw your ratio was 1.05 (the orange line), would you panic? How do you know if that's bad luck or a real problem? That's a statistics question.
+:::{.callout-tip}
+## Think About It
+If you ran a hospital and saw your ratio was 1.05 (the orange line), would you panic? How do you know if that's bad luck or a real problem? That's a statistics question.
+:::
 
 ## Another dataset: Airbnb pricing
 
@@ -139,7 +148,10 @@ plt.show()
 
 Notice how far the mean (red) is pulled to the right by expensive listings. The median is a better summary here. We'll dive deep into this data in Lecture 2.
 
-**Think about it:** If you had a 1-bedroom apartment in Manhattan, would you price at the mean? Why or why not? What other information would you want?
+:::{.callout-tip}
+## Think About It
+If you had a 1-bedroom apartment in Manhattan, would you price at the mean? Why or why not? What other information would you want?
+:::
 
 ## What happens when you ask an AI to analyze data?
 
@@ -170,7 +182,12 @@ print("What values do they have?")
 print(non_numeric['Number of Readmissions'].value_counts())
 ```
 
-This is your first example of a **missing data mechanism** — the data isn't missing randomly, it's missing because of a systematic pattern (small hospitals don't have enough cases to report). An AI would drop these rows without mentioning it. But *dropping them changes the answer* — it biases your analysis toward large urban hospitals.
+:::{.callout-important}
+## Definition: Missing Data Mechanism
+A **missing data mechanism** describes *why* data is absent — not just *that* it's absent. Here, the data isn't missing randomly; it's missing because of a systematic pattern (small hospitals don't have enough cases to report).
+:::
+
+An AI would drop these rows without mentioning it. But *dropping them changes the answer* — it biases your analysis toward large urban hospitals.
 
 ```{python}
 # Which hospitals have "Too Few to Report"? Let's look at a sample.
@@ -209,7 +226,10 @@ We won't analyze clinical trial data today. But notice: it's the same logic whet
 
 > *"Far better an approximate answer to the right question, which is often vague, than an exact answer to the wrong question, which can always be made precise."* — John Tukey
 
-**Think about it:** In the hospital example, what would the null hypothesis be? (Hint: "This hospital's readmission rate is no different from expected.")
+:::{.callout-tip}
+## Think About It
+In the hospital example, what would the null hypothesis be? (Hint: "This hospital's readmission rate is no different from expected.")
+:::
 
 ## What you'll be able to do by the end
 
@@ -218,7 +238,7 @@ By the end of MSE 125, you'll be able to:
 1. **Explore** a dataset and identify problems before they ruin your analysis
 2. **Model** relationships in data using regression and classification
 3. **Quantify uncertainty** — not just give a number, but say how confident you are
-4. **Reason about causation** — not just correlation
+4. **Reason about causation** — not just correlation. Two variables can be strongly associated without one causing the other; distinguishing association from causation is one of the central challenges of data science.
 5. **Critically evaluate** statistical claims — including those made by AI tools
 
 That last point is important. AI assistants are getting very good at writing code and producing analyses. But they have no judgment. They can't tell you when an analysis is misleading, when the data is biased, or when the conclusions don't follow from the evidence.
@@ -243,19 +263,16 @@ And in the final weeks of the course, we'll return to this hospital data and ask
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
-- **Applied statistics**: the science of making decisions under uncertainty using data.
-- **Excess Readmission Ratio (ERR)**: CMS measure comparing a hospital's readmissions to what's expected given its patient mix. Above 1.0 = more readmissions than expected.
-- **"Too Few to Report"**: a missing data mechanism in the hospital dataset — small hospitals don't have enough cases, so their data is suppressed. Not missing at random.
-- **Null hypothesis** (preview): the default assumption that nothing interesting is happening (e.g., "this hospital is no different from average"). Formalized in Lectures 9–10.
-
-### Key ideas (one sentence each)
-
-1. More data doesn't automatically mean better answers — it depends on what's in the data and what's missing.
-2. Missing data is often a signal, not just a nuisance — *why* data is missing matters as much as *that* it's missing.
-3. AI tools produce plausible-looking analyses fast, but lack the skepticism and domain knowledge to catch misleading results.
-4. Outliers distort averages — always look at the distribution, not just summary statistics.
+- **Applied statistics** is the science of making decisions under uncertainty using data.
+- The **Excess Readmission Ratio (ERR)** compares a hospital's readmissions to what's expected given its patient mix. Above 1.0 = more readmissions than expected.
+- **"Too Few to Report"** is a missing data mechanism — small hospitals don't have enough cases, so their data is suppressed. Not missing at random.
+- The **null hypothesis** (preview) is the default assumption that nothing interesting is happening (e.g., "this hospital is no different from average"). Formalized in Lectures 9–10.
+- More data doesn't automatically mean better answers — it depends on what's in the data and what's missing.
+- Missing data is often a signal, not just a nuisance — *why* data is missing matters as much as *that* it's missing.
+- AI tools produce plausible-looking analyses fast, but lack the skepticism and domain knowledge to catch misleading results.
+- Outliers distort averages — always look at the distribution, not just summary statistics.
 
 ### Computational tools
 

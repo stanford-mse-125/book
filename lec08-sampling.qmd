@@ -28,9 +28,11 @@ In Act 1, we built models: regression, feature engineering, trees, validation. W
 
 Act 2 opens with that question. A model says the treatment effect is 71 CD4 cells, or that an extra bedroom adds \$85 to rent. But how much would those numbers change if we had different data? If the answer is "a lot," maybe we shouldn't take them too seriously.
 
-### A brief history of this idea
+:::{.callout-note}
+## A brief history of the bootstrap
 
 For most of the 20th century, quantifying uncertainty required mathematical derivation — you needed a formula for the standard error of each statistic you cared about. In 1979, Bradley Efron at Stanford proposed a radical alternative: **just resample the data and see what happens.** His "bootstrap" was initially controversial — it felt like cheating, conjuring information from nothing. But it worked, and it liberated statisticians from having to derive a new formula for every new problem. The bootstrap is now one of the most widely used tools in applied statistics. (See Salsburg, *The Lady Tasting Tea*, Ch. 24, "The Bootstrap.")
+:::
 
 ## Estimand, estimator, estimate
 
@@ -82,9 +84,13 @@ The treatment group improved by about 71 more CD4 cells. But look at the spread 
 
 This question motivates three vocabulary terms that we'll use throughout Act 2:
 
+:::{.callout-important}
+## Definition: Estimand, estimator, estimate
+
 - **Estimand:** the true treatment effect — the difference in mean CD4 change if we could test *everyone* who might take these drugs. This is a fixed (but unknown) number.
 - **Estimator:** the procedure we use to approximate the estimand — here, "compute the difference in sample means."
 - **Estimate:** the specific number our estimator produces from this particular dataset — 71 CD4 cells.
+:::
 
 The key insight: **the estimate changes every time you draw a new sample, but the estimand stays fixed.**
 
@@ -106,7 +112,11 @@ Three different samples, three different estimates. This isn't a bug — it's a 
 
 We can't rerun the clinical trial. We have one dataset. But here's a clever trick: **we can resample from the data we have.**
 
-The idea is simple. Our sample is the best picture we have of the population. So we treat the sample *as if* it were the population, and draw new "samples" from it — **with replacement**, meaning the same patient can appear more than once in a resample.
+:::{.callout-important}
+## Definition: Bootstrap
+
+The **bootstrap** resamples the observed data **with replacement** to approximate the sampling distribution of a statistic. Our sample is the best picture we have of the population, so we treat the sample *as if* it were the population, and draw new "samples" from it — with replacement, meaning the same observation can appear more than once in a resample.
+:::
 
 Let's start with one resample of the treatment group.
 
@@ -164,7 +174,13 @@ print(f"Bootstrap mean of treatment effect: {boot_effects.mean():.1f}")
 print(f"Bootstrap SD of treatment effect:   {boot_effects.std():.1f}")
 ```
 
-The bootstrap distribution tells us how much the treatment effect estimate would vary across different samples. We can summarize this with a **confidence interval** — the middle 95% of bootstrap values.
+The bootstrap distribution tells us how much the treatment effect estimate would vary across different samples. We can summarize this with a **confidence interval**.
+
+:::{.callout-important}
+## Definition: Confidence interval
+
+A **confidence interval** is a range of plausible values for the estimand. The **percentile method** uses the middle 95% of bootstrap values: the 2.5th and 97.5th percentiles. A 95% confidence interval means that if we repeated the entire study many times and built a CI each time, about 95% of those intervals would contain the true parameter.
+:::
 
 ```{python}
 # 95% bootstrap CI: percentile method (2.5th and 97.5th percentiles)
@@ -307,7 +323,11 @@ for n in [10, 50, 500]:
 
 The formula matches simulation almost exactly.
 
-*Think about it:* You may have heard of the **Law of Large Numbers** (LLN) from MS&E 120 as well. The LLN says the sample mean *converges* to the population mean. The CLT tells you **how fast** (at rate $1/\sqrt{n}$) and **in what shape** (normal).
+:::{.callout-tip}
+## Think About It
+
+You may have heard of the **Law of Large Numbers** (LLN) from MS&E 120 as well. The LLN says the sample mean *converges* to the population mean. The CLT tells you **how fast** (at rate $1/\sqrt{n}$) and **in what shape** (normal).
+:::
 
 ## The normal approximation
 
@@ -347,9 +367,11 @@ They agree closely. So why bother with the normal approximation if we have the b
 3. **Analytical.** You can derive power formulas and sample size calculations — how many patients do we need to detect a 50-cell effect? (Preview: [Lecture 10](lec10-hypothesis-testing.qmd).)
 4. **Composable.** You can combine standard errors across studies (meta-analysis) without re-bootstrapping everything.
 
+:::{.callout-warning}
 ## When the normal approximation fails
 
 The normal approximation works great for means of not-too-skewed data with reasonable sample sizes. But it relies on the CLT, and the CLT has limits. Let's see two cases where the bootstrap is more honest.
+:::
 
 ### Demo 1: The median
 
@@ -518,32 +540,27 @@ The bootstrap distribution shows us the uncertainty in the bedrooms coefficient.
 
 ## Study guide
 
-**Key definitions:**
+### Key ideas
 
-- **Estimand** — the quantity you want to know (e.g., the true treatment effect)
-- **Estimator** — the procedure you use to approximate it (e.g., difference in sample means)
-- **Estimate** — the specific number you get from one sample (e.g., 71 CD4 cells)
-- **Bootstrap** — resample with replacement from the observed data to approximate the sampling distribution
-- **Confidence interval** — an interval that captures the middle 95% of the bootstrap distribution (percentile method: 2.5th and 97.5th percentiles)
-- **Central Limit Theorem (CLT)** — for large $n$, the sample mean is approximately Normal$(\mu, \sigma/\sqrt{n})$
-- **Standard error (SE)** — the standard deviation of a statistic's sampling distribution; for the mean, SE $= \sigma / \sqrt{n}$
-- **Normal approximation** — using $\hat{\theta} \pm 1.96 \cdot \text{SE}$ instead of bootstrapping
-- **iid** (independent and identically distributed) — each observation drawn from the same distribution, independently of the others
-
-**Key ideas (one sentence each):**
-
+- **Estimand** — the quantity you want to know (e.g., the true treatment effect). **Estimator** — the procedure you use to approximate it (e.g., difference in sample means). **Estimate** — the specific number you get from one sample (e.g., 71 CD4 cells).
+- **Bootstrap** — resample with replacement from the observed data to approximate the sampling distribution.
+- **Confidence interval** — an interval that captures the middle 95% of the bootstrap distribution (percentile method: 2.5th and 97.5th percentiles). A 95% CI means roughly 95% of such intervals would contain the true parameter.
+- **Central Limit Theorem (CLT)** — for large $n$, the sample mean is approximately Normal$(\mu, \sigma/\sqrt{n})$.
+- **Standard error (SE)** — the standard deviation of a statistic's sampling distribution; for the mean, SE $= \sigma / \sqrt{n}$.
+- **Normal approximation** — using $\hat{\theta} \pm 1.96 \cdot \text{SE}$ instead of bootstrapping.
+- **iid** (independent and identically distributed) — each observation drawn from the same distribution, independently of the others.
 - The bootstrap approximates the sampling distribution by resampling from the observed data.
 - The CLT explains why bootstrap distributions of means look normal: averaging many independent things produces normality.
 - The normal approximation replaces 10,000 resamples with a single formula — when the CLT applies.
 - When the CLT doesn't apply (median, heavy tails, small $n$), the bootstrap is more reliable.
 
-**Computational tools:**
+### Computational tools
 
 - `np.random.choice(data, size=n, replace=True)` — one bootstrap resample
 - `np.percentile(bootstrap_dist, [2.5, 97.5])` — 95% bootstrap CI
 - `norm.pdf(x, mu, sigma)` — normal density overlay
 - List comprehension `[f(resample) for _ in range(B)]` — repeat bootstrap $B$ times
 
-**For the quiz:**
+### For the quiz
 
 You are responsible for: the bootstrap procedure (resample with replacement, compute statistic, repeat), the percentile CI, the CLT statement, the SE formula for the mean, and when the normal approximation works vs fails. You are NOT responsible for: proving the CLT, bootstrap theory (Efron), or deriving the SE formula for the median.

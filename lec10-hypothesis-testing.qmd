@@ -80,6 +80,18 @@ For our clinical trial:
 | **Test statistic** | Difference in sample means (or the **t-statistic**) |
 | **p-value** | Probability of seeing a result *at least* this extreme, *if $H_0$ were true* |
 
+::: {.callout-important}
+## Definition: Null and Alternative Hypotheses
+
+The **null hypothesis** ($H_0$) is the default claim -- typically "no effect" or "no difference." The **alternative hypothesis** ($H_1$) is the competing claim you're testing for. A hypothesis test asks whether the data provide enough evidence to reject $H_0$ in favor of $H_1$.
+:::
+
+::: {.callout-important}
+## Definition: P-value
+
+The **p-value** is the probability of observing a test statistic at least as extreme as the one computed from the data, assuming $H_0$ is true. It is *not* the probability that $H_0$ is true.
+:::
+
 ::: {.callout-warning}
 ## The #1 p-value misconception
 
@@ -92,11 +104,19 @@ If you test "is this coin fair" and get p = 0.03, it does NOT mean there's a 3% 
 
 We need a threshold: how extreme is "extreme enough" to reject $H_0$? This threshold is called the **significance level** $\alpha$.
 
+::: {.callout-important}
+## Definition: Significance Level
+
+The **significance level** $\alpha$ is the threshold for rejecting $H_0$: if the p-value is less than $\alpha$, we reject $H_0$. It also equals the Type I error rate -- the probability of rejecting $H_0$ when it is actually true.
+:::
+
 Convention: $\alpha = 0.05$. But why 0.05? R.A. Fisher suggested 0.05 in 1925 as a "convenient" threshold. It stuck, but there's nothing magical about it. Some fields use 0.01; particle physics uses roughly 0.0000003. We'll see in a moment why the choice should depend on the stakes.
 
-### The brewer who invented small-sample testing
+::: {.callout-note}
+## The brewer who invented small-sample testing
 
 The t-test we're about to use has a surprising origin. In the early 1900s, William Sealy Gosset worked as a chemist at the Guinness brewery in Dublin. He needed to compare barley varieties and yeast strains — but with only a handful of samples from each batch, the normal approximation was unreliable. Gosset worked out the exact distribution of the sample mean divided by the sample standard deviation for small samples and published it in 1908 under the pseudonym "Student" (Guinness didn't allow employees to publish under their own names, fearing competitors would learn they were using statistics). His "Student's t-distribution" is the foundation of the t-test we use today — and the reason it's still called "Student's t." (See Salsburg, *The Lady Tasting Tea*, Ch. 2.)
+:::
 
 We use **Welch's t-test** (`equal_var=False`), which does not assume the two groups have equal variance. This is almost always the right default.
 
@@ -114,11 +134,19 @@ print(f"At alpha = 0.001: {'Reject H0' if p_value < 0.001 else 'Fail to reject H
 
 This p-value is so small that the choice of $\alpha$ doesn't matter here. But for borderline cases, it matters a lot.
 
-> **Think about it:** Try changing the alpha values above. What's the smallest alpha at which you'd still reject $H_0$ for this trial?
+::: {.callout-tip}
+## Think About It
+
+Try changing the alpha values above. What's the smallest alpha at which you'd still reject $H_0$ for this trial?
+:::
 
 ## Two Types of Errors
 
-> **Think about it:** Which mistake is worse -- approving a useless drug, or rejecting a drug that actually saves lives?
+::: {.callout-tip}
+## Think About It
+
+Which mistake is worse -- approving a useless drug, or rejecting a drug that actually saves lives?
+:::
 
 Think of it like a courtroom trial. The null hypothesis is "innocent until proven guilty."
 
@@ -132,9 +160,13 @@ Now here's the formal summary:
 | **Reject $H_0$** | Type I Error (false positive) | Correct! |
 | **Fail to reject $H_0$** | Correct! | Type II Error (false negative) |
 
-- **Type I error rate** = $\alpha$ (we choose this)
-- **Type II error rate** = $\beta$ (depends on effect size, sample size, and $\alpha$)
-- **Power** = $1 - \beta$ = probability of detecting a real effect
+::: {.callout-important}
+## Definition: Type I Error, Type II Error, and Power
+
+- **Type I error**: Rejecting $H_0$ when it is true (false positive). Its rate equals $\alpha$.
+- **Type II error**: Failing to reject $H_0$ when $H_1$ is true (false negative). Its rate is $\beta$.
+- **Power**: $1 - \beta$ = the probability of correctly detecting a real effect.
+:::
 
 ::: {.callout-important}
 ## "Fail to reject" -- not "accept"
@@ -144,9 +176,11 @@ Notice we say "fail to reject $H_0$," not "accept $H_0$." A non-significant resu
 As Einstein (reportedly) put it: *"No amount of experimentation can ever prove me right; a single experiment can prove me wrong."*
 :::
 
-### What does a hypothesis test *mean*? Fisher vs. Neyman-Pearson
+::: {.callout-note}
+## What does a hypothesis test *mean*? Fisher vs. Neyman-Pearson
 
 The framework we've just laid out — $H_0$, $H_1$, $\alpha$, Type I and Type II errors — is actually a blend of two competing philosophies that were never fully reconciled. Fisher saw the p-value as a *continuous measure of evidence against the null*: a small p-value means the data are surprising, and the scientist should use judgment about what to do next. Neyman and Pearson saw hypothesis testing as a *decision procedure*: fix $\alpha$ in advance, and then mechanically reject or fail to reject, optimizing long-run error rates. Fisher was furious at the Neyman-Pearson formulation — he thought reducing scientific inference to a binary decision was absurd. Neyman and Pearson thought Fisher's approach lacked rigor. The textbook version you learn today awkwardly combines both: we compute Fisher's p-value but make Neyman-Pearson's binary decision. Knowing this history helps explain why the framework can feel philosophically unsatisfying — it *is* a compromise. (See Salsburg, *The Lady Tasting Tea*, Ch. 6–7.)
+:::
 
 Let's visualize the tradeoff. Under the null, the test statistic is centered at zero. Under the alternative, it's shifted. The overlap is where errors happen.
 
@@ -285,7 +319,11 @@ Key observations:
 
 ### Power Analysis: Planning a Study
 
-> **Think about it:** You're designing the next clinical trial. Before running a \$2M study, you should know if you have enough patients. How do you decide how many to enroll?
+::: {.callout-tip}
+## Think About It
+
+You're designing the next clinical trial. Before running a \$2M study, you should know if you have enough patients. How do you decide how many to enroll?
+:::
 
 In practice, you'd use a **power analysis** tool rather than writing simulations from scratch. Here's the standard tool:
 
@@ -326,7 +364,11 @@ You're the FDA. The average cost to bring a drug to market is \$1.3 billion. You
 
 What should $\alpha$ be? 0.05? 0.01? 0.001?
 
-> **Think about it:** A drug might save 1,000 lives per year but costs \$2B to manufacture. What false positive rate would you accept?
+::: {.callout-tip}
+## Think About It
+
+A drug might save 1,000 lives per year but costs \$2B to manufacture. What false positive rate would you accept?
+:::
 
 ```{python}
 # Null distribution (permutation-based)
@@ -434,11 +476,15 @@ The chi-squared test is the go-to tool for categorical data. Use it for:
 - **Goodness of fit:** Does the observed distribution match an expected one?
 - **Independence:** Are two categorical variables associated?
 
-## The Surprise: Statistical Significance Is Not the Same as Importance
+## Statistical Significance Is Not the Same as Importance
 
 With ACTG175's large sample size, even tiny, clinically meaningless effects would be "statistically significant." Let's see this in action.
 
-> **Think about it:** If we subsample to n = 50 per group, will the treatment still be significant? What about n = 25? Predict what happens before running the cell.
+::: {.callout-tip}
+## Think About It
+
+If we subsample to n = 50 per group, will the treatment still be significant? What about n = 25? Predict what happens before running the cell.
+:::
 
 ```{python}
 # Subsample the data and test at each sample size
@@ -479,7 +525,11 @@ for n in [100, 500, 2000, 10000]:
           f"significant {sig_count/1000*100:.0f}% of the time")
 ```
 
-> **Think about it:** If a 5 CD4 cell change is "significant" with n = 10,000, should we change treatment guidelines?
+::: {.callout-tip}
+## Think About It
+
+If a 5 CD4 cell change is "significant" with n = 10,000, should we change treatment guidelines?
+:::
 
 ```{python}
 # p-value as a function of sample size (fixed effect)
@@ -525,7 +575,11 @@ The first plot shows that for a fixed (real) effect, the p-value shrinks as we a
 
 The second plot shows that for a fixed sample size, the p-value shrinks as the effect gets larger. A non-significant result might just mean you don't have enough data.
 
-**This is why you should always report effect sizes and confidence intervals alongside p-values.**
+::: {.callout-warning}
+## Always report effect sizes
+
+This is why you should always report effect sizes and confidence intervals alongside p-values. A small p-value tells you the effect is unlikely to be zero -- it does not tell you the effect is large or important.
+:::
 
 ## Key Takeaways
 
@@ -538,25 +592,16 @@ We'll revisit these ideas in Lecture 11 when we ask: what happens when you run 2
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
-- **Null hypothesis** ($H_0$): The default claim (e.g., no effect, no difference).
-- **Alternative hypothesis** ($H_1$): The competing claim you're testing for.
-- **p-value**: Probability of observing data at least this extreme, assuming $H_0$ is true.
+- **Null hypothesis** ($H_0$): The default claim (e.g., no effect, no difference). **Alternative hypothesis** ($H_1$): The competing claim you're testing for.
+- **p-value**: Probability of observing data at least this extreme, assuming $H_0$ is true. It is *not* the probability that $H_0$ is true.
 - **Significance level** ($\alpha$): The false positive rate you're willing to accept; the threshold for rejecting $H_0$.
-- **Type I error**: Rejecting $H_0$ when it's true (false positive). Rate = $\alpha$.
-- **Type II error**: Failing to reject $H_0$ when $H_1$ is true (false negative). Rate = $\beta$.
-- **Power**: $1 - \beta$. Probability of correctly detecting a real effect.
-- **Welch's t-test**: Two-sample t-test that does not assume equal variances.
-- **Chi-squared test**: Tests whether observed categorical frequencies match expected frequencies.
-
-### Key ideas (one sentence each)
-
-- The p-value is the probability of the data given the null, not the probability of the null given the data.
+- **Type I error**: Rejecting $H_0$ when it's true (false positive; rate = $\alpha$). **Type II error**: Failing to reject $H_0$ when $H_1$ is true (false negative; rate = $\beta$). **Power** = $1 - \beta$.
+- **Welch's t-test**: Two-sample t-test that does not assume equal variances. **Chi-squared test**: Tests whether observed categorical frequencies match expected frequencies.
 - You reject or fail to reject $H_0$ -- you never "accept" $H_0$ or "prove" it true.
 - Power depends on effect size, sample size, and $\alpha$ -- compute it before running an experiment.
 - Statistical significance does not imply practical importance; always report effect sizes alongside p-values.
-- The chi-squared test extends hypothesis testing to categorical data.
 
 ### Computational tools
 

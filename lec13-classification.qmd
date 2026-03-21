@@ -39,7 +39,12 @@ DATA_DIR = 'data'
 
 ## The Framingham Heart Study
 
-The Framingham Heart Study has tracked cardiovascular disease risk factors since 1948, following three generations of participants in Framingham, Massachusetts. It transformed our understanding of risk factors like cholesterol and blood pressure. Our dataset has 4,240 patients with 15 features — and a binary outcome: did they develop coronary heart disease (CHD) within 10 years?
+:::{.callout-note}
+## The Framingham Heart Study
+The Framingham Heart Study has tracked cardiovascular disease risk factors since 1948, following three generations of participants in Framingham, Massachusetts. It transformed our understanding of risk factors like cholesterol and blood pressure.
+:::
+
+Our dataset has 4,240 patients with 15 features — and a binary outcome: did they develop coronary heart disease (CHD) within 10 years?
 
 Let's look at the data and the class balance.
 
@@ -123,6 +128,8 @@ print(f"Predictions above 1: {(lin_preds > 1).sum()}")
 
 Some predictions are negative, some are above 1. Those don't make sense as probabilities. We need a function that squashes any number into [0, 1]. The **sigmoid function** does exactly this.
 
+:::{.callout-important}
+## Definition: Logistic Regression
 **Logistic regression** predicts the **probability** that the outcome is 1:
 
 $$p = \frac{1}{1 + e^{-(\beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p)}}$$
@@ -132,6 +139,12 @@ The linear combination $\beta_0 + \beta_1 x_1 + \cdots$ can range from $-\infty$
 Equivalently, the **log-odds** (**logit**) is a linear function of the features:
 
 $$\log\!\left(\frac{p}{1-p}\right) = \beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p$$
+:::
+
+:::{.callout-warning}
+## Logistic Regression Conditions
+There are two key conditions for logistic regression to be valid: (1) each outcome is independent of the others, and (2) each predictor is linearly related to the log-odds when all other predictors are held constant.
+:::
 
 This is why we call it *logistic* regression -- the core assumption is that the log-odds are a **linear** function of the features. This means the decision boundary (where predicted probability equals 0.5) is a hyperplane. If the true boundary is curved, logistic regression will miss it.
 
@@ -164,6 +177,8 @@ Logistic regression minimizes the **logistic loss** (also called **cross-entropy
 $$\ell(\beta) = -\left[ y \log(p) + (1-y) \log(1-p) \right]$$
 
 This penalizes confident wrong predictions *much* more heavily than squared error does. The model is punished harshly for saying "1% chance" when the patient actually develops CHD.
+
+<!-- FLAG: IMS Ch 9 covers model assessment via AIC and deviance for logistic regression model selection (analogous to adjusted R² in linear regression). Consider adding a brief discussion or worked example of AIC-based variable selection. -->
 
 ## Fitting logistic regression: gradient descent
 
@@ -261,7 +276,10 @@ The S-shape is visible: predicted probability increases with age, but stays betw
 
 Test accuracy of ~85%. Sounds great, right?
 
-**Think about it:** Before we compare, what accuracy would you expect from a model that just predicts "no CHD" for every patient?
+:::{.callout-tip}
+## Think About It
+Before we compare, what accuracy would you expect from a model that just predicts "no CHD" for every patient?
+:::
 
 **But wait.** What's the accuracy of the dumbest possible model — one that just predicts "no CHD" for everyone?
 
@@ -275,7 +293,10 @@ print(f"Improvement over baseline:                {model.score(X_test_scaled, y_
 
 Our fancy logistic regression barely beats "predict everyone is fine." That ~85% accuracy is **almost entirely driven by the class imbalance**, not by the model learning anything useful.
 
+:::{.callout-warning}
+## The Accuracy Trap
 This is the **accuracy trap** (also called the **accuracy paradox**). Accuracy measures how often you're right *overall*, but when one class dominates, being right about that class is easy and uninformative.
+:::
 
 ## Interpreting coefficients: odds and odds ratios
 
@@ -287,7 +308,10 @@ $$\text{odds} = \frac{p}{1-p} = \frac{0.20}{0.80} = 0.25 \quad \text{(or "1 to 4
 
 If you've encountered odds in sports betting -- "3 to 1 odds" -- that's the same idea. Odds are just another way to express probability.
 
+:::{.callout-important}
+## Definition: Odds Ratio
 The logit formula tells us that each coefficient $\beta_j$ affects the **log-odds** linearly. So $e^{\beta_j}$ is the **odds ratio** -- the multiplicative change in odds per one-unit increase in $x_j$.
+:::
 
 Because we standardized the features, each coefficient corresponds to a one-standard-deviation increase, not a one-unit increase. If you fit without standardizing, the coefficient for age would tell you the odds change per one-year increase in age instead.
 
@@ -338,7 +362,12 @@ At the default threshold of 0.5, anyone with predicted probability above 0.5 is 
 
 ## The confusion matrix: seeing where the model fails
 
-Accuracy collapses everything into a single number. The **confusion matrix** shows us the full picture: what did the model get right, and *how* did it get things wrong?
+:::{.callout-important}
+## Definition: Confusion Matrix
+The **confusion matrix** is a 2x2 table that cross-tabulates the model's predicted classes against the true classes, showing True Positives, False Positives, True Negatives, and False Negatives.
+:::
+
+Accuracy collapses everything into a single number. The confusion matrix shows us the full picture: what did the model get right, and *how* did it get things wrong?
 
 ```{python}
 # Predictions at default threshold (0.5)
@@ -365,16 +394,20 @@ Look at the bottom row — actual CHD cases. The model catches very few of them!
 
 This is a **False Negative** — and in medicine, false negatives can be deadly.
 
-**Think about it:** If you were designing a screening tool, which is worse — a false positive (unnecessary follow-up test) or a false negative (missed heart disease)?
+:::{.callout-tip}
+## Think About It
+If you were designing a screening tool, which is worse — a false positive (unnecessary follow-up test) or a false negative (missed heart disease)?
+:::
 
 ## Precision vs Recall
 
-Two metrics capture the two types of mistakes:
-
+:::{.callout-important}
+## Definition: Precision and Recall
 - **Precision** = $\frac{TP}{TP + FP}$ = "Of those I flagged as CHD, how many really had it?"
 - **Recall** (Sensitivity) = $\frac{TP}{TP + FN}$ = "Of all actual CHD cases, how many did I catch?"
+:::
 
-These tell very different stories.
+Two metrics capture the two types of mistakes, and they tell very different stories.
 
 ```{python}
 # Precision and recall at default threshold
@@ -403,9 +436,12 @@ This is the fundamental tradeoff: if you want to catch more positives (higher re
 
 So far we've been using the default threshold of 0.5: if the predicted probability is above 0.5, predict CHD. But why 0.5?
 
+:::{.callout-important}
+## Definition: ROC Curve and AUC
 The **ROC curve** shows model performance across *all* possible thresholds. It plots the True Positive Rate (recall) against the False Positive Rate at each threshold.
 
 The **AUC** (area under the ROC curve) summarizes this: a perfect model has AUC = 1.0, and random guessing gives AUC = 0.5.
+:::
 
 ```{python}
 # Get predicted probabilities
@@ -469,7 +505,10 @@ There's no free lunch. The right threshold depends on the **cost of each mistake
 
 If a follow-up test costs \$500 and a missed CHD case costs \$50,000 in emergency care, what threshold minimizes expected cost? In medicine, missing a heart disease case is far worse than ordering an extra test, so we'd choose a low threshold. In spam filtering, false positives (real email in spam) are worse, so we'd choose a high threshold.
 
-**Think about it:** If you're the hospital administrator and you have budget for follow-up appointments with 200 patients per month, which threshold would you choose? This isn't a statistics question -- it's a resource allocation question.
+:::{.callout-tip}
+## Think About It
+If you're the hospital administrator and you have budget for follow-up appointments with 200 patients per month, which threshold would you choose? This isn't a statistics question -- it's a resource allocation question.
+:::
 
 ```{python}
 # Precision-Recall curve
@@ -494,11 +533,14 @@ plt.tight_layout()
 plt.show()
 ```
 
-## The surprise: who does the model fail for?
+## Who does the model fail for?
 
 The overall AUC is ~0.73. Not amazing, but not terrible. But *overall* performance can hide dramatic failures in subgroups.
 
-**Think about it:** Before we look at the numbers -- for which age group do you think the model performs worst? Why?
+:::{.callout-tip}
+## Think About It
+Before we look at the numbers -- for which age group do you think the model performs worst? Why?
+:::
 
 Let's check: does the model work equally well for all ages?
 
@@ -588,7 +630,16 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 
 ## Study guide
 
-**Key definitions:**
+### Key ideas
+
+1. Logistic regression models the probability of a binary outcome by passing a linear combination through the sigmoid function.
+2. The logistic loss is the negative log-likelihood under a Bernoulli model -- it penalizes confident wrong predictions heavily.
+3. Gradient descent finds the coefficients by iteratively stepping in the direction that reduces the loss; convexity guarantees convergence to the global minimum.
+4. Accuracy is misleading with class imbalance -- always look at precision, recall, and the confusion matrix.
+5. Threshold choice is a cost-benefit decision, not a statistical one.
+6. Subgroup analysis can reveal dramatic failures hidden by aggregate performance.
+
+Key definitions:
 
 - **Sigmoid function**: maps any real number to [0, 1], used to convert linear predictions to probabilities
 - **Logit (log-odds)**: $\log(p/(1-p))$, the inverse of the sigmoid; linear in the features
@@ -604,16 +655,7 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 - **ROC curve**: True Positive Rate vs. False Positive Rate across all thresholds
 - **AUC**: area under the ROC curve; 1.0 = perfect, 0.5 = random guessing
 
-**Key ideas (one sentence each):**
-
-1. Logistic regression models the probability of a binary outcome by passing a linear combination through the sigmoid function.
-2. The logistic loss is the negative log-likelihood under a Bernoulli model -- it penalizes confident wrong predictions heavily.
-3. Gradient descent finds the coefficients by iteratively stepping in the direction that reduces the loss; convexity guarantees convergence to the global minimum.
-4. Accuracy is misleading with class imbalance -- always look at precision, recall, and the confusion matrix.
-5. Threshold choice is a cost-benefit decision, not a statistical one.
-6. Subgroup analysis can reveal dramatic failures hidden by aggregate performance.
-
-**Computational tools:**
+### Computational tools
 
 - `LogisticRegression()` -- fit a logistic regression model
 - `model.predict_proba()` -- get predicted probabilities (not just 0/1 predictions)
@@ -623,7 +665,9 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 - `precision_recall_curve()` -- compute the precision-recall curve
 - `classification_report()` -- print precision, recall, F1, and accuracy in one call
 
-**For the quiz:** Be able to (1) interpret logistic regression coefficients as odds ratios, (2) compute precision and recall from a confusion matrix, (3) explain why accuracy is misleading with class imbalance, (4) describe the gradient descent update rule and what convexity guarantees, (5) choose a threshold given the costs of false positives and false negatives.
+### For the quiz
+
+Be able to (1) interpret logistic regression coefficients as odds ratios, (2) compute precision and recall from a confusion matrix, (3) explain why accuracy is misleading with class imbalance, (4) describe the gradient descent update rule and what convexity guarantees, (5) choose a threshold given the costs of false positives and false negatives.
 
 ## Coming up next
 

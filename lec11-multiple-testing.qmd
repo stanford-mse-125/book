@@ -16,7 +16,10 @@ Their boss isn't convinced. What did the intern miss?
 > *"If you torture the data long enough, it will confess to anything."*
 > — Ronald Coase
 
+:::{.callout-note}
+## The Idol of the Qu
 Salsburg warns about exactly this in *The Lady Tasting Tea*. By the mid-20th century, hypothesis testing had become a ritual: collect data, compute a p-value, publish if $p < 0.05$, move on. Researchers stopped asking whether the question was worth testing and started treating the 0.05 threshold as a stamp of scientific truth. Salsburg calls this the "idol of the Qu" — the worship of quantitative methods for their own sake, divorced from scientific thinking. The intern's analysis is a textbook case: 431 p-values, no scientific question, no correction for the fact that most "discoveries" are noise. (See Salsburg, *The Lady Tasting Tea*, Ch. 20.)
+:::
 
 ```{python}
 import numpy as np
@@ -111,7 +114,10 @@ print(f"\nThe intern's report: '{n_sig} players benefit from load management!'")
 
 ## Wait — how many should we *expect* by chance?
 
-**Think about it:** If rest has zero effect on *every* player, how many of our tests would you expect to come back "significant" at $\alpha = 0.05$?
+:::{.callout-tip}
+## Think About It
+If rest has zero effect on *every* player, how many of our tests would you expect to come back "significant" at $\alpha = 0.05$?
+:::
 
 Here's the key insight. If rest has **no effect on any player**, the expected number of false positives is:
 
@@ -133,7 +139,10 @@ print(f"The intern's 'discovery' is probably noise.")
 
 ## The p-value histogram: a powerful diagnostic
 
-**Think about it:** If the null is true for every player, what should the histogram of p-values look like?
+:::{.callout-tip}
+## Think About It
+If the null is true for every player, what should the histogram of p-values look like?
+:::
 
 Under the null hypothesis (no effect for any player), p-values should follow a **Uniform(0, 1)** distribution.
 That means the **p-value histogram** should be flat.
@@ -163,9 +172,14 @@ print("The slight bump near 0 could be a few real effects, or just sampling vari
 
 The simplest fix: if you run $m$ tests, divide your significance level by $m$.
 
+:::{.callout-important}
+## Definition: Bonferroni Correction and FWER
+The **Bonferroni correction** sets
+
 $$\alpha_{\text{Bonferroni}} = \frac{\alpha}{m}$$
 
-This is the **Bonferroni correction**. It controls the **family-wise error rate (FWER)** — the probability of *any* false positive across all tests. It's conservative — meaning it may miss real effects — but it guarantees the probability of *any* false positive stays below $\alpha$, no matter how the tests are correlated.
+It controls the **family-wise error rate (FWER)** — the probability of *any* false positive across all $m$ tests. It's conservative — meaning it may miss real effects — but it guarantees the probability of *any* false positive stays below $\alpha$, no matter how the tests are correlated.
+:::
 
 ```{python}
 alpha = 0.05
@@ -190,15 +204,19 @@ else:
 
 Bonferroni killed every result. But is that too aggressive? Maybe some players really do benefit from rest — we just can't tell because Bonferroni demands an extremely low p-value for each test. Can we find a middle ground that allows a controlled fraction of false discoveries?
 
+:::{.callout-important}
+## Definition: Benjamini-Hochberg Procedure and FDR
 The **Benjamini-Hochberg (BH) procedure** controls the **false discovery rate (FDR)** —
 the expected *proportion* of false positives among rejected hypotheses.
 
 The BH procedure:
+
 1. Sort p-values: $p_{(1)} \le p_{(2)} \le \cdots \le p_{(m)}$
 2. Find the largest $k$ such that $p_{(k)} \le \frac{k}{m} \alpha$
 3. Reject hypotheses $1, 2, \ldots, k$
 
 This guarantees that among your "discoveries," at most a fraction $\alpha$ are false.
+:::
 
 ```{python}
 # Step-by-step Benjamini-Hochberg
@@ -253,6 +271,8 @@ plt.show()
 
 This same problem arises whenever you run many tests: a genomics lab testing 20,000 genes for association with a disease, a tech company running hundreds of A/B tests per week, or a pharmaceutical trial measuring many endpoints. Any time you run many tests, you need **multiple testing correction**.
 
+<!-- FLAG: Poldrack Ch 18 covers p-hacking, researcher degrees of freedom, pre-registration, and the replication crisis. These are thematically related to multiple testing but may warrant their own lecture or section (e.g., a "Reproducibility" lecture). -->
+
 ## From testing to correlation
 
 So far we've been testing each player separately — a binary question (*does rest help this player?*). But maybe we're asking the wrong question. Instead of 431 yes/no answers, can we measure one continuous relationship: how does rest relate to performance across all players?
@@ -288,11 +308,14 @@ print("Notice: the means trend DOWNWARD. More rest → fewer points?!")
 print("That can't be right... or can it?")
 ```
 
-Now let's quantify this with the **Pearson correlation** $r$, which measures the *linear* association between two variables (you may have seen this in MS&E 120):
+:::{.callout-important}
+## Definition: Pearson Correlation Coefficient
+The **Pearson correlation** $r$ measures the *linear* association between two variables (you may have seen this in MS&E 120):
 
 $$r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2 \sum (y_i - \bar{y})^2}}$$
 
-$r$ ranges from $-1$ to $+1$. Important: $r = 0$ means no *linear* relationship, not no relationship at all. Two variables can be strongly related (e.g., quadratic) and still have $r$ near 0.
+$r$ ranges from $-1$ to $+1$. It is unitless and symmetric: $r(x, y) = r(y, x)$. Important: $r = 0$ means no *linear* relationship, not no relationship at all. Two variables can be strongly related (e.g., quadratic) and still have $r$ near 0. Outliers can also strongly distort $r$.
+:::
 
 ```{python}
 r, p = stats.pearsonr(games_corr['REST_DAYS'], games_corr['PTS'])
@@ -302,11 +325,19 @@ print(f"\nWith n = {len(games_corr):,} observations, even tiny correlations are"
 print(f"*statistically* significant — but that doesn't mean the correlation is meaningful.")
 ```
 
+:::{.callout-warning}
+## Ecological Correlation Fallacy
+Correlations computed on group averages (e.g., one point per state or per team) can be much stronger than correlations computed on individual observations. These **ecological correlations** are misleading because averaging hides within-group variation. Always check whether a correlation is based on individual data or aggregated summaries.
+:::
+
 ## Correlation is not causation: the confounding problem
 
 That negative correlation seems backward. Rest *hurts* performance?
 
-**Think about it:** Before reading on — why might more rest be associated with fewer points? What's different about players who get extended rest? Discuss with your neighbor.
+:::{.callout-tip}
+## Think About It
+Before reading on — why might more rest be associated with fewer points? What's different about players who get extended rest? Discuss with your neighbor.
+:::
 
 Coaches don't randomly assign rest. Consider:
 
@@ -346,7 +377,7 @@ print(f"Correlation between PPG and extended rest fraction: r = {r_qual:.3f}")
 print("Low-scoring players have MORE extended rest — they're the ones sitting out!")
 ```
 
-## The surprise: Simpson's paradox in rest data
+## Simpson's paradox in rest data
 
 This is **Simpson's paradox** (named after Edward Simpson, 1951): the aggregate comparison shows rest *hurts* by several points, but within individual players, the effect is essentially zero. The aggregate pattern was entirely driven by *who* gets rest, not by rest itself.
 
@@ -434,7 +465,7 @@ In Lecture 12, we'll use regression to estimate the effect of rest while control
 
 ## Study guide
 
-**Key definitions:**
+### Key ideas
 
 - **Multiple testing (multiple comparisons):** Running many hypothesis tests on the same data, inflating the chance of false positives.
 - **Family-wise error rate (FWER):** The probability of making *any* false positive across all tests. Bonferroni controls this.
@@ -442,26 +473,24 @@ In Lecture 12, we'll use regression to estimate the effect of rest while control
 - **Bonferroni correction:** Test each hypothesis at $\alpha / m$ instead of $\alpha$.
 - **Benjamini-Hochberg (BH) procedure:** Sort p-values; find the largest $k$ where $p_{(k)} \le (k/m) \alpha$; reject hypotheses $1, \ldots, k$.
 - **p-value histogram:** Diagnostic tool; uniform under the null, spike near 0 if signal exists.
-- **Pearson correlation ($r$):** Measures linear association between two variables. Ranges from $-1$ to $+1$.
+- **Pearson correlation ($r$):** Measures linear association between two variables. Ranges from $-1$ to $+1$. Unitless and symmetric.
 - **Confounding:** When a third variable influences both the treatment and the outcome, creating a spurious association.
 - **Simpson's paradox:** An aggregate trend reverses (or disappears) when you look within subgroups.
-
-**Key ideas (one sentence each):**
-
+- **Ecological correlation:** Correlations computed on group averages can be much stronger than individual-level correlations; always check the unit of analysis.
 - Running $m$ tests at $\alpha = 0.05$ produces $\sim m \times 0.05$ false positives even when nothing is real.
 - Bonferroni is safe but conservative; BH is more powerful but allows a controlled fraction of false discoveries.
 - A flat p-value histogram means no widespread effect; a spike near 0 means some discoveries are real.
 - Correlation between two variables can be driven entirely by a confounder — always ask *who* is in each group.
 - Within-group analysis (demeaning) removes confounders that differ between groups.
 
-**Computational tools:**
+### Computational tools
 
 - `scipy.stats.ttest_ind(a, b)` — Welch's two-sample t-test
 - `scipy.stats.pearsonr(x, y)` — Pearson correlation and p-value
 - BH procedure: sort p-values, compute thresholds $k/m \times \alpha$, apply step-up rule
 - `.groupby().transform('mean')` — compute group means aligned to original rows (for demeaning)
 
-**For the quiz:**
+### For the quiz
 
 - Be able to compute the expected number of false positives given $m$ and $\alpha$.
 - Know when to use Bonferroni vs. BH (stakes determine the correction).

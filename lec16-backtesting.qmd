@@ -82,7 +82,10 @@ plt.show()
 
 Mono County is wild — AQI values above 1,000 (and once above 8,000!) from extreme dust storms near Mono Lake. Los Angeles and Sacramento show the typical California pattern: seasonal wildfire spikes layered on top of baseline urban pollution.
 
-This is **non-stationary** data — the mean and variance change over time, and extreme events (wildfire spikes) appear unpredictably. This is a concept we haven't seen before in the course; we'll explore why it matters throughout this lecture.
+:::{.callout-important}
+## Definition: Non-Stationarity
+A time series is **non-stationary** when its statistical properties (mean, variance) change over time. The AQI data above is non-stationary: the mean and variance shift with the seasons, and extreme events (wildfire spikes) appear unpredictably. We'll explore why this matters throughout this lecture.
+:::
 
 ## Building a prediction model
 
@@ -139,9 +142,15 @@ print("Looks great! Ship it?")
 
 R² around 0.85 and a low MAE — this looks like a strong model. But there's a hidden problem.
 
-**Think about it**: with a random split, your test set includes days *from the middle* of the time series. A test-set day from June 2022 has its neighbors (June 1, June 3, ...) in the training set. The lag features — "yesterday's AQI" — are computed from data that's *right next to* training points.
+:::{.callout-tip}
+## Think About It
+With a random split, your test set includes days *from the middle* of the time series. A test-set day from June 2022 has its neighbors (June 1, June 3, ...) in the training set. The lag features — "yesterday's AQI" — are computed from data that's *right next to* training points.
+:::
 
-This is a form of **data leakage** — not because test data enters the training set directly, but because the random split makes test observations highly correlated with nearby training observations. The lag feature "yesterday's AQI" for a test-set day was likely in the training set.
+:::{.callout-important}
+## Definition: Data Leakage (Temporal)
+**Data leakage** occurs when information from the future (or from the test set) contaminates training, producing optimistically biased results. In time series, a random split causes leakage because test observations are highly correlated with nearby training observations. The lag feature "yesterday's AQI" for a test-set day was likely in the training set.
+:::
 
 ## Proper backtesting: temporal split
 
@@ -177,7 +186,10 @@ print("Top: random split scatters test points everywhere (leakage!).")
 print("Bottom: temporal split puts all test points in the future (correct).")
 ```
 
-**Think about it:** We're about to train on 2021--2022 and test on 2023. Will R-squared be higher, lower, or about the same as the random split? Why?
+:::{.callout-tip}
+## Think About It
+We're about to train on 2021--2022 and test on 2023. Will R-squared be higher, lower, or about the same as the random split? Why?
+:::
 
 Let's train on 2021–2022 and test on 2023.
 
@@ -215,7 +227,11 @@ print("The naive split was lying to you -- the model isn't that good.")
 
 The performance drop is substantial. The random split made the model look much better than it actually is. That's the **leakage** — by testing on days surrounded by training data, the model gets to cheat.
 
-Before building a fancy model, we should always check the simplest possible forecast: **tomorrow = today**. This **naive baseline** is the bar any model must clear.
+:::{.callout-important}
+## Definition: Naive Baseline
+The **naive forecast** predicts that tomorrow's value equals today's value: $\hat{y}_{t+1} = y_t$. This is the simplest possible forecast and the bar any model must clear. In the forecasting literature, other standard benchmarks include the **seasonal naive** method (predict the value from the same season last year) and the **drift** method (extrapolate the line between the first and last observations). These are collectively called **benchmark forecasting methods**.
+:::
+
 
 ```{python}
 # Naive forecast baseline: predict "same as yesterday"
@@ -411,11 +427,17 @@ print("Same story -- the random split is optimistically biased.")
 
 Here's where backtesting gets really interesting. Suppose you use the model to bet: if the model predicts a player will score above their season average, bet the "over."
 
-A few terms you'll need: Sportsbooks charge a fee called the **vig** (short for vigorish). At standard **-110 odds**, you risk \$110 to win \$100. That means you need to win about 52.4% of your bets just to break even. A **unit** is one standard bet amount — we'll track profit/loss in units so the math is clean.
+:::{.callout-note}
+## Sports Betting Terminology
+Sportsbooks charge a fee called the **vig** (short for vigorish). At standard **-110 odds**, you risk \$110 to win \$100. That means you need to win about 52.4% of your bets just to break even. A **unit** is one standard bet amount — we'll track profit/loss in units so the math is clean.
+:::
 
 We'll use the player's trailing season average as a rough proxy for the sportsbook line. Real lines incorporate much more information (injuries, matchups, rest days), so this is a generous setup for our model.
 
-**Think about it:** Will this strategy make money? Our model has decent R-squared on the temporal split. Is that enough?
+:::{.callout-tip}
+## Think About It
+Will this strategy make money? Our model has decent R-squared on the temporal split. Is that enough?
+:::
 
 ```{python}
 # Simple betting backtest on the temporal test set
@@ -460,15 +482,21 @@ print("Even a model with decent R-squared doesn't necessarily make money.")
 print("The market is efficient -- the line already accounts for recent performance.")
 ```
 
-This is the **backtesting illusion**. In-sample performance does not equal out-of-sample performance. Sportsbooks already factor in rest days, recent form, and home/away. Your model isn't finding an edge — it's rediscovering information the market already knows.
+:::{.callout-warning}
+## The Backtesting Illusion
+In-sample performance does not equal out-of-sample performance. Sportsbooks already factor in rest days, recent form, and home/away. Your model isn't finding an edge — it's rediscovering information the market already knows.
+:::
 
-## The surprise: when the future doesn't look like the past
+## When the future doesn't look like the past
 
 Let's go back to air quality and look at something the model has *never seen*.
 
 Mono County, near Mono Lake in eastern California, occasionally experiences extreme dust/wildfire events that push AQI into the thousands — sometimes above 8,000. That's roughly 16x the "Hazardous" threshold of 500.
 
-**Think about it:** If we train a model on "normal" days (AQI below 300), what would it predict for an AQI of 8,000? How far off would it be?
+:::{.callout-tip}
+## Think About It
+If we train a model on "normal" days (AQI below 300), what would it predict for an AQI of 8,000? How far off would it be?
+:::
 
 ```{python}
 # Mono County extremes
@@ -535,7 +563,12 @@ print("The orange line (predictions) can't reach the spikes.")
 print("A linear model trained on normal conditions extrapolates nonsensically.")
 ```
 
-This is **distribution shift** — a severe form of the non-stationarity we saw at the start of this lecture. Not just gradual changes in the mean, but a fundamentally different regime that the training data never captured. It's the deepest problem in time series forecasting:
+:::{.callout-important}
+## Definition: Distribution Shift
+**Distribution shift** occurs when future data comes from a fundamentally different regime than the training data. It is a severe form of non-stationarity — not just gradual changes in the mean, but a qualitative change the training data never captured.
+:::
+
+Distribution shift is the deepest problem in time series forecasting:
 
 - Your training data covers *normal* conditions
 - The events that matter most — wildfires, pandemics, financial crashes — are precisely the ones your model has never seen
@@ -559,24 +592,22 @@ In Lecture 17, we'll see that AutoML tools often make this same mistake — they
 
 - **Distribution shift is the hardest problem.** Models trained on normal conditions fail during extreme events.
 
+<!-- FLAG: FPP3 Ch 5 covers residual diagnostics (ACF of residuals, Ljung-Box test) and prediction intervals in depth. This lecture does not address either topic. Consider adding a section on checking residuals (are they white noise?) and on quantifying forecast uncertainty with prediction intervals, or covering them in a separate lecture. -->
+
+<!-- FLAG: FPP3 Ch 5 introduces MAPE and MASE as forecast accuracy measures for comparing across series. This lecture uses only MAE and R-squared. Consider discussing scale-independent error measures if students will encounter multi-series forecasting. -->
+
 ## Study guide
-
-### Key definitions
-
-- **Backtesting (temporal split):** Evaluating a model by training on past data and testing on future data, mimicking real deployment.
-- **Data leakage:** When information from the future (or the test set) contaminates training, producing optimistically biased results.
-- **Lag features:** Predictors constructed from past values of the time series (e.g., yesterday's value, 7-day rolling average).
-- **Non-stationarity:** A time series whose statistical properties (mean, variance) change over time.
-- **Walk-forward validation (time series cross-validation):** Repeatedly training on an expanding (or sliding) window of past data and testing on the next period.
-- **Distribution shift:** When future data comes from a fundamentally different regime than the training data.
 
 ### Key ideas
 
-- Random train/test splits create data leakage in time series because test observations are correlated with nearby training observations.
-- Walk-forward validation reveals *when* a model fails, not just its average performance.
-- The naive baseline ("same as yesterday") is surprisingly hard to beat and should always be checked.
+- **Backtesting (temporal split):** Evaluating a model by training on past data and testing on future data, mimicking real deployment.
+- **Data leakage:** When information from the future (or the test set) contaminates training, producing optimistically biased results. Random train/test splits create leakage in time series because test observations are correlated with nearby training observations.
+- **Lag features:** Predictors constructed from past values of the time series (e.g., yesterday's value, 7-day rolling average).
+- **Non-stationarity:** A time series whose statistical properties (mean, variance) change over time.
+- **Walk-forward validation (time series cross-validation):** Repeatedly training on an expanding (or sliding) window of past data and testing on the next period. Reveals *when* a model fails, not just its average performance.
+- **Distribution shift:** When future data comes from a fundamentally different regime than the training data. Models trained on normal conditions cannot predict unprecedented events.
+- **Benchmark forecasting methods:** The naive forecast ("same as yesterday"), seasonal naive ("same day last year"), and drift method ("extrapolate the trend") are standard baselines. Any useful model must beat these.
 - Backtesting a strategy does not guarantee future profitability — markets already incorporate public information.
-- Distribution shift means models trained on normal conditions cannot predict unprecedented events.
 
 ### Computational tools
 

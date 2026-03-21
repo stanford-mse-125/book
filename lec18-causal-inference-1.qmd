@@ -78,11 +78,19 @@ The correlation is striking: $r \approx 0.66$. Schools with higher SAT averages 
 
 But wait. What if something else drives *both* SAT scores and earnings?
 
-> **Think about it:** what factors might affect both a student's SAT score and their future earnings?
+:::{.callout-tip}
+## Think About It
+What factors might affect both a student's SAT score and their future earnings?
+:::
 
 ## Confounders: The Hidden Third Variable
 
-A **confounder** is a common *cause* of both the treatment and the outcome — it must cause both, not just be correlated with both. Here, **family wealth** is a classic confounder:
+:::{.callout-important}
+## Definition: Confounder
+A **confounder** is a common *cause* of both the treatment and the outcome — it must cause both, not just be correlated with both.
+:::
+
+Here, **family wealth** is a classic confounder:
 
 - Wealthy families invest in SAT prep, better schools, tutors $\rightarrow$ **higher SAT scores**
 - Wealthy families provide professional networks, connections, inheritance $\rightarrow$ **higher earnings**
@@ -91,7 +99,10 @@ If family wealth drives both, then the SAT–earnings correlation could be entir
 
 ## Causal Diagrams (DAGs)
 
+:::{.callout-important}
+## Definition: DAG (Directed Acyclic Graph)
 A **Directed Acyclic Graph (DAG)** is a visual tool for representing causal relationships. "Directed" means the arrows have direction (A causes B, not the reverse). "Acyclic" means there are no loops — you can never follow the arrows in a circle back to where you started. Each arrow means "causes" or "directly influences."
+:::
 
 There are **two paths** from SAT to Earnings:
 
@@ -148,7 +159,10 @@ In practice, this is nearly impossible with **observational data** (data collect
 
 This is why we distinguish **observational data** from **experimental data** (data from a randomized experiment). In a randomized experiment, the treatment is assigned randomly, so there are no backdoor paths to worry about.
 
-> **The fundamental problem:** with observational data, you can never be sure you've blocked every backdoor path.
+:::{.callout-warning}
+## The Fundamental Problem
+With observational data, you can never be sure you've blocked every backdoor path.
+:::
 
 ## Simpson's Paradox: A Confounding Problem
 
@@ -235,7 +249,10 @@ Simpson's Paradox is a confounding problem. The aggregate data tells the opposit
 
 ## John Snow and the Birth of Epidemiology
 
+:::{.callout-note}
+## Historical Context: John Snow's Cholera Investigation
 London, 1854. Cholera is killing thousands. The prevailing theory: "bad air" (miasma) causes disease. A physician named John Snow had a different idea: contaminated *water*.
+:::
 
 Let's look at his data.
 
@@ -327,7 +344,10 @@ plt.show()
 
 ## Why This Is a Natural Experiment
 
+:::{.callout-important}
+## Definition: Natural Experiment
 A **natural experiment** occurs when some external circumstance assigns treatment in a way that is **as-if random** — creating comparable groups without deliberate randomization.
+:::
 
 Here, the "treatment" is contaminated water. The key features:
 
@@ -346,7 +366,7 @@ This is what makes Snow's evidence *causal*, not just correlational. He couldn't
 > ```
 > No confounding path! The neighborhoods are the same.
 
-## The Surprise: The Map Is Not the Experiment
+## The Map Is Not the Experiment
 
 Here's what most people get wrong about John Snow. The famous cholera map — deaths clustered around the Broad Street pump — is the image everyone remembers. It's in every textbook, every documentary, every data science course.
 
@@ -438,15 +458,24 @@ Adding control variables to a regression can help — but only if:
 
 This is why observational studies are hard. You're always one unmeasured confounder away from a wrong answer.
 
-> **Think about it:** what would you need to measure to estimate the *causal* effect of SAT scores on earnings?
+:::{.callout-tip}
+## Think About It
+What would you need to measure to estimate the *causal* effect of SAT scores on earnings?
+:::
 
 ## A Trap: Collider Bias
 
-> **Think about it:** We said you should control for confounders. Should you *always* add more control variables to a regression? What could go wrong?
+:::{.callout-tip}
+## Think About It
+We said you should control for confounders. Should you *always* add more control variables to a regression? What could go wrong?
+:::
 
 Here's a puzzle. Imagine you're at a prestigious consulting firm. You notice that the most talented analysts seem to have the weakest professional networks, and the best-connected people tend to be mediocre analysts. Does getting hired destroy your social skills? No — this is a statistical illusion called **collider bias**.
 
+:::{.callout-important}
+## Definition: Collider
 A variable is a **collider** on a particular path if both arrows on that path point *into* it. (Note: being a collider is a property of a variable *on a specific path*, not a property of the variable itself — the same variable might be a collider on one path but not another.)
+:::
 
 ```
   Talent ──→ Hired at Top Firm ←── Connections
@@ -494,7 +523,10 @@ print("Controlling for a collider creates bias that wasn't there before!")
 print("(The negative correlation holds regardless of the hiring threshold — try changing 70 to 50 or 90.)")
 ```
 
-**Bottom line:** conditioning on a common *effect* of two variables creates a fake relationship between them. That's collider bias.
+:::{.callout-warning}
+## Collider Bias
+Conditioning on a common *effect* of two variables creates a fake relationship between them. That's collider bias. Always check your DAG before adding control variables to a regression.
+:::
 
 ## DAG Rules: What to Control For
 
@@ -508,6 +540,11 @@ Before we summarize the rules, let's work through one more example. Consider thi
 
 What's the confounder? Socioeconomic Background — it's a common cause of Education and Health. Should we control for it? **Yes** — it's on a backdoor path. What's the mediator? Income — it's on the causal path from Education to Health. Should we control for Income? **No** — it would block the very effect we're trying to measure.
 
+:::{.callout-important}
+## Definition: Mediator
+A **mediator** is a variable on the causal path between treatment and outcome (X $\rightarrow$ Z $\rightarrow$ Y). Controlling for a mediator removes part of the causal effect you are trying to measure.
+:::
+
 Here are the key rules for reading causal diagrams:
 
 | Structure | Name | Example | Control for it? |
@@ -516,11 +553,19 @@ Here are the key rules for reading causal diagrams:
 | X $\rightarrow$ Z $\rightarrow$ Y | **Mediator** | SAT $\to$ Admission $\to$ Earnings | **No!** Blocks the causal path |
 | X $\rightarrow$ Z $\leftarrow$ Y | **Collider** | Talent $\to$ Hired $\leftarrow$ Connections | **No!** Opens a spurious path |
 
+:::{.callout-important}
+## Definition: Back-Door Criterion
+The **back-door criterion** says: to estimate the causal effect of X on Y, you must block all backdoor paths (paths into X through common causes) without blocking any causal paths (paths from X to Y) or opening any collider paths.
+:::
+
 These rules follow from whether "controlling for" a variable opens or closes the path between treatment and outcome. Getting this wrong — controlling for the wrong variable — is one of the most common mistakes in applied statistics.
 
-> **Think about it:** In the DAG below, identify the confounder, mediator, and collider. Which should you control for?
->
-> X $\to$ M $\to$ Y, &emsp; X $\leftarrow$ C $\to$ Y, &emsp; X $\to$ Z $\leftarrow$ Y
+:::{.callout-tip}
+## Think About It
+In the DAG below, identify the confounder, mediator, and collider. Which should you control for?
+
+X $\to$ M $\to$ Y, &emsp; X $\leftarrow$ C $\to$ Y, &emsp; X $\to$ Z $\leftarrow$ Y
+:::
 
 ## Key Takeaways
 
@@ -540,36 +585,34 @@ Next time: difference-in-differences, A/B tests, and counterfactual reasoning �
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
 - **Causal inference:** determining when a statistical association reflects a cause-and-effect relationship
 - **Confounder:** a common cause of treatment and outcome that creates a spurious association (a backdoor path)
 - **DAG (Directed Acyclic Graph):** a diagram of causal relationships; "directed" = arrows have direction, "acyclic" = no loops
 - **Backdoor path:** a non-causal path connecting treatment and outcome through a common cause
 - **Causal path (front door path):** a path where all arrows point forward from treatment to outcome
+- **Back-door criterion:** to estimate a causal effect, block all backdoor paths without blocking causal paths or opening collider paths
 - **Collider:** a variable on a path where both arrows point *into* it; conditioning on a collider opens a spurious path
 - **Mediator:** a variable on the causal path between treatment and outcome
 - **Spurious association:** a correlation that exists only because of a common cause, not a causal relationship
 - **Natural experiment:** a situation where an external circumstance assigns treatment as-if randomly
 - **Observational data vs. experimental data:** data collected without intervention vs. data from a randomized experiment
 - **Simpson's Paradox:** when a trend reverses after disaggregating by a confounding variable
+- Confounders create backdoor paths that make correlation look like causation; DAGs let you see and block them.
+- Regression estimates a causal effect only when all backdoor paths are blocked without blocking causal paths.
+- Controlling for a collider *creates* bias; controlling for a mediator *removes* the effect you want to measure.
+- Natural experiments exploit as-if-random assignment to provide causal evidence without a randomized trial.
+- Simpson's Paradox is a confounding problem that DAGs explain: the aggregate hides a backdoor path.
 
-### Key Ideas
-
-1. Confounders create backdoor paths that make correlation look like causation; DAGs let you see and block them.
-2. Regression estimates a causal effect only when all backdoor paths are blocked without blocking causal paths.
-3. Controlling for a collider *creates* bias; controlling for a mediator *removes* the effect you want to measure.
-4. Natural experiments exploit as-if-random assignment to provide causal evidence without a randomized trial.
-5. Simpson's Paradox is a confounding problem that DAGs explain: the aggregate hides a backdoor path.
-
-### Computational Tools
+### Computational tools
 
 - No new computational tools are critical for this lecture — the key skills are conceptual (drawing and reading DAGs, identifying confounders/colliders/mediators)
 - `pd.qcut()` for creating severity categories
 - `scipy.spatial.distance.cdist()` for computing distances between points
 - The `draw_dag()` helper function pattern for visualizing causal diagrams
 
-### For the Quiz
+### For the quiz
 
 You should be able to:
 

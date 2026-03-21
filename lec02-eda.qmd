@@ -9,9 +9,13 @@ jupyter: python3
 
 An Airbnb host is losing bookings to cheaper listings. How should she reprice? Both questions start the same way: **look at the data** before you jump to conclusions.
 
-**Exploratory Data Analysis (EDA)** is the practice of getting to know your data before you do anything fancy with it. It's the most important step in any analysis — and the one most often skipped.
+:::{.callout-important}
+## Definition: Exploratory Data Analysis (EDA)
 
-Today we'll explore two real datasets: hospital readmissions and NYC Airbnb listings. Along the way, we'll find **outliers**, missing data patterns, and a genuine surprise.
+**Exploratory Data Analysis (EDA)** is the practice of getting to know your data before you do anything fancy with it. It's the most important step in any analysis — and the one most often skipped.
+:::
+
+Today we'll explore two real datasets: hospital readmissions and NYC Airbnb listings. Along the way, we'll find **outliers**, missing data patterns, and a lesson about adjusting for context.
 
 ```{python}
 import numpy as np
@@ -28,7 +32,8 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-### Why "always visualize"? Anscombe's quartet
+:::{.callout-note}
+## Why "always visualize"? Anscombe's quartet
 
 Before we dive in, here's the single best argument for plotting your data. These four datasets have *identical* means, standard deviations, correlations, and regression lines:
 
@@ -45,6 +50,7 @@ plt.show()
 ```
 
 Same mean of *x*. Same mean of *y*. Same correlation. Same regression line. Completely different stories. **Summary statistics can lie. Always visualize.**
+:::
 
 ## Part 1: Hospital readmissions
 
@@ -112,7 +118,10 @@ plt.show()
 
 The distributions look roughly symmetric and unimodal, centered near 1.0 (though with a slight right skew — we'll revisit what "normal" really means in Lecture 8). But notice the spread differs by condition — heart failure (HF) has more variation than hip/knee replacement.
 
-**Think about it:** Why might some conditions have more variability in hospital performance than others?
+:::{.callout-tip}
+## Think About It
+Why might some conditions have more variability in hospital performance than others?
+:::
 
 ### Missing data: is it random?
 
@@ -161,17 +170,29 @@ plt.show()
 
 This is a critical finding. Statisticians distinguish three patterns of missingness:
 
+:::{.callout-important}
+## Definition: Patterns of Missingness
+
 - **Missing Completely At Random (MCAR)**: no pattern at all — like a lab assistant randomly spilling coffee on some data sheets.
 - **Missing At Random (MAR)**: missingness depends on other *observed* data (e.g., smaller hospitals are more likely to have suppressed data, and we can see hospital size).
 - **Missing Not At Random (MNAR)**: missingness depends on the *unobserved value itself* (e.g., hospitals with very high readmission rates might be more likely to have suppressed data).
+:::
 
 Here, CMS suppresses data when counts are too small to report — the data is missing *because* the counts are small. This is **MNAR**, and it's the most dangerous kind because you can't fully correct for it using other variables.
 
 CABG (coronary artery bypass graft surgery) has ~50% missing because fewer hospitals perform this complex procedure. The hospitals with missing data are systematically different: smaller, often rural, with fewer specialized services.
 
-If you drop these rows (which an AI tool would do silently), you're analyzing only the large, urban hospitals. Your conclusions would be biased. For now, we're just diagnosing — noticing what's going on. In the next lecture (Lecture 3), we'll decide what to do about it.
+:::{.callout-warning}
+## Dropping missing data can introduce bias
+If you drop these rows (which an AI tool would do silently), you're analyzing only the large, urban hospitals. Your conclusions would be biased.
+:::
 
-**Think about it:** If you drop all the "Too Few to Report" rows, what kind of hospitals are left in your dataset? What conclusions might change?
+For now, we're just diagnosing — noticing what's going on. In the next lecture (Lecture 3), we'll decide what to do about it.
+
+:::{.callout-tip}
+## Think About It
+If you drop all the "Too Few to Report" rows, what kind of hospitals are left in your dataset? What conclusions might change?
+:::
 
 > **Key principle**: Before you handle missing data, you must understand *why* it's missing. The "why" determines the "how."
 
@@ -228,7 +249,12 @@ Look at the left plot: the distribution is so skewed that you can barely see any
 
 Now look at the zoomed-in version on the right. Most listings are \$50–\$200/night, with a peak around \$100. Much more informative.
 
-The distribution is clearly right-skewed. **Think about it:** Will the mean be higher or lower than the median? What happens if we naively compute the mean?
+The distribution is clearly right-skewed.
+
+:::{.callout-tip}
+## Think About It
+Will the mean be higher or lower than the median? What happens if we naively compute the mean?
+:::
 
 ```{python}
 print(f"Mean price:   ${airbnb_slim['price'].mean():.0f}/night")
@@ -298,7 +324,10 @@ Two patterns jump out:
 1. **Entire homes/apartments** cost roughly 2x more than private rooms, which makes intuitive sense.
 2. **Manhattan** is the most expensive borough. But notice the overlap — there are cheap Manhattan listings and expensive Brooklyn listings.
 
-**Think about it:** If someone told you "Manhattan Airbnbs cost more," is that the full story? What if Manhattan has more entire homes and Brooklyn has more private rooms? The comparison might be confounded by room type.
+:::{.callout-tip}
+## Think About It
+If someone told you "Manhattan Airbnbs cost more," is that the full story? What if Manhattan has more entire homes and Brooklyn has more private rooms? The comparison might be confounded by room type.
+:::
 
 ## Ranking hospitals: a cautionary tale
 
@@ -386,7 +415,10 @@ These hospitals are being unfairly judged by the naive ranking. They have high r
 
 This is a preview of **Simpson's paradox** and **confounding**, topics we'll return to throughout the course. (It's like comparing average salaries between two companies without accounting for job titles — the company with more senior engineers will look like it pays better.) For now, the lesson is simpler:
 
-> **Don't rank before you adjust.** The "worst" hospitals might just be the ones treating the hardest cases.
+:::{.callout-warning}
+## Don't rank before you adjust
+The "worst" hospitals might just be the ones treating the hardest cases.
+:::
 
 We'll revisit this hospital data in Lecture 18 when we ask: *is this causal?* Does the penalty actually reduce readmissions, or does it just punish hospitals that serve vulnerable populations?
 
@@ -399,22 +431,21 @@ We'll revisit this hospital data in Lecture 18 when we ask: *is this causal?* Do
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
 - **Exploratory Data Analysis (EDA)**: Getting to know your data — shape, types, distributions, missingness, relationships — before modeling.
 - **Distribution**: The pattern of values a variable takes. Described by shape (symmetric, skewed), center (mean, median), and spread.
-- **Histogram**: Shows the shape of one numeric variable by binning values and counting.
-- **Box plot**: Compares distributions across groups, showing median, quartiles, and outliers.
-- **Scatter plot**: Reveals relationships between two numeric variables.
+- **Histogram**: Shows the shape of one numeric variable by binning values and counting. **Box plot**: Compares distributions across groups, showing median, quartiles, and outliers. **Scatter plot**: Reveals relationships between two numeric variables. **Bar chart**: Shows counts or proportions for categorical data.
+- **Contingency table**: A table summarizing counts for two categorical variables. **Row and column proportions** show the conditional distribution of one variable given the other.
 - **Outlier**: An observation far from the bulk of the data. Can be real (a penthouse) or an error.
+- **Robust statistics**: The median and IQR are robust — barely affected by extreme values. The mean and standard deviation are not.
 - **Missing Not At Random (MNAR)**: Data is missing for reasons related to the missing value itself — the most dangerous pattern.
-
-### Key ideas
-
 - Always visualize before summarizing. Summary statistics can hide wildly different data (Anscombe's quartet).
 - When a distribution is skewed, the mean doesn't represent a typical value — the median is more informative.
 - Missing data is a signal, not just a nuisance. Ask *why* it's missing before deciding how to handle it.
 - Naive rankings can be unfair: the "worst" hospitals may just be treating the hardest cases.
+
+<!-- FLAG: IMS Ch 2 covers contingency tables, row/column proportions, mosaic plots, and log transformations of skewed data in detail. This lecture mentions contingency tables and proportions only in the study guide. Consider adding a worked example with pd.crosstab() in a future revision, and/or a log-transform example for the Airbnb price data. -->
 
 ### Computational tools
 
@@ -424,6 +455,7 @@ We'll revisit this hospital data in Lecture 18 when we ask: *is this causal?* Do
 - `df.describe()` — summary statistics for numeric columns
 - `df['col'].hist()` — histogram of one column
 - `df['col'].value_counts()` — frequency table for categorical data
+- `pd.crosstab()` — contingency table for two categorical variables
 - `sns.boxplot()` — box plot comparing groups
 - `df.isnull().sum()` — count missing values per column
 

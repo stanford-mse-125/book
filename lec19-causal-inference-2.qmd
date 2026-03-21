@@ -29,7 +29,10 @@ Last lecture we drew DAGs to map causal structure and identify confounders. Toda
 
 ## Difference-in-Differences: The Economist's Workhorse
 
-The idea behind **difference-in-differences (DiD)** is beautifully simple: compare how a treatment group changed relative to a control group. If both groups were on the same trajectory before the treatment, any *divergence* afterward must be caused by the treatment.
+:::{.callout-important}
+## Definition: Difference-in-Differences (DiD)
+A method that estimates causal effects by comparing how a treatment group changed over time relative to a control group. If both groups were on the same trajectory before the treatment, any *divergence* afterward must be caused by the treatment.
+:::
 
 Let's simulate a hospital that adopts a new discharge protocol while a comparison hospital does not.
 
@@ -78,7 +81,10 @@ The dashed line shows the **counterfactual** — what *would have happened* to H
 
 Because this is simulated data, we know the true effect is -3.0 percentage points and can verify that DiD recovers it. In real data, you never have this luxury — you must rely on the parallel trends assumption.
 
-> **Think about it:** Looking at the plot, how would you quantify the effect of the new protocol? What two comparisons would you make?
+:::{.callout-tip}
+## Think About It
+Looking at the plot, how would you quantify the effect of the new protocol? What two comparisons would you make?
+:::
 
 ### The DiD Formula
 
@@ -114,7 +120,10 @@ print(f"True effect:  -3.00 percentage points")
 
 ### The Key Assumption: Parallel Trends
 
-DiD only works if the treatment and control groups would have followed the **same trajectory** absent the treatment. This is the **parallel trends assumption**.
+:::{.callout-important}
+## Definition: Parallel Trends Assumption
+The assumption that treatment and control groups would have followed the same trajectory absent the treatment. DiD only works if this assumption holds.
+:::
 
 You can't test this assumption directly (you never observe the counterfactual), but you *can* check whether the groups had parallel trends in the pre-treatment period. Pre-treatment parallel trends are encouraging but don't *prove* the assumption holds — the trends could diverge after treatment for reasons unrelated to the treatment itself. This is the fundamental limitation of DiD.
 
@@ -152,7 +161,10 @@ print("Pre-treatment: differences are roughly flat (parallel trends holds).")
 print("Post-treatment: differences jump down — that's the treatment effect.")
 ```
 
-> **Think about it:** What would this event study plot look like if the parallel trends assumption were *violated*? What if Hospital A was already improving faster than Hospital B before the intervention?
+:::{.callout-tip}
+## Think About It
+What would this event study plot look like if the parallel trends assumption were *violated*? What if Hospital A was already improving faster than Hospital B before the intervention?
+:::
 
 ### DiD as a Regression
 
@@ -183,9 +195,12 @@ print("It captures the causal effect of the protocol on readmissions.")
 
 ### John Snow's Natural Experiment: The Most Famous DiD in History
 
-Last lecture we learned that John Snow's most powerful evidence for waterborne cholera was *not* his famous map — it was his comparison of water companies. Let's compute the actual numbers.
+:::{.callout-note}
+## Historical Context: Snow's Grand Experiment
+Last lecture we learned that John Snow's most powerful evidence for waterborne cholera was *not* his famous map — it was his comparison of water companies. In the 1850s, two water companies served intermingled houses on the same streets of South London. Lambeth Company moved its water intake upstream (away from sewage) in 1852. Southwark & Vauxhall kept drawing from the polluted Thames. Because houses were served essentially at random based on which company had laid pipes, this is a **natural experiment** — nature created near-random assignment.
+:::
 
-In the 1850s, two water companies served intermingled houses on the same streets of South London. Lambeth Company moved its water intake upstream (away from sewage) in 1852. Southwark & Vauxhall kept drawing from the polluted Thames. Because houses were served essentially at random based on which company had laid pipes, this is a **natural experiment** — nature created near-random assignment.
+Let's compute the actual numbers.
 
 ```{python}
 # Load Snow's water company data
@@ -221,9 +236,17 @@ print("This is the power of a natural experiment.")
 
 Why is this a natural experiment rather than just an observational comparison? Because the two companies served *intermingled* houses on the same streets. A household's water company was determined by which company happened to have laid pipes to that address — essentially arbitrary. This eliminates confounding by neighborhood poverty, crowding, or sanitation.
 
-> **Think about it:** Why can't we frame Snow's water company comparison as a standard DiD with before/after data? (Hint: we only have data from the 1854 epidemic, not from before Lambeth moved its intake.) What assumption are we making instead?
+:::{.callout-tip}
+## Think About It
+Why can't we frame Snow's water company comparison as a standard DiD with before/after data? (Hint: we only have data from the 1854 epidemic, not from before Lambeth moved its intake.) What assumption are we making instead?
+:::
 
 ## RCTs: The Gold Standard Revisited
+
+:::{.callout-important}
+## Definition: Randomized Controlled Trial (RCT)
+An experiment where treatment is randomly assigned, eliminating confounding by ensuring that treatment and control groups are comparable on all characteristics, measured and unmeasured.
+:::
 
 The cleanest way to estimate a causal effect is to **randomly assign** treatment. Recall ACTG 175 from Lecture 10 — the clinical trial that randomized HIV-positive patients into different drug regimens.
 
@@ -256,7 +279,10 @@ print("\nNotice how similar the columns are -- that's randomization at work.")
 print("No confounder can explain away any difference in outcomes.")
 ```
 
-> **Think about it:** The balance table shows the groups are *nearly* identical, but not *perfectly* identical. Why doesn't randomization guarantee perfect balance? (Hint: think about sample size and the law of large numbers.)
+:::{.callout-tip}
+## Think About It
+The balance table shows the groups are *nearly* identical, but not *perfectly* identical. Why doesn't randomization guarantee perfect balance? (Hint: think about sample size and the law of large numbers.)
+:::
 
 The groups are nearly identical on every baseline characteristic. That's not a coincidence — it's the *design*. Randomization ensures that any confounder, whether we measured it or not, is balanced across groups on average.
 
@@ -286,6 +312,11 @@ print(f"\nBecause of randomization, this IS the causal effect. No adjustment nee
 ```
 
 ## A/B Testing: An RCT by Another Name
+
+:::{.callout-important}
+## Definition: A/B Test
+A randomized controlled trial run in a tech or business setting, where users are randomly assigned to different variants (e.g., website designs) and outcomes (e.g., conversion rates) are compared.
+:::
 
 An **A/B test** is just a randomized experiment run on a website or app. Your company's conversion rate is 12%. A 2 percentage point lift means $2M in additional annual revenue. Is the observed lift real, or should you keep testing?
 
@@ -330,9 +361,12 @@ print(f"\n  {'Reject H0: the new design increases conversions!' if p_value < 0.0
 
 ### The Peeking Problem
 
-Your PM checks the dashboard every morning. On day 5, p = 0.03. "Ship it!" they say. But you know better...
+:::{.callout-warning}
+## Don't Peek at A/B Test Results
+**Peeking** — checking results repeatedly and stopping at the first significant result — inflates your false positive rate far beyond 5%. Your PM checks the dashboard every morning. On day 5, p = 0.03. "Ship it!" they say. But you know better...
+:::
 
-**Peeking** — checking results repeatedly and stopping at the first significant result — inflates your false positive rate far beyond 5%. It's related to the multiple testing problem from Lecture 11: each peek is another chance for a false positive. But it's actually worse, because test statistics at successive peeks are correlated, making standard corrections like Bonferroni overly conservative. Tech companies use sequential testing methods designed for exactly this situation.
+It's related to the multiple testing problem from Lecture 11: each peek is another chance for a false positive. But it's actually worse, because test statistics at successive peeks are correlated, making standard corrections like Bonferroni overly conservative. Tech companies use sequential testing methods designed for exactly this situation.
 
 ```{python}
 # Simulate peeking: A/A test where there's NO real effect
@@ -383,11 +417,19 @@ print("If you stop at the first significant peek, you'll ship a change that does
 
 ### Other A/B Testing Pitfalls
 
-- **Network effects**: If users interact (social networks, marketplaces), treating user A affects user B. The independence assumption fails. This is a violation of **SUTVA** (Stable Unit Treatment Value Assumption) — the assumption that one person's treatment doesn't affect another's outcome.
+:::{.callout-important}
+## Definition: SUTVA (Stable Unit Treatment Value Assumption)
+The assumption that one unit's treatment assignment does not affect another unit's outcome. Violated when users interact, as in social networks or marketplaces.
+:::
+
+- **Network effects**: If users interact (social networks, marketplaces), treating user A affects user B. The independence assumption fails — a violation of SUTVA.
 - **Novelty effects**: Users might click a new design just because it's different. Effects fade over time.
 - **Small effects need large samples**: A 0.5% lift in conversion requires millions of users to detect reliably.
 
-> **Think about it:** You're running an A/B test on a social media feed. Treatment users see more local news. But they share those stories with control users. What happens to your estimate?
+:::{.callout-tip}
+## Think About It
+You're running an A/B test on a social media feed. Treatment users see more local news. But they share those stories with control users. What happens to your estimate?
+:::
 
 ## Beyond DiD: Other Quasi-Experimental Methods
 
@@ -403,15 +445,15 @@ IV requires two assumptions: (1) **relevance** — the instrument must actually 
 - Affects treatment: low numbers were drafted into military service
 - No direct effect: your lottery number doesn't affect your earnings except through whether you served
 
-We won't go deep into IV estimation — that's a full course in econometrics — but the idea of finding "clever randomization" in the world is the core of modern causal inference.
+The standard estimation method for IV is **two-stage least squares (2SLS)**: first regress treatment on the instrument, then regress the outcome on the predicted treatment values. We won't go deep into IV estimation — that's a full course in econometrics — but the idea of finding "clever randomization" in the world is the core of modern causal inference.
 
 ### Regression Discontinuity: Exploiting Cutoffs
 
-Another powerful design is **regression discontinuity (RD)** — when treatment is assigned at a sharp cutoff (e.g., a test score threshold for a scholarship), comparing people just above and below the cutoff is like a local randomized experiment. Students scoring 89 vs. 91 on a 90-point threshold are nearly identical, yet one gets the scholarship and the other doesn't. That sharp jump at the cutoff identifies the causal effect.
+Another powerful design is **regression discontinuity (RD)** — when treatment is assigned at a sharp cutoff (e.g., a test score threshold for a scholarship), comparing people just above and below the cutoff is like a local randomized experiment. Students scoring 89 vs. 91 on a 90-point threshold are nearly identical, yet one gets the scholarship and the other doesn't. That sharp jump at the cutoff identifies the causal effect. In a **sharp RD**, the cutoff perfectly determines treatment; in a **fuzzy RD**, the cutoff only changes the *probability* of treatment (and the analysis combines RD with IV ideas). A practical choice in any RD is the **bandwidth** — how close to the cutoff observations must be to count. Too wide and you introduce bias; too narrow and you lose precision.
 
 We won't work through RD in detail, but you should know it exists as a major tool in the quasi-experimental toolkit alongside DiD and IV.
 
-## The Surprise: An NBA Natural Experiment
+## An NBA Natural Experiment
 
 Let's look for a natural experiment in our NBA data. The NBA introduced the "play-in tournament" starting with the 2020-21 season. Teams seeded 7-10 now must compete in a mini-tournament to earn a playoff spot, changing incentives for teams near the cutoff. Did this affect how teams manage their star players' minutes?
 
@@ -487,7 +529,10 @@ Here's the honest takeaway: this analysis is *descriptive*, not causal. We compa
 
 This is common in practice. Causal inference is as much about acknowledging what your data *can't* tell you as about producing estimates. Contrast this with Snow's water companies, where the natural experiment was clean, or the ACTG 175 trial, where randomization made the causal inference airtight.
 
-> **Think about it:** How would you redesign this NBA analysis to be a *real* DiD? What would be your treatment group, control group, and pre/post periods? What threats to parallel trends would you worry about?
+:::{.callout-tip}
+## Think About It
+How would you redesign this NBA analysis to be a *real* DiD? What would be your treatment group, control group, and pre/post periods? What threats to parallel trends would you worry about?
+:::
 
 ## Key Takeaways
 
@@ -503,11 +548,11 @@ This is common in practice. Causal inference is as much about acknowledging what
 
 - **When you read a causal claim**, ask: what's the source of variation? Is it plausibly exogenous? What could confound this?
 
-**Further reading:** For more on DiD and natural experiments, see Huntington-Klein, *The Effect*, Chapters 16-18.
+**Further reading:** For more on DiD, event studies, and natural experiments, see Huntington-Klein, *The Effect*, Chapters 16-20.
 
 ## Study guide
 
-### Key definitions
+### Key ideas
 
 - **Counterfactual**: What would have happened to the treated group without the treatment. Never directly observed.
 - **Difference-in-differences (DiD)**: A method that estimates causal effects by comparing before/after changes across treatment and control groups.
@@ -516,24 +561,22 @@ This is common in practice. Causal inference is as much about acknowledging what
 - **A/B test**: An RCT run in a tech/business setting (e.g., website variants).
 - **Natural experiment**: A situation where some external event or policy creates near-random assignment to treatment.
 - **Treatment effect**: The causal impact of the treatment on the outcome.
-- **Instrumental variable (IV)**: A variable that affects treatment assignment but has no direct effect on the outcome except through treatment.
-- **Regression discontinuity (RD)**: A design that exploits sharp cutoffs in treatment assignment.
-
-### Key Ideas
-
+- **Instrumental variable (IV)**: A variable that affects treatment assignment but has no direct effect on the outcome except through treatment. Estimated via two-stage least squares (2SLS).
+- **Regression discontinuity (RD)**: A design that exploits sharp cutoffs in treatment assignment. Sharp RD has perfect compliance at the cutoff; fuzzy RD has imperfect compliance.
+- **SUTVA**: The assumption that one unit's treatment does not affect another unit's outcome. Violated by network effects.
 - DiD removes confounding from shared time trends by differencing twice: within groups across time, then across groups.
 - Randomization is powerful because it closes all backdoor paths in the DAG — no confounder adjustment needed.
 - Pre-treatment parallel trends are suggestive evidence for the parallel trends assumption, but cannot prove it.
 - Peeking at A/B test results inflates false positive rates far beyond the nominal 5%.
 - Snow's water company comparison is the most famous natural experiment — same streets, different water, 8x death rate difference.
 
-### Computational Tools
+### Computational tools
 
 - `statsmodels.OLS` for DiD regression with standard errors and confidence intervals
 - Two-proportion z-test for comparing rates (A/B tests, Snow data)
 - Event study plots for assessing parallel trends visually
 
-### For the Quiz
+### For the quiz
 
 You should be able to:
 

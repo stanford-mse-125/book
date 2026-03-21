@@ -101,8 +101,11 @@ One of the most important ideas in regression is **controlling for** other varia
 Let's see this in action by building the model one predictor at a time and watching
 how the REST_DAYS coefficient changes.
 
-**Think about it:** Before looking at the numbers, do you think the rest effect will
+:::{.callout-tip}
+## Think About It
+Before looking at the numbers, do you think the rest effect will
 be positive or negative? Large or small?
+:::
 
 ```{python}
 # Model 1: naive — just rest days
@@ -147,14 +150,20 @@ print(f"Observations: {int(model_full.nobs)}")
 
 ## Interpreting the coefficients
 
+:::{.callout-important}
+## Definition: Coefficient Interpretation
 Each coefficient has a specific interpretation: **"Holding everything else constant,** a one-unit
 increase in $x_j$ is associated with a $\hat{\beta}_j$ change in game score."
+:::
 
 This interpretation describes what the model estimates -- it doesn't mean we can literally
 hold everything else constant in the real world. We'll explore this distinction in Lecture 18.
 
-**Think about it:** Before looking at the numbers, which variable do you think has the
+:::{.callout-tip}
+## Think About It
+Before looking at the numbers, which variable do you think has the
 biggest effect on game score? The smallest?
+:::
 
 ```{python}
 # Extract and interpret coefficients
@@ -199,6 +208,8 @@ print("The ratio is about 2 -- the coefficient is roughly 2 SEs away from zero."
 print("Is that enough to conclude the effect is real, not just noise?")
 ```
 
+:::{.callout-important}
+## Definition: Coefficient t-test
 This ratio has a name -- the **t-statistic** -- and we know its distribution under the null hypothesis.
 
 For each coefficient, we test:
@@ -210,6 +221,8 @@ The test statistic is:
 $$t = \frac{\hat{\beta}_j}{\text{SE}(\hat{\beta}_j)}$$
 
 Under $H_0$, this follows a $t$-distribution with $n - p - 1$ degrees of freedom.
+:::
+
 (This assumes errors are approximately normal -- reasonable here given our large sample
 size, $n > 100{,}000$. With smaller samples, you'd want to check a residual Q-Q plot.)
 
@@ -291,11 +304,24 @@ The t-tests and confidence intervals above assume that residuals are approximate
 normal with constant variance. Before trusting those results, we should **check**.
 Diagnostics are how we look under the hood of a regression model.
 
+:::{.callout-important}
+## Definition: LINE Conditions
+The assumptions for regression inference are remembered by the **LINE** mnemonic:
+
+- **L**inearity: the relationship between predictors and response is linear.
+- **I**ndependence: observations are independent of each other.
+- **N**ormality: residuals are approximately normally distributed.
+- **E**qual variance: the spread of residuals is roughly constant across fitted values (no heteroscedasticity).
+:::
+
 ### Residual plot: do residuals have constant spread?
 
+:::{.callout-important}
+## Definition: Residual Plot
 A **residual plot** shows residuals (observed $-$ predicted) vs. fitted values. We want
 to see a random scatter with no pattern. If the spread of residuals changes with the
 fitted value, that's **heteroscedasticity** -- the model's uncertainty isn't uniform.
+:::
 
 ```{python}
 # Residual plot for the NBA model
@@ -355,8 +381,8 @@ print("The tails deviate — there are more extreme game scores than a normal")
 print("distribution would predict. This is common in sports data.")
 ```
 
-### When diagnostics reveal problems
-
+:::{.callout-warning}
+## When diagnostics reveal problems
 If residuals show strong non-normality or heteroscedasticity, the formula-based
 standard errors and p-values may be unreliable. What can you do?
 
@@ -366,6 +392,7 @@ standard errors and p-values may be unreliable. What can you do?
 - **Robust standard errors** adjust for heteroscedasticity without changing the
   coefficient estimates.
 - **Transform the response** (e.g., log price) to stabilize variance.
+:::
 
 For the NBA model, our sample is large ($n > 100{,}000$) and the Q-Q plot is
 reasonable in the middle, so the formula-based inference is trustworthy here.
@@ -373,21 +400,27 @@ But with smaller samples or heavier tails, you'd want bootstrap CIs.
 
 ## The significance-vs-importance tension
 
-**Think about it:** The t-test says REST_DAYS is "statistically significant" ($p \approx 0.04$).
+:::{.callout-tip}
+## Think About It
+The t-test says REST_DAYS is "statistically significant" ($p \approx 0.04$).
 But look at that tiny bar in the plot above. The model barely changes when we add rest days.
 Should we care?
+:::
 
 This is the tension between **statistical significance** and **practical importance**.
 
 ## Association is not causation
 
-**Important:** Our regression **controls for** player quality, home court, and opponent
+:::{.callout-warning}
+## Association is not causation
+Our regression **controls for** player quality, home court, and opponent
 strength, but it does NOT estimate a **causal effect** of rest. Coaches choose when to
 rest players for strategic reasons we can't observe in the data. The coefficient tells
 us about association, not causation.
 
 We'll formalize this distinction in Lecture 18 using causal DAGs. For now, remember:
 regression can adjust for measured confounders, but it cannot eliminate unmeasured ones.
+:::
 
 ## Regression inference on Airbnb data
 
@@ -505,7 +538,7 @@ for b in boroughs[1:]:
         print(f"  {b}: ${total:.2f}/night per bathroom (interaction p = {p_int:.4f})")
 ```
 
-## The surprise: "significant" does not mean "important"
+## "Significant" does not mean "important"
 
 > "A small p-value does not mean a big effect."
 
@@ -566,8 +599,11 @@ print("The rest effect is dwarfed by player quality and even home court advantag
 print("Would you bet real money on a 0.3-point edge? Probably not.")
 ```
 
-**Think about it:** A sports analytics team comes to you and says "We've proven rest helps
+:::{.callout-tip}
+## Think About It
+A sports analytics team comes to you and says "We've proven rest helps
 performance -- the p-value is 0.04!" What questions should you ask?
+:::
 
 1. How big is the effect? (Tiny -- 0.3 points, standardized effect near zero)
 2. Is there confounding? (Yes -- coaches strategically rest players)
@@ -575,6 +611,8 @@ performance -- the p-value is 0.04!" What questions should you ask?
 4. Would this hold out of sample? (Uncertain)
 
 Statistical significance with large samples can detect effects **too small to matter**.
+
+<!-- FLAG: IMS Ch 24 mentions prediction intervals vs confidence intervals for the mean response as a topic (though marks it out of scope). Consider adding a brief note distinguishing "CI for the mean response at x" from "prediction interval for a new observation at x" in a future revision. -->
 
 ## Putting it together: NBA vs Airbnb
 
@@ -631,7 +669,7 @@ inference ideas to categorical outcomes.
 
 ## Study guide
 
-**Key definitions:**
+### Key ideas
 
 - **Coefficient t-test**: Tests whether a single regression coefficient is significantly different from zero. $t = \hat{\beta}_j / \text{SE}(\hat{\beta}_j)$.
 - **Standard error (of a coefficient)**: The estimated standard deviation of $\hat{\beta}_j$ across repeated samples. Measures uncertainty in the coefficient estimate.
@@ -641,17 +679,15 @@ inference ideas to categorical outcomes.
 - **Residual plot**: Scatter plot of residuals vs. fitted values; used to check for patterns, non-linearity, and heteroscedasticity.
 - **Q-Q plot**: Quantile-quantile plot comparing residual quantiles to a normal distribution; points on the diagonal indicate normality.
 - **Heteroscedasticity**: When the variance of residuals changes across fitted values (the spread "fans out"). Violates the constant-variance assumption of OLS inference.
-
-**Key ideas (one sentence each):**
-
+- **LINE conditions**: The four assumptions for regression inference -- Linearity, Independence, Normality, Equal variance.
 - The t-test for a coefficient asks: is this predictor doing real work, or could the observed coefficient be due to noise?
 - A confidence interval for a coefficient gives the range of plausible effect sizes, not just a yes/no answer.
 - Building models step by step (adding one predictor at a time) reveals what "controlling for" actually does to coefficients.
 - Statistical significance with large n can detect effects too small to matter -- always check effect size.
 - Regression controls for measured confounders but does not establish causation.
-- Residual plots and Q-Q plots check whether the model's assumptions (constant variance, normality) hold; when they don't, use bootstrap CIs (Lecture 8) instead of formula CIs.
+- Residual plots and Q-Q plots check whether the model's assumptions (LINE conditions) hold; when they don't, use bootstrap CIs (Lecture 8) instead of formula CIs.
 
-**Computational tools:**
+### Computational tools
 
 - `smf.ols('y ~ x1 + x2', data=df).fit()` -- fit an OLS regression with formula syntax
 - `model.summary()` -- full regression output including coefficients, SEs, t-stats, p-values
@@ -662,7 +698,7 @@ inference ideas to categorical outcomes.
 - `model.fittedvalues`, `model.resid` -- fitted values and residuals for diagnostic plots
 - `sm.qqplot(residuals, line='45')` -- Q-Q plot to check normality of residuals
 
-**For the quiz:**
+### For the quiz
 
 - Be able to interpret a coefficient table: read off coefficients, SEs, t-statistics, and p-values.
 - Know what "controlling for" means in a regression context and how adding a predictor can change other coefficients.
@@ -670,4 +706,5 @@ inference ideas to categorical outcomes.
 - Know the formula $t = \hat{\beta}_j / \text{SE}(\hat{\beta}_j)$ and what it tests.
 - Be able to interpret a confidence interval for a regression coefficient in context.
 - Know what a residual plot and Q-Q plot show, and what patterns indicate problems (heteroscedasticity, non-normality).
+- Know the LINE conditions (Linearity, Independence, Normality, Equal variance) and which diagnostic plots check which conditions.
 - Know that bootstrap CIs (Lecture 8) are a fallback when normality assumptions fail.
