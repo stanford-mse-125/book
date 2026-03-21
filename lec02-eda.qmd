@@ -196,6 +196,35 @@ If you drop all the "Too Few to Report" rows, what kind of hospitals are left in
 
 > **Key principle**: Before you handle missing data, you must understand *why* it's missing. The "why" determines the "how."
 
+### Contingency tables: two categorical variables at once
+
+We've been looking at one variable at a time. A **contingency table** (or cross-tabulation) counts how often each combination of two categorical variables occurs. It's the categorical equivalent of a scatter plot.
+
+Let's see which conditions tend to have suppressed data. We'll create a binary column for whether data was suppressed, then cross-tabulate it with the medical condition.
+
+```{python}
+# Create a flag for suppressed data
+hrrp['suppressed'] = (hrrp['Number of Readmissions'] == 'Too Few to Report')
+
+# Contingency table: condition vs. suppression status
+ct = pd.crosstab(hrrp['Measure Name'], hrrp['suppressed'],
+                 colnames=['Suppressed'])
+ct.index = ct.index.str.replace('READM-30-', '').str.replace('-HRRP', '')
+ct
+```
+
+Raw counts are useful, but **proportions** tell a clearer story. What fraction of each condition's records are suppressed?
+
+```{python}
+# Row proportions: what % of each condition is suppressed?
+ct_pct = pd.crosstab(hrrp['Measure Name'], hrrp['suppressed'],
+                     colnames=['Suppressed'], normalize='index')
+ct_pct.index = ct_pct.index.str.replace('READM-30-', '').str.replace('-HRRP', '')
+ct_pct.round(3)
+```
+
+Now the pattern pops out: about half of CABG records are suppressed, compared to only ~8% of heart failure records. This is the same finding we saw in the bar chart above, but a contingency table makes it precise and easy to compare across all conditions at once.
+
 ## Part 2: Airbnb listings
 
 We've seen how missing data can hide systematic bias in healthcare. Now let's see how outliers and skewness can mislead in a completely different domain — showing that EDA principles are universal.
@@ -267,6 +296,58 @@ print(f"Listings over $1000: {(airbnb_slim['price'] > 1000).sum()}")
 The mean is about \$33 higher than the median. That gap is driven entirely by the right tail — a few hundred expensive listings pull the average up. If you're an Airbnb host trying to price a typical apartment, the mean is misleading. The median is a better summary here.
 
 > **Key principle**: When a distribution has a heavy tail, the mean doesn't represent a typical value. Always look at the distribution before relying on any single number.
+
+### Log-transforming skewed data
+
+When data is heavily right-skewed, a **log transform** can reveal patterns that are invisible on the original scale. Taking the logarithm compresses the long right tail and stretches out the bunched-up left side.
+
+```{python}
+# Add log-price column (filter out $0 listings first)
+airbnb_pos = airbnb_slim[airbnb_slim['price'] > 0].copy()
+airbnb_pos['log_price'] = np.log10(airbnb_pos['price'])
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Raw prices — heavily skewed
+airbnb_pos['price'].hist(bins=100, ax=axes[0], edgecolor='white')
+axes[0].set_xlabel('Price ($)')
+axes[0].set_ylabel('Count')
+axes[0].set_title('Raw prices (right-skewed)')
+
+# Log-transformed — much more symmetric
+airbnb_pos['log_price'].hist(bins=50, ax=axes[1], edgecolor='white', color='seagreen')
+axes[1].set_xlabel('log₁₀(Price)')
+axes[1].set_ylabel('Count')
+axes[1].set_title('Log-transformed prices (roughly symmetric)')
+
+plt.tight_layout()
+plt.show()
+```
+
+The raw histogram is nearly useless — everything is piled up on the left. After the log transform, we can see the distribution is roughly bell-shaped, centered around $10^{2.1} \approx \$125$/night.
+
+Log transforms also make relationships easier to spot. Compare price vs. number of guests on both scales:
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+sample = airbnb_pos.dropna(subset=['accommodates']).sample(3000, random_state=42)
+
+axes[0].scatter(sample['accommodates'], sample['price'], alpha=0.3, s=10)
+axes[0].set_xlabel('Accommodates (guests)')
+axes[0].set_ylabel('Price ($)')
+axes[0].set_title('Raw scale: outliers dominate')
+
+axes[1].scatter(sample['accommodates'], sample['log_price'], alpha=0.3, s=10, color='seagreen')
+axes[1].set_xlabel('Accommodates (guests)')
+axes[1].set_ylabel('log₁₀(Price)')
+axes[1].set_title('Log scale: trend is clearer')
+
+plt.tight_layout()
+plt.show()
+```
+
+On the raw scale, a handful of luxury listings ($5,000+) make it hard to see any pattern. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a multiplicative increase in price. We'll use this idea extensively when we build regression models in Lecture 5.
 
 ### Categorical variables: room types and boroughs
 
@@ -444,8 +525,6 @@ We'll revisit this hospital data in Lecture 18 when we ask: *is this causal?* Do
 - When a distribution is skewed, the mean doesn't represent a typical value — the median is more informative.
 - Missing data is a signal, not just a nuisance. Ask *why* it's missing before deciding how to handle it.
 - Naive rankings can be unfair: the "worst" hospitals may just be treating the hardest cases.
-
-<!-- FLAG: IMS Ch 2 covers contingency tables, row/column proportions, mosaic plots, and log transformations of skewed data in detail. This lecture mentions contingency tables and proportions only in the study guide. Consider adding a worked example with pd.crosstab() in a future revision, and/or a log-transform example for the Airbnb price data. -->
 
 ### Computational tools
 

@@ -291,7 +291,12 @@ else:
 
 ## The math behind PCA: SVD
 
-<!-- FLAG: Reading assignment VMLS Ch 16 may not align with PCA content — consider reassigning -->
+:::{.callout-important}
+## Definition: Basis and Orthonormal Basis
+A **basis** for a subspace is a minimal set of linearly independent vectors that spans it. The number of vectors in any basis equals the **dimension** of the subspace.
+
+An **orthonormal basis** is a basis where every vector has norm 1 and every pair of vectors is orthogonal (inner product = 0). Orthonormal bases are especially convenient: to find the coordinates of a point, you just take dot products — no matrix inversion needed. PCA finds an orthonormal basis aligned with the directions of maximum variance.
+:::
 
 Now that you've seen PCA work, let's look under the hood. PCA is powered by the **SVD** (**Singular Value Decomposition**). If you've taken EE103, see VMLS Chapter 16 for a deeper treatment.
 

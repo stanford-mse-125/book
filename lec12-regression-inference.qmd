@@ -538,6 +538,59 @@ for b in boroughs[1:]:
         print(f"  {b}: ${total:.2f}/night per bathroom (interaction p = {p_int:.4f})")
 ```
 
+## Prediction intervals vs. confidence intervals
+
+We've built confidence intervals for **coefficients** -- but what about predictions?
+When we use a regression model to predict at a particular value of $x$, there are
+two different questions we might ask, and they give different intervals.
+
+- **Confidence interval for the mean response**: How uncertain are we about the
+  *average* $Y$ at this $x$? This reflects estimation uncertainty in $\hat{\beta}$.
+- **Prediction interval for a new observation**: Where might a *single new* $Y$ fall?
+  This adds individual variability ($\varepsilon$) on top of estimation uncertainty.
+
+:::{.callout-important}
+## Prediction intervals are always wider
+A prediction interval accounts for **two sources of uncertainty**: (1) we don't know
+the true regression line exactly (estimation uncertainty), and (2) individual
+observations scatter around the line (residual variability $\sigma^2$). A confidence
+interval for the mean only includes source (1).
+:::
+
+```{python}
+# Prediction interval vs confidence interval — Airbnb model
+# get_prediction returns both CI for the mean and PI for a new observation
+pred_data = airbnb_clean.copy()
+predictions = airbnb_model.get_prediction(pred_data)
+pred_summary = predictions.summary_frame(alpha=0.05)
+
+# Pick one predictor to plot against: bathrooms
+# Average across other covariates by plotting prediction vs bathrooms
+bath_vals = np.arange(1, airbnb_clean['bathrooms'].max() + 0.5, 0.5)
+grid = pd.DataFrame({
+    'bathrooms': bath_vals,
+    'bedrooms': [airbnb_clean['bedrooms'].median()] * len(bath_vals),
+    'neighbourhood_group_cleansed': ['Manhattan'] * len(bath_vals),
+})
+grid_pred = airbnb_model.get_prediction(grid).summary_frame(alpha=0.05)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(bath_vals, grid_pred['mean'], 'o-', color='steelblue', label='Predicted mean')
+ax.fill_between(bath_vals, grid_pred['mean_ci_lower'], grid_pred['mean_ci_upper'],
+                alpha=0.4, color='steelblue', label='95% CI for mean response')
+ax.fill_between(bath_vals, grid_pred['obs_ci_lower'], grid_pred['obs_ci_upper'],
+                alpha=0.15, color='orange', label='95% prediction interval')
+ax.set_xlabel('Number of Bathrooms')
+ax.set_ylabel('Predicted Price ($/night)')
+ax.set_title('CI for Mean Response vs. Prediction Interval\n(Manhattan, median bedrooms)')
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+print("The blue band (CI for the mean) is narrow: we're fairly sure about the average price.")
+print("The orange band (prediction interval) is wide: individual listings vary a lot around that average.")
+```
+
 ## "Significant" does not mean "important"
 
 > "A small p-value does not mean a big effect."
@@ -612,8 +665,6 @@ performance -- the p-value is 0.04!" What questions should you ask?
 
 Statistical significance with large samples can detect effects **too small to matter**.
 
-<!-- FLAG: IMS Ch 24 mentions prediction intervals vs confidence intervals for the mean response as a topic (though marks it out of scope). Consider adding a brief note distinguishing "CI for the mean response at x" from "prediction interval for a new observation at x" in a future revision. -->
-
 ## Putting it together: NBA vs Airbnb
 
 Both analyses used the same tools -- t-tests and confidence intervals on regression
@@ -680,6 +731,7 @@ inference ideas to categorical outcomes.
 - **Q-Q plot**: Quantile-quantile plot comparing residual quantiles to a normal distribution; points on the diagonal indicate normality.
 - **Heteroscedasticity**: When the variance of residuals changes across fitted values (the spread "fans out"). Violates the constant-variance assumption of OLS inference.
 - **LINE conditions**: The four assumptions for regression inference -- Linearity, Independence, Normality, Equal variance.
+- **Prediction interval**: An interval for where a *single new* observation might fall at a given $x$. Always wider than the confidence interval for the mean, because it includes both estimation uncertainty and individual variability.
 - The t-test for a coefficient asks: is this predictor doing real work, or could the observed coefficient be due to noise?
 - A confidence interval for a coefficient gives the range of plausible effect sizes, not just a yes/no answer.
 - Building models step by step (adding one predictor at a time) reveals what "controlling for" actually does to coefficients.

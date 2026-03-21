@@ -253,6 +253,45 @@ print("This is common in time series: yesterday is a strong predictor of today."
 
 This is why backtesting matters. In production, your model only ever sees the past. Your evaluation should reflect that.
 
+### Scale-independent accuracy: MAPE and MASE
+
+MAE tells you the average error in the same units as your target — useful for one series, but hard to compare across series with different scales. Is an MAE of 5 good for Los Angeles (typical AQI ~50) and Mono County (typical AQI ~30, but spikes to 8,000)?
+
+**MAPE** (Mean Absolute Percentage Error) expresses errors as percentages:
+$$\text{MAPE} = \frac{1}{n} \sum_{i=1}^{n} \left| \frac{y_i - \hat{y}_i}{y_i} \right| \times 100\%.$$
+MAPE is intuitive — "the forecast is off by 15% on average" — but it breaks when actual values are near zero (division by zero) and penalizes under-forecasts more heavily than over-forecasts.
+
+**MASE** (Mean Absolute Scaled Error) compares your model's error to the naive baseline's error:
+$$\text{MASE} = \frac{\text{MAE of your model}}{\text{MAE of the naive forecast}}.$$
+MASE < 1 means you beat the naive forecast; MASE > 1 means you did worse than just predicting "same as yesterday." This connects directly to the baseline comparison above.
+
+```{python}
+# Compute MAPE and MASE on the temporal test set
+actual = test_temporal['AQI'].values
+predicted = pred_temporal
+naive = test_temporal['aqi_lag1'].values
+
+# MAPE — watch out for zeros
+nonzero = actual != 0
+mape = np.mean(np.abs((actual[nonzero] - predicted[nonzero]) / actual[nonzero])) * 100
+
+# MASE — scale by naive forecast error
+mae_model = np.mean(np.abs(actual - predicted))
+mae_naive_ref = np.mean(np.abs(actual - naive))
+mase = mae_model / mae_naive_ref
+
+print(f"LA County AQI forecasts (temporal split, 2023):")
+print(f"  MAE  = {mae_model:.2f}")
+print(f"  MAPE = {mape:.1f}%")
+print(f"  MASE = {mase:.3f}")
+print()
+if mase < 1:
+    print(f"MASE = {mase:.3f} < 1: the model beats the naive baseline.")
+else:
+    print(f"MASE = {mase:.3f} >= 1: the model does NOT beat the naive baseline.")
+print("MAPE gives an intuitive percentage, but would blow up if AQI hit 0.")
+```
+
 ## Walk-forward validation
 
 A single temporal split gives you one number. But model performance can *change over time*. **Walk-forward validation** trains on an expanding window and tests on the next period, giving you a performance curve. In the forecasting literature, this is called **time series cross-validation** — the same idea as k-fold cross-validation, but respecting temporal order.
@@ -580,6 +619,62 @@ In Lecture 10, we saw that a clinical trial on adults can't tell you about child
 
 In Lecture 17, we'll see that AutoML tools often make this same mistake — they use standard cross-validation by default and don't know your data is temporal.
 
+## Prediction intervals: quantifying forecast uncertainty
+
+A point forecast — "tomorrow's AQI will be 62" — hides everything that matters for decision-making. Should the county issue a health advisory? That depends on whether 62 means "almost certainly between 55 and 70" or "could easily be 200." **Prediction intervals** give you that range.
+
+The idea: use the bootstrap. Resample residuals from the training set, add them to each forecast, and repeat many times. The spread of the resulting forecasts gives you a prediction interval.
+
+```{python}
+# Bootstrap prediction intervals for the temporal test set
+np.random.seed(42)
+train_resid = train_temporal['AQI'].values - model_temporal.predict(train_temporal[features])
+n_boot = 1000
+
+# Generate bootstrap forecasts by resampling residuals
+boot_preds = np.zeros((n_boot, len(test_temporal)))
+point_pred = model_temporal.predict(test_temporal[features])
+for b in range(n_boot):
+    resampled_resid = np.random.choice(train_resid, size=len(test_temporal), replace=True)
+    boot_preds[b, :] = point_pred + resampled_resid
+
+# 95% prediction interval: 2.5th and 97.5th percentiles
+lower = np.percentile(boot_preds, 2.5, axis=0)
+upper = np.percentile(boot_preds, 97.5, axis=0)
+
+# How often does the actual value fall inside the interval?
+coverage = np.mean((test_temporal['AQI'].values >= lower) & (test_temporal['AQI'].values <= upper))
+avg_width = np.mean(upper - lower)
+
+print(f"95% bootstrap prediction interval:")
+print(f"  Coverage: {coverage:.1%} of test days (target: 95%)")
+print(f"  Average width: {avg_width:.1f} AQI points")
+```
+
+```{python}
+# Visualize prediction intervals for a 60-day window
+fig, ax = plt.subplots(figsize=(10, 5))
+window = slice(0, 60)
+dates_w = test_temporal['Date'].values[window]
+
+ax.fill_between(dates_w, lower[window], upper[window],
+                alpha=0.25, color='steelblue', label='95% prediction interval')
+ax.plot(dates_w, point_pred[window], color='steelblue', linewidth=1.2, label='Point forecast')
+ax.plot(dates_w, test_temporal['AQI'].values[window], color='black',
+        linewidth=0.8, alpha=0.8, label='Actual')
+ax.set_ylabel('AQI')
+ax.set_xlabel('Date')
+ax.set_title('LA County AQI: Forecast with 95% Prediction Interval (Jan–Feb 2023)')
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+print("Point forecasts alone are dangerous for decision-making.")
+print("Always report intervals so stakeholders can plan for the plausible range.")
+```
+
+This bootstrap approach is completely general: you can construct prediction intervals for *any* model, not just linear regression. And you're not limited to our residual-resampling scheme — you can devise your own null model, simulate from it, and compare. The key principle is that a forecast without a measure of uncertainty isn't a complete forecast.
+
 ## Key takeaways
 
 - **Never randomly split time series data.** Use temporal splits: train on the past, test on the future.
@@ -592,9 +687,9 @@ In Lecture 17, we'll see that AutoML tools often make this same mistake — they
 
 - **Distribution shift is the hardest problem.** Models trained on normal conditions fail during extreme events.
 
-<!-- FLAG: FPP3 Ch 5 covers residual diagnostics (ACF of residuals, Ljung-Box test) and prediction intervals in depth. This lecture does not address either topic. Consider adding a section on checking residuals (are they white noise?) and on quantifying forecast uncertainty with prediction intervals, or covering them in a separate lecture. -->
+- **Use scale-independent metrics** (MAPE, MASE) to compare forecasts across different series. MASE < 1 means you beat the naive baseline.
 
-<!-- FLAG: FPP3 Ch 5 introduces MAPE and MASE as forecast accuracy measures for comparing across series. This lecture uses only MAE and R-squared. Consider discussing scale-independent error measures if students will encounter multi-series forecasting. -->
+- **Always report prediction intervals**, not just point forecasts. Bootstrap resampling of residuals is a simple, general-purpose method.
 
 ## Study guide
 
@@ -607,6 +702,9 @@ In Lecture 17, we'll see that AutoML tools often make this same mistake — they
 - **Walk-forward validation (time series cross-validation):** Repeatedly training on an expanding (or sliding) window of past data and testing on the next period. Reveals *when* a model fails, not just its average performance.
 - **Distribution shift:** When future data comes from a fundamentally different regime than the training data. Models trained on normal conditions cannot predict unprecedented events.
 - **Benchmark forecasting methods:** The naive forecast ("same as yesterday"), seasonal naive ("same day last year"), and drift method ("extrapolate the trend") are standard baselines. Any useful model must beat these.
+- **MAPE** (Mean Absolute Percentage Error): expresses forecast error as a percentage. Intuitive but undefined when actual values are zero.
+- **MASE** (Mean Absolute Scaled Error): ratio of your model's MAE to the naive forecast's MAE. MASE < 1 means you beat the naive baseline. Scale-independent, so useful for comparing across different series.
+- **Prediction intervals:** A range (e.g., 95%) around a point forecast capturing plausible future values. Bootstrap resampling of training residuals is a general-purpose method for constructing them.
 - Backtesting a strategy does not guarantee future profitability — markets already incorporate public information.
 
 ### Computational tools
@@ -618,4 +716,4 @@ In Lecture 17, we'll see that AutoML tools often make this same mistake — they
 
 ### For the quiz
 
-You should be able to: (1) explain why random splitting fails for time series data, (2) implement a temporal train/test split given a date cutoff, (3) describe walk-forward validation (expanding and sliding window variants), and (4) explain what distribution shift is and why no cross-validation method can fully address it.
+You should be able to: (1) explain why random splitting fails for time series data, (2) implement a temporal train/test split given a date cutoff, (3) describe walk-forward validation (expanding and sliding window variants), (4) explain what distribution shift is and why no cross-validation method can fully address it, (5) compute and interpret MAPE and MASE, and (6) explain why prediction intervals matter and how bootstrap resampling produces them.

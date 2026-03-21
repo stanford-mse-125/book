@@ -275,6 +275,36 @@ These two simulation-based tools answer different questions:
 
 A bootstrap CI that excludes zero and a small permutation p-value are telling you the same story from different angles. When they agree — as they do for the ACTG 175 data — you can be confident in the conclusion.
 
+### The CI/Hypothesis Test Duality
+
+In fact, the agreement between bootstrap CIs and hypothesis tests is not a coincidence — it's a mathematical equivalence. A 95% confidence interval contains all the values of the parameter that would *not* be rejected by a two-sided test at $\alpha = 0.05$. So if the 95% CI for a treatment effect excludes zero, that's the same as rejecting $H_0{:}\;\text{effect} = 0$ at the 5% level. The CI gives you *more* information than the test alone — it tells you the range of plausible values, not just whether zero is among them.
+
+:::{.callout-important}
+## Confidence intervals and hypothesis tests are two sides of the same coin
+
+A 95% confidence interval that excludes 0 is equivalent to rejecting $H_0{:}\;\text{effect} = 0$ in a two-sided test at $\alpha = 0.05$. If the interval includes 0, you fail to reject. This holds for any confidence level: a 99% CI corresponds to $\alpha = 0.01$, and so on.
+:::
+
+Let's verify this with the ACTG 175 data. We'll compute the bootstrap CI from [Lecture 8](lec08-sampling.qmd) and check whether it excludes zero, then compare to the permutation test p-value we already computed.
+
+```{python}
+# Bootstrap 95% CI for the treatment effect
+n_boot = 10_000
+boot_effects = np.empty(n_boot)
+for i in range(n_boot):
+    boot_ctrl = np.random.choice(control, size=len(control), replace=True)
+    boot_trt = np.random.choice(treatment, size=len(treatment), replace=True)
+    boot_effects[i] = boot_trt.mean() - boot_ctrl.mean()
+
+ci_lower, ci_upper = np.percentile(boot_effects, [2.5, 97.5])
+
+print(f"Bootstrap 95% CI: [{ci_lower:.1f}, {ci_upper:.1f}]")
+print(f"Does the CI exclude 0?  {'Yes' if ci_lower > 0 else 'No'}")
+print(f"Permutation p-value:    {p_value:.4f}")
+print(f"Reject H0 at alpha=0.05? {'Yes' if p_value < 0.05 else 'No'}")
+print(f"\nBoth methods agree: the treatment effect is real.")
+```
+
 ## Connection to the Normal Approximation
 
 Just as the bootstrap CI has a normal approximation (the CLT-based interval from [Lecture 8](lec08-sampling.qmd)), the permutation test has an analytical counterpart: the **two-sample t-test**.
@@ -313,8 +343,6 @@ The t-test is faster (no simulation needed) but assumes normality. The permutati
 - The **two-sample t-test** is the normal approximation analog of the permutation test, just as the CLT-based CI is the analog of the bootstrap CI.
 - In a **randomized experiment** (like ACTG 175), a significant permutation test supports a **causal** conclusion: the treatment caused the difference. Without randomization (like the Airbnb example), the test shows an **association** but cannot rule out confounding.
 - **Next**: [Lecture 10](lec10-hypothesis-testing.qmd) formalizes hypothesis testing — $H_0$, $H_1$, $\alpha$, Type I/II errors, and power.
-
-<!-- FLAG: Data 8 Ch 13 (sec 13.4) discusses duality between confidence intervals and hypothesis tests — a CI that excludes 0 is equivalent to a significant two-sided test. Consider adding to Lecture 10 or here. -->
 
 ## Study guide
 

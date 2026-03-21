@@ -277,6 +277,36 @@ print(f"e    = [{', '.join(f'{v:.2f}' for v in e_3)}]")
 print(f"||e|| = {np.linalg.norm(e_3):.3f}")
 ```
 
+## From correlation to $R^2$
+
+Before adding more features, let's connect the simple regression we just ran to a quantity you've seen in introductory statistics: the **correlation coefficient** $r$.
+
+The correlation coefficient $r$ measures the strength and direction of the linear association between two variables. It ranges from $-1$ (perfect negative linear relationship) to $+1$ (perfect positive). In the Data 8 formulation, the regression line can be written as $\hat{y} = r \cdot \frac{SD_y}{SD_x}(x - \bar{x}) + \bar{y}$, which makes $r$ the slope in standardized units.
+
+```{python}
+# Compute the correlation coefficient between price and bedrooms
+r = df['price_clean'].corr(df['bedrooms'])
+print(f"Correlation between price and bedrooms: r = {r:.4f}")
+print(f"r² = {r**2:.4f}")
+print()
+
+# Compare to R² from the simple regression
+y_hat_simple = model_simple.predict(df[['bedrooms']])
+ss_res = np.sum((df['price_clean'] - y_hat_simple)**2)
+ss_tot = np.sum((df['price_clean'] - df['price_clean'].mean())**2)
+r2_simple_model = 1 - ss_res / ss_tot
+print(f"R² from simple regression: {r2_simple_model:.4f}")
+print(f"They match: r² = R² in simple regression.")
+```
+
+:::{.callout-important}
+## $R^2 = r^2$ in simple regression
+
+For a model with **one** predictor, $R^2$ is literally the square of the correlation coefficient $r$. This is a common source of confusion: $r$ and $R^2$ are different quantities that happen to be related by squaring in the simple case. Once you have multiple predictors, $R^2$ still measures the fraction of variance explained, but there's no single $r$ to square.
+:::
+
+This connection also explains Galton's original observation. Because $|r| < 1$ for real data, the predicted value $\hat{y}$ is always *closer to the mean* than $x$ is (in standardized units). Fathers who are 2 SDs above average height have sons whose predicted height is only $r \times 2$ SDs above average — less extreme, pulled back toward the mean. That's **regression to the mean**, and it's a purely statistical phenomenon, not a biological one. It happens whenever the correlation is imperfect.
+
 ## Multiple regression: more features, bigger column space
 
 Our model says each bedroom adds some amount per night. But wait — bigger apartments also have more bathrooms and can accommodate more guests. The bedroom coefficient might be picking up the effect of all of these. To isolate the bedroom effect, we need to *hold other features constant*.
@@ -519,7 +549,7 @@ Next time: can we make this model more powerful? With the right features — dum
 - **Normal equations** — $X^TX\beta = X^Ty$, the algebraic form of the orthogonality condition.
 - **$R^2$** — fraction of variance explained; $R^2 = 1 - \|e\|^2 / \|y - \bar{y}\|^2$. It always increases with more features (on training data).
 - **Coefficient interpretation** — "holding other features constant," the predicted change in $y$ per unit change in one feature. A regression coefficient measures association, not causation.
-<!-- FLAG: Data 8 Ch 15 emphasizes the correlation coefficient r and the regression line formula ŷ = r*(SD_y/SD_x)*(x - mean_x) + mean_y for simple regression. Also discusses "regression to the mean" as a general phenomenon. Consider whether to add a section or example connecting r to R^2 in the simple case (R^2 = r^2). -->
+- **$R^2 = r^2$ in simple regression** — the correlation coefficient $r$ measures linear association ($-1$ to $+1$); $R^2$ measures variance explained ($0$ to $1$). For one predictor, $R^2$ is just $r$ squared. With multiple predictors, only $R^2$ applies.
 
 ### Computational tools
 

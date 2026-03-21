@@ -73,6 +73,27 @@ plt.tight_layout()
 plt.show()
 ```
 
+:::{.callout-important}
+## Definition: Inner Product (Dot Product)
+The **inner product** (or **dot product**) of two vectors $u, v \in \mathbb{R}^n$ is the scalar
+$$u \cdot v = u^T v = \sum_{i=1}^n u_i v_i$$
+It measures **similarity**: a large positive value means $u$ and $v$ point in similar directions; near zero means they're unrelated; negative means they point in opposite directions. Example: "How similar are two Airbnb listings' feature vectors?" — compute their dot product.
+:::
+
+:::{.callout-important}
+## Definition: Norm
+The **norm** (or **length**) of a vector $v$ is
+$$\|v\| = \sqrt{v \cdot v} = \sqrt{\sum_{i=1}^n v_i^2}$$
+It measures **magnitude** — how large the vector is. Example: "How far is a listing's feature vector from the origin (or from the 'average' listing)?" In code: `np.linalg.norm(v)`.
+:::
+
+:::{.callout-important}
+## Definition: Distance
+The **distance** between two vectors $u$ and $v$ is the norm of their difference:
+$$d(u, v) = \|u - v\|$$
+It measures **dissimilarity**. Example: "How different are two hospitals' readmission profiles?" — compute the distance between their feature vectors. Smaller distance = more similar.
+:::
+
 ## Linear combinations: mixing features
 
 :::{.callout-important}
@@ -483,6 +504,21 @@ print("The 3rd direction contributes very little — beds is mostly redundant wi
 A model with 50 features but rank 3 — what does that tell you about the data? How many features are really doing the work?
 :::
 
+## Orthogonality: a preview of regression
+
+One more concept we'll need immediately in Lecture 5.
+
+:::{.callout-important}
+## Definition: Orthogonal Vectors
+Two vectors $u$ and $v$ are **orthogonal** (perpendicular) if their inner product is zero:
+$$u \cdot v = 0$$
+Orthogonal vectors are completely unrelated — knowing one tells you nothing about the other. Example: if two features are orthogonal, they carry entirely independent information, and neither is redundant.
+:::
+
+Why does this matter? In Lecture 5, we'll see that the residual $e = y - \hat{y}$ from regression is **orthogonal** to the column space of $X$. That orthogonality condition is what *defines* the least squares solution — and it gives us the normal equations.
+
+The code earlier in this lecture already demonstrated this idea: when we computed the angle between feature vectors using `np.dot`, we were checking how close to orthogonal they are. Orthogonal features (90° apart) expand the column space maximally; parallel features (0°) don't expand it at all.
+
 ## Key takeaways
 
 - **Vectors in data**: each feature column is a vector. Each data point is also a vector.
@@ -494,9 +530,6 @@ A model with 50 features but rank 3 — what does that tell you about the data? 
 Linear algebra tells you what your model CAN and CANNOT do, **before you fit anything.**
 
 In Lecture 6, we'll see that choosing the right features — polynomial terms, interactions, category indicators — lets linear models capture nonlinear patterns.
-
-<!-- FLAG: VMLS Ch 1 covers inner product (dot product), norm, and distance as formal definitions — this lecture uses them in code (np.dot, np.linalg.norm) without defining them. Consider adding brief definitions or a callout. -->
-<!-- FLAG: VMLS Ch 5 covers basis, dimension, and orthonormal vectors — none are formally introduced here. Basis/dimension could fit naturally in the Rank section; orthogonality could be deferred to Lecture 5 (projection). -->
 
 ## Further reading
 
@@ -511,6 +544,10 @@ Next lecture: we'll use these ideas to understand *why* the linear regression fo
 ### Key ideas
 
 - **Vector**: an ordered list of numbers. Each feature column and each data row is a vector.
+- **Inner product (dot product)**: $u \cdot v = \sum u_i v_i$ — measures similarity between vectors.
+- **Norm**: $\|v\| = \sqrt{v \cdot v}$ — the length/magnitude of a vector.
+- **Distance**: $d(u,v) = \|u - v\|$ — measures dissimilarity between vectors.
+- **Orthogonal**: vectors with zero inner product; completely independent directions.
 - **Linear combination**: $a \cdot v_1 + b \cdot v_2$ — a weighted sum of vectors. A **scalar** is a single number used as a weight.
 - **Span**: the set of all linear combinations of a set of vectors.
 - **Column space**: the span of the columns of a matrix $X$ — equivalently, the set of all possible predictions $X\beta$.
@@ -524,6 +561,8 @@ Next lecture: we'll use these ideas to understand *why* the linear regression fo
 
 ### Computational tools
 
+- `np.dot(u, v)` or `u @ v` — inner product (dot product)
+- `np.linalg.norm(v)` — Euclidean norm (length) of a vector
 - `np.column_stack([a, b])` — build a design matrix from column vectors
 - `np.linalg.matrix_rank(X)` — rank of a matrix
 - `np.linalg.svd(X)` — singular value decomposition (more in Lecture 14)
