@@ -127,7 +127,7 @@ Here's the key insight. If rest has **no effect on any player**, the expected nu
 
 $$\text{Expected false positives} = m \times \alpha$$
 
-where $m$ is the number of tests. (The expected count follows from linearity of expectation and holds regardless of dependence between tests. The Binomial standard deviation used below assumes the tests are independent — an approximation, since player performances share common opponents and schedules.)
+where $m$ is the number of tests. (Linearity of expectation holds even for dependent random variables — a useful fact from your probability course — so this expected count is valid regardless of dependence between tests. The Binomial distribution tells us exactly how many false positives to expect when running $m$ independent tests, and the standard deviation used below assumes that independence — an approximation, since player performances share common opponents and schedules.)
 
 ```{python}
 expected_false_positives = n_players * 0.05
@@ -346,7 +346,7 @@ print("That can't be right... or can it?")
 
 :::{.callout-important}
 ## Definition: Pearson Correlation Coefficient
-The **Pearson correlation** $r$ measures the *linear* association between two variables (you may have seen this in MS&E 120):
+The **Pearson correlation** $r$ measures the *linear* association between two variables — you derived this in your probability course when studying covariance:
 
 $$r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2 \sum (y_i - \bar{y})^2}}$$
 

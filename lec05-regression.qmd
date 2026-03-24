@@ -185,7 +185,7 @@ $$X^T X \beta = X^T y \qquad \Longrightarrow \qquad \beta = (X^T X)^{-1} X^T y$$
 The **normal equations** $X^TX\beta = X^Ty$ give the least squares solution $\beta = (X^TX)^{-1}X^Ty$. The formula requires $X^TX$ to be invertible, which means the columns of $X$ must be linearly independent (recall Lecture 4). Perfectly collinear features make the matrix singular, so no unique solution exists.
 :::
 
-You may have heard "regression minimizes the sum of squared errors." Now you can see *why*: the prediction that minimizes $\|y - \hat{y}\|^2$ is exactly the orthogonal projection of $y$ onto $\text{col}(X)$.
+You may have heard "regression minimizes the sum of squared errors." Now you can see *why*: the prediction that minimizes $\|y - \hat{y}\|^2$ is exactly the orthogonal projection of $y$ onto $\text{col}(X)$. Least squares turns out to be equivalent to maximum likelihood estimation when the errors are normally distributed — a connection you may see in a later course.
 
 The normal equations give us the exact solution in one step. For larger problems or different loss functions where no closed-form solution exists, we'll need an iterative approach called gradient descent (Lecture 13).
 

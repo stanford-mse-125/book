@@ -181,7 +181,7 @@ increase in $x_j$ is associated with a $\hat{\beta}_j$ change in game score."
 :::
 
 This phrasing describes what the model estimates -- it does not mean we can literally
-hold everything else constant in the real world. We explore the distinction in Lecture 18.
+hold everything else constant in the real world. In a more advanced course, you may see the same regression coefficients interpreted from three perspectives: prediction, inference, and causality. We explore the distinction in Lecture 18.
 
 ```{python}
 # Extract and interpret coefficients

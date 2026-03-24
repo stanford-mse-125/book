@@ -193,7 +193,7 @@ $$\beta \leftarrow \beta - \eta \cdot \nabla L(\beta)$$
 
 where $\eta$ is the **learning rate** (step size) and $\nabla L(\beta)$ is the gradient of the loss at the current $\beta$. Too large a step and you overshoot; too small and you crawl.
 
-The good news: the logistic loss is **convex** -- one valley, one **global minimum**. So gradient descent finds THE answer, no matter where you start. For neural networks, the loss landscape is **non-convex** -- multiple valleys, multiple **local minima** -- and going downhill doesn't always lead to the ocean. That's a story for another course.
+The good news: the logistic loss is **convex** -- one valley, one **global minimum**. So gradient descent finds THE answer, no matter where you start. A more formal treatment derives logistic regression from maximum likelihood estimation — choosing the parameters that make the observed data most probable. For neural networks, the loss landscape is **non-convex** -- multiple valleys, multiple **local minima** -- and going downhill doesn't always lead to the ocean. That's a story for another course.
 
 Let's see gradient descent in action. We'll standardize our features first (so the coefficients are comparable), then fit the model and watch the loss converge.
 
@@ -635,7 +635,7 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 
 1. Logistic regression models the probability of a binary outcome by passing a linear combination through the sigmoid function.
 2. OLS has a closed-form solution; logistic regression does not. The sigmoid makes the loss nonlinear, requiring gradient descent.
-3. The logistic loss is the negative log-likelihood under a Bernoulli model — it penalizes confident wrong predictions heavily.
+3. The logistic loss is the negative log-likelihood under a Bernoulli model — the Bernoulli distribution models a single binary outcome with probability $p$, and logistic regression estimates that $p$ as a function of features. This loss penalizes confident wrong predictions heavily.
 4. Gradient descent finds the coefficients by iteratively stepping in the direction that reduces the loss; convexity guarantees convergence to the global minimum.
 5. Accuracy is misleading with class imbalance — always look at precision, recall, and the confusion matrix.
 6. Threshold choice is a cost-benefit decision, not a statistical one.

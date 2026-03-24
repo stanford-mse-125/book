@@ -294,7 +294,7 @@ print("No confounder can explain away any difference in outcomes.")
 The balance table shows the groups are *nearly* identical, but not *perfectly* identical. Why doesn't randomization guarantee perfect balance? (Hint: think about sample size and the law of large numbers.)
 :::
 
-The groups are nearly identical on every baseline characteristic. That's not a coincidence — it's the *design*. Randomization ensures that any confounder, whether we measured it or not, is balanced across groups on average.
+The groups are nearly identical on every baseline characteristic. That's not a coincidence — it's the *design*. Randomization ensures that any confounder, whether we measured it or not, is balanced across groups on average. The law of large numbers guarantees this balance only in the limit — with finite samples, random fluctuations remain, which is why the columns are close but not identical.
 
 ```{python}
 # The causal estimate is just a comparison of means

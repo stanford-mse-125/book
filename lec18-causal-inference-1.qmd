@@ -110,7 +110,7 @@ If family wealth drives both, then the SAT–earnings correlation could be entir
 
 :::{.callout-important}
 ## Definition: DAG (Directed Acyclic Graph)
-A **Directed Acyclic Graph (DAG)** is a visual tool for representing causal relationships. "Directed" means the arrows have direction (A causes B, not the reverse). "Acyclic" means there are no loops — you can never follow the arrows in a circle back to where you started. Each arrow means "causes" or "directly influences."
+A **Directed Acyclic Graph (DAG)** is a visual tool for representing causal relationships. "Directed" means the arrows have direction (A causes B, not the reverse). "Acyclic" means there are no loops — you can never follow the arrows in a circle back to where you started. Each arrow means "causes" or "directly influences." Another formal framework, the potential outcomes model, defines causal effects using counterfactuals — what would have happened under a different treatment — a perspective you may encounter if you go on to study causal inference more formally.
 :::
 
 There are **two paths** from SAT to Earnings:

@@ -239,13 +239,13 @@ plt.tight_layout()
 plt.show()
 ```
 
-The normal curve fits almost perfectly. **The close fit isn't a coincidence.** A theorem you saw (briefly!) on the last day of MS&E 120 explains why: the **Central Limit Theorem**.
+The normal curve fits almost perfectly. **The close fit isn't a coincidence.** A theorem from your probability course explains why: the **Central Limit Theorem**.
 
 ## The CLT explains why
 
 The Central Limit Theorem (CLT) says: **if you average many independent things, the result is approximately normal.**
 
-More precisely: if $X_1, X_2, \ldots, X_n$ are **iid** — **independent and identically distributed**, meaning each observation is drawn from the same distribution independently of the others — with mean $\mu$ and standard deviation $\sigma$, then for large $n$:
+More precisely: if $X_1, X_2, \ldots, X_n$ are **iid** — **independent and identically distributed**, meaning each observation is drawn from the same distribution independently of the others — with mean $\mu$ and standard deviation $\sigma$, then for large $n$. You worked with iid random variables throughout your probability course — every time you assumed observations were drawn independently from the same distribution.
 
 $$\bar{X}_n \approx \text{Normal}\!\left(\mu,\; \frac{\sigma}{\sqrt{n}}\right)$$
 
@@ -324,7 +324,7 @@ The formula matches simulation almost exactly.
 :::{.callout-tip}
 ## Think About It
 
-You may have heard of the **Law of Large Numbers** (LLN) from MS&E 120 as well. The LLN says the sample mean *converges* to the population mean. The CLT tells you **how fast** (at rate $1/\sqrt{n}$) and **in what shape** (normal).
+You may have heard of the **Law of Large Numbers** (LLN) from your probability course as well. The LLN says the sample mean *converges* to the population mean. The CLT tells you **how fast** (at rate $1/\sqrt{n}$) and **in what shape** (normal).
 :::
 
 ## The normal approximation
@@ -530,7 +530,7 @@ The bootstrap distribution shows us the uncertainty in the bedrooms coefficient.
 
 ## Key takeaways
 
-- **Bootstrap:** resample with replacement to estimate uncertainty. Works for *any* statistic — means, medians, regression coefficients, anything.
+- **Bootstrap:** resample with replacement to estimate uncertainty. Works for *any* statistic — means, medians, regression coefficients, anything. The bootstrap generalizes far beyond means — in later courses you may see it used as a general-purpose inference engine.
 - **The CLT explains why** bootstrap distributions often look normal — at least for means and other "average-like" statistics.
 - **Normal approximation:** a fast, analytical shortcut when the CLT applies (large $n$, well-behaved data, mean-like statistics). Replace 10,000 resamples with $\hat{\theta} \pm 1.96 \cdot \text{SE}$.
 - **When the CLT fails** (median, heavy tails, small $n$), the bootstrap is the fallback. It's slower but always works.
