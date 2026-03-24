@@ -313,7 +313,12 @@ print(f"Bootstrap 95% CI: [{ci_lower:.1f}, {ci_upper:.1f}]")
 print(f"Does the CI exclude 0?  {'Yes' if ci_lower > 0 else 'No'}")
 print(f"Permutation p-value:    {p_value:.4f}")
 print(f"Reject H0 at alpha=0.05? {'Yes' if p_value < 0.05 else 'No'}")
-print(f"\nBoth methods agree: the treatment effect is real.")
+if (ci_lower > 0) and (p_value < 0.05):
+    print(f"\nBoth methods agree: the treatment effect is real.")
+elif (ci_lower > 0) or (p_value < 0.05):
+    print(f"\nMethods disagree — worth investigating further.")
+else:
+    print(f"\nNeither method finds a significant effect.")
 ```
 
 ## Connection to the Normal Approximation
