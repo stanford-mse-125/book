@@ -19,7 +19,7 @@ from sklearn.metrics import r2_score, mean_absolute_error
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 DATA_DIR = 'data'
@@ -64,7 +64,7 @@ for county in counties:
 Before modeling anything, let's look at the data. Notice the **seasonal pattern** — summer and fall have worse air quality (wildfire season). And notice the **spikes**: these are smoke events that dwarf normal variation.
 
 ```{python}
-fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
 
 for ax, county in zip(axes, counties):
     county_data = aqi_sub[aqi_sub['county Name'] == county]
@@ -89,7 +89,7 @@ A time series is **non-stationary** when its statistical properties (mean, varia
 
 ## Building a prediction model
 
-Let's try to predict tomorrow's AQI. A natural approach: use **lag features** — yesterday's AQI, the 7-day average, etc. This is just the feature engineering from Lecture 6, applied to time.
+Let's try to predict tomorrow's AQI. A natural approach: use **lag features** — yesterday's AQI, the 7-day average, etc. This approach is just the feature engineering from Lecture 6, applied to time.
 
 We'll focus on Los Angeles for a clean demonstration.
 
@@ -110,37 +110,37 @@ print(f"LA dataset: {len(la)} days with features")
 la.head(10)
 ```
 
-## The naive mistake: random train/test split
+## The standard split — and why it fails here
 
-In Lecture 7, we used random train/test splits and k-fold cross-validation. That worked because the data had no temporal structure. Here, it doesn't.
+Recall from Lecture 7 that we split data randomly into training and test sets. That approach assumed each observation was independent of the others. Time-ordered observations violate that assumption.
 
 Here's what most tutorials (and most AI tools) would do — randomly shuffle the data and split 80/20. Let's see how well it works.
 
 ```{python}
-# Random 80/20 split -- THE NAIVE APPROACH
+# Random 80/20 split -- THE WRONG WAY
 np.random.seed(42)
 features = ['aqi_lag1', 'aqi_lag7_avg', 'aqi_lag3_avg', 'day_of_year']
 
 mask = np.random.rand(len(la)) < 0.8
-train_naive = la[mask]
-test_naive = la[~mask]
+train_std = la[mask]
+test_std = la[~mask]
 
-model_naive = LinearRegression()
-model_naive.fit(train_naive[features], train_naive['AQI'])
+model_std = LinearRegression()
+model_std.fit(train_std[features], train_std['AQI'])
 
-pred_naive = model_naive.predict(test_naive[features])
-r2_naive = r2_score(test_naive['AQI'], pred_naive)
-mae_naive = mean_absolute_error(test_naive['AQI'], pred_naive)
+pred_std = model_std.predict(test_std[features])
+r2_std = r2_score(test_std['AQI'], pred_std)
+mae_std = mean_absolute_error(test_std['AQI'], pred_std)
 
 print(f"Random split results:")
-print(f"  R-squared = {r2_naive:.3f}")
-print(f"  MAE = {mae_naive:.1f}")
-print(f"  Train size: {len(train_naive)}, Test size: {len(test_naive)}")
+print(f"  R-squared = {r2_std:.3f}")
+print(f"  MAE = {mae_std:.1f}")
+print(f"  Train size: {len(train_std)}, Test size: {len(test_std)}")
 print()
 print("Looks great! Ship it?")
 ```
 
-R² around 0.85 and a low MAE — this looks like a strong model. But there's a hidden problem.
+R² around 0.85 and a low MAE — the model looks strong. But a hidden problem lurks in the evaluation itself.
 
 :::{.callout-tip}
 ## Think About It
@@ -149,12 +149,12 @@ With a random split, your test set includes days *from the middle* of the time s
 
 :::{.callout-important}
 ## Definition: Data Leakage (Temporal)
-**Data leakage** occurs when information from the future (or from the test set) contaminates training, producing optimistically biased results. In time series, a random split causes leakage because test observations are highly correlated with nearby training observations. The lag feature "yesterday's AQI" for a test-set day was likely in the training set.
+**Data leakage** occurs when information from the future (or from the test set) contaminates training, producing optimistically biased results. In time series, a random split causes leakage: test observations are highly correlated with nearby training observations. The lag feature "yesterday's AQI" for a test-set day was likely in the training set.
 :::
 
 ## Proper backtesting: temporal split
 
-The fix is simple: **train on the past, test on the future**. This mimics how the model would actually be used — you'd train it on historical data and deploy it to predict tomorrow. The diagram below shows the difference: random splitting scatters test points throughout the timeline, while a temporal split draws a clean boundary.
+The fix is simple: **train on the past, test on the future**. This protocol mimics how the model would actually be used — you'd train it on historical data and deploy it to predict tomorrow. The diagram below shows the difference: random splitting scatters test points throughout the timeline, while a temporal split draws a clean boundary.
 
 ```{python}
 # Visualize random vs temporal split
@@ -216,20 +216,20 @@ print(f"  Train size: {len(train_temporal)}, Test size: {len(test_temporal)}")
 print("=" * 50)
 print(f"{'Method':<25} {'R-sq':>8} {'MAE':>8}")
 print("=" * 50)
-print(f"{'Random split (WRONG)':<25} {r2_naive:>8.3f} {mae_naive:>8.1f}")
+print(f"{'Random split (WRONG)':<25} {r2_std:>8.3f} {mae_std:>8.1f}")
 print(f"{'Temporal split (RIGHT)':<25} {r2_temporal:>8.3f} {mae_temporal:>8.1f}")
 print("=" * 50)
-print(f"{'Leakage gap':<25} {r2_naive - r2_temporal:>8.3f} {mae_temporal - mae_naive:>8.1f}")
+print(f"{'Leakage gap':<25} {r2_std - r2_temporal:>8.3f} {mae_temporal - mae_std:>8.1f}")
 print()
 print("The R-squared gap is the leakage you avoided.")
-print("The naive split was lying to you -- the model isn't that good.")
+print("The standard split was lying to you -- the model isn't that good.")
 ```
 
 The performance drop is substantial. The random split made the model look much better than it actually is. That's the **leakage** — by testing on days surrounded by training data, the model gets to cheat.
 
 :::{.callout-important}
 ## Definition: Naive Baseline
-The **naive forecast** predicts that tomorrow's value equals today's value: $\hat{y}_{t+1} = y_t$. This is the simplest possible forecast and the bar any model must clear. In the forecasting literature, other standard benchmarks include the **seasonal naive** method (predict the value from the same season last year) and the **drift** method (extrapolate the line between the first and last observations). These are collectively called **benchmark forecasting methods**.
+The **naive forecast** predicts that tomorrow's value equals today's value: $\hat{y}_{t+1} = y_t$. This baseline is the simplest possible forecast and the bar any model must clear. In the forecasting literature, other standard benchmarks include the **seasonal naive** method (predict the value from the same season last year) and the **drift** method (extrapolate the line between the first and last observations). These methods are collectively called **benchmark forecasting methods**.
 :::
 
 
@@ -251,7 +251,7 @@ print("The naive baseline is surprisingly hard to beat!")
 print("This is common in time series: yesterday is a strong predictor of today.")
 ```
 
-This is why backtesting matters. In production, your model only ever sees the past. Your evaluation should reflect that.
+This result is why backtesting matters. In production, your model only ever sees the past. Your evaluation should reflect that constraint.
 
 ### Scale-independent accuracy: MAPE and MASE
 
@@ -259,11 +259,11 @@ MAE tells you the average error in the same units as your target — useful for 
 
 **MAPE** (Mean Absolute Percentage Error) expresses errors as percentages:
 $$\text{MAPE} = \frac{1}{n} \sum_{i=1}^{n} \left| \frac{y_i - \hat{y}_i}{y_i} \right| \times 100\%.$$
-MAPE is intuitive — "the forecast is off by 15% on average" — but it breaks when actual values are near zero (division by zero) and penalizes under-forecasts more heavily than over-forecasts.
+MAPE is intuitive — "the forecast is off by 15% on average" — but it breaks when actual values are near zero (division by zero) and penalizes under-forecasts more heavily than over-forecasts. When the actual value is small, even a modest error produces a large percentage — MAPE disproportionately penalizes forecasts for low-value days.
 
 **MASE** (Mean Absolute Scaled Error) compares your model's error to the naive baseline's error:
 $$\text{MASE} = \frac{\text{MAE of your model}}{\text{MAE of the naive forecast}}.$$
-MASE < 1 means you beat the naive forecast; MASE > 1 means you did worse than just predicting "same as yesterday." This connects directly to the baseline comparison above.
+MASE < 1 means you beat the naive forecast; MASE > 1 means you did worse than just predicting "same as yesterday." This metric connects directly to the baseline comparison above.^[Strictly, MASE uses the in-sample naive MAE as denominator (Hyndman & Koehler, 2006); we use the test-set version for simplicity.]
 
 ```{python}
 # Compute MAPE and MASE on the temporal test set
@@ -308,7 +308,7 @@ Fold 4: [=========== TRAIN ===========][TEST]
 
 We used an **expanding window** here (all past data). An alternative is a **sliding window** (fixed-width training set that moves forward), which can be better when very old data is from a different regime — exactly the distribution shift problem we'll see later.
 
-This is especially important when the data has regime changes — like wildfire season.
+This distinction is especially important when the data has regime changes — like wildfire season.
 
 ```{python}
 # Walk-forward: train on expanding window, test on next month
@@ -368,7 +368,7 @@ plt.show()
 
 Notice how the model's error **spikes during summer months** when wildfire smoke events push AQI to extremes. The model was trained on mostly "normal" air quality patterns and hasn't seen enough extreme events to handle them.
 
-This is the value of walk-forward validation: it reveals *when* your model breaks, not just how well it does on average.
+This pattern is the value of walk-forward validation: it reveals *when* your model breaks, not just how well it does on average.
 
 ## Lag features are just feature engineering
 
@@ -397,7 +397,7 @@ print("The seasonal feature (day_of_year) adds a small boost.")
 
 ## Same lesson, different domain: NBA performance prediction
 
-You might be thinking: "This is an air quality problem. My field is tech/finance/sports." But the temporal leakage trap appears anywhere data has a time dimension. Let's see if the same pattern holds in a completely different domain.
+You might be thinking: "This example is an air quality problem. My field is tech/finance/sports." But the temporal leakage trap appears anywhere data has a time dimension. Let's see if the same pattern holds in a completely different domain.
 
 If you could reliably predict how many points an NBA player will score tonight, you could make a fortune betting. Let's try — predicting a player's performance from their last 5 games. Can we randomly split games? No — that would let the model peek at future games.
 
@@ -435,7 +435,7 @@ print(f"Modeling dataset: {len(nba_model):,} player-games")
 ```
 
 ```{python}
-# Naive random split vs temporal split
+# Standard random split vs temporal split
 np.random.seed(42)
 mask_nba = np.random.rand(len(nba_model)) < 0.8
 
@@ -673,7 +673,9 @@ print("Point forecasts alone are dangerous for decision-making.")
 print("Always report intervals so stakeholders can plan for the plausible range.")
 ```
 
-This bootstrap approach is completely general: you can construct prediction intervals for *any* model, not just linear regression. And you're not limited to our residual-resampling scheme — you can devise your own null model, simulate from it, and compare. The key principle is that a forecast without a measure of uncertainty isn't a complete forecast.
+This resampling approach is completely general: you can construct prediction intervals for *any* model, not just linear regression. And you're not limited to our residual-resampling scheme — you can devise your own null model, simulate from it, and compare. The key principle is that a forecast without a measure of uncertainty isn't a complete forecast.
+
+These intervals assume stationary residuals. In practice, intervals should be wider during high-variance periods like wildfire season. A model that uses the same residual distribution year-round will undercover extreme events and overcover calm ones.
 
 ## Key takeaways
 
@@ -683,7 +685,7 @@ This bootstrap approach is completely general: you can construct prediction inte
 
 - **Lag features are feature engineering** — yesterday's value, rolling averages, same-day-last-year are all transformations of the raw data.
 
-- **Backtesting is not prediction.** A strategy that looks profitable in backtest may fail in production because the market already knows the same signals.
+- **Backtesting is not prediction.** A strategy that looks profitable in backtest may fail in production — the market already knows the same signals.
 
 - **Distribution shift is the hardest problem.** Models trained on normal conditions fail during extreme events.
 
@@ -696,7 +698,7 @@ This bootstrap approach is completely general: you can construct prediction inte
 ### Key ideas
 
 - **Backtesting (temporal split):** Evaluating a model by training on past data and testing on future data, mimicking real deployment.
-- **Data leakage:** When information from the future (or the test set) contaminates training, producing optimistically biased results. Random train/test splits create leakage in time series because test observations are correlated with nearby training observations.
+- **Data leakage:** When information from the future (or the test set) contaminates training, producing optimistically biased results. Random train/test splits create leakage in time series: test observations are correlated with nearby training observations.
 - **Lag features:** Predictors constructed from past values of the time series (e.g., yesterday's value, 7-day rolling average).
 - **Non-stationarity:** A time series whose statistical properties (mean, variance) change over time.
 - **Walk-forward validation (time series cross-validation):** Repeatedly training on an expanding (or sliding) window of past data and testing on the next period. Reveals *when* a model fails, not just its average performance.

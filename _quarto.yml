@@ -24,9 +24,9 @@ book:
         - lec10-hypothesis-testing.qmd
         - lec11-multiple-testing.qmd
         - lec12-regression-inference.qmd
-        - lec13-classification.qmd
     - part: "Act 3: See Further"
       chapters:
+        - lec13-classification.qmd
         - lec14-pca.qmd
         - lec15-clustering.qmd
         - lec16-backtesting.qmd
@@ -39,7 +39,9 @@ filters:
 
 format:
   html:
-    theme: cosmo
+    theme:
+      - cosmo
+      - custom.scss
     code-fold: true
     code-tools: true
     toc: true

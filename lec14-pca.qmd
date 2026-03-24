@@ -19,7 +19,7 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 np.random.seed(42)
 
@@ -91,7 +91,7 @@ In Lecture 5, regression projected $y$ onto a fixed set of features $X$. PCA ask
 
 ## First attempt: PCA without standardization
 
-Let's see what happens if we run PCA on the raw (unstandardized) data. This is what an AI assistant would typically do.
+Let's see what happens if we run PCA on the raw (unstandardized) data. This approach is what an AI assistant would typically produce.
 
 :::{.callout-tip}
 ## Think About It
@@ -121,13 +121,13 @@ for col in raw_var.head(5).index:
     print(f"  {col:>35s}: variance = {raw_var[col]:>15,.1f}")
 ```
 
-**There it is.** `maximum_nights` has a variance of millions because some listings allow stays of 1,000+ nights. `availability_365` ranges up to 365. Meanwhile, `bathrooms` ranges from 0 to 10.
+**There it is.** `maximum_nights` has a variance of millions — some listings allow stays of 1,000+ nights. `availability_365` ranges up to 365. Meanwhile, `bathrooms` ranges from 0 to 10.
 
 PCA on unstandardized data just picks up whichever column has the biggest numbers. PC1 is basically "maximum_nights" — that's not a useful summary of anything.
 
 :::{.callout-warning}
 ## PCA is dominated by scale
-This is a critical lesson: without standardization, PCA is dominated by whichever feature has the largest scale.
+This lesson is critical: without standardization, PCA is dominated by whichever feature has the largest scale.
 :::
 
 ## The fix: standardize first
@@ -155,11 +155,11 @@ print(f"  ...total for first 5: {pca.explained_variance_ratio_[:5].sum()*100:.1f
 
 ## The scree plot: how many components do we need?
 
-The **scree plot** shows how much variance each PC explains. We look for an **elbow** — the point where adding more PCs doesn't help much. This is called the **elbow method**.
+The **scree plot** shows how much variance each PC explains. We look for an **elbow** — the point where adding more PCs doesn't help much. This heuristic is called the **elbow method**.
 
 ```{python}
-# Scree plot: individual variance explained
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+# Scree plot: individual and cumulative variance explained
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 axes[0].bar(range(1, len(pca.explained_variance_ratio_)+1),
             pca.explained_variance_ratio_ * 100,
@@ -168,10 +168,7 @@ axes[0].set_xlabel('Principal Component')
 axes[0].set_ylabel('Variance Explained (%)')
 axes[0].set_title('Scree Plot')
 axes[0].set_xlim(0.5, 15.5)
-```
 
-```{python}
-# Scree plot: cumulative variance explained
 cumvar = np.cumsum(pca.explained_variance_ratio_) * 100
 axes[1].plot(range(1, len(cumvar)+1), cumvar, 'o-', color='steelblue')
 axes[1].axhline(y=80, color='red', linestyle='--', alpha=0.5, label='80% threshold')
@@ -247,15 +244,15 @@ for feat, val in pc2.tail(3).items():
 
 **Telling the story of each PC:**
 
-- **PC1** loads heavily on the review scores (accuracy, cleanliness, communication, value, rating). This is a "review quality" factor — listings that score high on PC1 have uniformly good reviews.
+- **PC1** loads heavily on the review scores (accuracy, cleanliness, communication, value, rating). This component captures a "review quality" factor — listings that score high on PC1 have uniformly good reviews.
 
-- **PC2** loads on size features (accommodates, bedrooms, beds, bathrooms) and price. This is a "size/luxury" factor — bigger, pricier listings score higher on PC2.
+- **PC2** loads on size features (accommodates, bedrooms, beds, bathrooms) and price. This component captures a "size/luxury" factor — bigger, pricier listings score higher on PC2.
 
-Notice how PCA automatically discovered these natural groupings. We didn't tell it about "review quality" or "listing size" — it found these dimensions because they capture the most variance.
+Notice how PCA automatically discovered these natural groupings. We didn't tell it about "review quality" or "listing size" — it found these dimensions by following the variance.
 
 ### Tracing one listing through PCA
 
-Let's pick one listing and trace it through the entire PCA pipeline. This makes the loadings concrete.
+Let's pick one listing and trace it through the entire PCA pipeline. This exercise makes the loadings concrete.
 
 ```{python}
 # Pick a listing and show its original features and PC scores
@@ -291,6 +288,8 @@ else:
 
 ## The math behind PCA: SVD
 
+To understand what the SVD produces, two definitions from linear algebra are needed. These definitions build on the vector and span concepts from Lecture 4.
+
 :::{.callout-important}
 ## Definition: Basis and Orthonormal Basis
 A **basis** for a subspace is a minimal set of linearly independent vectors that spans it. The number of vectors in any basis equals the **dimension** of the subspace.
@@ -298,9 +297,9 @@ A **basis** for a subspace is a minimal set of linearly independent vectors that
 An **orthonormal basis** is a basis where every vector has norm 1 and every pair of vectors is orthogonal (inner product = 0). Orthonormal bases are especially convenient: to find the coordinates of a point, you just take dot products — no matrix inversion needed. PCA finds an orthonormal basis aligned with the directions of maximum variance.
 :::
 
-Now that you've seen PCA work, let's look under the hood. PCA is powered by the **SVD** (**Singular Value Decomposition**). If you've taken EE103, see VMLS Chapter 16 for a deeper treatment.
+Now that you've seen PCA work, let's look under the hood. PCA is powered by the **SVD** (**Singular Value Decomposition**). The assigned reading (VanderPlas Ch 5.09) covers the sklearn implementation. If you've taken EE103, see VMLS Chapter 16 for a deeper treatment.
 
-The exact SVD of the centered data matrix is:
+The exact SVD of the standardized (centered and scaled) data matrix is:
 
 $$X = U S V^T$$
 
@@ -310,11 +309,11 @@ $$X \approx U_k S_k V_k^T$$
 
 - The columns of $V$ are the **principal component directions** (the new axes)
 - The diagonal of $S$ contains the **singular values** — the fraction of total variance captured by PC$i$ is $\sigma_i^2 / \sum_j \sigma_j^2$
-- The columns of $US$ are the **PC scores** (each listing's coordinates in the new basis)
+- The rows of $US$ are the **PC scores** — row $i$ gives listing $i$'s coordinates in the new basis
 
 :::{.callout-important}
 ## Definition: Eckart-Young-Mirsky Theorem
-Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest total squared error. No other $k$-dimensional summary can do better.
+Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest total squared error (Frobenius norm). No other $k$-dimensional summary can do better.
 :::
 
 ## PCA as regression onto optimal covariates
@@ -323,9 +322,9 @@ Here's the key insight that connects PCA to everything we've learned.
 
 In regression (Lecture 5), we had a fixed set of features $X$ and found the best weights $w$ to minimize $\|y - Xw\|^2$. We chose the features; the math found the coefficients.
 
-PCA is the same optimization, except we also get to choose $X$. We're minimizing $\|Y - XW\|_F^2$ over *both* the scores $X$ and the directions $W$ simultaneously. PCA finds the best covariates AND the best coefficients.
+PCA is the same optimization, except we also get to choose $X$. We're minimizing $\|Y - XW\|_F^2$ over *both* the scores $X$ ($= U_k S_k$) and the directions $W$ ($= V_k^T$) simultaneously. PCA finds the best covariates AND the best coefficients.
 
-These two views — maximizing variance captured and minimizing reconstruction error — are mathematically equivalent. This is why PCA feels like a natural extension of regression: it IS regression, but with the freedom to pick the best possible features.
+These two views — maximizing variance captured and minimizing reconstruction error — are mathematically equivalent. This equivalence explains why PCA feels like a natural extension of regression: it IS regression, but with the freedom to pick the best possible features.
 
 ## Biplot: visualizing listings in PC space
 
@@ -347,7 +346,7 @@ plot_df = pd.DataFrame({
 ```
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+fig, axes = plt.subplots(1, 2, figsize=(11, 5))
 
 # Color by room type
 for rt in plot_df['room_type'].unique():
@@ -358,9 +357,7 @@ axes[0].set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% var)")
 axes[0].set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% var)")
 axes[0].set_title('Listings in PC Space — by Room Type')
 axes[0].legend(markerscale=5)
-```
 
-```{python}
 # Color by borough
 for b in ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island']:
     mask = plot_df['borough'] == b
@@ -385,7 +382,7 @@ Let's put the two PCA results side by side.
 
 ```{python}
 # Side by side comparison: loadings of PC1
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+fig, axes = plt.subplots(1, 2, figsize=(11, 5))
 
 # Unstandardized PC1
 loadings_raw_pc1 = pd.Series(pca_raw.components_[0], index=numeric_cols)
@@ -394,9 +391,7 @@ pct_raw = pca_raw.explained_variance_ratio_[0]*100
 axes[0].set_title(f'PC1 — WITHOUT Standardization\n({pct_raw:.1f}% var)')
 axes[0].set_xlabel('Loading')
 axes[0].axvline(x=0, color='black', linewidth=0.5)
-```
 
-```{python}
 # Standardized PC1
 loadings_std_pc1 = pd.Series(pca.components_[0], index=numeric_cols)
 loadings_std_pc1.sort_values().plot.barh(ax=axes[1], color='steelblue')
@@ -409,11 +404,11 @@ plt.tight_layout()
 plt.show()
 ```
 
-**Completely different!** Without standardization, PC1 is dominated by `maximum_nights` and `availability_365` — just because those columns have big numbers. With standardization, PC1 captures the review quality pattern we identified earlier.
+**Completely different!** Without standardization, PC1 is dominated by `maximum_nights` and `availability_365` — those columns simply have the biggest numbers. With standardization, PC1 captures the review quality pattern we identified earlier.
 
 :::{.callout-warning}
 ## Always standardize before PCA
-This is one of the most common PCA mistakes in practice. Always check whether your data has been standardized. Standardize before PCA unless you have a specific reason not to (e.g., all features are already on the same scale).
+This mistake is one of the most common PCA errors in practice. Always check whether your data has been standardized. Standardize before PCA unless you have a specific reason not to (e.g., all features are already on the same scale).
 :::
 
 ## PCA vs. feature selection
@@ -423,7 +418,7 @@ This is one of the most common PCA mistakes in practice. Always check whether yo
 Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Lecture 7)?
 :::
 
-PCA creates *new* features that are combinations of the originals — it's **dimensionality reduction**. Lasso picks a subset of existing features — that's **feature selection**. PCA is especially useful when your original features are correlated (like the six review scores), because it creates uncorrelated summaries that capture more information per component.
+PCA creates *new* features that are combinations of the originals — it's **dimensionality reduction**. Lasso picks a subset of existing features — that's **feature selection**. PCA is especially useful when your original features are correlated (like the six review scores): it creates uncorrelated summaries that capture more information per component.
 
 :::{.callout-warning}
 ## PCA on mixed data
@@ -455,7 +450,7 @@ In **Lecture 15**, we'll move from summarizing data to *grouping* data. **K-mean
 - **PCA (Principal Component Analysis)** finds the directions of maximum variance in high-dimensional data, producing a lower-dimensional summary.
 - **Principal component**: a new axis (direction) found by PCA. Each PC is a weighted combination of the original features.
 - **Loading**: the weight of an original feature in a principal component. High loadings tell you which features drive that PC.
-- **SVD (Singular Value Decomposition)**: the matrix factorization $X = USV^T$ that powers PCA. The columns of $V$ are the PC directions, the diagonal of $S$ holds the singular values, and $US$ gives the PC scores.
+- **SVD (Singular Value Decomposition)**: the matrix factorization $X = USV^T$ that powers PCA. The columns of $V$ are the PC directions, the diagonal of $S$ holds the singular values, and the rows of $US$ give the PC scores.
 - **Singular value**: the $i$-th diagonal entry of $S$. Its square is proportional to the variance explained by PC$i$.
 - **Explained variance ratio**: the fraction of total variance captured by a given PC. Sum of all ratios = 1.
 - **Scree plot**: bar chart of explained variance by component, used to decide how many PCs to keep.

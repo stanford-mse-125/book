@@ -1,11 +1,11 @@
 ---
-title: "Lecture 13: Classification — Logistic Regression and Metrics (Act 2 Capstone)"
+title: "Lecture 13: Classification — Logistic Regression and Metrics"
 execute:
   enabled: true
 jupyter: python3
 ---
 
-We've spent the last five lectures learning to *trust* our models — bootstrap CIs, hypothesis tests, regression inference. Now we close Act 2 by extending our toolkit from predicting numbers to predicting categories. You used `RandomForestClassifier` back in Lecture 6. Today we understand *why* classification needs its own tools — and build a more interpretable classifier.
+In Acts 1 and 2, we built and tested models for continuous outcomes. Act 3 extends these ideas to new settings, starting with classification — predicting categories instead of numbers. You used `RandomForestClassifier` back in Lecture 6. Today we understand *why* classification needs its own tools — and build a more interpretable classifier.
 
 ## The 85% accuracy trap
 
@@ -23,14 +23,13 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay,
-                             classification_report, roc_curve, auc,
-                             precision_recall_curve)
+                             roc_curve, auc, precision_recall_curve)
 from sklearn.preprocessing import StandardScaler
 
 # Load data
@@ -64,7 +63,7 @@ print(f"  CHD:     {chd_counts[1]:,} ({chd_counts[1]/len(framingham)*100:.1f}%)"
 print(f"  Ratio:   {chd_counts[0]/chd_counts[1]:.1f}:1")
 ```
 
-Only 15.2% of patients developed CHD. This is called **class imbalance** — the positive class is much rarer than the negative class. This is extremely common in real applications: fraud detection, disease screening, equipment failure.
+Only 15.2% of patients developed CHD. This ratio reflects **class imbalance** — the positive class is much rarer than the negative class. Class imbalance arises frequently in real applications: fraud detection, disease screening, equipment failure.
 
 Class imbalance is going to cause us a lot of trouble today. Let's see why.
 
@@ -89,7 +88,7 @@ print(f"Training: {len(X_train):,} | Test: {len(X_test):,}")
 print(f"Test positive rate: {y_test.mean():.3f}")
 ```
 
-Let's look at the feature scales before we do anything else. Notice how different the ranges are -- age is in years, blood pressure in mmHg, BMI around 20-40. This will matter when we interpret coefficients.
+Let's look at the feature scales before we do anything else. Notice how different the ranges are -- age is in years, blood pressure in mmHg, BMI around 20-40. This variation will matter when we interpret coefficients.
 
 ```{python}
 # Feature scales -- notice the wide variation
@@ -141,12 +140,14 @@ Equivalently, the **log-odds** (**logit**) is a linear function of the features:
 $$\log\!\left(\frac{p}{1-p}\right) = \beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p$$
 :::
 
+A concrete example makes the log-odds scale tangible. If $p = 0.20$: odds $= 0.20/0.80 = 0.25$, log-odds $= \log(0.25) = -1.39$. If $p = 0.80$: odds $= 0.80/0.20 = 4$, log-odds $= \log(4) = 1.39$. The symmetry is no accident — the log-odds scale is centered at zero (where $p = 0.5$) and stretches symmetrically toward $\pm\infty$.
+
 :::{.callout-warning}
 ## Logistic Regression Conditions
 There are two key conditions for logistic regression to be valid: (1) each outcome is independent of the others, and (2) each predictor is linearly related to the log-odds when all other predictors are held constant.
 :::
 
-This is why we call it *logistic* regression -- the core assumption is that the log-odds are a **linear** function of the features. This means the decision boundary (where predicted probability equals 0.5) is a hyperplane. If the true boundary is curved, logistic regression will miss it.
+The name *logistic* regression reflects this core assumption: the log-odds are a **linear** function of the features. The decision boundary (where predicted probability equals 0.5) is therefore a hyperplane. If the true boundary is curved, logistic regression will miss it.
 
 ```{python}
 # Visualize the sigmoid function
@@ -176,13 +177,11 @@ Logistic regression minimizes the **logistic loss** (also called **cross-entropy
 
 $$\ell(\beta) = -\left[ y \log(p) + (1-y) \log(1-p) \right]$$
 
-This penalizes confident wrong predictions *much* more heavily than squared error does. The model is punished harshly for saying "1% chance" when the patient actually develops CHD.
-
-<!-- FLAG: IMS Ch 9 covers model assessment via AIC and deviance for logistic regression model selection (analogous to adjusted R² in linear regression). Consider adding a brief discussion or worked example of AIC-based variable selection. -->
+This loss penalizes confident wrong predictions *much* more heavily than squared error does. The model is punished harshly for saying "1% chance" when the patient actually develops CHD.
 
 ## Fitting logistic regression: gradient descent
 
-In Lecture 5, we solved linear regression using the normal equations -- projection onto the column space gave us an exact formula. Logistic regression has no such shortcut. The logistic loss function doesn't simplify to a nice linear system, so we need an iterative algorithm: **gradient descent**.
+In Lecture 5, we solved linear regression using the normal equations — projection onto the column space gave us an exact, closed-form solution. OLS has a closed-form solution; logistic regression does not — the sigmoid makes the loss nonlinear, so the loss function no longer simplifies to a nice linear system. We need an iterative algorithm: **gradient descent**.
 
 ### The hiking metaphor
 
@@ -237,13 +236,13 @@ plt.tight_layout()
 plt.show()
 ```
 
-The characteristic pattern: fast progress early (steep slope), then the curve flattens as we approach the minimum. This is **convergence** -- each step gets smaller because the gradient shrinks near the bottom of the valley.
+The characteristic pattern: fast progress early (steep slope), then the curve flattens as we approach the minimum. This flattening is **convergence** — each step shrinks as the gradient approaches zero near the bottom of the valley.
 
 Now let's fit the final model using sklearn's `LogisticRegression`, which uses a sophisticated version of this same idea under the hood.
 
 ```{python}
 # Fit logistic regression
-model = LogisticRegression(max_iter=1000, random_state=42)
+model = LogisticRegression(penalty=None, max_iter=1000, random_state=42)
 model.fit(X_train_scaled, y_train)
 
 print("Logistic regression fitted.")
@@ -295,7 +294,7 @@ Our fancy logistic regression barely beats "predict everyone is fine." That ~85%
 
 :::{.callout-warning}
 ## The Accuracy Trap
-This is the **accuracy trap** (also called the **accuracy paradox**). Accuracy measures how often you're right *overall*, but when one class dominates, being right about that class is easy and uninformative.
+This phenomenon is the **accuracy trap** (also called the **accuracy paradox**). Accuracy measures how often you're right *overall*, but when one class dominates, being right about that class is easy and uninformative.
 :::
 
 ## Interpreting coefficients: odds and odds ratios
@@ -336,11 +335,11 @@ for _, row in coef_df.iterrows():
 
 A concrete example: if a patient's predicted CHD probability is 0.20 (odds = 0.25), a one-SD increase in age multiplies those odds by about 1.5x, giving new odds of 0.375 -- corresponding to a probability of about 27%.
 
-The model says: age, systolic blood pressure, glucose, and male sex are the strongest risk factors. This matches medical knowledge -- but notice that the model treats each feature independently. It doesn't know that high blood pressure and high BMI often go together, or that young smokers face different risks than old smokers (for that, we'd need interaction terms -- recall Lecture 6). We'll come back to this.
+The model says: age, systolic blood pressure, glucose, and male sex are the strongest risk factors. This ranking matches medical knowledge — but notice that the model treats each feature independently. It doesn't know that high blood pressure and high BMI often go together, or that young smokers face different risks than old smokers (for that, we'd need interaction terms -- recall Lecture 6). We'll come back to this.
 
 ## What does the model predict for individual patients?
 
-Before we evaluate overall performance, let's look at specific patients. This makes the predicted probabilities concrete.
+Before we evaluate overall performance, let's look at specific patients. This step makes the predicted probabilities concrete.
 
 ```{python}
 # Pick a few patients to examine
@@ -392,7 +391,7 @@ print(f"False Negatives (MISSED actual CHD):        {fn}")
 
 Look at the bottom row — actual CHD cases. The model catches very few of them! Most actual CHD patients are predicted as "no CHD." In a medical context, those are people who needed intervention and didn't get it.
 
-This is a **False Negative** — and in medicine, false negatives can be deadly.
+This outcome is a **False Negative** — and in medicine, false negatives can be deadly.
 
 :::{.callout-tip}
 ## Think About It
@@ -406,6 +405,8 @@ If you were designing a screening tool, which is worse — a false positive (unn
 - **Precision** = $\frac{TP}{TP + FP}$ = "Of those I flagged as CHD, how many really had it?"
 - **Recall** (Sensitivity) = $\frac{TP}{TP + FN}$ = "Of all actual CHD cases, how many did I catch?"
 :::
+
+A mnemonic: Precision asks, "I flagged this patient — should I trust my flag?" Recall asks, "Of all sick people, how many did we find?"
 
 Two metrics capture the two types of mistakes, and they tell very different stories.
 
@@ -424,13 +425,13 @@ print(f"Accuracy:  {(tp+tn)/(tp+tn+fp+fn):.3f}")
 print(f"  → This number hides the fact that recall is terrible")
 ```
 
-Precision is decent -- when the model *does* flag someone, it's often right. But recall is abysmal: we're missing the vast majority of actual CHD cases. The model is being **too conservative** -- it rarely predicts CHD because the base rate is low.
+Precision is decent — when the model *does* flag someone, it's often right. But recall is abysmal: we're missing the vast majority of actual CHD cases. The low base rate makes the model **too conservative** — it rarely predicts CHD.
 
-Note: if the model never predicts positive, precision is undefined (0/0). We set it to 0 by convention, but this edge case is worth noting -- it nearly happens here because the model is so conservative.
+Note: if the model never predicts positive, precision is undefined (0/0). We set it to 0 by convention, but the edge case is worth noting — with such a conservative model, it nearly occurs here.
 
 The **F1 score** is the harmonic mean of precision and recall: $F_1 = 2 \cdot \frac{\text{precision} \cdot \text{recall}}{\text{precision} + \text{recall}}$. It balances both concerns in a single number, but it still doesn't capture the *cost* of each type of mistake.
 
-This is the fundamental tradeoff: if you want to catch more positives (higher recall), you have to accept more false alarms (lower precision).
+This tension is the fundamental tradeoff: catching more positives (higher recall) means accepting more false alarms (lower precision).
 
 ## The ROC curve: evaluating across all thresholds
 
@@ -467,7 +468,7 @@ print(f"AUC = {roc_auc:.3f}")
 print("Interpretation: if you pick one CHD patient and one non-CHD patient")
 print(f"at random, the model ranks the CHD patient higher {roc_auc*100:.0f}% of the time.")
 print()
-print("This is called the concordance probability. It measures the model's")
+print("This quantity is the concordance probability. It measures the model's")
 print("ability to *rank* patients by risk -- not how well it classifies at any threshold.")
 ```
 
@@ -499,15 +500,15 @@ for t in thresholds_to_try:
 See the tradeoff? As we lower the threshold:
 - **Recall goes up** — we catch more CHD cases
 - **Precision goes down** — more false alarms
-- **Accuracy goes down** — because we're now "wrong" about more negative cases
+- **Accuracy goes down** — more negative cases are now misclassified
 
-There's no free lunch. The right threshold depends on the **cost of each mistake** -- this is a \$\$ decision, not a statistical one.
+There's no free lunch. The right threshold depends on the **cost of each mistake** -- this is a consequential decision, not a statistical one.
 
 If a follow-up test costs \$500 and a missed CHD case costs \$50,000 in emergency care, what threshold minimizes expected cost? In medicine, missing a heart disease case is far worse than ordering an extra test, so we'd choose a low threshold. In spam filtering, false positives (real email in spam) are worse, so we'd choose a high threshold.
 
 :::{.callout-tip}
 ## Think About It
-If you're the hospital administrator and you have budget for follow-up appointments with 200 patients per month, which threshold would you choose? This isn't a statistics question -- it's a resource allocation question.
+If you're the hospital administrator and you have budget for follow-up appointments with 200 patients per month, which threshold would you choose? This choice isn't a statistics question — it's a resource allocation question.
 :::
 
 ```{python}
@@ -573,7 +574,7 @@ for group in ['30-40', '40-50', '50-60', '60-70']:
 
 **There it is.** For patients under 40, the AUC drops dramatically — close to 0.5, which is *random guessing*. The model essentially learned "older people get heart disease" and has almost no ability to identify risk in younger patients.
 
-This is a critical failure for a screening tool. Young patients who *do* develop CHD are exactly the cases where early intervention matters most — and the model is blind to them.
+This failure is critical for a screening tool. Young patients who *do* develop CHD are exactly the cases where early intervention matters most — and the model is blind to them.
 
 ```{python}
 # Box plot: predicted probabilities by age group and actual outcome
@@ -614,7 +615,7 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 
 - **The confusion matrix** reveals what accuracy hides: look at True Positives, False Positives, True Negatives, and False Negatives separately.
 
-- **Precision vs Recall** captures the fundamental tradeoff: catching more positives (recall) means more false alarms (lower precision). The right balance depends on the cost of each type of mistake -- a \$\$ decision.
+- **Precision vs Recall** captures the fundamental tradeoff: catching more positives (recall) means more false alarms (lower precision). The right balance depends on the cost of each type of mistake -- a consequential decision.
 
 - **Always check subgroup performance.** An overall AUC of 0.73 can hide the fact that the model is *useless* for certain patient groups. Models that work "on average" can fail exactly where it matters most.
 
@@ -633,21 +634,22 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 ### Key ideas
 
 1. Logistic regression models the probability of a binary outcome by passing a linear combination through the sigmoid function.
-2. The logistic loss is the negative log-likelihood under a Bernoulli model -- it penalizes confident wrong predictions heavily.
-3. Gradient descent finds the coefficients by iteratively stepping in the direction that reduces the loss; convexity guarantees convergence to the global minimum.
-4. Accuracy is misleading with class imbalance -- always look at precision, recall, and the confusion matrix.
-5. Threshold choice is a cost-benefit decision, not a statistical one.
-6. Subgroup analysis can reveal dramatic failures hidden by aggregate performance.
+2. OLS has a closed-form solution; logistic regression does not. The sigmoid makes the loss nonlinear, requiring gradient descent.
+3. The logistic loss is the negative log-likelihood under a Bernoulli model — it penalizes confident wrong predictions heavily.
+4. Gradient descent finds the coefficients by iteratively stepping in the direction that reduces the loss; convexity guarantees convergence to the global minimum.
+5. Accuracy is misleading with class imbalance — always look at precision, recall, and the confusion matrix.
+6. Threshold choice is a cost-benefit decision, not a statistical one.
+7. Subgroup analysis can reveal dramatic failures hidden by aggregate performance.
 
-Key definitions:
+### Definitions
 
-- **Sigmoid function**: maps any real number to [0, 1], used to convert linear predictions to probabilities
+- **Sigmoid function**: maps any real number to $[0, 1]$, converting linear predictions to probabilities
 - **Logit (log-odds)**: $\log(p/(1-p))$, the inverse of the sigmoid; linear in the features
-- **Odds ratio**: $e^{\beta_j}$, multiplicative change in odds per unit increase in $x_j$
+- **Odds ratio**: $e^{\beta_j}$, the multiplicative change in odds per unit increase in $x_j$
 - **Logistic loss (cross-entropy)**: the loss function logistic regression minimizes; heavily penalizes confident wrong predictions
 - **Gradient descent**: iterative optimization algorithm that follows the negative gradient downhill
-- **Learning rate**: step size in gradient descent; too large = overshoot, too small = slow
-- **Convex**: loss landscape with a single valley; gradient descent finds the global minimum
+- **Learning rate**: step size in gradient descent; too large causes overshoot, too small causes slow convergence
+- **Convex**: a loss landscape with a single valley; gradient descent finds the global minimum
 - **Confusion matrix**: 2x2 table of TP, FP, TN, FN
 - **Precision**: fraction of positive predictions that are correct
 - **Recall (sensitivity)**: fraction of actual positives that are caught
@@ -671,6 +673,6 @@ Be able to (1) interpret logistic regression coefficients as odds ratios, (2) co
 
 ## Coming up next
 
-We've now built models (Act 1) and learned to trust them (Act 2). Next: Act 3 opens with [Lecture 14](lec14-pca.qmd) on **PCA** — when you have 96 columns, can you summarize them with just 5? PCA finds the best low-dimensional summary of your data, and the linear algebra from earlier in the course tells us exactly what "best" means.
+Act 3 continues with [Lecture 14](lec14-pca.qmd) on **PCA** — when you have 96 columns, can you summarize them with just 5? PCA finds the best low-dimensional summary of your data, and the linear algebra from earlier in the course tells us exactly what "best" means.
 
 And in **Lecture 17**, we'll see how gradient descent powers **gradient boosting** -- an algorithm that builds on today's ideas to produce state-of-the-art predictions.

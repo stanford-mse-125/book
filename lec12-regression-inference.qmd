@@ -9,12 +9,20 @@ jupyter: python3
 
 An NBA team's analytics department says resting players boosts performance by 0.3 points
 per game. They want to restructure the schedule around it. Should the front office invest
-in roster flexibility based on this finding? We'll also look at Airbnb listings to see
+in roster flexibility based on this finding? We also examine Airbnb listings to see
 what happens when the effect IS real and large. Same tools, very different conclusions.
 
-In Act 1, we learned regression finds the best fit. In Act 2, we learned hypothesis testing
-asks "is this real?" Now we combine them: **is each piece of our model doing real work?**
-We'll also check whether our model's assumptions hold using **regression diagnostics**.
+:::{.callout-note}
+## Act 1 meets Act 2
+Act 1 built regression models for prediction. Act 2 introduced hypothesis testing and
+confidence intervals. This lecture combines both toolkits: we apply inference to
+regression coefficients and check whether the model's assumptions justify that inference.
+:::
+
+The central question: **is each predictor in our model useful, or could we
+drop it without loss?** Parsimony matters -- the best model is the simplest one that
+adequately fits the data (an idea sometimes called *Occam's razor*).
+We also check whether the model's assumptions hold using **regression diagnostics**.
 
 ```{python}
 import numpy as np
@@ -24,6 +32,7 @@ import seaborn as sns
 from scipy import stats
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from statsmodels.nonparametric.smoothers_lowess import lowess
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
@@ -33,13 +42,19 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
+```{python}
+def format_pvalue(p):
+    """Format p-values: scientific notation for very small values."""
+    if p < 0.001:
+        return f"{p:.2e}"
+    return f"{p:.3f}"
+```
+
 ## Building a regression model for NBA performance
 
 Recall from Lecture 11 that the raw correlation between rest and points was misleading --
 Simpson's paradox showed that bench players dominate the extended-rest group.
 Can regression help us **control for** player quality and isolate the rest effect?
-
-Let's build a model step by step.
 
 ```{python}
 # Load NBA data
@@ -59,6 +74,14 @@ nba_games['PLAYER_SEASON_AVG'] = nba_games.groupby(
 opp_strength = nba_games.groupby('OPPONENT')['GAME_SCORE'].mean()
 nba_games['OPP_STRENGTH'] = nba_games['OPPONENT'].map(opp_strength)
 
+# Derive additional covariates from existing columns
+# Back-to-back indicator: did the player play yesterday?
+nba_games['BACK_TO_BACK'] = (nba_games['REST_DAYS'] == 1).astype(int)
+
+# Minutes in previous game (proxy for fatigue/usage)
+nba_games = nba_games.sort_values(['PLAYER_ID', 'GAME_DATE'])
+nba_games['PREV_MIN'] = nba_games.groupby('PLAYER_ID')['MIN'].shift(1)
+
 print(f"Observations: {len(nba_games):,}")
 print(f"Players: {nba_games['PLAYER_NAME'].nunique()}")
 print()
@@ -67,6 +90,8 @@ print(f"  GAME_SCORE (response): mean={nba_games['GAME_SCORE'].mean():.2f}, std=
 print(f"  REST_DAYS: mean={nba_games['REST_DAYS'].mean():.2f}")
 print(f"  PLAYER_SEASON_AVG: mean={nba_games['PLAYER_SEASON_AVG'].mean():.2f}")
 print(f"  HOME: {nba_games['HOME'].mean():.2%} home games")
+print(f"  BACK_TO_BACK: {nba_games['BACK_TO_BACK'].mean():.2%} of games")
+print(f"  PREV_MIN: mean={nba_games['PREV_MIN'].mean():.1f} (previous game minutes)")
 ```
 
 Before fitting any model, let's look at the data. Is there a visible relationship
@@ -81,7 +106,7 @@ axes[0].set_xlabel('Rest Days')
 axes[0].set_ylabel('Game Score')
 axes[0].set_title('Game Score by Rest Days')
 
-# Scatter with player quality on x-axis, colored by rest
+# Scatter with player quality on x-axis
 axes[1].scatter(nba_games['PLAYER_SEASON_AVG'], nba_games['GAME_SCORE'],
                alpha=0.02, s=5, color='steelblue')
 axes[1].set_xlabel('Player Season Average')
@@ -98,8 +123,7 @@ print("Player quality clearly matters more. Can regression disentangle these eff
 ## Step-by-step model building: what does "controlling for" mean?
 
 One of the most important ideas in regression is **controlling for** other variables.
-Let's see this in action by building the model one predictor at a time and watching
-how the REST_DAYS coefficient changes.
+We build the model one predictor at a time and watch how the REST_DAYS coefficient changes.
 
 :::{.callout-tip}
 ## Think About It
@@ -121,18 +145,18 @@ model_full = smf.ols(
 ).fit()
 
 print("REST_DAYS coefficient as we add controls:")
-print(f"  Model 1 (REST_DAYS only):           {model_1.params['REST_DAYS']:+.4f}  (p = {model_1.pvalues['REST_DAYS']:.4f})")
-print(f"  Model 2 (+ PLAYER_SEASON_AVG):      {model_2.params['REST_DAYS']:+.4f}  (p = {model_2.pvalues['REST_DAYS']:.4f})")
-print(f"  Model 3 (+ HOME + OPP_STRENGTH):    {model_full.params['REST_DAYS']:+.4f}  (p = {model_full.pvalues['REST_DAYS']:.4f})")
+print(f"  Model 1 (REST_DAYS only):           {model_1.params['REST_DAYS']:+.4f}  (p = {format_pvalue(model_1.pvalues['REST_DAYS'])})")
+print(f"  Model 2 (+ PLAYER_SEASON_AVG):      {model_2.params['REST_DAYS']:+.4f}  (p = {format_pvalue(model_2.pvalues['REST_DAYS'])})")
+print(f"  Model 3 (+ HOME + OPP_STRENGTH):    {model_full.params['REST_DAYS']:+.4f}  (p = {format_pvalue(model_full.pvalues['REST_DAYS'])})")
 print()
-print("Watch how the coefficient changes as we add controls!")
-print("This is what 'controlling for' means — isolating the rest effect")
-print("from confounders like player quality.")
+print("This progression illustrates what 'controlling for' means — isolating the rest")
+print("effect from confounders like player quality.")
 ```
 
 ## The full regression model
 
-We'll predict game score from:
+We predict game score from:
+
 - **REST_DAYS**: our variable of interest
 - **PLAYER_SEASON_AVG**: controls for player quality
 - **HOME**: home court advantage
@@ -156,14 +180,8 @@ Each coefficient has a specific interpretation: **"Holding everything else const
 increase in $x_j$ is associated with a $\hat{\beta}_j$ change in game score."
 :::
 
-This interpretation describes what the model estimates -- it doesn't mean we can literally
-hold everything else constant in the real world. We'll explore this distinction in Lecture 18.
-
-:::{.callout-tip}
-## Think About It
-Before looking at the numbers, which variable do you think has the
-biggest effect on game score? The smallest?
-:::
+This phrasing describes what the model estimates -- it does not mean we can literally
+hold everything else constant in the real world. We explore the distinction in Lecture 18.
 
 ```{python}
 # Extract and interpret coefficients
@@ -174,7 +192,7 @@ pvals = model_full.pvalues
 print("Coefficient interpretations:")
 print()
 print(f"  REST_DAYS:        {coefs['REST_DAYS']:+.3f}")
-print(f"    -> One more day of rest is associated with {coefs['REST_DAYS']:.3f} more game score points")
+print(f"    -> One more rest day is associated with a {coefs['REST_DAYS']:.3f} change in game score")
 print(f"    -> Over a 3-day difference: {coefs['REST_DAYS']*3:.2f} points")
 print()
 print(f"  PLAYER_SEASON_AVG: {coefs['PLAYER_SEASON_AVG']:+.3f}")
@@ -184,87 +202,7 @@ print(f"  HOME:             {coefs['HOME']:+.3f}")
 print(f"    -> Home court advantage is worth ~{coefs['HOME']:.1f} game score points")
 print()
 print(f"  OPP_STRENGTH:     {coefs['OPP_STRENGTH']:+.3f}")
-print(f"    -> Facing a stronger opponent (by 1 GS point avg) shifts your score by {coefs['OPP_STRENGTH']:.2f}")
-```
-
-## T-test for a single coefficient: is this distinguishable from zero?
-
-Look at the REST_DAYS coefficient and its **standard error** (the uncertainty in our estimate).
-The coefficient is small. The SE tells us how much that estimate would bounce around
-across different samples. Is the coefficient "big" relative to its uncertainty?
-
-```{python}
-# The coefficient and its SE
-beta_rest = coefs['REST_DAYS']
-se_rest = ses['REST_DAYS']
-# df_resid = degrees of freedom of the residuals (not a DataFrame!)
-df_resid = model_full.df_resid
-
-print(f"REST_DAYS coefficient: {beta_rest:.4f}")
-print(f"Standard error:        {se_rest:.4f}")
-print(f"Ratio (coef / SE):     {beta_rest / se_rest:.4f}")
-print()
-print("The ratio is about 2 -- the coefficient is roughly 2 SEs away from zero.")
-print("Is that enough to conclude the effect is real, not just noise?")
-```
-
-:::{.callout-important}
-## Definition: Coefficient t-test
-This ratio has a name -- the **t-statistic** -- and we know its distribution under the null hypothesis.
-
-For each coefficient, we test:
-
-$$H_0: \beta_j = 0 \quad \text{vs} \quad H_a: \beta_j \neq 0$$
-
-The test statistic is:
-
-$$t = \frac{\hat{\beta}_j}{\text{SE}(\hat{\beta}_j)}$$
-
-Under $H_0$, this follows a $t$-distribution with $n - p - 1$ degrees of freedom.
-:::
-
-(This assumes errors are approximately normal -- reasonable here given our large sample
-size, $n > 100{,}000$. With smaller samples, you'd want to check a residual Q-Q plot.)
-
-```{python}
-# T-test for REST_DAYS coefficient — verify by hand
-t_stat = beta_rest / se_rest
-p_value = 2 * stats.t.sf(abs(t_stat), df_resid)
-
-print("T-test for REST_DAYS coefficient (by hand):")
-print(f"  t = {beta_rest:.4f} / {se_rest:.4f} = {t_stat:.4f}")
-print(f"  df = {df_resid:.0f}")
-print(f"  p-value = {p_value:.4f}")
-print()
-print("From statsmodels:")
-print(f"  t = {model_full.tvalues['REST_DAYS']:.4f}")
-print(f"  p = {model_full.pvalues['REST_DAYS']:.4f}")
-print()
-print("They match!")
-```
-
-## Confidence interval for a coefficient
-
-A 95% **confidence interval** for $\beta_j$:
-
-$$\hat{\beta}_j \pm t^* \times \text{SE}(\hat{\beta}_j)$$
-
-where $t^*$ is the critical value from the $t$-distribution.
-
-```{python}
-# 95% CI for REST_DAYS coefficient
-t_star = stats.t.ppf(0.975, df_resid)
-ci_lower = beta_rest - t_star * se_rest
-ci_upper = beta_rest + t_star * se_rest
-
-print(f"95% CI for REST_DAYS coefficient:")
-print(f"  {beta_rest:.4f} +/- {t_star:.3f} x {se_rest:.4f}")
-print(f"  [{ci_lower:.4f}, {ci_upper:.4f}]")
-print()
-print(f"Interpretation: we're 95% confident that one extra day of rest is associated")
-print(f"with between {ci_lower:.3f} and {ci_upper:.3f} additional game score points.")
-print()
-print(f"From statsmodels: {model_full.conf_int().loc['REST_DAYS'].values}")
+print(f"    -> Facing a stronger opponent (by 1 GS point avg) shifts score by {coefs['OPP_STRENGTH']:.2f}")
 ```
 
 ```{python}
@@ -295,14 +233,186 @@ plt.tight_layout()
 plt.show()
 
 print("Player quality dominates. REST_DAYS is barely distinguishable from zero.")
-print("(Coefficients are standardized: each bar shows the effect of a 1-SD change in the predictor.)")
 ```
+
+Which of these coefficients should we trust? The bars for player quality and home court
+are clearly separated from zero. The bar for rest days barely clears the line. We need a
+formal framework to decide which coefficients are distinguishable from noise.
+
+## Which coefficients matter? The null hypothesis
+
+For each coefficient, the **null hypothesis** states that the predictor contributes nothing
+to the model after accounting for all other predictors:
+
+$$H_0: \beta_j = 0 \quad \text{vs} \quad H_a: \beta_j \neq 0$$
+
+If $\beta_j = 0$, then predictor $j$ is dead weight -- the model would be equally good
+without it. The question: can we reject that null hypothesis?
+
+## Bootstrap approach: computing a p-value by resampling
+
+One way to assess whether the REST_DAYS coefficient is distinguishable from zero
+is to bootstrap the coefficient and see how often the resampled estimate crosses zero.
+
+```{python}
+# Bootstrap the REST_DAYS coefficient
+np.random.seed(42)
+n_boot = 2000
+boot_coefs = np.zeros(n_boot)
+
+for i in range(n_boot):
+    boot_idx = np.random.choice(len(nba_games), size=len(nba_games), replace=True)
+    boot_data = nba_games.iloc[boot_idx]
+    boot_model = smf.ols(
+        'GAME_SCORE ~ REST_DAYS + PLAYER_SEASON_AVG + HOME + OPP_STRENGTH',
+        data=boot_data
+    ).fit()
+    boot_coefs[i] = boot_model.params['REST_DAYS']
+
+boot_se = boot_coefs.std()
+boot_ci = np.percentile(boot_coefs, [2.5, 97.5])
+# Two-sided p-value: fraction of bootstrap samples on the opposite side of zero
+if np.mean(boot_coefs) >= 0:
+    boot_p = 2 * np.mean(boot_coefs <= 0)
+else:
+    boot_p = 2 * np.mean(boot_coefs >= 0)
+
+print("Bootstrap inference for REST_DAYS coefficient:")
+print(f"  Original estimate: {coefs['REST_DAYS']:.4f}")
+print(f"  Bootstrap SE:      {boot_se:.4f}")
+print(f"  Bootstrap 95% CI:  [{boot_ci[0]:.4f}, {boot_ci[1]:.4f}]")
+print(f"  Bootstrap p-value: {format_pvalue(boot_p)}")
+```
+
+The bootstrap gives us a distribution of the coefficient across resampled datasets.
+Now we derive the same result using a formula.
+
+## The t-statistic: a formula shortcut
+
+The bootstrap standard error and the formula-based standard error measure the same thing:
+how much the coefficient would vary across repeated samples. The **t-statistic** divides
+the coefficient by its standard error.
+
+```{python}
+# The coefficient and its SE
+beta_rest = coefs['REST_DAYS']
+se_rest = ses['REST_DAYS']
+# df_resid = degrees of freedom of the residuals (not a DataFrame!)
+df_resid = model_full.df_resid
+
+print(f"REST_DAYS coefficient: {beta_rest:.4f}")
+print(f"Formula SE:            {se_rest:.4f}")
+print(f"Bootstrap SE:          {boot_se:.4f}  (close match)")
+print(f"Ratio (coef / SE):     {beta_rest / se_rest:.4f}")
+print()
+print("The ratio is about 2 -- the coefficient sits roughly 2 SEs from zero.")
+```
+
+:::{.callout-important}
+## Definition: Coefficient t-test
+This ratio has a name -- the **t-statistic** -- and we know its distribution under the null hypothesis.
+
+For each coefficient, we test:
+
+$$H_0: \beta_j = 0 \quad \text{vs} \quad H_a: \beta_j \neq 0$$
+
+The test statistic is:
+
+$$t = \frac{\hat{\beta}_j}{\text{SE}(\hat{\beta}_j)}$$
+
+Under $H_0$, this statistic follows a $t$-distribution with $n - p - 1$ degrees of freedom.
+:::
+
+(This derivation assumes approximately normal errors -- reasonable here given our large
+sample size, $n > 100{,}000$. With smaller samples, you would want to check a residual Q-Q plot.)
+
+```{python}
+# T-test for REST_DAYS coefficient — verify by hand
+t_stat = beta_rest / se_rest
+p_value = 2 * stats.t.sf(abs(t_stat), df_resid)
+
+print("T-test for REST_DAYS coefficient (by hand):")
+print(f"  t = {beta_rest:.4f} / {se_rest:.4f} = {t_stat:.4f}")
+print(f"  df = {df_resid:.0f}")
+print(f"  p-value = {format_pvalue(p_value)}")
+print()
+print("From statsmodels:")
+print(f"  t = {model_full.tvalues['REST_DAYS']:.4f}")
+print(f"  p = {format_pvalue(model_full.pvalues['REST_DAYS'])}")
+print()
+print("They match! The formula gives the same answer as bootstrap, much faster.")
+```
+
+## Confidence interval for a coefficient
+
+A 95% **confidence interval** for $\beta_j$:
+
+$$\hat{\beta}_j \pm t^* \times \text{SE}(\hat{\beta}_j)$$
+
+where $t^*$ is the critical value from the $t$-distribution.
+
+```{python}
+# 95% CI for REST_DAYS coefficient
+t_star = stats.t.ppf(0.975, df_resid)
+ci_lower = beta_rest - t_star * se_rest
+ci_upper = beta_rest + t_star * se_rest
+
+print(f"95% CI for REST_DAYS coefficient:")
+print(f"  {beta_rest:.4f} +/- {t_star:.3f} x {se_rest:.4f}")
+print(f"  [{ci_lower:.4f}, {ci_upper:.4f}]")
+print()
+print(f"Interpretation: we are 95% confident that one extra day of rest is associated")
+print(f"with between {ci_lower:.3f} and {ci_upper:.3f} additional game score points.")
+print()
+print(f"From statsmodels: {model_full.conf_int().loc['REST_DAYS'].values}")
+print(f"From bootstrap:   [{boot_ci[0]:.4f}, {boot_ci[1]:.4f}]")
+```
+
+## Can additional covariates flip the rest-days sign?
+
+The REST_DAYS coefficient is negative (or near zero) -- disappointing if you hoped rest
+helps performance. Can adding more covariates change the story?
+
+We derive two additional predictors from columns already in the dataset:
+
+- **BACK_TO_BACK**: a binary indicator for playing on consecutive days (REST_DAYS = 1)
+- **PREV_MIN**: minutes played in the previous game (a fatigue/usage proxy)
+
+```{python}
+# Extended model with additional covariates
+nba_extended = nba_games.dropna(subset=['PREV_MIN']).copy()
+
+model_extended = smf.ols(
+    'GAME_SCORE ~ REST_DAYS + PLAYER_SEASON_AVG + HOME + OPP_STRENGTH + BACK_TO_BACK + PREV_MIN',
+    data=nba_extended
+).fit()
+
+print("REST_DAYS coefficient across model specifications:")
+print(f"  Base model (4 predictors):     {model_full.params['REST_DAYS']:+.4f}  (p = {format_pvalue(model_full.pvalues['REST_DAYS'])})")
+print(f"  Extended model (6 predictors): {model_extended.params['REST_DAYS']:+.4f}  (p = {format_pvalue(model_extended.pvalues['REST_DAYS'])})")
+print()
+print("Extended model coefficients:")
+for var in ['REST_DAYS', 'BACK_TO_BACK', 'PREV_MIN', 'PLAYER_SEASON_AVG', 'HOME', 'OPP_STRENGTH']:
+    print(f"  {var:25s} {model_extended.params[var]:+.4f}  (p = {format_pvalue(model_extended.pvalues[var])})")
+print()
+print("The coefficient for REST_DAYS remains negative (or near zero) regardless of")
+print("which covariates we include. Additional rest does not appear to improve performance")
+print("in this dataset — a genuine finding, not an artifact of omitted variables.")
+print("Sometimes the data simply do not support the hypothesis we hoped for.")
+```
+
+:::{.callout-note}
+## Why diagnostics come after inference
+We presented the regression results and inference first, then check assumptions below.
+The pedagogical logic is deliberate: show the exciting results first, then check whether
+you should trust them. In practice, you should run diagnostics early and often -- but
+in a lecture, the punchline motivates the careful checking that follows.
+:::
 
 ## Regression diagnostics: checking the model's assumptions
 
-The t-tests and confidence intervals above assume that residuals are approximately
-normal with constant variance. Before trusting those results, we should **check**.
-Diagnostics are how we look under the hood of a regression model.
+The t-tests and confidence intervals above assume residuals are
+approximately normal with constant variance. Diagnostics let us look under the hood.
 
 :::{.callout-important}
 ## Definition: LINE Conditions
@@ -314,13 +424,79 @@ The assumptions for regression inference are remembered by the **LINE** mnemonic
 - **E**qual variance: the spread of residuals is roughly constant across fitted values (no heteroscedasticity).
 :::
 
+### What LINE looks like: satisfied vs. violated
+
+Before examining our NBA residuals, it helps to see what each LINE condition looks like
+when it holds and when it fails. The following synthetic examples illustrate four
+diagnostic scenarios in a single panel.
+
+```{python}
+# Synthetic examples: LINE satisfied vs. violated
+np.random.seed(0)
+n_syn = 300
+
+fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+
+# (a) Good residuals — LINE satisfied
+x_good = np.random.uniform(0, 10, n_syn)
+y_good = 2 + 1.5 * x_good + np.random.normal(0, 2, n_syn)
+fit_good = np.polyval(np.polyfit(x_good, y_good, 1), x_good)
+resid_good = y_good - fit_good
+axes[0, 0].scatter(fit_good, resid_good, alpha=0.4, s=12, color='steelblue')
+axes[0, 0].axhline(0, color='red', linestyle='--', linewidth=1)
+axes[0, 0].set_title('(a) LINE Satisfied\nRandom scatter, constant spread')
+axes[0, 0].set_xlabel('Fitted values')
+axes[0, 0].set_ylabel('Residuals')
+
+# (b) Non-linearity — curved pattern
+x_nl = np.random.uniform(0, 10, n_syn)
+y_nl = 2 + 0.5 * x_nl**2 + np.random.normal(0, 3, n_syn)
+fit_nl = np.polyval(np.polyfit(x_nl, y_nl, 1), x_nl)
+resid_nl = y_nl - fit_nl
+axes[0, 1].scatter(fit_nl, resid_nl, alpha=0.4, s=12, color='#e74c3c')
+axes[0, 1].axhline(0, color='red', linestyle='--', linewidth=1)
+axes[0, 1].set_title('(b) Non-linearity\nCurved pattern in residuals')
+axes[0, 1].set_xlabel('Fitted values')
+axes[0, 1].set_ylabel('Residuals')
+
+# (c) Heteroscedasticity — funnel shape
+x_het = np.random.uniform(0, 10, n_syn)
+y_het = 2 + 1.5 * x_het + np.random.normal(0, 1, n_syn) * x_het
+fit_het = np.polyval(np.polyfit(x_het, y_het, 1), x_het)
+resid_het = y_het - fit_het
+axes[1, 0].scatter(fit_het, resid_het, alpha=0.4, s=12, color='#e67e22')
+axes[1, 0].axhline(0, color='red', linestyle='--', linewidth=1)
+axes[1, 0].set_title('(c) Heteroscedasticity\nFunnel-shaped spread')
+axes[1, 0].set_xlabel('Fitted values')
+axes[1, 0].set_ylabel('Residuals')
+
+# (d) Non-normality — heavy tails in Q-Q plot
+resid_heavy = np.random.standard_t(df=3, size=n_syn) * 2
+theoretical_q = np.sort(np.random.normal(0, 1, n_syn))
+sample_q = np.sort((resid_heavy - resid_heavy.mean()) / resid_heavy.std())
+axes[1, 1].scatter(theoretical_q, sample_q, alpha=0.4, s=12, color='#9b59b6')
+lims = [min(theoretical_q.min(), sample_q.min()), max(theoretical_q.max(), sample_q.max())]
+axes[1, 1].plot(lims, lims, 'r--', linewidth=1)
+axes[1, 1].set_title('(d) Non-normality\nHeavy tails in Q-Q plot')
+axes[1, 1].set_xlabel('Theoretical quantiles')
+axes[1, 1].set_ylabel('Sample quantiles')
+
+plt.tight_layout()
+plt.show()
+
+print("(a) No pattern, constant spread — LINE conditions hold.")
+print("(b) Curvature signals a missing nonlinear term (L violated).")
+print("(c) Spread that fans out signals heteroscedasticity (E violated).")
+print("(d) Points deviating from the diagonal in the tails signal non-normality (N violated).")
+```
+
 ### Residual plot: do residuals have constant spread?
 
 :::{.callout-important}
 ## Definition: Residual Plot
 A **residual plot** shows residuals (observed $-$ predicted) vs. fitted values. We want
 to see a random scatter with no pattern. If the spread of residuals changes with the
-fitted value, that's **heteroscedasticity** -- the model's uncertainty isn't uniform.
+fitted value, that is **heteroscedasticity** -- the model's uncertainty is not uniform.
 :::
 
 ```{python}
@@ -338,7 +514,6 @@ axes[0].set_ylabel('Residuals')
 axes[0].set_title('Residuals vs Fitted Values')
 
 # Add a LOWESS smoother to highlight any trend
-from statsmodels.nonparametric.smoothers_lowess import lowess
 smooth = lowess(residuals, fitted_vals, frac=0.1)
 axes[0].plot(smooth[:, 0], smooth[:, 1], color='orange', linewidth=2, label='LOWESS smooth')
 axes[0].legend()
@@ -347,7 +522,7 @@ axes[0].legend()
 std_resid = model_full.get_influence().resid_studentized_internal
 axes[1].scatter(fitted_vals, np.sqrt(np.abs(std_resid)), alpha=0.02, s=5, color='steelblue')
 axes[1].set_xlabel('Fitted Values')
-axes[1].set_ylabel('√|Standardized Residuals|')
+axes[1].set_ylabel(r'$\sqrt{|\mathrm{Standardized\ Residuals}|}$')
 axes[1].set_title('Scale-Location Plot\n(check for heteroscedasticity)')
 smooth2 = lowess(np.sqrt(np.abs(std_resid)), fitted_vals, frac=0.1)
 axes[1].plot(smooth2[:, 0], smooth2[:, 1], color='orange', linewidth=2)
@@ -355,40 +530,43 @@ axes[1].plot(smooth2[:, 0], smooth2[:, 1], color='orange', linewidth=2)
 plt.tight_layout()
 plt.show()
 
-print("If the spread of residuals fans out (or narrows) across fitted values,")
-print("that's heteroscedasticity — the model's uncertainty varies with the prediction.")
-print("Here the spread looks roughly constant, which is reassuring.")
+print("The spread of residuals looks roughly constant across fitted values — reassuring.")
 ```
 
 ### Q-Q plot: are residuals approximately normal?
 
-A **Q-Q plot** compares residual quantiles to what we'd expect from a normal distribution.
-Points on the diagonal = normal. Deviations in the tails = heavy tails or skew.
+A **Q-Q plot** compares residual quantiles to what we would expect from a normal distribution.
+Points on the diagonal indicate normality. Deviations in the tails indicate heavy tails or skew.
 
 ```{python}
-# Q-Q plot
+# Q-Q plot using scipy.stats.probplot for correct scaling
 fig, ax = plt.subplots(figsize=(6, 6))
-sm.qqplot(residuals, line='45', ax=ax, alpha=0.02, markerfacecolor='steelblue',
-          markeredgecolor='steelblue', markersize=3)
-ax.set_title('Q-Q Plot of Residuals\n(NBA regression model)')
+(theoretical_quantiles, ordered_residuals), (slope, intercept, r) = stats.probplot(
+    residuals, dist='norm'
+)
+ax.scatter(theoretical_quantiles, ordered_residuals, alpha=0.02, s=5, color='steelblue')
+# Reference line: if residuals are normal, points lie on y = intercept + slope * x
+ref_x = np.array([theoretical_quantiles.min(), theoretical_quantiles.max()])
+ax.plot(ref_x, intercept + slope * ref_x, 'r-', linewidth=1.5, label='Normal reference line')
 ax.set_xlabel('Theoretical Quantiles (Normal)')
 ax.set_ylabel('Sample Quantiles (Residuals)')
+ax.set_title('Q-Q Plot of Residuals\n(NBA regression model)')
+ax.legend()
 plt.tight_layout()
 plt.show()
 
 print("The middle of the distribution follows the normal line closely.")
-print("The tails deviate — there are more extreme game scores than a normal")
-print("distribution would predict. This is common in sports data.")
+print("The tails deviate — more extreme game scores occur than a normal")
+print("distribution would predict. This pattern is common in sports data.")
 ```
 
 :::{.callout-warning}
 ## When diagnostics reveal problems
 If residuals show strong non-normality or heteroscedasticity, the formula-based
-standard errors and p-values may be unreliable. What can you do?
+standard errors and p-values may be unreliable. Options include:
 
-- **Bootstrap confidence intervals** (Lecture 8) don't assume normality -- they let
-  the data speak for itself. When residuals aren't normal, bootstrap CIs are more
-  reliable than formula CIs.
+- **Bootstrap confidence intervals** (Lecture 8) do not assume normality -- they let
+  the data speak for itself.
 - **Robust standard errors** adjust for heteroscedasticity without changing the
   coefficient estimates.
 - **Transform the response** (e.g., log price) to stabilize variance.
@@ -396,207 +574,26 @@ standard errors and p-values may be unreliable. What can you do?
 
 For the NBA model, our sample is large ($n > 100{,}000$) and the Q-Q plot is
 reasonable in the middle, so the formula-based inference is trustworthy here.
-But with smaller samples or heavier tails, you'd want bootstrap CIs.
+With smaller samples or heavier tails, bootstrap CIs would be the safer choice.
 
 ## The significance-vs-importance tension
 
 :::{.callout-tip}
 ## Think About It
 The t-test says REST_DAYS is "statistically significant" ($p \approx 0.04$).
-But look at that tiny bar in the plot above. The model barely changes when we add rest days.
-Should we care?
+Yet the rest-days bar in the coefficient plot above barely clears zero.
+The model scarcely changes when we add rest days. Should we care?
 :::
 
-This is the tension between **statistical significance** and **practical importance**.
-
-## Association is not causation
-
-:::{.callout-warning}
-## Association is not causation
-Our regression **controls for** player quality, home court, and opponent
-strength, but it does NOT estimate a **causal effect** of rest. Coaches choose when to
-rest players for strategic reasons we can't observe in the data. The coefficient tells
-us about association, not causation.
-
-We'll formalize this distinction in Lecture 18 using causal DAGs. For now, remember:
-regression can adjust for measured confounders, but it cannot eliminate unmeasured ones.
-:::
-
-## Regression inference on Airbnb data
-
-The NBA example showed statistical significance without practical importance. But regression
-inference isn't always disappointing -- sometimes the effect IS real and large.
-Let's see what that looks like with Airbnb pricing.
-
-The question: **is the price premium for an extra bathroom statistically significant,
-and is it large enough to matter?**
-
-```{python}
-# Load and clean Airbnb data
-airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
-
-# Convert price to numeric (handles both numeric and "$150.00" string formats)
-airbnb['price_clean'] = pd.to_numeric(
-    airbnb['price'].astype(str).str.replace(r'[\$,]', '', regex=True),
-    errors='coerce'
-)
-
-# Filter to reasonable listings
-airbnb_clean = airbnb[
-    (airbnb['price_clean'] > 0) &
-    (airbnb['price_clean'] <= 500) &
-    (airbnb['bathrooms'].notna()) &
-    (airbnb['bedrooms'].notna()) &
-    (airbnb['room_type'] == 'Entire home/apt')
-].copy()
-
-print(f"Airbnb listings (filtered): {len(airbnb_clean):,}")
-print(f"Price range: ${airbnb_clean['price_clean'].min():.0f} - ${airbnb_clean['price_clean'].max():.0f}")
-print(f"Bathrooms range: {airbnb_clean['bathrooms'].min():.0f} - {airbnb_clean['bathrooms'].max():.0f}")
-```
-
-Before modeling, let's visualize. The `neighbourhood_group_cleansed` column represents
-NYC boroughs (Manhattan, Brooklyn, Queens, Bronx, Staten Island).
-
-```{python}
-# Visualize price by bathrooms
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-sns.boxplot(x='bathrooms', y='price_clean', data=airbnb_clean, ax=axes[0], color='steelblue')
-axes[0].set_xlabel('Number of Bathrooms')
-axes[0].set_ylabel('Price per Night ($)')
-axes[0].set_title('Airbnb Price by Bathrooms')
-
-sns.boxplot(x='neighbourhood_group_cleansed', y='price_clean',
-            data=airbnb_clean, ax=axes[1], color='steelblue')
-axes[1].set_xlabel('Borough')
-axes[1].set_ylabel('Price per Night ($)')
-axes[1].set_title('Airbnb Price by Borough')
-axes[1].tick_params(axis='x', rotation=30)
-
-plt.tight_layout()
-plt.show()
-
-print("More bathrooms = higher price. But does this hold after controlling for bedrooms and borough?")
-```
-
-```{python}
-# Regression: price ~ bathrooms + bedrooms + borough
-# C(...) tells statsmodels to treat borough as categorical (one-hot encoding, as in Lec 6)
-airbnb_model = smf.ols(
-    'price_clean ~ bathrooms + bedrooms + C(neighbourhood_group_cleansed)',
-    data=airbnb_clean
-).fit()
-
-print(airbnb_model.summary().tables[1])
-```
-
-```{python}
-# Focus on the bathrooms coefficient
-beta_bath = airbnb_model.params['bathrooms']
-se_bath = airbnb_model.bse['bathrooms']
-ci_bath = airbnb_model.conf_int().loc['bathrooms']
-p_bath = airbnb_model.pvalues['bathrooms']
-
-print(f"Bathrooms coefficient: ${beta_bath:.2f} per night")
-print(f"95% CI: [${ci_bath[0]:.2f}, ${ci_bath[1]:.2f}]")
-print(f"p-value: {p_bath:.2e}")
-print()
-print(f"Interpretation: controlling for bedrooms and borough, each additional bathroom")
-print(f"is associated with ${beta_bath:.2f} more per night.")
-print()
-print("This IS practically meaningful -- unlike the NBA rest effect!")
-```
-
-## Bonus: interaction terms -- does the bathroom premium vary by borough?
-
-Maybe an extra bathroom matters more in Manhattan than in the Bronx. We can test this
-with an **interaction term** (recall these from Lecture 6).
-
-```{python}
-# Model with interaction: bathrooms x borough
-airbnb_interact = smf.ols(
-    'price_clean ~ bathrooms * C(neighbourhood_group_cleansed) + bedrooms',
-    data=airbnb_clean
-).fit()
-
-# Extract bathroom effects by borough (main effect + interaction)
-# statsmodels names interaction terms like 'bathrooms:C(borough)[T.Manhattan]'
-boroughs = sorted(airbnb_clean['neighbourhood_group_cleansed'].unique())
-base_borough = boroughs[0]
-base_effect = airbnb_interact.params['bathrooms']
-
-print("Bathroom premium by borough:")
-print("=" * 50)
-print(f"  {base_borough} (baseline): ${base_effect:.2f}/night per bathroom")
-for b in boroughs[1:]:
-    key = f'bathrooms:C(neighbourhood_group_cleansed)[T.{b}]'
-    if key in airbnb_interact.params:
-        interaction = airbnb_interact.params[key]
-        total = base_effect + interaction
-        p_int = airbnb_interact.pvalues[key]
-        print(f"  {b}: ${total:.2f}/night per bathroom (interaction p = {p_int:.4f})")
-```
-
-## Prediction intervals vs. confidence intervals
-
-We've built confidence intervals for **coefficients** -- but what about predictions?
-When we use a regression model to predict at a particular value of $x$, there are
-two different questions we might ask, and they give different intervals.
-
-- **Confidence interval for the mean response**: How uncertain are we about the
-  *average* $Y$ at this $x$? This reflects estimation uncertainty in $\hat{\beta}$.
-- **Prediction interval for a new observation**: Where might a *single new* $Y$ fall?
-  This adds individual variability ($\varepsilon$) on top of estimation uncertainty.
-
-:::{.callout-important}
-## Prediction intervals are always wider
-A prediction interval accounts for **two sources of uncertainty**: (1) we don't know
-the true regression line exactly (estimation uncertainty), and (2) individual
-observations scatter around the line (residual variability $\sigma^2$). A confidence
-interval for the mean only includes source (1).
-:::
-
-```{python}
-# Prediction interval vs confidence interval — Airbnb model
-# get_prediction returns both CI for the mean and PI for a new observation
-pred_data = airbnb_clean.copy()
-predictions = airbnb_model.get_prediction(pred_data)
-pred_summary = predictions.summary_frame(alpha=0.05)
-
-# Pick one predictor to plot against: bathrooms
-# Average across other covariates by plotting prediction vs bathrooms
-bath_vals = np.arange(1, airbnb_clean['bathrooms'].max() + 0.5, 0.5)
-grid = pd.DataFrame({
-    'bathrooms': bath_vals,
-    'bedrooms': [airbnb_clean['bedrooms'].median()] * len(bath_vals),
-    'neighbourhood_group_cleansed': ['Manhattan'] * len(bath_vals),
-})
-grid_pred = airbnb_model.get_prediction(grid).summary_frame(alpha=0.05)
-
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.plot(bath_vals, grid_pred['mean'], 'o-', color='steelblue', label='Predicted mean')
-ax.fill_between(bath_vals, grid_pred['mean_ci_lower'], grid_pred['mean_ci_upper'],
-                alpha=0.4, color='steelblue', label='95% CI for mean response')
-ax.fill_between(bath_vals, grid_pred['obs_ci_lower'], grid_pred['obs_ci_upper'],
-                alpha=0.15, color='orange', label='95% prediction interval')
-ax.set_xlabel('Number of Bathrooms')
-ax.set_ylabel('Predicted Price ($/night)')
-ax.set_title('CI for Mean Response vs. Prediction Interval\n(Manhattan, median bedrooms)')
-ax.legend()
-plt.tight_layout()
-plt.show()
-
-print("The blue band (CI for the mean) is narrow: we're fairly sure about the average price.")
-print("The orange band (prediction interval) is wide: individual listings vary a lot around that average.")
-```
+This example illustrates the tension between **statistical significance** and **practical importance**.
 
 ## "Significant" does not mean "important"
 
-> "A small p-value does not mean a big effect."
+A small p-value does not mean a large effect. This principle is one of the most
+frequently misunderstood ideas in applied statistics.
 
-Let's return to the NBA. Our REST_DAYS coefficient was statistically significant ($p \approx 0.04$).
-But look at the **effect size**.
+Let us return to the NBA model. The REST_DAYS coefficient was statistically significant ($p \approx 0.04$).
+Look at the **effect size**.
 
 ```{python}
 # Effect size for REST_DAYS in NBA model
@@ -605,7 +602,6 @@ rest_se = model_full.bse['REST_DAYS']
 game_score_std = nba_games['GAME_SCORE'].std()
 
 # Standardized effect size: coefficient divided by outcome SD
-# This is analogous to Cohen's d — expressing the effect in SD units
 std_effect = rest_coef / game_score_std
 
 print("=== NBA Rest Effect: Significance vs Importance ===")
@@ -613,17 +609,13 @@ print()
 print(f"Coefficient: {rest_coef:.3f} game score points per rest day")
 print(f"Standard deviation of game score: {game_score_std:.2f}")
 print(f"Standardized effect size: {std_effect:.4f} SD")
-print(f"p-value: {model_full.pvalues['REST_DAYS']:.4f}")
+print(f"p-value: {format_pvalue(model_full.pvalues['REST_DAYS'])}")
 print()
 print("For context, Cohen's d benchmarks for effect sizes:")
 print("  Small effect:  d = 0.2")
 print("  Medium effect: d = 0.5")
 print("  Large effect:  d = 0.8")
 print(f"  Our effect:    {std_effect:.4f}  <-- essentially zero")
-print()
-print(f"A standardized effect of {std_effect:.4f} means rest shifts the distribution")
-print(f"by {abs(std_effect)*100:.1f}% of a standard deviation. If you lined up 100 games,")
-print(f"you couldn't pick out which ones had the extra rest day.")
 print()
 print(f"With n = {len(nba_games):,} observations, we can detect effects that are")
 print(f"completely negligible in practice.")
@@ -649,36 +641,236 @@ plt.tight_layout()
 plt.show()
 
 print("The rest effect is dwarfed by player quality and even home court advantage.")
-print("Would you bet real money on a 0.3-point edge? Probably not.")
 ```
 
 :::{.callout-tip}
 ## Think About It
-A sports analytics team comes to you and says "We've proven rest helps
-performance -- the p-value is 0.04!" What questions should you ask?
+A sports analytics team comes to you and says "We ran a regression and found a
+negative coefficient for rest days -- extra rest actually *hurts* performance,
+with $p = 0.04$!" What questions should you ask?
 :::
 
-1. How big is the effect? (Tiny -- 0.3 points, standardized effect near zero)
-2. Is there confounding? (Yes -- coaches strategically rest players)
-3. Does the model capture all relevant factors? (No -- schedule difficulty, travel, etc.)
-4. Would this hold out of sample? (Uncertain)
+1. How big is the effect? (Tiny -- a fraction of a point, standardized effect near zero.)
+2. Is there confounding? (Yes -- coaches strategically rest players before tough opponents.)
+3. Does the model capture all relevant factors? (No -- schedule difficulty, travel, fatigue history, etc.)
+4. Would this result hold out of sample? (Uncertain.)
 
 Statistical significance with large samples can detect effects **too small to matter**.
+
+## Association is not causation
+
+:::{.callout-warning}
+## Association is not causation
+Our regression **controls for** player quality, home court, and opponent
+strength, but it does NOT estimate a **causal effect** of rest. Coaches choose when to
+rest players for strategic reasons we cannot observe in the data. The coefficient tells
+us about association, not causation.
+
+We formalize this distinction in Lecture 18 using causal DAGs. For now, remember:
+regression can adjust for measured confounders, but it cannot eliminate unmeasured ones.
+:::
+
+## Regression inference on Airbnb data
+
+The NBA example showed statistical significance without practical importance. Regression
+inference is not always so underwhelming -- sometimes the effect IS real and large.
+
+The question: **is the price premium for an extra bathroom statistically significant,
+and is it large enough to matter?**
+
+We filter to listings under \$500/night to focus on typical listings and avoid extreme
+luxury outliers that would distort the regression.
+
+```{python}
+# Load and clean Airbnb data
+airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
+
+# Convert price to numeric (handles both numeric and "$150.00" string formats)
+airbnb['price_clean'] = pd.to_numeric(
+    airbnb['price'].astype(str).str.replace(r'[\$,]', '', regex=True),
+    errors='coerce'
+)
+
+# Filter to typical listings (under $500/night removes extreme luxury outliers)
+airbnb_clean = airbnb[
+    (airbnb['price_clean'] > 0) &
+    (airbnb['price_clean'] <= 500) &
+    (airbnb['bathrooms'].notna()) &
+    (airbnb['bedrooms'].notna()) &
+    (airbnb['room_type'] == 'Entire home/apt')
+].copy()
+
+print(f"Airbnb listings (filtered): {len(airbnb_clean):,}")
+print(f"Price range: ${airbnb_clean['price_clean'].min():.0f} - ${airbnb_clean['price_clean'].max():.0f}")
+print(f"Bathrooms range: {airbnb_clean['bathrooms'].min():.0f} - {airbnb_clean['bathrooms'].max():.0f}")
+```
+
+Before modeling, let us visualize. The `neighbourhood_group_cleansed` column represents
+NYC boroughs (Manhattan, Brooklyn, Queens, Bronx, Staten Island).
+
+```{python}
+# Visualize price by bathrooms
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+sns.boxplot(x='bathrooms', y='price_clean', data=airbnb_clean, ax=axes[0], color='steelblue')
+axes[0].set_xlabel('Number of Bathrooms')
+axes[0].set_ylabel('Price per Night ($)')
+axes[0].set_title('Airbnb Price by Bathrooms')
+
+sns.boxplot(x='neighbourhood_group_cleansed', y='price_clean',
+            data=airbnb_clean, ax=axes[1], color='steelblue')
+axes[1].set_xlabel('Borough')
+axes[1].set_ylabel('Price per Night ($)')
+axes[1].set_title('Airbnb Price by Borough')
+axes[1].tick_params(axis='x', rotation=30)
+
+plt.tight_layout()
+plt.show()
+
+print("More bathrooms = higher price. Does this hold after controlling for bedrooms and borough?")
+```
+
+```{python}
+# Regression: price ~ bathrooms + bedrooms + borough
+airbnb_model = smf.ols(
+    'price_clean ~ bathrooms + bedrooms + C(neighbourhood_group_cleansed)',
+    data=airbnb_clean
+).fit()
+
+print(airbnb_model.summary().tables[1])
+```
+
+```{python}
+# Focus on the bathrooms coefficient
+beta_bath = airbnb_model.params['bathrooms']
+se_bath = airbnb_model.bse['bathrooms']
+ci_bath = airbnb_model.conf_int().loc['bathrooms']
+p_bath = airbnb_model.pvalues['bathrooms']
+
+print(f"Bathrooms coefficient: ${beta_bath:.2f} per night")
+print(f"95% CI: [${ci_bath[0]:.2f}, ${ci_bath[1]:.2f}]")
+print(f"p-value: {format_pvalue(p_bath)}")
+print()
+print(f"Interpretation: controlling for bedrooms and borough, each additional bathroom")
+print(f"is associated with ${beta_bath:.2f} more per night.")
+print()
+print("This IS practically meaningful -- unlike the NBA rest effect!")
+```
+
+## Bonus: interaction terms -- does the bathroom premium vary by borough?
+
+Perhaps an extra bathroom matters more in Manhattan than in the Bronx. We can test this
+with an **interaction term** (recall these from Lecture 6).
+
+```{python}
+# Model with interaction: bathrooms x borough
+airbnb_interact = smf.ols(
+    'price_clean ~ bathrooms * C(neighbourhood_group_cleansed) + bedrooms',
+    data=airbnb_clean
+).fit()
+
+# Extract bathroom effects by borough (main effect + interaction)
+boroughs = sorted(airbnb_clean['neighbourhood_group_cleansed'].unique())
+base_borough = boroughs[0]
+base_effect = airbnb_interact.params['bathrooms']
+
+print("Bathroom premium by borough:")
+print("=" * 50)
+print(f"  {base_borough} (baseline): ${base_effect:.2f}/night per bathroom")
+for b in boroughs[1:]:
+    key = f'bathrooms:C(neighbourhood_group_cleansed)[T.{b}]'
+    if key in airbnb_interact.params:
+        interaction = airbnb_interact.params[key]
+        total = base_effect + interaction
+        p_int = airbnb_interact.pvalues[key]
+        print(f"  {b}: ${total:.2f}/night per bathroom (interaction p = {format_pvalue(p_int)})")
+```
+
+## Prediction intervals vs. confidence intervals
+
+We have built confidence intervals for **coefficients** -- but what about predictions?
+When we use a regression model to predict at a particular value of $x$, there are
+two different questions, and they give different intervals.
+
+- **Confidence interval for the mean response**: How uncertain are we about the
+  *average* $Y$ at this $x$? This interval reflects estimation uncertainty in $\hat{\beta}$.
+- **Prediction interval for a new observation**: Where might a *single new* $Y$ fall?
+  This interval adds individual variability ($\varepsilon$) on top of estimation uncertainty.
+
+:::{.callout-important}
+## Prediction intervals are always wider
+A prediction interval accounts for **two sources of uncertainty**: (1) estimation
+uncertainty in the regression line, and (2) individual variability around the line
+($\sigma^2$). A confidence interval for the mean includes only source (1). In formulas:
+
+$$\text{PI width}^2 \;\approx\; \text{CI width}^2 \;+\; \hat{\sigma}^2$$
+
+where $\hat{\sigma}^2$ is the estimated residual variance. The prediction interval is
+always wider, and the gap depends on how noisy the response is.
+:::
+
+```{python}
+# Prediction interval vs confidence interval — Airbnb model
+bath_vals = np.arange(1, airbnb_clean['bathrooms'].max() + 0.5, 0.5)
+grid = pd.DataFrame({
+    'bathrooms': bath_vals,
+    'bedrooms': [airbnb_clean['bedrooms'].median()] * len(bath_vals),
+    'neighbourhood_group_cleansed': ['Manhattan'] * len(bath_vals),
+})
+grid_pred = airbnb_model.get_prediction(grid).summary_frame(alpha=0.05)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(bath_vals, grid_pred['mean'], 'o-', color='steelblue', label='Predicted mean')
+ax.fill_between(bath_vals, grid_pred['mean_ci_lower'], grid_pred['mean_ci_upper'],
+                alpha=0.4, color='steelblue', label='95% CI for mean response')
+ax.fill_between(bath_vals, grid_pred['obs_ci_lower'], grid_pred['obs_ci_upper'],
+                alpha=0.15, color='orange', label='95% prediction interval')
+ax.set_xlabel('Number of Bathrooms')
+ax.set_ylabel('Predicted Price ($/night)')
+ax.set_title('CI for Mean Response vs. Prediction Interval\n(Manhattan, median bedrooms)')
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+print("The blue band (CI for the mean) is narrow — we are fairly sure about the average price.")
+print("The orange band (prediction interval) is wide — individual listings vary greatly.")
+```
+
+Both intervals for a specific prediction point make the difference concrete.
+
+```{python}
+# Numeric example: predicted price for a 2-bathroom, 2-bedroom Manhattan listing
+example = pd.DataFrame({
+    'bathrooms': [2],
+    'bedrooms': [2],
+    'neighbourhood_group_cleansed': ['Manhattan'],
+})
+example_pred = airbnb_model.get_prediction(example).summary_frame(alpha=0.05)
+
+print("Prediction for a 2-bath, 2-bed Manhattan listing:")
+print(f"  Predicted price:        ${example_pred['mean'].values[0]:.2f}/night")
+print(f"  95% CI for mean price:  [${example_pred['mean_ci_lower'].values[0]:.2f}, ${example_pred['mean_ci_upper'].values[0]:.2f}]")
+print(f"  95% prediction interval:[${example_pred['obs_ci_lower'].values[0]:.2f}, ${example_pred['obs_ci_upper'].values[0]:.2f}]")
+print()
+print("The CI says the *average* listing like this rents for roughly")
+print(f"${example_pred['mean_ci_lower'].values[0]:.0f}-${example_pred['mean_ci_upper'].values[0]:.0f}/night.")
+print("The PI says a *single new* listing could fall anywhere in a much wider range,")
+print("reflecting the large variation among individual Airbnb listings.")
+```
 
 ## Putting it together: NBA vs Airbnb
 
 Both analyses used the same tools -- t-tests and confidence intervals on regression
-coefficients. But the conclusions are very different.
+coefficients. The conclusions differ dramatically.
 
 ```{python}
 # Side-by-side comparison
-# With n > 100,000 the t critical value is essentially 1.96
 print("=" * 60)
 print(f"{'':30s} {'NBA Rest':>12s}  {'Airbnb Bath':>12s}")
 print("=" * 60)
 print(f"{'Coefficient':30s} {rest_coef:12.3f}  {beta_bath:12.2f}")
 print(f"{'SE':30s} {rest_se:12.4f}  {se_bath:12.2f}")
-print(f"{'p-value':30s} {model_full.pvalues['REST_DAYS']:12.4f}  {p_bath:12.2e}")
+print(f"{'p-value':30s} {format_pvalue(model_full.pvalues['REST_DAYS']):>12s}  {format_pvalue(p_bath):>12s}")
 ci_rest = model_full.conf_int().loc['REST_DAYS']
 print(f"{'95% CI lower':30s} {ci_rest[0]:12.3f}  {ci_bath[0]:12.2f}")
 print(f"{'95% CI upper':30s} {ci_rest[1]:12.3f}  {ci_bath[1]:12.2f}")
@@ -693,11 +885,12 @@ print("Both are 'statistically significant.' Only one matters.")
 
 ## Key takeaways
 
-1. **Regression inference asks: is each feature doing real work?** The **coefficient t-test**
-   tests $H_0: \beta_j = 0$, asking whether the variable contributes *above noise*.
+1. **Regression inference asks: is each predictor useful?** The **coefficient t-test**
+   tests $H_0: \beta_j = 0$, asking whether the variable contributes above noise.
+   Parsimony favors dropping predictors that fail this test.
 
 2. **Building models step by step reveals what "controlling for" means.** Watch how
-   coefficients change as you add predictors -- this makes the idea concrete.
+   coefficients change as you add predictors -- this progression makes the idea concrete.
 
 3. **Confidence intervals tell you the range of plausible effect sizes.** A CI that barely
    excludes zero should make you cautious.
@@ -706,14 +899,14 @@ print("Both are 'statistically significant.' Only one matters.")
    effects too small to matter. Always report **effect sizes** alongside p-values.
 
 5. **Context matters.** The bathroom premium (\$30+/night) is actionable for Airbnb hosts.
-   The rest effect (0.3 game score points) is not actionable for NBA coaches.
+   The rest effect (a fraction of a game score point) is not actionable for NBA coaches.
 
 6. **Regression estimates associations, not causal effects** (unless all confounders are
    controlled for -- more in Lecture 18).
 
-We'll revisit this in Lecture 18 when we ask: coaches *choose* when to rest players --
-so is the "rest effect" actually a "coaching strategy" effect? That's a causal question,
-and regression alone can't answer it.
+We revisit this topic in Lecture 18 when we ask: coaches *choose* when to rest players --
+so is the "rest effect" actually a "coaching strategy" effect? That question is causal,
+and regression alone cannot answer it.
 
 **Next up:** Lecture 13 is the Act 2 capstone on classification, where we apply
 inference ideas to categorical outcomes.
@@ -731,13 +924,14 @@ inference ideas to categorical outcomes.
 - **Q-Q plot**: Quantile-quantile plot comparing residual quantiles to a normal distribution; points on the diagonal indicate normality.
 - **Heteroscedasticity**: When the variance of residuals changes across fitted values (the spread "fans out"). Violates the constant-variance assumption of OLS inference.
 - **LINE conditions**: The four assumptions for regression inference -- Linearity, Independence, Normality, Equal variance.
-- **Prediction interval**: An interval for where a *single new* observation might fall at a given $x$. Always wider than the confidence interval for the mean, because it includes both estimation uncertainty and individual variability.
-- The t-test for a coefficient asks: is this predictor doing real work, or could the observed coefficient be due to noise?
+- **Prediction interval**: An interval for where a *single new* observation might fall at a given $x$. Always wider than the confidence interval for the mean -- it includes both estimation uncertainty and individual variability.
+- **Parsimony / Occam's razor**: The best model is the simplest one that adequately fits the data. Drop predictors that are not useful.
+- The t-test for a coefficient asks: is this predictor useful, or could the observed coefficient be due to noise?
 - A confidence interval for a coefficient gives the range of plausible effect sizes, not just a yes/no answer.
 - Building models step by step (adding one predictor at a time) reveals what "controlling for" actually does to coefficients.
 - Statistical significance with large n can detect effects too small to matter -- always check effect size.
 - Regression controls for measured confounders but does not establish causation.
-- Residual plots and Q-Q plots check whether the model's assumptions (LINE conditions) hold; when they don't, use bootstrap CIs (Lecture 8) instead of formula CIs.
+- Residual plots and Q-Q plots check whether the model's assumptions (LINE conditions) hold; when they do not, use bootstrap CIs (Lecture 8) instead of formula CIs.
 
 ### Computational tools
 
@@ -748,7 +942,9 @@ inference ideas to categorical outcomes.
 - `model.conf_int()` -- 95% confidence intervals for all coefficients
 - `model.bse` -- standard errors of all coefficients
 - `model.fittedvalues`, `model.resid` -- fitted values and residuals for diagnostic plots
-- `sm.qqplot(residuals, line='45')` -- Q-Q plot to check normality of residuals
+- `model.get_prediction(new_data).summary_frame()` -- confidence interval for the mean and prediction interval for a new observation
+- `stats.probplot(residuals, dist='norm')` -- Q-Q plot data with correct scaling
+- `format_pvalue(p)` -- format p-values in scientific notation when below 0.001
 
 ### For the quiz
 

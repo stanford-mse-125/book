@@ -15,7 +15,7 @@ from sklearn.linear_model import LinearRegression
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 DATA_DIR = 'data'
@@ -24,19 +24,17 @@ np.random.seed(42)
 
 We estimated the treatment effect as 71 CD4 cells. How precise is that? We'll resample to find out — and discover that the answer looks surprisingly normal.
 
-In Act 1, we built models: regression, feature engineering, trees, validation. We learned to *fit* models and *evaluate* them. But we never asked a deeper question: **can we trust the numbers they produce?**
-
-Act 2 opens with that question. A model says the treatment effect is 71 CD4 cells, or that an extra bedroom adds \$85 to rent. But how much would those numbers change if we had different data? If the answer is "a lot," maybe we shouldn't take them too seriously.
+Act 2 opens with a new question: **can we trust the numbers our models produce?** A model says the treatment effect is 71 CD4 cells, or that an extra bedroom adds \$85 to rent. How much would those numbers change with different data?
 
 :::{.callout-note}
-## A brief history of the bootstrap
+## Bradley Efron's radical idea
 
 For most of the 20th century, quantifying uncertainty required mathematical derivation — you needed a formula for the standard error of each statistic you cared about. In 1979, Bradley Efron at Stanford proposed a radical alternative: **just resample the data and see what happens.** His "bootstrap" was initially controversial — it felt like cheating, conjuring information from nothing. But it worked, and it liberated statisticians from having to derive a new formula for every new problem. The bootstrap is now one of the most widely used tools in applied statistics. (See Salsburg, *The Lady Tasting Tea*, Ch. 24, "The Bootstrap.")
 :::
 
 ## Estimand, estimator, estimate
 
-Let's ground this in a real dataset. AIDS Clinical Trials Group Study 175 was a randomized trial comparing HIV treatments. The key outcome is the change in CD4 cell count (a measure of immune function) at 20 weeks.
+Let's ground this in a real dataset. AIDS Clinical Trials Group Study 175 (ACTG 175) enrolled 2,139 HIV-positive adults between 1991--1995 (Hammer et al., *NEJM* 1996). The trial compared HIV treatments; the key outcome is the change in CD4 cell count (a measure of immune function) at 20 weeks.
 
 ```{python}
 df = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
@@ -58,7 +56,7 @@ print(f"\nObserved treatment effect:   {observed_effect:.1f} CD4 cells")
 ```
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
 
 axes[0].hist(control['cd4_change'].dropna(), bins=40, color='steelblue', alpha=0.7, edgecolor='white')
 axes[0].axvline(control['cd4_change'].mean(), color='red', lw=2, ls='--',
@@ -82,12 +80,12 @@ plt.show()
 
 The treatment group improved by about 71 more CD4 cells. But look at the spread — there's enormous patient-to-patient variation. If we enrolled a *different* set of patients, would we still see a 71-cell advantage?
 
-This question motivates three vocabulary terms that we'll use throughout Act 2:
+That question motivates three vocabulary terms that we'll use throughout Act 2:
 
 :::{.callout-important}
 ## Definition: Estimand, estimator, estimate
 
-- **Estimand:** the true treatment effect — the difference in mean CD4 change if we could test *everyone* who might take these drugs. This is a fixed (but unknown) number.
+- **Estimand:** the true treatment effect — the difference in mean CD4 change if we could test *everyone* who might take these drugs. The estimand is a fixed (but unknown) number.
 - **Estimator:** the procedure we use to approximate the estimand — here, "compute the difference in sample means."
 - **Estimate:** the specific number our estimator produces from this particular dataset — 71 CD4 cells.
 :::
@@ -106,7 +104,7 @@ for i in range(3):
 print(f"\n  Full treatment group mean:    {treatment_cd4.mean():.1f}")
 ```
 
-Three different samples, three different estimates. This isn't a bug — it's a fundamental feature of working with samples. The question that motivates this lecture is: **how much do these estimates vary, and what can we say about that variation?**
+Three different samples, three different estimates. Sample-to-sample variation is a fundamental feature of statistical estimation, not a bug. The question that motivates the rest of this lecture: **how much do these estimates vary, and what can we say about that variation?**
 
 ## The bootstrap idea
 
@@ -174,12 +172,14 @@ print(f"Bootstrap mean of treatment effect: {boot_effects.mean():.1f}")
 print(f"Bootstrap SD of treatment effect:   {boot_effects.std():.1f}")
 ```
 
-The bootstrap distribution tells us how much the treatment effect estimate would vary across different samples. We can summarize this with a **confidence interval**.
+The bootstrap distribution approximates the **sampling distribution** — the distribution we would observe if we could repeat the entire study thousands of times. Each repetition would enroll different patients and produce a different estimate; the sampling distribution captures that variation. We can summarize the bootstrap distribution with a **confidence interval**.
 
 :::{.callout-important}
 ## Definition: Confidence interval
 
 A **confidence interval** is a range of plausible values for the estimand. The **percentile method** uses the middle 95% of bootstrap values: the 2.5th and 97.5th percentiles. A 95% confidence interval means that if we repeated the entire study many times and built a CI each time, about 95% of those intervals would contain the true parameter.
+
+*Caveat:* the percentile method works well when the bootstrap distribution is roughly symmetric. For skewed bootstrap distributions, more advanced methods (such as the bias-corrected and accelerated, or BCa, interval) give better coverage.
 :::
 
 ```{python}
@@ -198,8 +198,6 @@ ax.hist(boot_effects, bins=60, density=True, color='steelblue', alpha=0.7, edgec
         label='Bootstrap distribution')
 
 # Shade the 95% CI
-ci_mask = (np.linspace(boot_effects.min(), boot_effects.max(), 1000) >= ci_low) & \
-          (np.linspace(boot_effects.min(), boot_effects.max(), 1000) <= ci_high)
 ax.axvspan(ci_low, ci_high, alpha=0.15, color='steelblue', label=f'95% CI: [{ci_low:.1f}, {ci_high:.1f}]')
 
 # Vertical line at zero
@@ -241,13 +239,13 @@ plt.tight_layout()
 plt.show()
 ```
 
-The normal curve fits almost perfectly. **This isn't a coincidence.** It happens because of a theorem you saw (briefly!) on the last day of MS&E 120: the **Central Limit Theorem**.
+The normal curve fits almost perfectly. **The close fit isn't a coincidence.** A theorem you saw (briefly!) on the last day of MS&E 120 explains why: the **Central Limit Theorem**.
 
 ## The CLT explains why
 
 The Central Limit Theorem (CLT) says: **if you average many independent things, the result is approximately normal.**
 
-More precisely: if $X_1, X_2, \ldots, X_n$ are **iid** (independent and identically distributed) with mean $\mu$ and standard deviation $\sigma$, then for large $n$:
+More precisely: if $X_1, X_2, \ldots, X_n$ are **iid** — **independent and identically distributed**, meaning each observation is drawn from the same distribution independently of the others — with mean $\mu$ and standard deviation $\sigma$, then for large $n$:
 
 $$\bar{X}_n \approx \text{Normal}\!\left(\mu,\; \frac{\sigma}{\sqrt{n}}\right)$$
 
@@ -260,7 +258,7 @@ Our treatment effect is a difference of two sample means — and each sample mea
 Let's **watch** the CLT at work. We'll draw samples from the (decidedly non-normal!) CD4 distribution at increasing sample sizes.
 
 ```{python}
-fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+fig, axes = plt.subplots(2, 2, figsize=(10, 7))
 
 # Top-left: the population distribution (skewed, non-normal)
 axes[0, 0].hist(treatment_cd4, bins=50, density=True, color='gray', alpha=0.7, edgecolor='white')
@@ -341,7 +339,7 @@ For the treatment effect, the standard error of a difference of means is:
 
 $$\text{SE} = \sqrt{\frac{s_T^2}{n_T} + \frac{s_C^2}{n_C}}$$
 
-where $s_T, s_C$ are the sample standard deviations and $n_T, n_C$ are the sample sizes. Let's compare the two approaches side by side.
+where $s_T, s_C$ are the sample standard deviations and $n_T, n_C$ are the sample sizes. Notice the plug-in step: the CLT's formula uses the population standard deviation $\sigma$, which we never know in practice, so we substitute the sample standard deviation $s$. With large $n$, $s \approx \sigma$ and the approximation is excellent. Let's compare the two approaches side by side.
 
 ```{python}
 # Normal approximation CI
@@ -378,7 +376,7 @@ The normal approximation works great for means of not-too-skewed data with reaso
 The CLT applies to sample *means*. For the **median**, convergence to normality is slower and no simple SE formula exists.
 
 ```{python}
-fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+fig, axes = plt.subplots(2, 3, figsize=(12, 6))
 sample_sizes = [10, 50, 500]
 
 for col, n in enumerate(sample_sizes):
@@ -426,7 +424,7 @@ print(f"Skewness is extreme — the mean is far above the median.")
 ```
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Bootstrap the mean at n=20 (small sample, heavy tails)
 boot_means_20 = np.array([
@@ -549,7 +547,7 @@ The bootstrap distribution shows us the uncertainty in the bedrooms coefficient.
 - **Standard error (SE)** — the standard deviation of a statistic's sampling distribution; for the mean, SE $= \sigma / \sqrt{n}$.
 - **Normal approximation** — using $\hat{\theta} \pm 1.96 \cdot \text{SE}$ instead of bootstrapping.
 - **iid** (independent and identically distributed) — each observation drawn from the same distribution, independently of the others.
-- The bootstrap approximates the sampling distribution by resampling from the observed data.
+- **Sampling distribution** — the distribution of a statistic across all possible samples from the population. The bootstrap approximates the sampling distribution by resampling from the observed data.
 - The CLT explains why bootstrap distributions of means look normal: averaging many independent things produces normality.
 - The normal approximation replaces 10,000 resamples with a single formula — when the CLT applies.
 - When the CLT doesn't apply (median, heavy tails, small $n$), the bootstrap is more reliable.

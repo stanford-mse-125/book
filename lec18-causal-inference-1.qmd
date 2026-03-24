@@ -14,7 +14,7 @@ from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 # Load data
@@ -24,9 +24,18 @@ np.random.seed(42)
 
 You're a high school senior choosing between Stanford and your state school. Stanford costs \$200K more over four years. Stanford graduates earn a median of \$86K ten years after enrollment — but is that *caused* by Stanford, or would those students earn a lot anyway? That's a \$200K question.
 
-This is the central question of **causal inference**: when can we interpret a statistical association as a cause-and-effect relationship? Here's a precise test: X causes Y if, were we to *intervene* and change X, Y would change as a result. If we could magically send every student to Stanford without changing anything else about them, would their earnings go up? *That's* the causal question.
+The central question of **causal inference** is: when can we interpret a statistical association as a cause-and-effect relationship?
 
-Today we'll see why "correlation is not causation" — and, more importantly, learn the tools to tell the difference.
+:::{.callout-important}
+## Definition: Causal Effect
+X **causes** Y if intervening to change X — while holding everything else fixed — would change Y. The causal effect of X on Y is the difference in Y that results from this intervention.
+:::
+
+If we could magically send every student to Stanford without changing anything else about them, would their earnings go up? The interventionist definition makes the question precise: a cause is something whose manipulation changes the outcome.
+
+> "Correlation is not causation." — a foundational principle of statistics
+
+Today we formalize *why* — and develop the tools to tell the difference.
 
 ## The Stanford Premium
 
@@ -95,7 +104,7 @@ Here, **family wealth** is a classic confounder:
 - Wealthy families invest in SAT prep, better schools, tutors $\rightarrow$ **higher SAT scores**
 - Wealthy families provide professional networks, connections, inheritance $\rightarrow$ **higher earnings**
 
-If family wealth drives both, then the SAT–earnings correlation could be entirely **spurious** — a **spurious association** that exists only because of a shared cause. The SAT doesn't *cause* anything; it's just a proxy for wealth. (Recall from Lecture 11: "correlation is not causation." Now let's formalize *why*.)
+If family wealth drives both, then the SAT–earnings correlation could be entirely **spurious** — a **spurious association** that exists only from a shared cause. The SAT doesn't *cause* anything; it's just a proxy for wealth. (Recall from Lecture 11: "correlation is not causation." Now let's formalize *why*.)
 
 ## Causal Diagrams (DAGs)
 
@@ -106,7 +115,7 @@ A **Directed Acyclic Graph (DAG)** is a visual tool for representing causal rela
 
 There are **two paths** from SAT to Earnings:
 
-1. **Causal path (front door path):** SAT $\to$ Admission $\to$ Earnings (maybe real — all arrows point forward from treatment to outcome)
+1. **Causal path (directed path):** SAT $\to$ Admission $\to$ Earnings (maybe real — all arrows point forward from treatment to outcome)
 2. **Backdoor path:** SAT $\leftarrow$ Wealth $\to$ Earnings (spurious — goes "behind" the treatment through a common cause)
 
 The standard causal inference term for path 2 is a **backdoor path**: it connects treatment to outcome by going through a common cause rather than through a direct causal chain. A naive regression mixes both paths together. We can't tell which is which without more information. Let's draw it.
@@ -149,7 +158,7 @@ draw_dag(
 
 In Lecture 12, we interpreted regression coefficients as "holding everything else constant." Now we can see when that interpretation is *causal* and when it's just descriptive.
 
-Regression estimates a causal effect **only** when you **block all backdoor paths** between treatment and outcome — by controlling for at least one non-collider variable on each backdoor path — without blocking any causal (front door) paths.
+Regression estimates a causal effect **only** when you **block all backdoor paths** between treatment and outcome — by controlling for at least one non-collider variable on each backdoor path — without blocking any causal paths.
 
 In practice, this is nearly impossible with **observational data** (data collected without an experiment):
 
@@ -157,7 +166,7 @@ In practice, this is nearly impossible with **observational data** (data collect
 - There may be confounders we haven't even thought of (motivation, neighborhood, genetics...)
 - Controlling for the wrong variable can actually **create** bias (we'll see this with colliders soon)
 
-This is why we distinguish **observational data** from **experimental data** (data from a randomized experiment). In a randomized experiment, the treatment is assigned randomly, so there are no backdoor paths to worry about.
+The gap between correlation and causation motivates the distinction between **observational data** (collected without intervention) and **experimental data** (from a randomized experiment). In a randomized experiment, the treatment is assigned randomly, so there are no backdoor paths to worry about.
 
 :::{.callout-warning}
 ## The Fundamental Problem
@@ -168,20 +177,19 @@ With observational data, you can never be sure you've blocked every backdoor pat
 
 In Lecture 11, you saw Simpson's Paradox in NBA rest data: extended-rest players scored fewer points overall, but *more* points within each position group. The aggregate lied. We first saw hospital readmission data in Lecture 2, where the "worst" hospitals turned out to be small rural ones with noisy estimates. Now let's see another way this data can mislead — and explain *why* using DAGs.
 
-The question: are **high-volume hospitals** (which tend to be teaching hospitals) better or worse at preventing readmissions?
+The question: are **high-volume hospitals** better or worse at preventing readmissions?
 
 ```{python}
 hospitals = pd.read_csv(f'{DATA_DIR}/hospital-readmissions/hospital_level_summary.csv')
 hospitals['star_rating_num'] = pd.to_numeric(hospitals['star_rating_num'], errors='coerce')
 
-# High-volume hospitals serve as a proxy for teaching hospitals
 hospitals['is_high_volume'] = hospitals['total_discharges'] > hospitals['total_discharges'].median()
 
 # Overall comparison
 print("Overall readmission rates:")
 print("-" * 50)
 for group_name, group in hospitals.groupby('is_high_volume'):
-    label = 'High-volume (teaching-like)' if group_name else 'Low-volume (community)'
+    label = 'High-volume' if group_name else 'Low-volume'
     rate = group['overall_readmission_rate'].mean()
     n = len(group)
     print(f"  {label}: {rate:.2f}%  (n={n})")
@@ -198,12 +206,12 @@ hospitals['severity_cat'] = pd.qcut(hospitals['severity_proxy'], q=3,
 But when we break the data down by patient severity, the story reverses:
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
 
 # Left: overall
 overall = hospitals.groupby('is_high_volume')['overall_readmission_rate'].mean()
 colors_bar = ['#4878CF', '#E24A33']
-axes[0].bar(['Low-volume\n(community)', 'High-volume\n(teaching-like)'],
+axes[0].bar(['Low-volume', 'High-volume'],
             overall.values, color=colors_bar, edgecolor='white', width=0.5)
 axes[0].set_ylabel('Mean Readmission Rate (%)')
 axes[0].set_title('Overall: High-Volume Looks WORSE')
@@ -358,7 +366,7 @@ Here, the "treatment" is contaminated water. The key features:
 | Confounders controlled? | Yes — the only difference was the water source |
 | Temporal precedent? | Yes — Lambeth moved its intake before the outbreak |
 
-This is what makes Snow's evidence *causal*, not just correlational. He couldn't run an experiment (you can't randomly give people contaminated water!), but nature effectively ran one for him.
+The intermingling of houses is what makes Snow's evidence *causal*, not just correlational. He couldn't run an experiment (you can't randomly give people contaminated water!), but nature effectively ran one for him.
 
 > **The DAG:**
 > ```
@@ -374,7 +382,7 @@ But **the map is not the causal evidence.**
 
 The map shows a *spatial correlation*: deaths near the pump. But maybe people near that pump were also poorer, more crowded, less healthy. The map can't rule that out.
 
-Snow's actual causal argument came from the **water company comparison** — the natural experiment. Same neighborhoods, different water, 8.4x difference in death rates. That's the evidence that contaminated water causes cholera.
+Snow's actual causal argument came from the **water company comparison** — the natural experiment. Same neighborhoods, different water, 8.5x difference in death rates. That's the evidence that contaminated water causes cholera.
 
 The map is memorable. The natural experiment is convincing. They're not the same thing.
 
@@ -417,7 +425,7 @@ We'll see more of levels 1 and 2 in Lecture 19.
 
 If we can't run an experiment, can we at least control for confounders in a regression?
 
-Let's try. In the college data, `CONTROL` indicates public (1), private nonprofit (2), or private for-profit (3). This is a rough proxy for resources and wealth. What happens when we add it?
+Let's try. In the college data, `CONTROL` indicates public (1), private nonprofit (2), or private for-profit (3). This variable is a rough proxy for resources and wealth. What happens when we add it?
 
 ```{python}
 from sklearn.linear_model import LinearRegression
@@ -456,7 +464,7 @@ Adding control variables to a regression can help — but only if:
 2. **You measure them well.** A rough proxy for "family wealth" isn't the same as actual wealth.
 3. **You don't control for the wrong things.** Controlling for a **mediator** (something on the causal path) or a **collider** (something caused by both treatment and outcome) can make bias *worse*.
 
-This is why observational studies are hard. You're always one unmeasured confounder away from a wrong answer.
+This difficulty is the core challenge of observational studies. You're always one unmeasured confounder away from a wrong answer.
 
 :::{.callout-tip}
 ## Think About It
@@ -483,7 +491,7 @@ A variable is a **collider** on a particular path if both arrows on that path po
 
 Among all people, talent and connections may be unrelated. But among people hired at top firms (conditioning on the collider), they're **negatively** correlated — you got in either through talent OR connections.
 
-This is called **collider bias** or **selection bias**, and it's a common trap in regression analysis.
+This phenomenon is called **collider bias** or **selection bias**, and it's a common trap in regression analysis.
 
 ```{python}
 # Simulate collider bias
@@ -498,7 +506,7 @@ print(f"Hired {hired.sum()} of {n} people (top 30% of hire score)")
 ```
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Left: full population
 axes[0].scatter(talent, connections, alpha=0.1, s=5, color='gray')
@@ -528,6 +536,11 @@ print("(The negative correlation holds regardless of the hiring threshold — tr
 Conditioning on a common *effect* of two variables creates a fake relationship between them. That's collider bias. Always check your DAG before adding control variables to a regression.
 :::
 
+:::{.callout-important}
+## Confounder vs. Collider
+A **confounder** is a common *cause* of treatment and outcome — controlling for it **removes** bias. A **collider** is a common *effect* of treatment and outcome — controlling for it **creates** bias. The two require opposite strategies: always control for confounders, never control for colliders.
+:::
+
 ## DAG Rules: What to Control For
 
 Before we summarize the rules, let's work through one more example. Consider this DAG for the effect of Education on Health:
@@ -555,7 +568,7 @@ Here are the key rules for reading causal diagrams:
 
 :::{.callout-important}
 ## Definition: Back-Door Criterion
-The **back-door criterion** says: to estimate the causal effect of X on Y, you must block all backdoor paths (paths into X through common causes) without blocking any causal paths (paths from X to Y) or opening any collider paths.
+The **back-door criterion** says: to estimate the causal effect of X on Y, you must block all backdoor paths (paths into X through common causes) without blocking any causal paths (paths from X to Y) or opening any collider paths. An additional requirement: you cannot control for any **descendant of the treatment** (a variable caused by X), since doing so partly blocks the causal effect or introduces bias through collider structures downstream of X.
 :::
 
 These rules follow from whether "controlling for" a variable opens or closes the path between treatment and outcome. Getting this wrong — controlling for the wrong variable — is one of the most common mistakes in applied statistics.
@@ -591,11 +604,11 @@ Next time: difference-in-differences, A/B tests, and counterfactual reasoning �
 - **Confounder:** a common cause of treatment and outcome that creates a spurious association (a backdoor path)
 - **DAG (Directed Acyclic Graph):** a diagram of causal relationships; "directed" = arrows have direction, "acyclic" = no loops
 - **Backdoor path:** a non-causal path connecting treatment and outcome through a common cause
-- **Causal path (front door path):** a path where all arrows point forward from treatment to outcome
+- **Causal path (directed path):** a path where all arrows point forward from treatment to outcome
 - **Back-door criterion:** to estimate a causal effect, block all backdoor paths without blocking causal paths or opening collider paths
 - **Collider:** a variable on a path where both arrows point *into* it; conditioning on a collider opens a spurious path
 - **Mediator:** a variable on the causal path between treatment and outcome
-- **Spurious association:** a correlation that exists only because of a common cause, not a causal relationship
+- **Spurious association:** a correlation arising entirely from a common cause, not from a causal relationship
 - **Natural experiment:** a situation where an external circumstance assigns treatment as-if randomly
 - **Observational data vs. experimental data:** data collected without intervention vs. data from a randomized experiment
 - **Simpson's Paradox:** when a trend reverses after disaggregating by a confounding variable

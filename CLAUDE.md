@@ -29,7 +29,7 @@
 - `code-tools-fix.html` works around Quarto 1.8 code-tools bug
 
 ## Course design principles
-- Act 1 (Lec 1-7): prediction. Act 2 (Lec 8-13): inference. Don't mix.
-- Every hypothesis test needs a concrete $$ decision
+- Act 1 (Lec 1-7): prediction. Act 2 (Lec 8-12): inference. Act 3 (Lec 13-19): see further. Don't mix Act 1/2.
+- Every hypothesis test needs a consequential decision motivating it
 - Topics must earn their place — practical utility over textbook completeness
 - Real datasets only, no synthetic data

@@ -5,14 +5,14 @@ execute:
 jupyter: python3
 ---
 
-## A hospital is about to be fined \$350,000 for high readmission rates. Is that fair?
+## A hospital is about to be fined \$350,000. Is that fair?
 
-An Airbnb host is losing bookings to cheaper listings. How should she reprice? Both questions start the same way: **look at the data** before you jump to conclusions.
+Under the CMS Hospital Readmissions Reduction Program, hospitals with excess readmissions face penalties that can reach hundreds of thousands of dollars per year. A hospital administrator staring at a \$350,000 fine wants to know: are we actually performing worse than expected, or are we just treating sicker patients? Answering that question requires looking at the data before jumping to conclusions.
 
 :::{.callout-important}
 ## Definition: Exploratory Data Analysis (EDA)
 
-**Exploratory Data Analysis (EDA)** is the practice of getting to know your data before you do anything fancy with it. It's the most important step in any analysis — and the one most often skipped.
+**Exploratory Data Analysis (EDA)** is the practice of examining a dataset's structure, distributions, and quirks before fitting any model. EDA is the most important step in any analysis — and the one most often skipped.
 :::
 
 Today we'll explore two real datasets: hospital readmissions and NYC Airbnb listings. Along the way, we'll find **outliers**, missing data patterns, and a lesson about adjusting for context.
@@ -25,7 +25,7 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 # Load data
@@ -93,25 +93,28 @@ The **Excess Readmission Ratio** is the key metric. It's the ratio of a hospital
 Let's see its distribution.
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
 # Overall distribution
-hrrp['Excess Readmission Ratio'].dropna().hist(bins=50, ax=axes[0], edgecolor='white')
-axes[0].axvline(x=1.0, color='red', linestyle='--', linewidth=2)
-axes[0].set_xlabel('Excess Readmission Ratio')
-axes[0].set_ylabel('Count')
-axes[0].set_title('All Conditions Combined')
+fig, ax = plt.subplots(figsize=(8, 5))
+hrrp['Excess Readmission Ratio'].dropna().hist(bins=50, ax=ax, edgecolor='white')
+ax.axvline(x=1.0, color='red', linestyle='--', linewidth=2)
+ax.set_xlabel('Excess Readmission Ratio')
+ax.set_ylabel('Count')
+ax.set_title('All Conditions Combined')
+plt.tight_layout()
+plt.show()
+```
 
-# By condition
+```{python}
+# Distribution by condition
+fig, ax = plt.subplots(figsize=(8, 5))
 for condition in hrrp['Measure Name'].unique():
     subset = hrrp[hrrp['Measure Name'] == condition]['Excess Readmission Ratio'].dropna()
     label = condition.replace('READM-30-', '').replace('-HRRP', '')
-    axes[1].hist(subset, bins=30, alpha=0.5, label=label, edgecolor='white')
-axes[1].set_xlabel('Excess Readmission Ratio')
-axes[1].set_ylabel('Count')
-axes[1].set_title('By Condition')
-axes[1].legend(fontsize=9)
-
+    ax.hist(subset, bins=30, alpha=0.5, label=label, edgecolor='white')
+ax.set_xlabel('Excess Readmission Ratio')
+ax.set_ylabel('Count')
+ax.set_title('By Condition')
+ax.legend(fontsize=9)
 plt.tight_layout()
 plt.show()
 ```
@@ -125,7 +128,7 @@ Why might some conditions have more variability in hospital performance than oth
 
 ### Missing data: is it random?
 
-This is where EDA gets interesting. How much of the data do you think is missing? 1%? 10%? 50%? Let's count.
+Now EDA gets interesting. How much of the data do you think is missing? 1%? 10%? 50%? Let's count.
 
 ```{python}
 # Missing data summary
@@ -168,19 +171,19 @@ plt.tight_layout()
 plt.show()
 ```
 
-This is a critical finding. Statisticians distinguish three patterns of missingness:
+The pattern in the bar chart is a critical finding. Statisticians distinguish three patterns of missingness:
 
 :::{.callout-important}
 ## Definition: Patterns of Missingness
 
-- **Missing Completely At Random (MCAR)**: no pattern at all — like a lab assistant randomly spilling coffee on some data sheets.
-- **Missing At Random (MAR)**: missingness depends on other *observed* data (e.g., smaller hospitals are more likely to have suppressed data, and we can see hospital size).
-- **Missing Not At Random (MNAR)**: missingness depends on the *unobserved value itself* (e.g., hospitals with very high readmission rates might be more likely to have suppressed data).
+- **Missing Completely At Random (MCAR)**: no pattern at all. A lab assistant randomly spills coffee on some data sheets — the ruined records have nothing in common with each other.
+- **Missing At Random (MAR)**: missingness depends on other *observed* data, but not on the missing value itself. Older patients are less likely to complete a follow-up survey, and we have each patient's age on file — so we can account for the gap.
+- **Missing Not At Random (MNAR)**: missingness depends on the *unobserved value itself*. Patients with the worst health outcomes are the ones who skip the follow-up survey, and we never observe their outcomes.
 :::
 
-Here, CMS suppresses data when counts are too small to report — the data is missing *because* the counts are small. This is **MNAR**, and it's the most dangerous kind because you can't fully correct for it using other variables.
+Here, CMS suppresses data when counts are too small to report — the data is missing precisely *due to* the small counts. This pattern is **MNAR**, the most dangerous kind: no set of observed variables can fully correct for it.
 
-CABG (coronary artery bypass graft surgery) has ~50% missing because fewer hospitals perform this complex procedure. The hospitals with missing data are systematically different: smaller, often rural, with fewer specialized services.
+CABG (coronary artery bypass graft surgery) has ~50% missing — fewer hospitals perform this complex procedure. The hospitals with missing data are systematically different: smaller, often rural, with fewer specialized services.
 
 :::{.callout-warning}
 ## Dropping missing data can introduce bias
@@ -223,13 +226,13 @@ ct_pct.index = ct_pct.index.str.replace('READM-30-', '').str.replace('-HRRP', ''
 ct_pct.round(3)
 ```
 
-Now the pattern pops out: about half of CABG records are suppressed, compared to only ~8% of heart failure records. This is the same finding we saw in the bar chart above, but a contingency table makes it precise and easy to compare across all conditions at once.
+Now the pattern pops out: about half of CABG records are suppressed, compared to only ~8% of heart failure records. The contingency table confirms the same finding we saw in the bar chart, but makes the comparison precise and easy to read across all conditions at once.
 
 ## Part 2: Airbnb listings
 
 We've seen how missing data can hide systematic bias in healthcare. Now let's see how outliers and skewness can mislead in a completely different domain — showing that EDA principles are universal.
 
-We'll work with 29,000+ Airbnb listings in New York City. We'll return to this Airbnb data in Lecture 5, where we'll try to predict price from these features using regression.
+We'll work with 29,000+ Airbnb listings in New York City. An Airbnb host losing bookings to cheaper listings might wonder: how should I reprice? We'll answer that question in Lecture 5, once we have regression tools. For now, we focus on understanding the data itself.
 
 ```{python}
 # Load Airbnb data
@@ -256,7 +259,7 @@ airbnb_slim.head()
 Let's look at the distribution of nightly prices.
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Raw distribution
 airbnb_slim['price'].hist(bins=100, ax=axes[0], edgecolor='white')
@@ -295,6 +298,12 @@ print(f"Listings over $1000: {(airbnb_slim['price'] > 1000).sum()}")
 
 The mean is about \$33 higher than the median. That gap is driven entirely by the right tail — a few hundred expensive listings pull the average up. If you're an Airbnb host trying to price a typical apartment, the mean is misleading. The median is a better summary here.
 
+:::{.callout-important}
+## Definition: Robust Statistics
+
+A statistic is **robust** if extreme values barely affect it. The **median** and **interquartile range (IQR)** are robust: moving one observation to \$100,000 hardly changes either one. The **mean** and **standard deviation** are not robust: a single extreme value can shift them dramatically. When a distribution has heavy tails or outliers, robust summaries give a more reliable picture of the typical value and spread.
+:::
+
 > **Key principle**: When a distribution has a heavy tail, the mean doesn't represent a typical value. Always look at the distribution before relying on any single number.
 
 ### Log-transforming skewed data
@@ -306,7 +315,7 @@ When data is heavily right-skewed, a **log transform** can reveal patterns that 
 airbnb_pos = airbnb_slim[airbnb_slim['price'] > 0].copy()
 airbnb_pos['log_price'] = np.log10(airbnb_pos['price'])
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Raw prices — heavily skewed
 airbnb_pos['price'].hist(bins=100, ax=axes[0], edgecolor='white')
@@ -329,7 +338,7 @@ The raw histogram is nearly useless — everything is piled up on the left. Afte
 Log transforms also make relationships easier to spot. Compare price vs. number of guests on both scales:
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 sample = airbnb_pos.dropna(subset=['accommodates']).sample(3000, random_state=42)
 
@@ -360,7 +369,7 @@ Not all data is numeric. Let's look at the categorical variables. So far we've u
 Choosing the right plot for the question is half the battle.
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Room type
 room_counts = airbnb_slim['room_type'].value_counts()
@@ -382,7 +391,7 @@ plt.show()
 
 ```{python}
 # Price by room type and borough
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Price by room type (cap at $500 for visibility)
 filtered = airbnb_slim[airbnb_slim['price'].between(1, 500)]
@@ -416,9 +425,9 @@ Let's go back to the hospital data for the punchline of today's lecture.
 
 Quick reference for the three metrics we'll use:
 
-- **Expected Rate** = what CMS predicts *should* happen given the patient mix
-- **Predicted Rate** = the hospital's actual estimated rate
-- **Excess Ratio** = Predicted / Expected (above 1.0 = worse than expected)
+- **Expected Readmission Rate** = what CMS predicts *should* happen given the patient mix
+- **Predicted Readmission Rate** = the hospital's actual estimated rate
+- **Excess Readmission Ratio (ERR)** = Predicted / Expected (above 1.0 = worse than expected)
 
 Suppose you want to find the hospitals with the highest readmission rates. A naive approach: just rank by `Predicted Readmission Rate`.
 
@@ -450,27 +459,17 @@ scatter = ax.scatter(hf['Expected Readmission Rate'],
                      c=hf['Excess Readmission Ratio'],
                      cmap='coolwarm', alpha=0.5, s=15, vmin=0.85, vmax=1.15)
 plt.colorbar(scatter, label='Excess Readmission Ratio')
-
-# Add the y=x line
 lims = [hf['Expected Readmission Rate'].min(), hf['Expected Readmission Rate'].max()]
 ax.plot(lims, lims, 'k--', alpha=0.5, linewidth=1, label='Predicted = Expected')
-
 ax.set_xlabel('Expected Readmission Rate (%)')
 ax.set_ylabel('Predicted Readmission Rate (%)')
 ax.set_title('Heart Failure: Are "high-rate" hospitals actually underperforming?')
 ax.legend()
-
-# Annotate regions
-ax.text(0.02, 0.95, 'Worse than\nexpected', transform=ax.transAxes,
-        fontsize=10, color='gray', va='top', style='italic')
-ax.text(0.85, 0.05, 'Better than\nexpected', transform=ax.transAxes,
-        fontsize=10, color='gray', va='bottom', style='italic')
-
 plt.tight_layout()
 plt.show()
 ```
 
-This is a crucial insight. The hospitals with the highest *raw* readmission rates are often treating the sickest patients. Their expected rates are high too. When you adjust for patient mix (using the Excess Ratio), many of these hospitals are performing *at or below* expectations.
+The scatter plot reveals a crucial insight. Hospitals with the highest *raw* readmission rates are often treating the sickest patients. Their expected rates are high too. After adjusting for patient mix (via the Excess Readmission Ratio), many of these hospitals are performing *at or below* expectations.
 
 Conversely, some hospitals with modest raw rates are actually doing *worse than expected* given their healthier patient mix.
 
@@ -492,9 +491,9 @@ big_movers = hf_ranked.nlargest(5, 'Rank Change')[
 big_movers
 ```
 
-These hospitals are being unfairly judged by the naive ranking. They have high raw rates because they treat complex patients — but after adjustment, they're performing fine.
+The naive ranking unfairly penalizes these hospitals. Their high raw rates reflect the complexity of the patients they treat — after adjustment, they're performing fine.
 
-This is a preview of **Simpson's paradox** and **confounding**, topics we'll return to throughout the course. (It's like comparing average salaries between two companies without accounting for job titles — the company with more senior engineers will look like it pays better.) For now, the lesson is simpler:
+The ranking reversal we just witnessed is a form of **confounding**: patient severity is a lurking variable that distorts the naive comparison. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix. We'll study confounding formally in Lecture 18. For now, the lesson is simpler:
 
 :::{.callout-warning}
 ## Don't rank before you adjust
@@ -520,7 +519,7 @@ We'll revisit this hospital data in Lecture 18 when we ask: *is this causal?* Do
 - **Contingency table**: A table summarizing counts for two categorical variables. **Row and column proportions** show the conditional distribution of one variable given the other.
 - **Outlier**: An observation far from the bulk of the data. Can be real (a penthouse) or an error.
 - **Robust statistics**: The median and IQR are robust — barely affected by extreme values. The mean and standard deviation are not.
-- **Missing Not At Random (MNAR)**: Data is missing for reasons related to the missing value itself — the most dangerous pattern.
+- **Patterns of missingness**: **MCAR** — no pattern at all. **MAR** — missingness depends on observed variables. **MNAR** — missingness depends on the unobserved value itself, the most dangerous pattern.
 - Always visualize before summarizing. Summary statistics can hide wildly different data (Anscombe's quartet).
 - When a distribution is skewed, the mean doesn't represent a typical value — the median is more informative.
 - Missing data is a signal, not just a nuisance. Ask *why* it's missing before deciding how to handle it.

@@ -15,7 +15,7 @@ from scipy.stats import norm
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 # Load data
@@ -23,13 +23,13 @@ DATA_DIR = 'data'
 np.random.seed(42)
 ```
 
-A drug company just spent \$800 million on a clinical trial. The p-value is 0.0000000000000000028. Time to approve the drug? Not so fast.
+The average cost to bring a drug to market exceeds \$1.3 billion. A clinical trial just produced a p-value of 0.0000000000000000028. Time to approve the drug? Not so fast.
 
 In Lecture 9, we used permutation to simulate what the treatment effect would look like if the drug did nothing -- that gave us a p-value. Today we formalize that machinery and discover its limitations.
 
 ## Setup: Recap the Clinical Trial
 
-Let's reload the data and the observed treatment effect.
+The original ACTG 175 trial had four arms; here we compare control vs. all alternative treatments combined. Let's reload the data and the observed treatment effect.
 
 ```{python}
 df = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
@@ -43,7 +43,7 @@ print(f"Observed treatment effect: {observed_effect:.1f} CD4 cells")
 print(f"Control n = {len(control)}, Treatment n = {len(treatment)}")
 ```
 
-Before we formalize anything, let's look at what we're working with. Do these two groups actually look different?
+Before formalizing anything, let's look at what we're working with. Do the two groups actually look different?
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -118,7 +118,7 @@ Convention: $\alpha = 0.05$. But why 0.05? R.A. Fisher suggested 0.05 in 1925 as
 The t-test we're about to use has a surprising origin. In the early 1900s, William Sealy Gosset worked as a chemist at the Guinness brewery in Dublin. He needed to compare barley varieties and yeast strains — but with only a handful of samples from each batch, the normal approximation was unreliable. Gosset worked out the exact distribution of the sample mean divided by the sample standard deviation for small samples and published it in 1908 under the pseudonym "Student" (Guinness didn't allow employees to publish under their own names, fearing competitors would learn they were using statistics). His "Student's t-distribution" is the foundation of the t-test we use today — and the reason it's still called "Student's t." (See Salsburg, *The Lady Tasting Tea*, Ch. 2.)
 :::
 
-We use **Welch's t-test** (`equal_var=False`), which does not assume the two groups have equal variance. This is almost always the right default.
+We use **Welch's t-test** (`equal_var=False`), which does not assume the two groups have equal variance. This choice is almost always the right default.
 
 $$t = \frac{\bar{X}_1 - \bar{X}_2}{\sqrt{s_1^2/n_1 + s_2^2/n_2}}$$
 
@@ -132,7 +132,7 @@ print(f"At alpha = 0.01: {'Reject H0' if p_value < 0.01 else 'Fail to reject H0'
 print(f"At alpha = 0.001: {'Reject H0' if p_value < 0.001 else 'Fail to reject H0'}")
 ```
 
-This p-value is so small that the choice of $\alpha$ doesn't matter here. But for borderline cases, it matters a lot.
+The p-value here is so small that the choice of $\alpha$ doesn't matter. But for borderline cases, it matters a lot.
 
 ::: {.callout-tip}
 ## Think About It
@@ -182,7 +182,7 @@ As Einstein (reportedly) put it: *"No amount of experimentation can ever prove m
 The framework we've just laid out — $H_0$, $H_1$, $\alpha$, Type I and Type II errors — is actually a blend of two competing philosophies that were never fully reconciled. Fisher saw the p-value as a *continuous measure of evidence against the null*: a small p-value means the data are surprising, and the scientist should use judgment about what to do next. Neyman and Pearson saw hypothesis testing as a *decision procedure*: fix $\alpha$ in advance, and then mechanically reject or fail to reject, optimizing long-run error rates. Fisher was furious at the Neyman-Pearson formulation — he thought reducing scientific inference to a binary decision was absurd. Neyman and Pearson thought Fisher's approach lacked rigor. The textbook version you learn today awkwardly combines both: we compute Fisher's p-value but make Neyman-Pearson's binary decision. Knowing this history helps explain why the framework can feel philosophically unsatisfying — it *is* a compromise. (See Salsburg, *The Lady Tasting Tea*, Ch. 6–7.)
 :::
 
-Let's visualize the tradeoff. Under the null, the test statistic is centered at zero. Under the alternative, it's shifted. The overlap is where errors happen.
+Let's visualize the tradeoff. Under the null, the test statistic is centered at zero. Under the alternative, it's shifted. The overlap is where errors happen. (The plot shows only the right tail of a two-sided test; the left tail is symmetric.)
 
 ```{python}
 sigma = control.std()
@@ -252,9 +252,9 @@ ax.legend()
 plt.show()
 ```
 
-Under the null, p-values from a correctly specified test are **uniformly distributed** on [0, 1]. This is exact for tests based on the normal distribution and approximate for large samples via the CLT. That's why choosing $\alpha = 0.05$ gives a 5% false positive rate -- exactly 5% of uniform draws fall below 0.05.
+Under the null, p-values from a correctly specified test are **uniformly distributed** on [0, 1] -- exact when the null fully specifies the distribution, and a good approximation otherwise (e.g., for large samples via the CLT). Choosing $\alpha = 0.05$ therefore gives a 5% false positive rate: exactly 5% of uniform draws fall below 0.05.
 
-This is a key insight: the p-value is a random variable too!
+The p-value is a random variable too -- a key insight we return to throughout the course.
 
 ## Power: Can We Detect a Real Effect?
 
@@ -266,7 +266,7 @@ Our trial found an effect of ~71 CD4 cells -- very large, very detectable. But w
 2. The sample size
 3. The significance level $\alpha$
 
-Let's build intuition with a single example first. If the true effect is 30 CD4 cells and we have 100 patients per group, what's the power? We simulate from a normal distribution here -- the actual CD4 count distribution is somewhat skewed, but this gives us a useful approximation.
+Let's build intuition with a single example first. If the true effect is 30 CD4 cells and we have 100 patients per group, what's the power? We simulate from a normal distribution here -- the actual CD4 count distribution is somewhat skewed, but the approximation is useful. The simulation also draws both groups with the same $\sigma$, a simplification; Welch's t-test works correctly either way.
 
 ```{python}
 def simulate_power(true_effect, n_per_group, alpha=0.05, n_sims=2000):
@@ -357,7 +357,7 @@ Power tells us whether our study is big enough to find an effect. But the signif
 
 ## The Stakes: What Should $\alpha$ Be?
 
-You're the FDA. The average cost to bring a drug to market is \$1.3 billion. You have to decide:
+You're the FDA. Recall that the average cost to bring a drug to market exceeds \$1.3 billion. You have to decide:
 
 - **Approve a useless drug** = waste billions in healthcare costs AND expose patients to side effects with no benefit (Type I error).
 - **Reject an effective drug** = patients die who could have been saved (Type II error).
@@ -420,6 +420,8 @@ Our test was **two-sided**: we rejected $H_0$ for large effects in *either* dire
 
 Suppose a new drug might have side effects. You want to test whether it *increases* adverse events (one-sided) vs. whether it *changes* adverse events in either direction (two-sided). If you use one-sided and the drug actually *decreases* adverse events, your test won't detect that.
 
+The FDA almost always requires two-sided tests: a drug must demonstrate efficacy without assuming the direction of the effect in advance.
+
 ```{python}
 # Two-sided vs one-sided p-values
 _, p_two = stats.ttest_ind(treatment, control, equal_var=False, alternative='two-sided')
@@ -436,7 +438,7 @@ print(f"Rule of thumb: use two-sided unless you have a strong prior reason.")
 
 ## Chi-Squared Test: Testing Categorical Data
 
-So far, our tests have compared means of numerical data. But what if the data are categorical? For instance, was the treatment assignment in ACTG 175 balanced across demographic groups?
+So far, our tests have compared means of numerical data. But what if the data are categorical? For instance, was the treatment assignment in ACTG 175 balanced across demographic groups? If randomization were imbalanced, the FDA could reject the entire trial -- wasting years and hundreds of millions of dollars.
 
 The **chi-squared test** compares observed frequencies to expected frequencies:
 
@@ -578,7 +580,7 @@ The second plot shows that for a fixed sample size, the p-value shrinks as the e
 ::: {.callout-warning}
 ## Always report effect sizes
 
-This is why you should always report effect sizes and confidence intervals alongside p-values. A small p-value tells you the effect is unlikely to be zero -- it does not tell you the effect is large or important.
+The lesson: always report effect sizes and confidence intervals alongside p-values. A small p-value tells you the effect is unlikely to be zero -- it does not tell you the effect is large or important.
 :::
 
 ## Key Takeaways
@@ -598,6 +600,7 @@ We'll revisit these ideas in Lecture 11 when we ask: what happens when you run 2
 - **p-value**: Probability of observing data at least this extreme, assuming $H_0$ is true. It is *not* the probability that $H_0$ is true.
 - **Significance level** ($\alpha$): The false positive rate you're willing to accept; the threshold for rejecting $H_0$.
 - **Type I error**: Rejecting $H_0$ when it's true (false positive; rate = $\alpha$). **Type II error**: Failing to reject $H_0$ when $H_1$ is true (false negative; rate = $\beta$). **Power** = $1 - \beta$.
+- **p-values are uniform under $H_0$**: Exact when the null fully specifies the distribution; a good approximation otherwise.
 - **Welch's t-test**: Two-sample t-test that does not assume equal variances. **Chi-squared test**: Tests whether observed categorical frequencies match expected frequencies.
 - You reject or fail to reject $H_0$ -- you never "accept" $H_0$ or "prove" it true.
 - Power depends on effect size, sample size, and $\alpha$ -- compute it before running an experiment.

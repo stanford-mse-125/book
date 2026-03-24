@@ -73,35 +73,81 @@ plt.tight_layout()
 plt.show()
 ```
 
+How similar are two listings? One natural measure: multiply corresponding entries and add them up.
+
+```{python}
+# How similar are listings 1 and 3?
+listing_1 = np.array([bedrooms[0], bathrooms[0]])  # (1, 1)
+listing_3 = np.array([bedrooms[2], bathrooms[2]])  # (3, 2)
+
+similarity = listing_1[0] * listing_3[0] + listing_1[1] * listing_3[1]
+print(f"Listing 1: {listing_1}")
+print(f"Listing 3: {listing_3}")
+print(f"Entry-by-entry product sum: {listing_1[0]}*{listing_3[0]} + {listing_1[1]}*{listing_3[1]} = {similarity}")
+```
+
 :::{.callout-important}
 ## Definition: Inner Product (Dot Product)
 The **inner product** (or **dot product**) of two vectors $u, v \in \mathbb{R}^n$ is the scalar
 $$u \cdot v = u^T v = \sum_{i=1}^n u_i v_i$$
-It measures **similarity**: a large positive value means $u$ and $v$ point in similar directions; near zero means they're unrelated; negative means they point in opposite directions. Example: "How similar are two Airbnb listings' feature vectors?" — compute their dot product.
+A positive inner product indicates the vectors tend to point in the same direction; a negative value indicates opposite directions; zero indicates perpendicularity.
 :::
+
+A word of caution: the raw inner product depends on both direction *and* magnitude. A listing with 10 bedrooms and 10 bathrooms would have a large inner product with almost any other listing, simply from its scale. To isolate directional similarity, divide by the lengths of both vectors — a quantity called **cosine similarity**, which we return to below.
+
+How large *is* a feature vector? The length generalizes the Pythagorean theorem.
+
+```{python}
+# How "big" is each listing's feature vector?
+for i, name in [(0, 'Listing 1'), (2, 'Listing 3')]:
+    vec = np.array([bedrooms[i], bathrooms[i]])
+    length = np.sqrt(vec[0]**2 + vec[1]**2)
+    print(f"{name}: {vec}, length = sqrt({vec[0]}^2 + {vec[1]}^2) = {length:.2f}")
+```
 
 :::{.callout-important}
 ## Definition: Norm
 The **norm** (or **length**) of a vector $v$ is
 $$\|v\| = \sqrt{v \cdot v} = \sqrt{\sum_{i=1}^n v_i^2}$$
-It measures **magnitude** — how large the vector is. Example: "How far is a listing's feature vector from the origin (or from the 'average' listing)?" In code: `np.linalg.norm(v)`.
+The norm measures **magnitude** — how large the vector is. In code: `np.linalg.norm(v)`.
 :::
+
+With norms in hand, we can measure how far apart two listings are.
+
+```{python}
+# How different are listings 1 and 3?
+diff = listing_3 - listing_1
+dist = np.linalg.norm(diff)
+print(f"Difference vector: {listing_3} - {listing_1} = {diff}")
+print(f"Distance = norm of difference = {dist:.2f}")
+```
 
 :::{.callout-important}
 ## Definition: Distance
 The **distance** between two vectors $u$ and $v$ is the norm of their difference:
 $$d(u, v) = \|u - v\|$$
-It measures **dissimilarity**. Example: "How different are two hospitals' readmission profiles?" — compute the distance between their feature vectors. Smaller distance = more similar.
+Smaller distance means more similar. Larger distance means more different.
 :::
 
-## Linear combinations: mixing features
+## Linear functions and linear combinations
+
+:::{.callout-important}
+## Definition: Linear Function
+A function $f$ is **linear** if it satisfies two properties:
+$$f(ax + by) = a\,f(x) + b\,f(y)$$
+for all vectors $x, y$ and all scalars $a, b$. Equivalently: scaling the input scales the output, and adding inputs adds outputs.
+:::
+
+Familiar examples of linear functions: multiplying by a constant ($f(x) = 3x$), matrix multiplication ($f(x) = Ax$), and the inner product with a fixed vector ($f(x) = w \cdot x$). Non-examples: squaring ($f(x) = x^2$, since $(2x)^2 \neq 2x^2$) and adding a constant ($f(x) = x + 1$, since $f(0) \neq 0$).
+
+Linear models matter precisely for this reason: the prediction $\hat{y} = X\beta$ is a linear function of $\beta$. Changing the weights changes the prediction in a proportional, predictable way — no surprises.
 
 :::{.callout-important}
 ## Definition: Linear Combination
 A **linear combination** of vectors $v_1, v_2$ is any expression $a \cdot v_1 + b \cdot v_2$ where $a, b$ are **scalars** (plain numbers).
 :::
 
-Why do we care? Because a linear model $\hat{y} = \beta_1 \cdot x_1 + \beta_2 \cdot x_2$ says: "the prediction is a linear combination of the feature columns."
+A linear model $\hat{y} = \beta_1 \cdot x_1 + \beta_2 \cdot x_2$ says: "the prediction is a linear combination of the feature columns."
 
 Let's see what that looks like. (In code, we write `beta` for the Greek letter $\beta$.)
 
@@ -172,7 +218,7 @@ $$\text{span}(v_1, v_2) = \{a \cdot v_1 + b \cdot v_2 : a, b \in \mathbb{R}\}$$
 
 In other words, try every possible choice of weights $a$ and $b$. The collection of all the vectors you can make this way is the span.
 
-For a linear model, the span of your feature columns IS the set of all possible predictions. This is a powerful idea: it tells you what your model **can** and **cannot** predict, before you fit anything.
+For a linear model, the span of your feature columns IS the set of all possible predictions. This characterization tells you what your model **can** and **cannot** predict, before you fit anything.
 
 Let's visualize the span of 2 vectors in $\mathbb{R}^3$.
 
@@ -181,48 +227,49 @@ from mpl_toolkits.mplot3d import Axes3D
 
 v1_3d = np.array([2, 1, 0])
 v2_3d = np.array([0, 1, 2])
+target = np.array([1, 3, 1])
 
-# Compute projection of an out-of-span point onto the plane
-out_of_span = np.array([-3, -3, 3])
+# Project target onto span(v1, v2) via least squares
 V = np.column_stack([v1_3d, v2_3d])
-coeffs = np.linalg.lstsq(V, out_of_span, rcond=None)[0]
-projection = V @ coeffs
+coeffs = np.linalg.lstsq(V, target, rcond=None)[0]
+proj = V @ coeffs
 
 fig = plt.figure(figsize=(8, 6))
 ax = fig.add_subplot(111, projection='3d')
 
-# Draw the plane (span)
-s = np.linspace(-1.5, 1.5, 10)
-t = np.linspace(-1.5, 1.5, 10)
+# Draw the plane (span) — range covers the projection point
+s = np.linspace(-1.5, 2, 20)
+t = np.linspace(-1.5, 2, 20)
 S, T = np.meshgrid(s, t)
 X = S * v1_3d[0] + T * v2_3d[0]
 Y = S * v1_3d[1] + T * v2_3d[1]
 Z = S * v1_3d[2] + T * v2_3d[2]
-ax.plot_surface(X, Y, Z, alpha=0.2, color='gray')
+ax.plot_surface(X, Y, Z, alpha=0.18, color='gray')
 
-# Draw the two vectors
+# Draw the two basis vectors
 for v, color, label in [(v1_3d, 'C0', '$v_1$'), (v2_3d, 'C1', '$v_2$')]:
     ax.quiver(0, 0, 0, *v, color=color, arrow_length_ratio=0.1, lw=2.5)
-    ax.text(*(v * 1.1), label, fontsize=14, color=color)
+    ax.text(*(v * 1.15), label, fontsize=14, color=color)
 
-# Mark the out-of-span point, its projection, and the residual
-ax.scatter(*out_of_span, color='red', s=80, zorder=5, marker='X')
-ax.text(*out_of_span, '  Target $y$', fontsize=11, color='red')
-ax.scatter(*projection, color='green', s=80, zorder=5)
-ax.text(*projection, '  Closest point\n  in span', fontsize=9, color='green')
+# Mark the target, its projection, and the residual
+ax.scatter(*target, color='red', s=80, zorder=5, marker='X')
+ax.text(target[0] + 0.15, target[1] + 0.15, target[2],
+        'Target $b$', fontsize=11, color='red')
+ax.scatter(*proj, color='green', s=80, zorder=5)
+ax.text(proj[0] - 0.3, proj[1] - 0.5, proj[2] - 0.3,
+        'Closest point in span', fontsize=9, color='green')
 
 # Dashed line: residual connecting target to its projection
-ax.plot([out_of_span[0], projection[0]],
-        [out_of_span[1], projection[1]],
-        [out_of_span[2], projection[2]],
-        'k--', lw=1.5, alpha=0.7)
+ax.plot([target[0], proj[0]], [target[1], proj[1]], [target[2], proj[2]],
+        'k--', lw=1.5, alpha=0.7, label='Residual ($b$ − proj)')
 
 ax.set_xlabel('$x_1$')
 ax.set_ylabel('$x_2$')
 ax.set_zlabel('$x_3$')
 ax.set_title('Span of 2 vectors in $\\mathbb{R}^3$ = a plane\n'
              'Some targets are unreachable — the best we can do is the closest point')
-ax.view_init(elev=25, azim=135)
+ax.legend(loc='upper left', fontsize=9)
+ax.view_init(elev=15, azim=60)
 plt.tight_layout()
 plt.show()
 ```
@@ -241,7 +288,7 @@ $$X = \begin{bmatrix} | & | \\ x_1 & x_2 \\ | & | \end{bmatrix}$$
 ## Definition: Column Space
 The **column space** of $X$ is the span of its columns:
 $$\text{col}(X) = \text{span}(x_1, x_2) = \{X\beta : \beta \in \mathbb{R}^2\}$$
-This is exactly the set of all possible predictions $\hat{y} = X\beta$ for a linear model. Different $\beta$ = different predictions, but they all live in the column space.
+This set is exactly the collection of all possible predictions $\hat{y} = X\beta$ for a linear model. Different $\beta$ = different predictions, but they all live in the column space.
 :::
 
 ```{python}
@@ -337,9 +384,9 @@ Bedrooms and beds are *very* highly correlated. In linear algebra terms, the `be
 
 $$\text{beds} \approx 1.2 \cdot \text{bedrooms}$$
 
-This means the span barely grows when you add `beds` as a feature. You have two vectors pointing in nearly the same direction — they span almost a **line**, not a **plane**.
+The span barely grows when you add `beds` as a feature. Two vectors pointing in nearly the same direction span almost a **line**, not a **plane**.
 
-This is **multicollinearity**: redundant features that don't expand the column space. (High correlation between feature columns corresponds to near-**collinearity** in the column vectors — hence the name.)
+The phenomenon is called **multicollinearity**: redundant features that don't expand the column space. High correlation between feature columns corresponds to near-**collinearity** in the column vectors — hence the name.
 
 ```{python}
 # How parallel are these feature vectors?
@@ -436,7 +483,7 @@ plt.show()
 
 On the left, two independent features let you reach any point in the plane — you have full 2D freedom. On the right, nearly parallel features only let you move along one direction. **The span collapsed.** Adding the second feature barely helped.
 
-This is why multicollinearity is a problem: it means your features are providing *redundant information*.
+Multicollinearity limits your model: redundant features provide *redundant information*, not new predictive power.
 
 :::{.callout-tip}
 ## Think About It
@@ -512,12 +559,100 @@ One more concept we'll need immediately in Lecture 5.
 ## Definition: Orthogonal Vectors
 Two vectors $u$ and $v$ are **orthogonal** (perpendicular) if their inner product is zero:
 $$u \cdot v = 0$$
-Orthogonal vectors are completely unrelated — knowing one tells you nothing about the other. Example: if two features are orthogonal, they carry entirely independent information, and neither is redundant.
+For centered data vectors, orthogonality corresponds to zero correlation — the features are **uncorrelated**. Uncorrelated features carry non-redundant information; neither can be predicted from the other by a linear model.
 :::
 
-Why does this matter? In Lecture 5, we'll see that the residual $e = y - \hat{y}$ from regression is **orthogonal** to the column space of $X$. That orthogonality condition is what *defines* the least squares solution — and it gives us the normal equations.
+Let's check orthogonality with real feature vectors. Two features with near-zero correlation should have centered vectors that are approximately orthogonal.
 
-The code earlier in this lecture already demonstrated this idea: when we computed the angle between feature vectors using `np.dot`, we were checking how close to orthogonal they are. Orthogonal features (90° apart) expand the column space maximally; parallel features (0°) don't expand it at all.
+```{python}
+# Orthogonality computation: are any Airbnb features approximately orthogonal?
+# Center the vectors (subtract the mean) so dot product corresponds to correlation
+beds_c = df['beds'].values - df['beds'].mean()
+reviews_c = df['number_of_reviews'].values - df['number_of_reviews'].mean()
+bedrooms_c = df['bedrooms'].values - df['bedrooms'].mean()
+
+# Dot products (unnormalized)
+dot_beds_reviews = np.dot(beds_c, reviews_c)
+dot_beds_bedrooms = np.dot(beds_c, bedrooms_c)
+
+# Cosine similarity = correlation for centered vectors
+cos_beds_reviews = dot_beds_reviews / (np.linalg.norm(beds_c) * np.linalg.norm(reviews_c))
+cos_beds_bedrooms = dot_beds_bedrooms / (np.linalg.norm(beds_c) * np.linalg.norm(bedrooms_c))
+
+print(f"beds vs number_of_reviews:")
+print(f"  dot product = {dot_beds_reviews:,.0f}")
+print(f"  cosine similarity (= correlation) = {cos_beds_reviews:.3f}")
+print(f"  angle = {np.degrees(np.arccos(np.clip(cos_beds_reviews, -1, 1))):.1f}°")
+print()
+print(f"beds vs bedrooms:")
+print(f"  dot product = {dot_beds_bedrooms:,.0f}")
+print(f"  cosine similarity (= correlation) = {cos_beds_bedrooms:.3f}")
+print(f"  angle = {np.degrees(np.arccos(np.clip(cos_beds_bedrooms, -1, 1))):.1f}°")
+print()
+print("Beds and reviews are nearly orthogonal — they carry independent information.")
+print("Beds and bedrooms are far from orthogonal — they carry redundant information.")
+```
+
+Why does orthogonality matter? In Lecture 5, we'll see that the residual $e = y - \hat{y}$ from regression is **orthogonal** to the column space of $X$. That orthogonality condition defines the least squares solution and gives us the normal equations.
+
+Orthogonal features (90° apart) expand the column space maximally; parallel features (0°) don't expand it at all.
+
+## What predictions are possible? An answer
+
+The opening of this lecture asked: given your features, what predictions are possible? We now have the tools to answer concretely. The column space of $X$ is the set of all achievable predictions. Any target vector outside the column space cannot be reached exactly — the best a linear model can do is find the closest point inside the column space.
+
+Let's project actual Airbnb prices onto the column space of two feature sets and measure the gap.
+
+```{python}
+# Build two design matrices: one with 2 features, one with 4
+X_small = df[['bedrooms', 'bathrooms']].values
+X_large = df[['bedrooms', 'bathrooms', 'accommodates', 'number_of_reviews']].values
+y = df['price_clean'].values
+
+# Project y onto each column space using least squares
+beta_small = np.linalg.lstsq(X_small, y, rcond=None)[0]
+beta_large = np.linalg.lstsq(X_large, y, rcond=None)[0]
+
+y_hat_small = X_small @ beta_small
+y_hat_large = X_large @ beta_large
+
+# Residuals: what the model cannot reach
+resid_small = y - y_hat_small
+resid_large = y - y_hat_large
+
+print("Projection of actual prices onto the column space:")
+print(f"  2 features (bedrooms, bathrooms):")
+print(f"    residual norm = {np.linalg.norm(resid_small):,.0f}")
+print(f"    avg |residual| = ${np.mean(np.abs(resid_small)):.0f} per listing")
+print(f"  4 features (+ accommodates, reviews):")
+print(f"    residual norm = {np.linalg.norm(resid_large):,.0f}")
+print(f"    avg |residual| = ${np.mean(np.abs(resid_large)):.0f} per listing")
+print()
+print("More independent features → larger column space → smaller residual.")
+```
+
+```{python}
+# Visualize: actual prices vs projected prices
+fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+
+for ax, y_hat, label, n_feat in [
+    (axes[0], y_hat_small, 'bedrooms + bathrooms', 2),
+    (axes[1], y_hat_large, 'bedrooms + bathrooms +\naccommodates + reviews', 4)
+]:
+    ax.scatter(y_hat, y, alpha=0.15, s=8)
+    ax.plot([0, 500], [0, 500], 'r--', lw=1.5, label='Perfect prediction')
+    ax.set_xlabel('Predicted price (projection onto column space)')
+    ax.set_ylabel('Actual price')
+    ax.set_title(f'{n_feat} features: {label}')
+    ax.legend(fontsize=10)
+    ax.set_xlim(0, 500)
+    ax.set_ylim(0, 500)
+
+plt.tight_layout()
+plt.show()
+```
+
+The gap between the red dashed line and the point cloud is the residual — the part of actual prices that lives outside the column space. A richer column space (more independent features) narrows the gap, but some gap always remains. No linear combination of these features can perfectly reproduce the full complexity of Airbnb pricing.
 
 ## Key takeaways
 
@@ -544,10 +679,12 @@ Next lecture: we'll use these ideas to understand *why* the linear regression fo
 ### Key ideas
 
 - **Vector**: an ordered list of numbers. Each feature column and each data row is a vector.
-- **Inner product (dot product)**: $u \cdot v = \sum u_i v_i$ — measures similarity between vectors.
+- **Linear function**: $f$ is linear if $f(ax + by) = af(x) + bf(y)$. Linear models are linear in the weights $\beta$.
+- **Inner product (dot product)**: $u \cdot v = \sum u_i v_i$ — measures similarity between vectors (but depends on magnitude; use cosine similarity to isolate direction).
+- **Cosine similarity**: $\cos\theta = \frac{u \cdot v}{\|u\|\|v\|}$ — directional similarity, independent of magnitude. Equals correlation for centered vectors.
 - **Norm**: $\|v\| = \sqrt{v \cdot v}$ — the length/magnitude of a vector.
 - **Distance**: $d(u,v) = \|u - v\|$ — measures dissimilarity between vectors.
-- **Orthogonal**: vectors with zero inner product; completely independent directions.
+- **Orthogonal**: vectors with zero inner product; for centered data, orthogonality means zero correlation (uncorrelated).
 - **Linear combination**: $a \cdot v_1 + b \cdot v_2$ — a weighted sum of vectors. A **scalar** is a single number used as a weight.
 - **Span**: the set of all linear combinations of a set of vectors.
 - **Column space**: the span of the columns of a matrix $X$ — equivalently, the set of all possible predictions $X\beta$.

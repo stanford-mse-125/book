@@ -129,6 +129,12 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Column space
 - Linearly dependent / independent
 - Collinearity
+- Inner product, dot product
+- Norm, distance
+- Orthogonal
+- Rank, multicollinearity
+- Linear function
+- Cosine similarity
 
 **Prerequisites:** MS&E 120 (vectors as random variables); some students have EE103/CME103 (VMLS)
 
@@ -160,6 +166,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - R-squared (R²)
 - Normal equations
 - Coefficient interpretation
+- Regression to the mean
 
 **Key formulas:**
 - ŷ = Xβ (prediction is in column space)
@@ -307,6 +314,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Exchangeability: random assignment makes labels exchangeable under H₀
 - Connection: bootstrap (Lec 8) = precision of estimate; permutation = significance of effect
 - Conservative p-value estimator: (count + 1) / (n_perms + 1) (Phipson & Smyth 2010)
+- CI/hypothesis test duality: a 95% CI excluding 0 is equivalent to rejecting H0 at alpha = 0.05
 
 **Key vocabulary:**
 - Permutation test (shuffle labels)
@@ -315,6 +323,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - p-value
 - Exchangeability
 - Simulation-based inference
+- CI/hypothesis test duality
 
 **Prerequisites:** Lec 8 (bootstrap — students know resampling)
 
@@ -397,6 +406,12 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - p-value histogram
 - Simpson's paradox
 - Correlation, confounding
+- Pearson correlation (r)
+- Ecological correlation fallacy
+- Reproducibility crisis
+- p-hacking, researcher degrees of freedom
+- Pre-registration
+- File drawer problem
 
 **Key formulas:**
 - Expected false positives = m × α
@@ -428,6 +443,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Bootstrap CIs for regression coefficients (callback to Lec 8): resample rows, refit, collect β̂
 - Formula-based CIs: t-distribution with n − p − 1 df
 - When bootstrap and formula CIs agree (normal residuals) and disagree (heavy tails, heteroscedasticity)
+- Prediction interval vs confidence interval for the mean
 - t-test for coefficients: H₀: βⱼ = 0
 - Step-by-step model building: watch coefficients change
 - "Controlling for" / "holding constant" interpretation
@@ -441,6 +457,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Standard error (of a coefficient)
 - "Controlling for" / "holding constant"
 - Practical significance, effect size, Cohen's d
+- Prediction interval
 
 **Key formulas:**
 - t = β̂ⱼ / SE(β̂ⱼ), with n − p − 1 degrees of freedom
@@ -456,7 +473,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 ---
 
-## Lecture 13: Classification (Logistic Regression + Metrics) — Act 2 capstone
+## Lecture 13: Classification (Logistic Regression + Metrics)
 
 **Objectives addressed:** 13 (logistic regression, classification metrics — precision, recall, ROC)
 
@@ -528,6 +545,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Explained variance ratio
 - Scree plot, elbow method
 - Standardization (z-score)
+- Basis, orthonormal basis
 
 **Key formulas:**
 - SVD: X = USV^T
@@ -569,6 +587,9 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Silhouette score
 - Elbow method
 - Local optimum, initialization sensitivity
+- Distance metrics (Euclidean, Manhattan, cosine)
+- K-medoids
+- Adjusted Rand Index (ARI)
 
 **Key formulas:**
 - K-means objective: minimize Σ_k Σ_{i∈C_k} ||x_i − μ_k||²
@@ -595,6 +616,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Lag features: use past values (last 5 games, yesterday's AQI) as features for today
 - Non-stationarity: the data-generating process changes over time
 - Walk-forward validation: expanding or sliding window
+- MAPE and MASE as forecast accuracy metrics
+- Prediction intervals via bootstrap residual resampling
+- Distribution shift: future data may not resemble past data
+- Benchmark forecasting methods: naive, seasonal naive, drift
 
 **Key vocabulary:**
 - Backtesting, temporal split
@@ -603,6 +628,11 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Non-stationarity
 - Walk-forward validation
 - AQI (Air Quality Index)
+- MAPE (Mean Absolute Percentage Error)
+- MASE (Mean Absolute Scaled Error)
+- Prediction interval
+- Distribution shift
+- Naive forecast, seasonal naive, drift
 
 **Prerequisites:** Lec 7 (train/test split, cross-validation, feature engineering)
 

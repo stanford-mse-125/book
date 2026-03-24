@@ -8,8 +8,8 @@ jupyter: python3
 ## The intern who "discovered" load management
 
 An NBA analytics intern tests whether each of 431 players performs better after rest.
-They find 30 "significant" results and write a report:
-*"These 30 players benefit from load management."*
+They find several dozen "significant" results and write a report:
+*"These players benefit from load management."*
 
 Their boss isn't convinced. What did the intern miss?
 
@@ -18,7 +18,11 @@ Their boss isn't convinced. What did the intern miss?
 
 :::{.callout-note}
 ## The Idol of the Qu
-Salsburg warns about exactly this in *The Lady Tasting Tea*. By the mid-20th century, hypothesis testing had become a ritual: collect data, compute a p-value, publish if $p < 0.05$, move on. Researchers stopped asking whether the question was worth testing and started treating the 0.05 threshold as a stamp of scientific truth. Salsburg calls this the "idol of the Qu" — the worship of quantitative methods for their own sake, divorced from scientific thinking. The intern's analysis is a textbook case: 431 p-values, no scientific question, no correction for the fact that most "discoveries" are noise. (See Salsburg, *The Lady Tasting Tea*, Ch. 20.)
+Salsburg warns about exactly this in *The Lady Tasting Tea*. By the mid-20th century, hypothesis testing had become a ritual: collect data, compute a p-value, publish if $p < 0.05$, move on. Researchers stopped asking whether the question was worth testing and started treating the 0.05 threshold as a stamp of scientific truth. Salsburg calls this the "idol of the Qu" — the worship of quantitative methods for their own sake, divorced from scientific thinking.
+
+The statistician John Ioannidis made this argument rigorous in his landmark paper ["Why Most Published Research Findings Are False"](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124) (*PLOS Medicine*, 2005). The paper's central insight is quantitative: when most tested hypotheses are false and studies are underpowered, the mathematics of Bayes' theorem guarantees that a majority of "statistically significant" findings will be false positives. This result holds even without any p-hacking or researcher misbehavior — it follows from the base rates alone. The paper became one of the most cited in the history of medicine and helped catalyze the reproducibility reforms discussed later in this lecture.
+
+The intern's analysis is a textbook case of both warnings: 431 p-values, no scientific question, no correction for the fact that most "discoveries" are noise. (See Salsburg, *The Lady Tasting Tea*, Ch. 20; Ioannidis, *PLOS Medicine*, 2005.)
 :::
 
 ```{python}
@@ -79,7 +83,7 @@ The intern's approach is straightforward:
 2. Run a two-sample t-test on points scored
 3. If $p < 0.05$, declare the player "benefits from rest"
 
-This is the **multiple testing** problem: running many hypothesis tests on the same dataset. Let's do exactly what the intern did.
+This scenario illustrates the **multiple testing** problem: running many hypothesis tests on the same dataset. Let's do exactly what the intern did.
 
 ```{python}
 # Run a Welch's t-test for each player with >= 20 games in each category
@@ -123,7 +127,7 @@ Here's the key insight. If rest has **no effect on any player**, the expected nu
 
 $$\text{Expected false positives} = m \times \alpha$$
 
-where $m$ is the number of tests. (This follows from linearity of expectation and holds regardless of dependence between tests.)
+where $m$ is the number of tests. (The expected count follows from linearity of expectation and holds regardless of dependence between tests. The Binomial standard deviation used below assumes the tests are independent — an approximation, since player performances share common opponents and schedules.)
 
 ```{python}
 expected_false_positives = n_players * 0.05
@@ -131,7 +135,7 @@ sd_under_null = np.sqrt(n_players * 0.05 * 0.95)
 
 print(f"Number of tests: {n_players}")
 print(f"Expected false positives under the null: {expected_false_positives:.1f}")
-print(f"Std dev under null (Binomial): {sd_under_null:.1f}")
+print(f"Std dev under null (Binomial, assuming independence): {sd_under_null:.1f}")
 print(f"Actual 'significant' results: {n_sig}")
 print(f"\nGetting {n_sig} is only ~{(n_sig - expected_false_positives)/sd_under_null:.1f} SDs above {expected_false_positives:.0f}.")
 print(f"The intern's 'discovery' is probably noise.")
@@ -202,7 +206,7 @@ else:
 
 ## Correction 2: Benjamini-Hochberg (FDR control)
 
-Bonferroni killed every result. But is that too aggressive? Maybe some players really do benefit from rest — we just can't tell because Bonferroni demands an extremely low p-value for each test. Can we find a middle ground that allows a controlled fraction of false discoveries?
+Bonferroni killed every result. But is that too aggressive? Maybe some players really do benefit from rest — we just can't tell — Bonferroni demands an extremely low p-value for each test. Can we find a middle ground that allows a controlled fraction of false discoveries?
 
 :::{.callout-important}
 ## Definition: Benjamini-Hochberg Procedure and FDR
@@ -213,9 +217,9 @@ The BH procedure:
 
 1. Sort p-values: $p_{(1)} \le p_{(2)} \le \cdots \le p_{(m)}$
 2. Find the largest $k$ such that $p_{(k)} \le \frac{k}{m} \alpha$
-3. Reject hypotheses $1, 2, \ldots, k$
+3. Reject all hypotheses whose p-values are among the $k$ smallest (i.e., hypotheses $1, 2, \ldots, k$ in the sorted order)
 
-This guarantees that among your "discoveries," at most a fraction $\alpha$ are false.
+In expectation, a fraction $\alpha$ of your "discoveries" are false.
 :::
 
 ```{python}
@@ -247,7 +251,7 @@ print(f"  Bonferroni:   {n_bonf}")
 print(f"  BH (FDR):     {n_bh}")
 ```
 
-Use Bonferroni when *any* false positive is costly (e.g., drug safety). Use BH when you can tolerate some false discoveries (e.g., screening genes for further study). This connects to the dollar-sign decisions from Lecture 10: the stakes determine the correction.
+The two corrections answer different questions. FWER asks: *did I make any mistake at all?* FDR asks: *among the things I called discoveries, what fraction are wrong?* Use Bonferroni when *any* false positive is costly (e.g., drug safety). Use BH when you can tolerate some false discoveries (e.g., screening genes for further study). A sportsbook evaluating hundreds of player props per night faces this same multiple testing problem. The stakes determine the correction — a connection to the consequential decisions from Lecture 10.
 
 ```{python}
 # Visualize the BH procedure
@@ -277,18 +281,18 @@ Multiple testing corrections fix the problem when you *know* how many tests you 
 
 :::{.callout-note}
 ## The replication crisis in psychology
-In 2011, the psychologist Daryl Bem published a paper in a top journal claiming to find evidence for *precognition* — that people could sense future events before they happened. The paper used standard methods and passed peer review. It was an embarrassment for the field, not because the result was wrong (it almost certainly was), but because the standard methods *allowed* it.
+In 2011, the psychologist Daryl Bem published a paper in a top journal claiming to find evidence for *precognition* — that people could sense future events before they happened. The paper used standard methods and passed peer review. The embarrassment lay not in the result being wrong (it almost certainly was), but in the fact that standard methods *allowed* it.
 
-This helped spark the **Reproducibility Project** (Open Science Collaboration, 2015), which attempted to replicate 100 published psychology studies. The results were sobering: only about **36%** of the studies replicated with a statistically significant result, and effect sizes were roughly half the originals. Social psychology was hit hardest. The crisis wasn't limited to psychology — similar problems surfaced in cancer biology, economics, and other fields — but psychology became the most visible case.
+This embarrassment helped spark the **Reproducibility Project** (Open Science Collaboration, 2015), which attempted to replicate 100 published psychology studies. The results were sobering: only about **36%** of the studies replicated with a statistically significant result, and effect sizes were roughly half the originals. Social psychology was hit hardest. The crisis wasn't limited to psychology — similar problems surfaced in cancer biology, economics, and other fields — but psychology became the most visible case.
 :::
 
 How did so many false findings get published? The answer connects directly to what we just learned about multiple testing.
 
 :::{.callout-warning}
 ## P-hacking and researcher degrees of freedom
-**P-hacking** (also called **data dredging**) means trying many analyses and reporting the one that produces $p < 0.05$. This includes: excluding "outlier" participants until significance appears, testing many outcome variables and reporting only the significant one, collecting data until $p$ dips below 0.05, or splitting groups in various ways until a comparison "works."
+**P-hacking** (also called **data dredging**) means trying many analyses and reporting the one that produces $p < 0.05$. This practice includes: excluding "outlier" participants until significance appears, testing many outcome variables and reporting only the significant one, collecting data until $p$ dips below 0.05, or splitting groups in various ways until a comparison "works."
 
-The statistician Andrew Gelman calls these **researcher degrees of freedom** — the garden of forking paths. At each fork (which variable? which subset? which test?), the researcher makes a choice, and each choice is an implicit hypothesis test. The final reported p-value *looks* like it came from a single test, but it is really the survivor of many. This is exactly the multiple testing problem, except the multiplicity is invisible: it doesn't appear in the paper.
+The statistician Andrew Gelman calls these **researcher degrees of freedom** — the garden of forking paths. At each fork (which variable? which subset? which test?), the researcher makes a choice, and each choice is an implicit hypothesis test. The final reported p-value *looks* like it came from a single test, but it is really the survivor of many. This structure is exactly the multiple testing problem, except the multiplicity is invisible: it doesn't appear in the paper.
 
 Simmons, Nelson, and Simonsohn (2011) demonstrated that exploiting just a few common degrees of freedom — optional stopping, controlling for gender, dropping a condition — could produce $p < 0.05$ for a completely nonexistent effect over 60% of the time.
 :::
@@ -296,11 +300,11 @@ Simmons, Nelson, and Simonsohn (2011) demonstrated that exploiting just a few co
 Two structural features of science make the problem worse:
 
 - **The file drawer problem.** Studies with $p > 0.05$ are hard to publish, so they go in the "file drawer." If 20 labs independently test the same false hypothesis, one will get $p < 0.05$ by chance — and that's the only one you'll read about. The published literature is a biased sample of all the research ever conducted.
-- **Incentive misalignment.** Careers are built on novel, statistically significant findings. Null results don't get published, don't earn grants, and don't lead to promotions. This creates strong pressure (often unconscious) to find significance.
+- **Incentive misalignment.** Careers are built on novel, statistically significant findings. Null results don't get published, don't earn grants, and don't lead to promotions. This misalignment creates strong pressure (often unconscious) to find significance.
 
 :::{.callout-important}
 ## Definition: Pre-registration
-**Pre-registration** means publicly committing to your research question, data collection plan, and analysis plan *before* looking at the data. This eliminates researcher degrees of freedom by fixing the garden of forking paths in advance. A pre-registered analysis is a single, pre-specified test — not the survivor of many. Pre-registration doesn't prevent exploratory analysis; it simply requires labeling it honestly as exploratory (hypothesis-generating) rather than confirmatory (hypothesis-testing).
+**Pre-registration** means publicly committing to your research question, data collection plan, and analysis plan *before* looking at the data. This commitment eliminates researcher degrees of freedom by fixing the garden of forking paths in advance. A pre-registered analysis is a single, pre-specified test — not the survivor of many. Pre-registration doesn't prevent exploratory analysis; it simply requires labeling it honestly as exploratory (hypothesis-generating) rather than confirmatory (hypothesis-testing).
 :::
 
 The lesson for this course: multiple testing corrections (Bonferroni, BH) handle the *known* multiplicity — the 431 tests the intern explicitly ran. Pre-registration and transparent reporting handle the *hidden* multiplicity — the choices a researcher makes before the final analysis ever appears. Both are manifestations of the same core problem: **if you test many things and cherry-pick, you will find "significance" whether or not anything is real.**
@@ -359,7 +363,7 @@ print(f"*statistically* significant — but that doesn't mean the correlation is
 
 :::{.callout-warning}
 ## Ecological Correlation Fallacy
-Correlations computed on group averages (e.g., one point per state or per team) can be much stronger than correlations computed on individual observations. These **ecological correlations** are misleading because averaging hides within-group variation. Always check whether a correlation is based on individual data or aggregated summaries.
+Correlations computed on group averages (e.g., one point per state or per team) can be much stronger than correlations computed on individual observations. These **ecological correlations** are misleading — averaging hides within-group variation. Always check whether a correlation is based on individual data or aggregated summaries.
 :::
 
 ## Correlation is not causation: the confounding problem
@@ -411,7 +415,7 @@ print("Low-scoring players have MORE extended rest — they're the ones sitting 
 
 ## Simpson's paradox in rest data
 
-This is **Simpson's paradox** (named after Edward Simpson, 1951): the aggregate comparison shows rest *hurts* by several points, but within individual players, the effect is essentially zero. The aggregate pattern was entirely driven by *who* gets rest, not by rest itself.
+This reversal is **Simpson's paradox** (named after Edward Simpson, 1951): the aggregate comparison shows rest *hurts* by several points, but within individual players, the effect is essentially zero. The aggregate pattern was entirely driven by *who* gets rest, not by rest itself.
 
 Let's see this directly.
 
@@ -424,7 +428,7 @@ print(f"\nExtended rest: {agg_means.iloc[-1]:.1f} PPG  vs  Back-to-back: {agg_me
 print(f"Looks like rest HURTS by {agg_means.iloc[0] - agg_means.iloc[-1]:.1f} points!")
 ```
 
-The fix is to compare each player to *themselves*. For each player-season, we subtract their average points. Now a value of +2 means "this player scored 2 points above their own average." This removes player quality from the comparison.
+The fix is to compare each player to *themselves*. For each player-season, we subtract their average points. Now a value of +2 means "this player scored 2 points above their own average." This transformation removes player quality from the comparison.
 
 ```{python}
 # Compute each player-season's average points
@@ -487,8 +491,8 @@ Both halves of today's lecture share a theme: statistical results can be deeply 
 
 **Correlation and confounding:**
 
-4. **Correlation is not causation.** The negative correlation between rest and points exists because
-   of *who* gets rest, not because rest hurts performance. Confounding variables drive the pattern.
+4. **Correlation is not causation.** The negative correlation between rest and points reflects
+   *who* gets rest, not the effect of rest itself. Confounding variables drive the pattern.
 
 5. **Simpson's paradox is real and common.** Aggregate comparisons can reverse the individual-level
    story when groups are heterogeneous. Always ask what's driving the comparison.
@@ -509,6 +513,9 @@ In Lecture 12, we'll use regression to estimate the effect of rest while control
 - **Confounding:** When a third variable influences both the treatment and the outcome, creating a spurious association.
 - **Simpson's paradox:** An aggregate trend reverses (or disappears) when you look within subgroups.
 - **Ecological correlation:** Correlations computed on group averages can be much stronger than individual-level correlations; always check the unit of analysis.
+- **Reproducibility crisis:** Bem's precognition paper (2011) exposed how standard methods could validate implausible claims. The Reproducibility Project (2015) found only ~36% of 100 psychology studies replicated.
+- **P-hacking (data dredging):** Trying many analyses and reporting only the one that produces $p < 0.05$. Researcher degrees of freedom (Simmons et al., 2011) make invisible multiplicity.
+- **Pre-registration:** Publicly committing to research question, data collection, and analysis plan before seeing data — eliminating researcher degrees of freedom.
 - Running $m$ tests at $\alpha = 0.05$ produces $\sim m \times 0.05$ false positives even when nothing is real.
 - Bonferroni is safe but conservative; BH is more powerful but allows a controlled fraction of false discoveries.
 - A flat p-value histogram means no widespread effect; a spike near 0 means some discoveries are real.

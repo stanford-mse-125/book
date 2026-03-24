@@ -5,9 +5,9 @@ execute:
 jupyter: python3
 ---
 
-Regression takes numbers. Real data has categories, text, and nonlinear relationships. Here's how to bridge that gap — from hand-crafted features to AI-generated ones.
+Regression takes numbers. Real data has categories, text, and nonlinear relationships. Feature engineering bridges that gap — from hand-crafted inputs to AI-generated ones. The central idea: a model can be **linear in its parameters** while capturing wildly **nonlinear relationships in its features**. Every technique in this lecture exploits that fact.
 
-In [Lecture 5](lec05-regression.qmd), we fit a regression predicting Airbnb prices from bedrooms and bathrooms. But we ignored most of the information in the dataset: borough, room type, listing descriptions. Today we learn **feature engineering** — the art of transforming raw data into inputs a model can use. We'll start with classical techniques (dummies, polynomials, interactions), meet decision trees that engineer features automatically, and end with a modern trick: using an LLM to extract structured features from unstructured text.
+In [Lecture 5](lec05-regression.qmd), we fit a regression predicting Airbnb prices from bedrooms and bathrooms. That model ignored most of the information in the dataset: borough, room type, listing descriptions. **Feature engineering** transforms raw data into inputs a model can use. We start with classical techniques (dummies, polynomials, interactions), meet decision trees that engineer features automatically, and end with a modern approach: using an LLM to extract structured features from unstructured text.
 
 ```{python}
 import numpy as np
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor, plot_tree
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
@@ -43,7 +43,7 @@ df['price'] = df['price'].astype(str).str.replace('[$,]', '', regex=True).astype
 
 # Focus on reasonable prices (filter out near-free and luxury outliers)
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
-y = df['price']
+prices = df['price']
 
 print(f"Working with {len(df):,} listings")
 df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
@@ -65,6 +65,13 @@ We can't feed "Manhattan" or "Private room" into a regression equation. The solu
 We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't in any of the other boroughs, it *must* be in the dropped category (the **reference level**). Including all dummies would make the columns sum to the intercept column — a linearly dependent column space (recall the column space from [Lecture 4](lec04-linear-algebra.qmd)). The dropped category becomes the baseline that all other coefficients are measured against.
 :::
 
+:::{.callout-tip}
+## Regularization as an alternative to dropping a category
+Dropping the first category is one way to resolve collinearity. Regularization is another. Even a mild L2 penalty (ridge regression) breaks the perfect linear dependence among dummy columns, making all coefficients well-defined and interpretable — no category needs to serve as a hidden baseline.
+
+The intuition: collinearity is not inherently dangerous. It simply means the model has redundant parameters, so infinitely many coefficient vectors produce the same predictions. Regularization picks one of those vectors (the one with smallest norm), resolving the ambiguity without discarding any information. We develop regularization in [Lecture 8](lec08-regularization.qmd); this observation makes a good homework exercise.
+:::
+
 ```{python}
 # One-hot encode categorical features
 cat_features = pd.get_dummies(df[['room_type', 'borough']], drop_first=True)
@@ -81,8 +88,8 @@ cat_features.head(3)
 Each dummy column shifts predictions for that category. Let's fit a regression and see.
 
 ```{python}
-model_base = LinearRegression().fit(X_base, y)
-r2_base = model_base.score(X_base, y)
+model_base = LinearRegression().fit(X_base, prices)
+r2_base = model_base.score(X_base, prices)
 
 # Build coefficient table
 feature_names = list(X_base.columns)
@@ -115,11 +122,11 @@ plt.show()
 
 What if the relationship isn't linear in the original features? Maybe the jump from 1 to 2 bedrooms matters more than from 4 to 5. We can capture this by adding **polynomial features**: $x$, $x^2$, $x^3$.
 
-The key insight: the model is still **linear in parameters** — we're just giving it richer inputs.
+Here is the mantra of feature engineering: **linear in parameters, not in features.** We transform the inputs; the model stays linear in $\beta$.
 
 $$\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$$
 
-This is still a linear regression! The model is nonlinear in $x$ but linear in the parameters $\beta$. That means we can still use least squares to fit it — the optimization is identical.
+The equation above is nonlinear in $x$ but linear in the parameters $(\beta_0, \beta_1, \beta_2)$. Least squares still applies — the optimization is identical to ordinary regression, just with a richer feature matrix.
 
 ```{python}
 X_bedrooms = df[['bedrooms']]
@@ -128,54 +135,72 @@ results = []
 for degree in [1, 2, 3, 4]:
     poly = PolynomialFeatures(degree=degree, include_bias=False)
     X_poly = poly.fit_transform(X_bedrooms)
-    m = LinearRegression().fit(X_poly, y)
-    r2 = m.score(X_poly, y)
+    m = LinearRegression().fit(X_poly, prices)
+    r2 = m.score(X_poly, prices)
     results.append({'degree': degree, 'n_features': X_poly.shape[1], 'R²': round(r2, 4)})
     print(f"Degree {degree}: R² = {r2:.4f}  ({X_poly.shape[1]} features)")
-
-print("\nDiminishing returns — polynomials on bedrooms alone aren't the answer.")
-print("The real gains come from using the other information we have.")
 ```
 
+The R-squared improvements are modest. The more serious problem with polynomials is not diminishing returns — it is **overfitting and wild extrapolation**. A degree-4 polynomial, fit on a range where most listings have 1--3 bedrooms, can produce absurd predictions outside that range.
+
 ```{python}
-# Visualize polynomial fits
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+# Extrapolate polynomial fits beyond the training range
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# Left: scatter with degree-1 and degree-3 fits
+# Left: polynomial fits extrapolated to 12 bedrooms
 ax = axes[0]
-ax.scatter(df['bedrooms'], y, alpha=0.05, s=5, color='gray')
-x_line = np.linspace(0, df['bedrooms'].max(), 200).reshape(-1, 1)
+ax.scatter(df['bedrooms'], prices, alpha=0.05, s=5, color='gray', label='data')
+x_extrap = np.linspace(0, 12, 300).reshape(-1, 1)
 
-for degree, color, ls in [(1, '#2171b5', '-'), (3, '#d62728', '--')]:
+for degree, color, ls in [(1, '#2171b5', '-'), (3, '#d62728', '--'), (4, '#2ca02c', ':')]:
     poly = PolynomialFeatures(degree=degree, include_bias=False)
     X_p = poly.fit_transform(X_bedrooms)
-    m = LinearRegression().fit(X_p, y)
-    y_line = m.predict(poly.transform(x_line))
-    ax.plot(x_line, y_line, color=color, linewidth=2.5, linestyle=ls,
-            label=f'Degree {degree} (R²={m.score(X_p, y):.3f})')
+    m = LinearRegression().fit(X_p, prices)
+    pred_extrap = m.predict(poly.transform(x_extrap))
+    ax.plot(x_extrap, pred_extrap, color=color, linewidth=2.5, linestyle=ls,
+            label=f'Degree {degree}')
 
+ax.axhline(0, color='black', linewidth=0.8, linestyle='-')
 ax.set_xlabel('Bedrooms')
-ax.set_ylabel('Price ($)')
-ax.set_title('Polynomial fits: bedrooms → price')
+ax.set_ylabel('Predicted price ($)')
+ax.set_title('Polynomial extrapolation beyond the data')
 ax.legend()
+ax.set_ylim(-200, 500)
 
-# Right: R² by degree
+# Right: table of predictions at 9, 10, 11 bedrooms
 ax = axes[1]
-degrees = [r['degree'] for r in results]
-r2s = [r['R²'] for r in results]
-ax.plot(degrees, r2s, 'o-', color='steelblue', linewidth=2, markersize=8)
-ax.set_xlabel('Polynomial degree')
-ax.set_ylabel('R²')
-ax.set_title('Diminishing returns from polynomial features')
-ax.set_xticks(degrees)
+ax.axis('off')
+bed_vals = [1, 3, 5, 7, 9, 10, 11]
+table_data = []
+for degree in [1, 3, 4]:
+    poly = PolynomialFeatures(degree=degree, include_bias=False)
+    X_p = poly.fit_transform(X_bedrooms)
+    m = LinearRegression().fit(X_p, prices)
+    preds = m.predict(poly.transform(np.array(bed_vals).reshape(-1, 1)))
+    table_data.append([f'${p:.0f}' for p in preds])
+
+table = ax.table(
+    cellText=table_data,
+    rowLabels=['Degree 1', 'Degree 3', 'Degree 4'],
+    colLabels=[f'{b} BR' for b in bed_vals],
+    loc='center', cellLoc='center'
+)
+table.auto_set_font_size(False)
+table.set_fontsize(10)
+table.scale(1.2, 1.8)
+ax.set_title('Predicted price by bedroom count', fontsize=12, pad=20)
 
 plt.tight_layout()
 plt.show()
 ```
 
+The degree-3 and degree-4 models predict **negative prices** for listings with 9 or more bedrooms. This result is not a quirk of one dataset. Polynomial extrapolation is governed by the highest-order term, which eventually dominates and sends predictions to $\pm\infty$. The linear model, while less flexible, at least gives sensible predictions outside the training range.
+
+The secondary issue is diminishing returns: polynomials on bedrooms alone barely improve R-squared. The real gains come from incorporating other features.
+
 :::{.callout-tip}
 ## Think About It
-Why do polynomial features on bedrooms alone give such small improvements? What other sources of variation in price are we ignoring?
+Why do polynomial features on bedrooms alone give such small improvements? What other sources of variation in price are we ignoring? And why is extrapolation especially dangerous when the training data is concentrated in a narrow range (most listings have 1--2 bedrooms)?
 :::
 
 ## Interaction terms
@@ -194,8 +219,8 @@ interactions.columns = [f'bedrooms_x_{col}' for col in interactions.columns]
 
 # Full model with interactions
 X_interact = pd.concat([X_base, interactions], axis=1)
-model_interact = LinearRegression().fit(X_interact, y)
-r2_interact = model_interact.score(X_interact, y)
+model_interact = LinearRegression().fit(X_interact, prices)
+r2_interact = model_interact.score(X_interact, prices)
 
 print(f"Without interactions: R² = {r2_base:.3f}  ({X_base.shape[1]} features)")
 print(f"With interactions:    R² = {r2_interact:.3f}  ({X_interact.shape[1]} features)")
@@ -232,7 +257,7 @@ The slopes are quite different! An extra bedroom in Manhattan is worth much more
 fig, ax = plt.subplots(figsize=(8, 4))
 models = ['bedrooms only', '+ bath + room + borough', '+ interactions']
 r2_list = [
-    LinearRegression().fit(df[['bedrooms']], y).score(df[['bedrooms']], y),
+    LinearRegression().fit(df[['bedrooms']], prices).score(df[['bedrooms']], prices),
     r2_base,
     r2_interact
 ]
@@ -247,15 +272,33 @@ plt.tight_layout()
 plt.show()
 ```
 
-**Feature engineering is where domain knowledge meets statistics.** Knowing that location affects the value of space is domain knowledge; encoding it as an interaction term is statistics.
+**Feature engineering is where domain knowledge meets statistics.** Knowing that location affects the value of space is domain knowledge; encoding it as an interaction term is statistics. Notice the recurring pattern: dummies, polynomials, and interactions all produce new columns for the feature matrix, yet the model remains **linear in parameters**. Least squares handles every variant identically.
 
-As we add more features, R^2 can only go up — even if the new features are noise. **Adjusted R^2** corrects for this by penalizing model complexity: $R^2_{adj} = 1 - \frac{s^2_{\text{residuals}} / (n-k-1)}{s^2_{\text{outcome}} / (n-1)}$, where $k$ is the number of predictors. A feature that doesn't help prediction will increase $k$ without sufficiently reducing the residual variance, causing adjusted R^2 to drop. This makes it a useful guide for deciding which features to keep.
+:::{.callout-tip collapse="true"}
+## Adjusted R-squared: penalizing complexity
 
-<!-- FLAG: IMS Ch 8 covers model selection strategies (forward selection, backward elimination, stepwise) and Ch 10 covers multicollinearity and VIF in detail. These are not included here. Consider whether multicollinearity / VIF deserves a section — the lecture mentions collinearity only in the context of drop_first. Stepwise selection could fit in a model-building lecture. -->
+As we add features, R^2 can only increase — even when the new features are noise. **Adjusted R^2** corrects for model complexity:
 
-:::{.callout-note}
-## George Box on models
-"All models are wrong, but some are useful." — George Box
+$$R^2_{\text{adj}} = 1 - \frac{s^2_{\text{residuals}} / (n-k-1)}{s^2_{\text{outcome}} / (n-1)}$$
+
+where $k$ is the number of predictors. A useless feature increases $k$ without sufficiently reducing residual variance, so adjusted R^2 drops. Let's compare our models:
+
+```{python}
+from sklearn.metrics import r2_score as _r2
+
+def adjusted_r2(r2, n, k):
+    return 1 - (1 - r2) * (n - 1) / (n - k - 1)
+
+n = len(prices)
+models_adj = {
+    'bedrooms only': (LinearRegression().fit(df[['bedrooms']], prices).score(df[['bedrooms']], prices), 1),
+    '+ bath + room + borough': (r2_base, X_base.shape[1]),
+    '+ interactions': (r2_interact, X_interact.shape[1]),
+}
+
+for name, (r2, k) in models_adj.items():
+    print(f"{name:30s}  R²={r2:.4f}  adj R²={adjusted_r2(r2, n, k):.4f}  (k={k})")
+```
 :::
 
 ## A different approach — decision trees
@@ -264,10 +307,12 @@ Engineering features by hand is creative but tedious. What if the model could fi
 
 A **decision tree** splits the feature space into regions and predicts the mean price in each region. Each internal node asks an if/then question about one feature: "Is bedrooms > 2?" or "Is borough = Manhattan?" The tree learns which questions to ask and where to split — no manual feature engineering needed.
 
+A model that memorizes training data looks perfect on those same observations but fails on new ones. To get an honest measure of prediction quality, we hold out 30% of listings as a **test set** that the model never sees during fitting. [Lecture 7](lec07-trees-validation.qmd) develops this idea fully.
+
 ```{python}
-# Train/test split for fair comparison (we'll formalize this idea in Lecture 7)
+# Hold out 30% of listings for honest evaluation
 X_train, X_test, y_train, y_test = train_test_split(
-    X_base, y, test_size=0.3, random_state=42
+    X_base, prices, test_size=0.3, random_state=42
 )
 
 # Decision tree with limited depth to prevent overfitting
@@ -333,41 +378,11 @@ The forest beats our hand-engineered linear model — and we didn't engineer a s
 
 How does this work? We'll understand the key idea in [Lecture 7](lec07-trees-validation.qmd) (averaging reduces variance) and go deep on tree-based methods in Lecture 17.
 
-## Classification with trees
+::::{.callout-note}
+## Preview: classification
 
-So far we've predicted prices — a continuous number. What about predicting categories?
-
-**Classification** assigns observations to discrete groups instead of predicting a number. The same tree-based ideas apply: instead of predicting the mean in each leaf, a classification tree predicts the majority class.
-
-```{python}
-# Create a binary target: is this listing above median price?
-df['is_expensive'] = (df['price'] > df['price'].median()).astype(int)
-y_class = df['is_expensive']
-
-print(f"Median price: ${df['price'].median():.0f}")
-print(f"Expensive (above median): {y_class.sum():,} listings")
-print(f"Not expensive:            {(1 - y_class).sum():,} listings")
-```
-
-```{python}
-# Split and fit a random forest classifier
-X_train_c, X_test_c, y_train_c, y_test_c = train_test_split(
-    X_base, y_class, test_size=0.3, random_state=42
-)
-
-rf_clf = RandomForestClassifier(n_estimators=100, random_state=42)
-rf_clf.fit(X_train_c, y_train_c)
-
-train_acc = rf_clf.score(X_train_c, y_train_c)
-test_acc = rf_clf.score(X_test_c, y_test_c)
-
-print(f"Random Forest Classifier:")
-print(f"  Train accuracy: {train_acc:.3f}")
-print(f"  Test accuracy:  {test_acc:.3f}")
-print(f"  (Baseline — always guess majority class: {max(y_class.mean(), 1-y_class.mean()):.3f})")
-```
-
-A random forest classifier uses majority vote instead of averaging: each tree votes for a class, and the forest picks the most popular answer. You now have a classification tool for your projects. We'll build a deeper, more statistical understanding of classification with logistic regression in Lecture 13.
+Everything above predicts a continuous number (price). **Classification** predicts a discrete category instead — "expensive or not," "spam or not." The same tree-based machinery applies: a classification tree predicts the majority class in each leaf, and a random forest classifier uses majority vote across trees. We develop classification properly with logistic regression in Lecture 13; for projects before then, `RandomForestClassifier` from scikit-learn works out of the box with the same `fit`/`score` interface.
+::::
 
 ## LLM-based featurization
 
@@ -386,23 +401,72 @@ for _, row in sample.iterrows():
     print()
 ```
 
-An **LLM** (large language model) can read each description and extract structured features — numbers and categories that a regression *can* use. This is a form of **weak supervision**: instead of hand-labeling thousands of listings, you write a prompt once and let the model do the labeling.
+An **LLM** (large language model) can read each description and extract structured features — numbers and categories that a regression *can* use. The approach is a form of **weak supervision**: instead of hand-labeling thousands of listings, you write a prompt once and let the model do the labeling. The resulting features feed into a linear model just like bedrooms or borough dummies — still **linear in parameters**, even though the feature extraction itself is wildly nonlinear.
+
+### Choosing what to extract
+
+Not every feature an LLM can produce will help a regression. Good LLM features are:
+
+- **Predictive of the outcome.** A "mentions luxury" flag likely correlates with price; a "uses exclamation marks" flag probably does not.
+- **Not redundant with existing features.** The LLM could extract "number of bedrooms" from the text, but we already have that column. Focus on information that structured fields miss.
+- **Well-defined and unambiguous.** Asking for a "quality score from 0-10" invites inconsistency; asking "does the listing mention a doorman? (true/false)" gives a concrete extraction task.
+
+For our Airbnb data, we extracted five features from each listing description:
+
+| Feature | Type | Rationale |
+|---------|------|-----------|
+| `mentions_luxury` | bool | Luxury keywords signal higher-end listings |
+| `amenity_count` | int | More amenities mentioned suggests a more complete listing |
+| `sentiment_score` | float (0--1) | Enthusiastic descriptions may correlate with quality |
+| `neighborhood_vibe` | category | Captures location character beyond borough name |
+| `cleanliness_mentioned` | bool | Cleanliness emphasis may signal quality or concern |
+
+### The prompt
+
+The extraction prompt must be specific, include the expected output format, and define each field precisely. Here is the prompt that generated our features (see `data/airbnb/generate_llm_features.py` for the full script):
 
 ```{python}
-# How these features were generated (see data/airbnb/generate_llm_features.py):
+# The extraction prompt used to generate LLM features:
+example_prompt = """Extract structured features from this Airbnb listing description.
+
+LISTING DESCRIPTION:
+{description}
+
+Return a JSON object with exactly these fields:
+- mentions_luxury (bool): Does the description use words like "luxury", "upscale",
+  "designer", "high-end", "premium", or similar?
+- amenity_count (int): How many distinct amenities are explicitly mentioned?
+  Count items like WiFi, AC, washer, gym, pool, doorman, etc.
+- sentiment_score (float, 0 to 1): Overall tone of the description.
+  0 = negative/apologetic, 0.5 = neutral/factual, 1 = enthusiastic/glowing.
+- neighborhood_vibe (string, one of: "quiet", "lively", "central", "residential", "other"):
+  The dominant character of the neighborhood as described.
+- cleanliness_mentioned (bool): Does the description explicitly mention cleanliness,
+  sanitization, or hygiene?
+
+Return ONLY the JSON object, no other text."""
+
+print(example_prompt.format(description="<listing text goes here>"))
+```
+
+```{python}
+# How the API call works (not run here — features are pre-computed):
 #
 # from anthropic import Anthropic
 # client = Anthropic()
+#
 # response = client.messages.create(
 #     model="claude-haiku-4-5-20251001",  # Fast + cheap: ~$0.01 per 1000 listings
-#     messages=[{"role": "user", "content": f"Extract from this Airbnb listing:\n{description}\n\n"
-#                "Return JSON: mentions_luxury (bool), amenity_count (int), sentiment_score (0-1), "
-#                "neighborhood_vibe (category), cleanliness_mentioned (bool)"}],
+#     max_tokens=200,
+#     messages=[{"role": "user", "content": prompt_with_description}],
 # )
+# features = json.loads(response.content[0].text)
 #
-# For projects: Claude Haiku is best for bulk extraction (fast, cheap).
-# Use Claude Sonnet for complex reasoning tasks.
-# Always validate: LLM features can be wrong. Cross-validate to check if they help.
+# Practical tips for projects:
+# - Use Claude Haiku for bulk extraction (fast, cheap, sufficient for structured tasks)
+# - Use Claude Sonnet when extraction requires complex reasoning
+# - Process listings in batches; save results incrementally
+# - Always include "Return ONLY the JSON" to avoid preamble in the response
 
 # Load pre-computed LLM features
 llm_features = pd.read_csv(f'{DATA_DIR}/airbnb/llm_features.csv')
@@ -410,6 +474,10 @@ print(f"LLM features shape: {llm_features.shape}")
 print(f"Columns: {llm_features.columns.tolist()}")
 llm_features.head()
 ```
+
+### Why some features help and some don't
+
+Not every extracted feature will improve the model. `sentiment_score` sounds promising — surely enthusiastic descriptions command higher prices? — but sentiment may reflect the host's writing style more than the listing's quality. Meanwhile, `mentions_luxury` directly signals a price tier that structured fields (bedrooms, borough) cannot capture. The test set tells us which features earn their place.
 
 ```{python}
 # Join LLM features to the main dataframe on listing id
@@ -481,17 +549,16 @@ plt.show()
 
 :::{.callout-warning}
 ## LLM features can be wrong
-LLM featurization is a powerful modern technique: instead of building a natural language processing pipeline from scratch, you write a prompt and let the model extract structured information. The resulting features are imperfect — LLMs can hallucinate or misinterpret text — but cross-validation tells you whether they help. Always validate LLM-extracted features before trusting them in a model.
+LLM featurization replaces an entire natural language processing pipeline with a single prompt. The resulting features are imperfect — LLMs can hallucinate or misinterpret text — but cross-validation tells you whether they help. Always validate LLM-extracted features on held-out data before trusting them in a model.
 :::
 
 ## Key takeaways
 
 - **One-hot encoding** turns categories into numbers. Each dummy shifts predictions for that group; `drop_first=True` avoids collinearity with the intercept.
-- **Polynomial features** and **interaction terms** make linear models arbitrarily powerful. The mantra: **"linear in parameters, not in features."**
+- **Polynomial features** and **interaction terms** make linear models arbitrarily flexible. The mantra: **"linear in parameters, not in features."**
 - **Decision trees** find splits automatically — no manual feature engineering needed. Each node asks an if/then question about one feature.
 - **Random forests** average many trees to reduce overfitting. They provide a strong benchmark without any feature engineering.
-- **Random forest classifiers** use majority vote for classification — a tool you can use immediately in your projects.
-- **LLM featurization** extracts structured features from unstructured text. This is **weak supervision** at scale: one prompt replaces thousands of hand labels.
+- **LLM featurization** extracts structured features from unstructured text — a form of **weak supervision** at scale, where one prompt replaces thousands of hand labels. Good prompts define each feature precisely and request a structured output format.
 - Next: [Lecture 7](lec07-trees-validation.qmd) asks "how do we know these features aren't just overfitting?" — introducing train/test splits, cross-validation, and the bias-variance tradeoff.
 
 ## Study guide
@@ -505,7 +572,7 @@ LLM featurization is a powerful modern technique: instead of building a natural 
 - **Adjusted R^2** penalizes model complexity, preventing R^2 from rewarding useless features. Use it to compare models with different numbers of predictors.
 - **Decision trees** recursively split the feature space into regions, predicting the mean (regression) or majority class (classification) in each region — no manual feature engineering needed.
 - **Random forests** average many decision trees trained on random subsets of data and features, reducing overfitting. More trees never hurts.
-- **Weak supervision** — using noisy, programmatic labels (e.g., from an LLM) instead of expensive hand labels. LLM featurization converts unstructured text into structured features using a single prompt.
+- **Weak supervision** — using noisy, programmatic labels (e.g., from an LLM) instead of expensive hand labels. LLM featurization converts unstructured text into structured features via a well-specified prompt. Good prompts define each field precisely, request a structured output format, and target features that complement (rather than duplicate) existing columns.
 
 ### Computational tools
 
@@ -513,7 +580,6 @@ LLM featurization is a powerful modern technique: instead of building a natural 
 - `PolynomialFeatures(degree=d)` — generates polynomial features up to degree $d$; still linear in parameters
 - `DecisionTreeRegressor(max_depth=k)` — fits a regression tree with at most $k$ levels of splits
 - `RandomForestRegressor(n_estimators=100)` — fits 100 trees and averages predictions
-- `RandomForestClassifier(n_estimators=100)` — fits 100 trees and uses majority vote for classification
 - `train_test_split(X, y, test_size=0.3, random_state=42)` — splits data for honest evaluation
 
 ### For the quiz
@@ -521,5 +587,4 @@ LLM featurization is a powerful modern technique: instead of building a natural 
 - Know what one-hot encoding produces and why `drop_first=True` is needed.
 - Be able to write the formula for a model with polynomial or interaction features and explain why it's still "linear regression."
 - Understand at a high level how a decision tree makes predictions (recursive splits, predict mean in each leaf).
-- Know the difference between regression (predict a number) and classification (predict a category).
-- Be able to explain what LLM featurization does and why it's called weak supervision.
+- Be able to explain what LLM featurization does, why it's called weak supervision, and what makes a good extraction prompt.

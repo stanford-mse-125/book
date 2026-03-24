@@ -1,0 +1,28 @@
+/*-- scss:rules --*/
+
+/* Restyle .callout-important as a friendly "definition" box:
+   blue instead of red, book icon instead of exclamation.
+   Specificity must match or exceed Quarto's default selectors. */
+
+$def-blue: #2563eb;
+$def-blue-dark: #1e40af;
+$def-blue-bg: rgba(37, 99, 235, 0.08);
+$def-icon: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%232563eb" viewBox="0 0 16 16"><path d="M5 0h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2 1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2a2 2 0 0 1 2-2zM3 1a1 1 0 0 0-1 1v10.5A1.5 1.5 0 0 1 3.5 12H13a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H3z"/><path d="M5.5 4a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zm0 2a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1h-3z"/></svg>');
+
+div.callout-important.callout {
+  border-left-color: $def-blue !important;
+}
+
+div.callout-important.callout-style-default > .callout-header {
+  background-color: $def-blue-bg !important;
+}
+
+/* Override both titled and untitled icon variants */
+div.callout-important:not(.callout-titled) .callout-icon::before,
+div.callout-important.callout-titled .callout-icon::before {
+  background-image: $def-icon !important;
+}
+
+div.callout-important .callout-caption {
+  color: $def-blue-dark;
+}

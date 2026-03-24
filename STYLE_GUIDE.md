@@ -63,15 +63,23 @@ plt.rcParams['figure.figsize'] = (8, 5)
 plt.rcParams['font.size'] = 12
 
 # Load data
-DATA_DIR = '../data'
+DATA_DIR = 'data'  # For .qmd files at repo root; '../data' for .ipynb in course-notes/
 ```
 
-## Tone
-- Curious, not lecturing. "Let's see what happens" not "We will now demonstrate"
-- Honest about complexity. "This is messier than textbooks suggest"
-- Encourage skepticism. "Should we trust this result? Let's check."
-- Fun. Statistics is about detective work — lean into the mystery.
+## Tone and prose style
+- Scholarly but accessible. Aim for Cambridge University Press, not clickbait.
+- Every sentence must communicate a new idea. No filler, no fluff, no bombast.
+- Show before tell: demonstrate ideas computationally, then name them.
+- Mathematical concepts (even simple ones like correlation) must be defined and demonstrated.
+- Do not namedrop concepts without explaining them.
+- Minimal words; each one should carry meaning.
 - Credit the data. Real datasets have stories; tell them briefly.
+
+### Grammar rules
+- "This" must ALWAYS be followed by a noun. Never "This means..." or "This happens because..." — instead "This technique improves..." or "This pattern suggests..."
+- Avoid "because" constructions — rephrase for flow. Prefer causal structure in the sentence itself.
+- Vary sentence structure. Do not overuse colon-fronted patterns ("Think about it: ...", "The key insight: ...").
+- Prefer active voice. Prefer concrete subjects over abstract ones.
 
 ## Cross-references
 - Reference previous notebooks: "Recall from Lecture 5 that regression finds the projection onto..."

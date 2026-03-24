@@ -5,16 +5,23 @@ execute:
 jupyter: python3
 ---
 
-You've built powerful features and met trees. But how do you know your model works on *new* data? Today: the discipline of model evaluation, and a surprising discovery about what happens when models get very complex.
+A fintech startup has built two credit-scoring models — one simple, one complex. The complex model fits the training data beautifully: 95% accuracy on past loan applications. The board approves deployment. Within six months, default rates spike, regulators intervene, and the company loses $40 million. The model had memorized the training data, including its noise, and failed on the borrowers it had never seen. Choosing the wrong model can cost a company its future.
 
-In [Lecture 6](lec06-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. We also met decision trees and random forests, which engineer features automatically. But we've been measuring performance on the *same data we trained on*. That's like grading a student on the questions they've already seen. Today we confront the most important question in applied modeling: **does this model generalize?**
+In [Lecture 6](lec06-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. We also met decision trees and random forests, which engineer features automatically. But we've been measuring performance on the *same data we trained on*. Evaluating a model on its training data is like grading a student on the questions they've already seen. Today we confront the most important question in applied modeling: **does this model generalize?**
+
+:::{.callout-note}
+## All Models Are Wrong
+"All models are wrong, but some are useful." — George Box (1976)
+
+Every model simplifies reality. The question is never *whether* a model is exactly right — no model is. The question is whether the model's approximation is close enough to be useful for the decision at hand. The entire machinery of validation exists to answer that question.
+:::
 
 ```{python}
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.linear_model import LinearRegression, Lasso
+from sklearn.linear_model import LinearRegression, Lasso, LassoCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import PolynomialFeatures
@@ -23,7 +30,7 @@ from sklearn.metrics import r2_score, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 DATA_DIR = 'data'
@@ -175,7 +182,7 @@ Look at the gap between the blue line (train) and the red line (test). The train
 
 :::{.callout-tip}
 ## Think About It
-Why does the training $R^2$ always go up? Because adding a feature can only help the model fit the training data better — in the worst case, the model can set that feature's coefficient to zero.
+Why does the training $R^2$ always go up? Adding a feature can only help the model fit the training data better — in the worst case, the model sets that feature's coefficient to zero.
 :::
 
 ### A dramatic demonstration
@@ -247,19 +254,19 @@ plt.show()
 
 The training $R^2$ approaches 1 — the model nearly perfectly memorizes the training data. Meanwhile, the test $R^2$ plummets, eventually going *negative*.
 
-Wait — can $R^2$ be negative? Yes, on test data. Recall that $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$. On test data, a model's residuals can be *worse* than just predicting the mean for every observation. A negative test $R^2$ means the model is worse than the trivial baseline. That's a clear sign of catastrophic overfitting.
+Wait — can $R^2$ be negative? Yes, on test data. On training data, $R^2$ is always between 0 and 1. On test data, no such guarantee holds. Recall that $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$. When a model's predictions on new data are worse than simply predicting the mean every time, the residual sum of squares exceeds the total sum of squares, and $R^2$ drops below zero. A negative test $R^2$ signals catastrophic overfitting: the model has memorized training noise so thoroughly that it actively harms predictions.
 
 
 ## The bias-variance tradeoff
 
-Why does test error first decrease and then increase as models get more complex? This is one of the most important ideas in all of applied statistics: the **bias-variance tradeoff**.
+Why does test error first decrease and then increase as models get more complex? The answer is one of the most important ideas in all of applied statistics: the **bias-variance tradeoff**.
 
 :::{.callout-important}
 ## Definition: Bias and Variance
 Two sources of prediction error:
 
-- **Bias** is the error from oversimplifying. The model can't capture the true pattern. This is **underfitting** — like trying to fit a straight line through a curved relationship.
-- **Variance** is the error from over-complicating. The model is so flexible that it's too sensitive to the particular training data it happened to see. This is **overfitting** — the model learns noise as if it were signal.
+- **Bias** is the error from oversimplifying. The model can't capture the true pattern. High bias corresponds to **underfitting** — like fitting a straight line through a curved relationship.
+- **Variance** is the error from over-complicating. The model is so flexible that it's too sensitive to the particular training data it happened to see. High variance corresponds to **overfitting** — the model learns noise as if it were signal.
 :::
 
 | | Too few features | Just right | Too many features |
@@ -268,7 +275,11 @@ Two sources of prediction error:
 | **Variance** | Low | Low | High (overfitting) |
 | **Test error** | High | **Low** | High |
 
-The total test error is (roughly) bias$^2$ + variance (this decomposition holds for mean squared error). Simple models have high bias but low variance. Complex models have low bias but high variance. The best model minimizes the sum — and that's somewhere in the middle.
+For mean squared error, the decomposition is exact:
+
+$$\text{Expected test error} = \text{Bias}^2 + \text{Variance} + \sigma^2$$
+
+The first two terms depend on the model. The third term, $\sigma^2$, is the **irreducible noise** — inherent randomness in the outcome that no model can eliminate. Even a perfect model that recovers the true relationship still faces $\sigma^2$. Simple models have high bias but low variance. Complex models have low bias but high variance. The best model minimizes the sum of the first two terms; $\sigma^2$ sets the floor.
 
 :::{.callout-note}
 ## Von Neumann's Warning
@@ -281,6 +292,22 @@ Von Neumann's warning applies directly: a model with enough parameters can fit *
 ## Think About It
 In the polynomial experiment above, which degrees had high bias? Which had high variance? Where was the sweet spot?
 :::
+
+
+## Train, validation, and test sets
+
+Before introducing cross-validation, we need to distinguish three roles that held-out data can play.
+
+:::{.callout-important}
+## Definition: The Three-Way Split
+- **Training set** — the data the model learns from.
+- **Validation set** — held-out data used to *choose* model complexity (number of features, regularization strength, tree depth). The modeler sees validation scores and adjusts accordingly.
+- **Test set** — held-out data touched *only once*, at the very end, to report final performance. No modeling decisions depend on the test set.
+:::
+
+Why not just two sets? If we use the test set to choose among models, we are implicitly fitting to the test set. The reported "test" performance becomes optimistic — it no longer estimates how the model will perform on truly unseen data. A dedicated validation set absorbs the cost of model selection so the test set remains pristine.
+
+In practice, a common split is 60% train / 20% validation / 20% test. Our earlier 70/30 split conflated validation and test — acceptable for a first look, but not for rigorous deployment. Cross-validation, introduced next, offers a more data-efficient alternative to a fixed validation set.
 
 
 ## Cross-validation
@@ -346,10 +373,8 @@ Cross-validation correctly identifies the sweet spot: enough features to capture
 
 :::{.callout-warning}
 ## CV Assumes Exchangeable Data
-CV works because we can shuffle the data randomly — each fold is representative of the whole. This breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Lecture 16](lec16-backtesting.qmd).
+CV relies on the assumption that we can shuffle the data randomly — each fold is representative of the whole. The assumption breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Lecture 16](lec16-backtesting.qmd).
 :::
-
-<!-- FLAG: The assigned reading (IMS Ch 8-10) covers model selection criteria AIC, BIC, and adjusted R² as alternatives to cross-validation. Consider adding a short subsection or comparison table contrasting CV with these information-criterion approaches. -->
 
 ## Lasso (regularization)
 
@@ -396,7 +421,7 @@ print(f"Lasso — Train R²: {lasso.score(X_ks_tr, y_tr):.3f}  Test R²: {r2_sco
 
 ```{python}
 # Visualize: Lasso coefficients vs OLS coefficients
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 axes[0].stem(range(len(ols_ks.coef_)), ols_ks.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
 axes[0].set_title(f'OLS coefficients ({n_total} features, all nonzero)')
@@ -416,8 +441,47 @@ OLS uses all features and overfits badly — its test $R^2$ may be negative. Las
 
 :::{.callout-tip}
 ## Think About It
-The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff. Large $\alpha$ = more regularization = more features zeroed out = simpler model (higher bias, lower variance). Small $\alpha$ = less regularization = closer to OLS (lower bias, higher variance). You can choose $\alpha$ by cross-validation.
+The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff. Large $\alpha$ = more regularization = more features zeroed out = simpler model (higher bias, lower variance). Small $\alpha$ = less regularization = closer to OLS (lower bias, higher variance). You can choose $\alpha$ by cross-validation — as we do next.
 :::
+
+### Choosing $\alpha$ by cross-validation
+
+How do we pick the right $\alpha$? Scikit-learn's `LassoCV` automates the search: it fits lasso at many $\alpha$ values, scores each by cross-validation, and selects the $\alpha$ with the best CV performance.
+
+```{python}
+# LassoCV searches over a grid of alpha values using 5-fold CV
+lasso_cv = LassoCV(cv=5, random_state=42, max_iter=10000).fit(X_ks_tr, y_tr)
+
+print(f"Best alpha: {lasso_cv.alpha_:.4f}")
+print(f"Nonzero coefficients: {(lasso_cv.coef_ != 0).sum()} out of {len(lasso_cv.coef_)}")
+print(f"Train R²: {lasso_cv.score(X_ks_tr, y_tr):.3f}")
+print(f"Test R²:  {r2_score(y_te, lasso_cv.predict(X_ks_te)):.3f}")
+```
+
+```{python}
+# Plot CV error as a function of alpha
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# LassoCV stores the mean and std of MSE across folds for each alpha
+alphas = lasso_cv.alphas_
+mse_mean = lasso_cv.mse_path_.mean(axis=1)
+mse_std = lasso_cv.mse_path_.std(axis=1)
+
+ax.plot(alphas, mse_mean, 'o-', color='steelblue', markersize=4)
+ax.fill_between(alphas, mse_mean - mse_std, mse_mean + mse_std, alpha=0.2, color='steelblue')
+ax.axvline(lasso_cv.alpha_, color='orangered', linestyle='--', linewidth=2,
+           label=f'Best α = {lasso_cv.alpha_:.4f}')
+ax.set_xscale('log')
+ax.set_xlabel('Regularization strength (α)')
+ax.set_ylabel('Cross-validated MSE')
+ax.set_title('LassoCV: choosing α by cross-validation')
+ax.legend(fontsize=12)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+The U-shaped CV curve confirms the bias-variance tradeoff in action. Too small an $\alpha$ (right side) gives insufficient regularization — the model overfits. Too large an $\alpha$ (left side) penalizes too aggressively — the model underfits. `LassoCV` finds the valley automatically.
 
 
 ## The modern view — averaging overfit trees
@@ -462,7 +526,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-No U-shape! The test $R^2$ increases and then plateaus. Adding more trees never hurts — it just stops helping. This is fundamentally different from the polynomial story, where more complexity eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in Lecture 17, adding too many trees *can* overfit.)
+No U-shape! The test $R^2$ increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial story, where more complexity eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in Lecture 17, adding too many trees *can* overfit.)
 
 ### Demo 2: individual trees are overfit; their average is smooth
 
@@ -512,11 +576,34 @@ plt.show()
 
 Each individual tree (thin colored lines) is wiggly and overfit — it has memorized the quirks of its particular bootstrap sample. But their *errors point in different directions*. One tree might predict too high for 3-bedroom listings while another predicts too low. When we average them, the noise cancels out, and what remains is the genuine signal.
 
-This is the core insight of **bagging** (bootstrap aggregating): averaging many overfit models reduces variance without increasing bias. It's the same principle behind asking 100 people to estimate the weight of a cow at a county fair — individual guesses vary wildly, but the average is remarkably accurate.
+The core insight of **bagging** (bootstrap aggregating): averaging many overfit models reduces variance without increasing bias. It's the same principle behind asking 100 people to estimate the weight of a cow at a county fair — individual guesses vary wildly, but the average is remarkably accurate.
 
 One sentence looking ahead: this same principle — overparameterize, then regularize implicitly through averaging — is part of why large language models work. We'll revisit this connection in [Lecture 17](lec17-automl-llms.qmd).
 
 **The punchline:** the classical advice "regularize and cross-validate" still works. But now you know there's another path: build many diverse models and average them. The bias-variance tradeoff isn't wrong — it's just not the whole story.
+
+
+## Beyond the U-shape: double descent
+
+The classical bias-variance picture predicts a clean U-shape: test error decreases, hits a sweet spot, then increases as model complexity grows. For decades, the prescription was clear — stop before the curve turns upward. But recent empirical work has revealed that the U-shape is not the end of the story.
+
+If you keep increasing model complexity *far* past the point where the model perfectly interpolates the training data, test error can start *decreasing again*. The test-error curve traces not a U but an "M" — or more precisely, a double descent. The first descent is the classical regime. The peak occurs near the **interpolation threshold**, where the number of parameters roughly equals the number of training observations and the model barely has enough capacity to memorize the data. Beyond the threshold, in the **overparameterized regime**, test error drops a second time. Belkin et al. (2019) documented the phenomenon; Hastie et al. (2022) provided theoretical analysis for linear models.
+
+Why does the second descent happen? In the overparameterized regime, there are many models that perfectly fit the training data. The learning algorithm (gradient descent, minimum-norm solution) implicitly selects among these interpolating models, and the one it finds tends to be "smooth" — it generalizes well. Averaging, as in bagging and random forests, amplifies the effect: each overfit tree interpolates its bootstrap sample, but their average cancels the idiosyncratic noise, much as we saw in the tree-averaging demo above.
+
+The double-descent curve reframes how we think about modern machine learning. Large language models and deep neural networks operate firmly in the overparameterized regime — GPT-class models have billions of parameters, far exceeding the number of training examples by some measures. The classical U-shape would predict catastrophic overfitting. Instead, these models generalize remarkably well. Understanding which regime your model occupies — left of the interpolation threshold (where regularization helps) or right of it (where more capacity helps) — is essential for making sound modeling decisions.
+
+:::{.callout-note}
+## Double Descent — Conceptual Picture
+Imagine a plot with "model complexity (number of parameters)" on the horizontal axis and "test error" on the vertical axis. From left to right: test error first falls (underfitting resolves), then rises to a sharp peak at the interpolation threshold (where parameters $\approx$ observations), then falls again in the overparameterized regime. The classical U-shape captures only the left half of the picture. The full curve has two descents separated by the interpolation peak.
+
+*Key references: Belkin, M. et al. (2019), "Reconciling modern machine-learning practice and the classical bias-variance trade-off," PNAS; Hastie, T. et al. (2022), "Surprises in High-Dimensional Ridgeless Least Squares Interpolation," Annals of Statistics.*
+:::
+
+:::{.callout-tip}
+## Think About It
+When you train a random forest with very deep trees (no max depth), each tree interpolates its bootstrap sample. Where does the ensemble sit on the double-descent curve? How does averaging move the effective test error?
+:::
 
 
 ## When R² is low — hospital data
@@ -587,7 +674,7 @@ Does a low $R^2$ mean the model is bad, or that the outcome is inherently hard t
 
 - **Cross-validation for stable model comparison.** A single train/test split is noisy. CV rotates which fold is held out and averages the results, picking the sweet spot between under- and overfitting.
 
-- **Bias-variance tradeoff: the classical U-shape.** Too simple (high bias, underfitting) is bad. Too complex (high variance, overfitting) is bad. The goal is to minimize the sum.
+- **Bias-variance tradeoff: the classical U-shape.** Too simple (high bias, underfitting) is bad. Too complex (high variance, overfitting) is bad. Expected test error = bias$^2$ + variance + $\sigma^2$, where $\sigma^2$ is irreducible noise. The goal is to minimize the first two terms.
 
 - **Lasso: automatic feature selection via regularization.** Instead of manually choosing features, let the L1 penalty shrink unimportant coefficients to exactly zero.
 
@@ -605,18 +692,22 @@ Does a low $R^2$ mean the model is bad, or that the outcome is inherently hard t
 - **Cross-validation (k-fold)** — rotating which of $k$ folds is held out, averaging test scores for a more stable estimate of out-of-sample performance.
 - **Overfitting** — the model memorizes training data (including noise) and performs poorly on new data. Training $R^2$ always improves with more features; test $R^2$ eventually degrades — the gap is overfitting.
 - **Underfitting** — the model is too simple to capture the real pattern in the data.
-- **Bias-variance tradeoff** — the tension between underfitting (high bias) and overfitting (high variance); total error is approximately bias$^2$ + variance. The goal is to minimize the sum.
+- **Bias-variance tradeoff** — the tension between underfitting (high bias) and overfitting (high variance). For MSE: expected test error = bias$^2$ + variance + $\sigma^2$ (irreducible noise). The goal is to minimize the first two terms; $\sigma^2$ sets the floor.
 - **Lasso (L1 regularization)** — adds a penalty $\alpha \sum |\beta_j|$ that shrinks some coefficients to exactly zero, performing automatic feature selection.
 - **Ridge (L2 regularization)** — adds a penalty $\alpha \sum \beta_j^2$ that shrinks coefficients toward zero but does not set them exactly to zero; useful when many features contribute small effects.
 - **Regularization** — constraining model complexity to reduce overfitting. Lasso and ridge are the two main forms for linear regression.
 - **Bagging** — bootstrap aggregating: training many models on bootstrap samples and averaging their predictions to reduce variance. More trees never hurts.
 - **Leave-one-out CV (LOO-CV)** — the extreme case of $k$-fold CV where $k = n$; each observation gets its own fold. Low bias but high variance and computationally expensive.
+- **Irreducible noise ($\sigma^2$)** — inherent randomness in the outcome that no model can eliminate. Even the true model faces this floor on test error.
+- **Double descent** — beyond the classical U-shape, test error can decrease again in the overparameterized regime (parameters >> observations). The interpolation threshold marks the peak between the two descents. Modern deep learning operates in the overparameterized regime.
+- **Three-way split (train / validation / test)** — training data for fitting, validation data for choosing model complexity, test data for final evaluation. Using the test set for model selection contaminates the performance estimate.
 
 ### Computational tools
 
 - `train_test_split(X, y, test_size=0.3)` — splits data into training and test sets
 - `cross_val_score(model, X, y, cv=5)` — performs 5-fold cross-validation and returns scores per fold
 - `Lasso(alpha=1.0).fit(X, y)` — fits a Lasso regression with regularization strength `alpha`
+- `LassoCV(cv=5).fit(X, y)` — searches over `alpha` values by cross-validation, selects the best
 - `RandomForestRegressor(n_estimators=100).fit(X, y)` — fits a random forest; more trees = better or flat, never worse
 
 ### For the quiz

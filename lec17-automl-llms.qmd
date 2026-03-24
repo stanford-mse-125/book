@@ -25,7 +25,7 @@ from sklearn.metrics import r2_score, mean_absolute_error
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (8, 5)
+plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 DATA_DIR = 'data'
@@ -33,9 +33,9 @@ DATA_DIR = 'data'
 
 ## Opening the black box: how trees and forests work
 
-In Lectures 6-7, you used decision trees and random forests as practical tools: you fit them to Airbnb data, compared them to linear models, and saw how averaging many overfit trees reduces variance without increasing bias. You know *what* trees and forests do. Today we explain *why* they work — the recursive splitting criterion, why bootstrap samples and feature subsets decorrelate the trees, and how gradient boosting builds on the same gradient descent idea from Lecture 13.
+In Lectures 6–7, you used decision trees and random forests as practical tools: you fit them to Airbnb data, compared them to linear models, and saw how averaging many overfit trees reduces variance without increasing bias. You know *what* trees and forests do. Today we explain *why* they work — the recursive splitting criterion, why bootstrap samples and feature subsets decorrelate the trees, and how gradient boosting builds on the same gradient descent idea from Lecture 13.
 
-Let's start by looking more carefully at what a single **decision tree** actually computes.
+Every call to `RandomForestRegressor` has been doing the following under the hood. Let us unpack the algorithm step by step, starting with a single **decision tree**.
 
 ```{python}
 # Load College Scorecard data
@@ -60,7 +60,7 @@ earnings_target = model_data[target_col]
 shallow_tree = DecisionTreeRegressor(max_depth=3, random_state=42)
 shallow_tree.fit(earnings_features, earnings_target)
 
-fig, ax = plt.subplots(figsize=(14, 7))
+fig, ax = plt.subplots(figsize=(11, 5.5))
 plot_tree(shallow_tree, feature_names=feature_cols, filled=True,
           rounded=True, fontsize=8, ax=ax, impurity=False)
 ax.set_title('A decision tree for predicting graduate earnings (depth = 3)')
@@ -73,7 +73,7 @@ plt.show()
 At each **node**, the algorithm tries every feature and every possible threshold, and picks the split that minimizes the prediction error (mean squared error for regression, Gini impurity or entropy for classification). It keeps splitting until it reaches a **leaf**, where it predicts the average outcome for all data points in that group.
 :::
 
-Read the tree top-down. The first split asks: is `SAT_AVG` above or below a threshold? The algorithm chose this split because it produces the largest reduction in MSE across all possible first splits. Each subsequent split refines the prediction further.
+Read the tree top-down. The first split asks: is `SAT_AVG` above or below a threshold? The algorithm chose this split — it produces the largest reduction in MSE across all possible first splits. Each subsequent split refines the prediction further.
 
 :::{.callout-tip}
 ## Think About It
@@ -107,10 +107,10 @@ print(f"Shallow tree (depth=3):  Train R-sq = {shallow_tree.score(earnings_featu
 print(f"Deep tree (no limit):    Train R-sq = {deep_tree.score(earnings_features, earnings_target):.3f}, "
       f"CV R-sq = {deep_cv.mean():.3f}")
 print(f"\nThe deep tree memorizes the training data (R-sq near 1.0)")
-print(f"but generalizes poorly. This is overfitting.")
+print(f"but generalizes poorly. This gap is overfitting.")
 ```
 
-The deep tree memorizes every quirk in the training data. Its training R-squared is nearly perfect, but its cross-validation R-squared is worse than the shallow tree. This is the bias-variance tradeoff from Lecture 7: deep trees have low bias but high variance.
+The deep tree memorizes every quirk in the training data. Its training R-squared is nearly perfect, but its cross-validation R-squared is worse than the shallow tree. This gap illustrates the bias-variance tradeoff from Lecture 7: deep trees have low bias but high variance.
 
 ### Random forests: the mechanism behind the magic
 
@@ -121,7 +121,7 @@ A **random forest** uses two sources of randomness to make sure the trees disagr
 1. **Bagging** (bootstrap aggregation): each tree is trained on a random sample (with replacement) of the data, so each tree sees slightly different examples
 2. **Feature subsampling**: at each split, each tree considers only a random subset of features, so even on similar data, trees make different splits
 
-Why does this matter? If every tree made the same errors, averaging wouldn't help. The two sources of randomness **decorrelate** the trees — they overfit in different directions, and averaging cancels out the noise. This is why the variance drops without the bias increasing.
+Why does decorrelation matter? If every tree made the same errors, averaging wouldn't help. The two sources of randomness force the trees to overfit in different directions, so averaging cancels out the noise. The variance drops without the bias increasing.
 
 ```{python}
 # Compare: one deep tree vs. a forest of 100 deep trees
@@ -137,16 +137,29 @@ print(f"bootstrap samples + feature subsets decorrelate the trees,")
 print(f"so averaging reduces variance without increasing bias.")
 ```
 
+```{python}
+# Feature importances: one of the most practically useful RF outputs
+importances = forest.feature_importances_
+sorted_idx = np.argsort(importances)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.barh(np.array(feature_cols)[sorted_idx], importances[sorted_idx], color='#4C72B0')
+ax.set_xlabel('Feature importance (mean decrease in impurity)')
+ax.set_title('Random forest feature importances for predicting graduate earnings')
+plt.tight_layout()
+plt.show()
+```
+
 :::{.callout-tip}
 ## Think About It
-Why does averaging many overfitting trees produce a good model? Hint: each tree overfits to *different* noise because it sees different bootstrap samples and different feature subsets.
+Why does averaging many overfitting trees produce a good model? Hint: each tree overfits to *different* noise, given that it sees different bootstrap samples and different feature subsets.
 :::
 
 ### Gradient boosting: learning from mistakes
 
 There's another way to combine trees. Instead of growing them independently and averaging, **gradient boosting** grows them *sequentially*: each new tree is trained on the *errors* of the previous trees.
 
-The "gradient" in gradient boosting is the same gradient descent idea from Lecture 13 — each new tree is trained on the gradient of the loss function, i.e., the direction that reduces error fastest. Instead of taking gradient steps in parameter space (like we did for regression), we're adding small trees that each push the prediction a little closer to the truth.
+Each new tree fits the negative gradient (pseudo-residuals) of the loss. Just as gradient descent (Lecture 13) takes steps in parameter space, gradient boosting takes steps in *function space* by adding a tree that approximates the negative gradient. Each added tree nudges the ensemble's prediction a little closer to the truth.
 
 ```{python}
 # Gradient boosting: sequential error correction
@@ -275,7 +288,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-This is **selection bias** from Lecture 3. By requiring SAT scores, we've excluded community colleges, trade schools, and most for-profit institutions — precisely the schools where the relationship between institutional characteristics and earnings might be *different*.
+This exclusion pattern is **selection bias** from Lecture 3. By requiring SAT scores, we've excluded community colleges, trade schools, and most for-profit institutions — precisely the schools where the relationship between institutional characteristics and earnings might be *different*.
 
 AutoML optimized R-squared on the available data. It has no way to know the available data isn't representative.
 
@@ -328,7 +341,7 @@ The code runs. The output looks reasonable. But the *conclusions* are wrong. Let
 
 ### Problem 1: Silent data loss
 
-The LLM dropped most of the data without flagging it. This isn't random missingness — schools that don't report SAT scores are *systematically different* from those that do. This is the kind of non-random missingness we discussed in Lecture 2: schools with low SAT averages may be less likely to report them, and schools that don't require SATs (community colleges, trade schools) have no score to report at all.
+The LLM dropped most of the data without flagging it. The missingness here is not random — schools that don't report SAT scores are *systematically different* from those that do. This pattern is the non-random missingness discussed in Lecture 2: schools with low SAT averages may be less likely to report them, and schools that don't require SATs (community colleges, trade schools) have no score to report at all.
 
 ```{python}
 # The LLM didn't check what it dropped
@@ -342,11 +355,11 @@ print(f"  Dropped: {len(sc) - len(sc_clean):,} ({(len(sc) - len(sc_clean))/len(s
 
 The LLM said SAT scores "predict" higher earnings. But does attending a higher-SAT school *cause* you to earn more? Or do higher-SAT schools simply admit students who would have earned more anyway?
 
-This is the **confounding** problem from Lecture 18. Family income, parental education, and geographic location all affect both SAT scores and earnings. The LLM has no way to know this from the data alone.
+This result reflects a **confounding** problem — the kind you saw in Lecture 11, formalized with DAGs in Lecture 18. Family income, parental education, and geographic location all affect both SAT scores and earnings. The LLM has no way to distinguish confounded association from causal effect.
 
 ```{python}
 # Show the confounding: Pell Grant % (a proxy for family income) correlates with both
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
 axes[0].scatter(sc_clean['PCTPELL'], sc_clean['SAT_AVG'], alpha=0.4, s=15)
 axes[0].set_xlabel('Pell Grant Recipients (%)')
@@ -379,7 +392,7 @@ Recall from Lecture 12: regression diagnostics aren't optional. They tell you wh
 # Quick residual check the LLM skipped
 residuals = y_llm - model_llm.predict(X_llm)
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
 axes[0].scatter(model_llm.predict(X_llm), residuals, alpha=0.3, s=10)
 axes[0].axhline(y=0, color='red', linestyle='--')
@@ -460,10 +473,10 @@ Wait — rested players score *fewer* points? That's backwards from what you'd e
 Why might this be backwards? Think about *which* players tend to have many rest days, and *which* players play on back-to-backs. Take 30 seconds before reading on.
 :::
 
-This is **Simpson's paradox** from Lectures 11-12. The aggregate comparison is *backwards* because rest is confounded with player quality:
+This reversal is **Simpson's paradox** from Lecture 11. The aggregate comparison is *backwards*, given that rest is confounded with player quality:
 
-- Bench players (low scorers) have more rest days because they don't play every game
-- Stars (high scorers) play on back-to-backs because coaches need them
+- Bench players (low scorers) have more rest days — they don't play every game
+- Stars (high scorers) play on back-to-backs — coaches need them
 
 The LLM also used `ttest_ind` without noting that the same players appear many times — the observations within a player are correlated, violating the independence assumption.
 
@@ -472,9 +485,11 @@ The LLM doesn't know any of this. It would report the naive comparison and eithe
 1. Confidently claim rest *hurts* performance (wrong interpretation)
 2. Hedge with "more analysis needed" (correct but unhelpful)
 
+For the within-player analysis we switch from `PTS` to `GAME_SCORE`, a composite metric that accounts for rebounds, assists, turnovers, and efficiency — a better measure of overall performance than raw points.
+
 ```{python}
 # What WE know to do: control for player identity
-# Within-player comparison (from Lectures 11-12)
+# Within-player comparison (from Lecture 11)
 player_effects = []
 players_tested = 0
 significant_naive = 0
@@ -550,6 +565,8 @@ AI tools are getting better fast. But some things remain fundamentally human:
 :::{.callout-note}
 ## Tukey on Asking the Right Question
 "Far better an approximate answer to the right question, which is often vague, than an exact answer to the wrong question, which can always be made precise." — John Tukey
+
+You first heard this quote in Lecture 1. Seventeen lectures later, the meaning is concrete: the LLM gave a precise answer to the wrong question.
 :::
 
 **Knowing the domain.** Why are for-profit schools missing SAT data? Why do bench players have more rest days? Why does AQI spike in August? Domain knowledge is the difference between a plausible-looking wrong answer and a correct one.
@@ -577,9 +594,9 @@ AI tools aren't going away. Here's how to use them as a *statistically literate*
 | Generating hypotheses | Is this correlation or causation? |
 | Drafting reports | Are the uncertainty statements honest? |
 
-The pattern: **let the AI draft, then apply your statistical judgment.** This is why you took this course.
+The pattern: **let the AI draft, then apply your statistical judgment.** This principle is why you took the course.
 
-This checklist is worth keeping — save it for when you're using AI tools in your projects.
+This checklist is worth keeping — save it for when you use AI tools in your projects.
 
 ### Prompt decomposition: how to use AI effectively
 
@@ -601,11 +618,11 @@ You've probably used AI tools for homework this quarter. Think of a time the AI 
 
 Over 17 lectures, you've built a statistical toolkit. Here are the big themes:
 
-- **Lectures 1-5 (EDA and regression):** You can spot when data is missing, biased, or misrepresented — whether by a human or an AI.
-- **Lectures 6-7 (Features, trees, and validation):** You can engineer features, use trees and forests, and evaluate whether a model's predictions generalize.
-- **Lectures 8-12 (Inference and diagnostics):** You understand what p-values mean, why multiple testing matters, and how to check a model's assumptions.
+- **Lectures 1–5 (EDA and regression):** You can spot when data is missing, biased, or misrepresented — whether by a human or an AI.
+- **Lectures 6–7 (Features, trees, and validation):** You can engineer features, use trees and forests, and evaluate whether a model's predictions generalize.
+- **Lectures 8–12 (Inference and diagnostics):** You understand what p-values mean, why multiple testing matters, and how to check a model's assumptions.
 - **Lectures 13, 18-19 (Classification and causation):** You won't confuse correlation with causation — the most common error in AI-generated analyses.
-- **Lectures 15-17 (Modern tools):** You can use time series, tree-based models in depth, and AI tools critically and effectively.
+- **Lectures 15–17 (Modern tools):** You can use time series, tree-based models in depth, and AI tools critically and effectively.
 
 You now have the vocabulary to be a sophisticated consumer — and critic — of data analysis, whether it's done by a human, an algorithm, or an AI.
 
@@ -638,12 +655,7 @@ The goal of this course was never to make you compute faster than a machine. It 
 - **AutoML:** automated machine learning — systematic search over models, features, and hyperparameters with cross-validation.
 - **Selection bias:** systematic exclusion of certain groups from an analysis, leading to conclusions that don't generalize.
 - **LLM (Large Language Model):** an AI model trained on text that can generate code and analysis, but lacks the ability to check statistical assumptions or reason causally.
-- Decision trees partition the feature space into rectangular regions by recursively splitting on single features.
-- Deep trees overfit; random forests fix this by averaging many trees trained on different bootstrap samples.
-- Gradient boosting trains trees sequentially on residuals, connecting to the gradient descent idea from Lecture 13.
-- AutoML automates model selection but cannot frame the question, check data quality, or interpret results.
-- LLMs produce working code quickly but systematically fail at checking assumptions, recognizing confounding, and calibrating uncertainty.
-- Decomposing an analysis into small, verifiable prompts lets you catch AI errors before they propagate.
+- **Prompt decomposition:** breaking an analysis into small, verifiable steps so you can catch AI errors before they propagate.
 
 ### Computational tools
 

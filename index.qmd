@@ -1,25 +1,11 @@
 ---
-title: "Welcome"
+title: "MS&E 125: Applied Statistics"
 ---
 
-# MS&E 125: Applied Statistics
+Welcome to MS&E 125. This book accompanies the Spring 2026 offering at Stanford University.
 
-**Stanford University, Spring 2026**
+The course is organized in three acts:
 
-This online textbook accompanies MS&E 125. Each chapter is a self-contained lecture with runnable code, real data, and at least one genuine surprise.
-
-## How to use this book
-
-**Reading online:** Browse the chapters using the sidebar. Code is folded by default — click "Code" to expand any cell. Figures and outputs are shown inline.
-
-**In class:** Each chapter is also a Jupyter notebook. Download it, open in JupyterLab, clear outputs, and run cells live.
-
-**Datasets:** All analyses use real data — hospital readmissions (CMS), Airbnb listings (Inside Airbnb), NBA game logs, clinical trials (ACTG 175), Framingham Heart Study, EPA air quality, College Scorecard, and John Snow's cholera investigation.
-
-## Structure
-
-The course has three acts:
-
-1. **Build Models** (Lectures 1--7): From raw data to regression and random forests, with linear algebra as the foundation.
-2. **Trust Models** (Lectures 8--13): What can we actually conclude? Bootstrap, permutation tests, hypothesis testing, and classification.
-3. **See Further** (Lectures 14--19): PCA, clustering, backtesting, AI tools, and causal inference.
+- **Act 1: Build Models** (Lectures 1--7) — From raw data to prediction
+- **Act 2: Trust Models** (Lectures 8--12) — Statistical inference and diagnostics
+- **Act 3: See Further** (Lectures 13--19) — Classification, dimensionality reduction, causality, and the frontier
