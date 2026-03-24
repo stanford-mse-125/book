@@ -144,10 +144,10 @@ A concrete example makes the log-odds scale tangible. If $p = 0.20$: odds $= 0.2
 
 :::{.callout-warning}
 ## Logistic Regression Conditions
-There are two key conditions for logistic regression to be valid: (1) each outcome is independent of the others, and (2) each predictor is linearly related to the log-odds when all other predictors are held constant.
+There are two key conditions for logistic regression to be valid: (1) each outcome is independent of the others, and (2) each predictor is linearly related to the log-odds when all other predictors are held constant. Because the log-odds are linear in the features, the decision boundary (where $p = 0.5$) is a hyperplane — logistic regression can only produce linear decision boundaries.
 :::
 
-The name *logistic* regression reflects this core assumption: the log-odds are a **linear** function of the features. The decision boundary (where predicted probability equals 0.5) is therefore a hyperplane. If the true boundary is curved, logistic regression will miss it.
+The name *logistic* regression reflects this core assumption: the log-odds are a **linear** function of the features. If the true decision boundary is curved, logistic regression will miss it — add polynomial or interaction features (Lecture 6) to capture nonlinear boundaries.
 
 ```{python}
 # Visualize the sigmoid function

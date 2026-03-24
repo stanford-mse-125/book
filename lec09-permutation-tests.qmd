@@ -150,7 +150,7 @@ The observed effect of ~71 CD4 cells is **way out in the tail** — not even clo
 
 :::{.callout-important}
 ## Definition: p-value
-The probability of observing a result as extreme as (or more extreme than) what you got, assuming the null hypothesis is true.
+The probability of observing a result at least as extreme as what you got, assuming the null hypothesis is true.
 :::
 
 The p-value answers this question: if there were truly no effect, how often would we see something this extreme?
