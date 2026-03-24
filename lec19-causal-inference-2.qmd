@@ -219,7 +219,8 @@ print("John Snow's Water Company Comparison (1854 cholera epidemic)")
 print("=" * 60)
 print(snow.to_string(index=False))
 print(f"\nRelative risk: {snow.loc[snow['company'] == 'Southwark & Vauxhall', 'death_rate_per_10000'].values[0] / snow.loc[snow['company'] == 'Lambeth', 'death_rate_per_10000'].values[0]:.1f}x")
-print("Houses served by the polluted company had 8x the death rate.")
+rr = snow.loc[snow['company'] == 'Southwark & Vauxhall', 'death_rate_per_10000'].values[0] / snow.loc[snow['company'] == 'Lambeth', 'death_rate_per_10000'].values[0]
+print(f"Houses served by the polluted company had {rr:.1f}x the death rate.")
 ```
 
 ```{python}
@@ -570,7 +571,7 @@ We began this course asking how to predict --- building models from data, measur
 - Randomization closes all backdoor paths in the DAG, eliminating the need for confounder adjustment.
 - Pre-treatment parallel trends are suggestive evidence for the parallel trends assumption, but cannot prove it.
 - Peeking at A/B test results inflates false positive rates far beyond the nominal 5%.
-- Snow's water company comparison is the most famous natural experiment — same streets, different water, 8x death rate difference.
+- Snow's water company comparison is the most famous natural experiment — same streets, different water, 8.5x death rate difference.
 
 ### Computational tools
 

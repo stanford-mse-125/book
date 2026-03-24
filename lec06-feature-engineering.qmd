@@ -69,7 +69,7 @@ We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't 
 ## Regularization as an alternative to dropping a category
 Dropping the first category is one way to resolve collinearity. Regularization is another. Even a mild L2 penalty (ridge regression) breaks the perfect linear dependence among dummy columns, making all coefficients well-defined and interpretable — no category needs to serve as a hidden baseline.
 
-The intuition: collinearity is not inherently dangerous. It simply means the model has redundant parameters, so infinitely many coefficient vectors produce the same predictions. Regularization picks one of those vectors (the one with smallest norm), resolving the ambiguity without discarding any information. We develop regularization in [Lecture 8](lec08-regularization.qmd); this observation makes a good homework exercise.
+The intuition: collinearity is not inherently dangerous. It simply means the model has redundant parameters, so infinitely many coefficient vectors produce the same predictions. Regularization picks one of those vectors (the one with smallest norm), resolving the ambiguity without discarding any information. We develop regularization in [Lecture 7](lec07-trees-validation.qmd).
 :::
 
 ```{python}
