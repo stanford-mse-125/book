@@ -293,6 +293,11 @@ Von Neumann's warning applies directly: a model with enough parameters can fit *
 In the polynomial experiment above, which degrees had high bias? Which had high variance? Where was the sweet spot?
 :::
 
+:::{.callout-note}
+## Preview: regularization as bias-variance control
+Another approach to controlling overfitting adds a **penalty** directly to the loss function. **Ridge regression** (L2 penalty) shrinks coefficients toward zero; **lasso** (L1 penalty) can shrink them exactly to zero, performing feature selection automatically. The bias-variance tradeoff governs the penalty strength: too little penalty and the model overfits (high variance); too much and it underfits (high bias). We introduce lasso later in this lecture and develop regularization more fully in a later course.
+:::
+
 
 ## Train, validation, and test sets
 

@@ -185,7 +185,10 @@ $$X^T X \beta = X^T y \qquad \Longrightarrow \qquad \beta = (X^T X)^{-1} X^T y$$
 The **normal equations** $X^TX\beta = X^Ty$ give the least squares solution $\beta = (X^TX)^{-1}X^Ty$. The formula requires $X^TX$ to be invertible, which means the columns of $X$ must be linearly independent (recall Lecture 4). Perfectly collinear features make the matrix singular, so no unique solution exists.
 :::
 
-You may have heard "regression minimizes the sum of squared errors." Now you can see *why*: the prediction that minimizes $\|y - \hat{y}\|^2$ is exactly the orthogonal projection of $y$ onto $\text{col}(X)$. Least squares turns out to be equivalent to maximum likelihood estimation when the errors are normally distributed — a connection you may see in a later course.
+You may have heard "regression minimizes the sum of squared errors." Now you can see *why*: the prediction that minimizes $\|y - \hat{y}\|^2$ is exactly the orthogonal projection of $y$ onto $\text{col}(X)$. :::{.callout-note}
+## Connection to maximum likelihood
+When the errors are normally distributed, least squares and maximum likelihood estimation (MLE) produce identical coefficient estimates. MLE chooses the parameters that make the observed data most probable — a principle that extends to logistic regression ([Lecture 13](lec13-classification.qmd)) and many other models. The equivalence breaks down when errors are non-normal, which is one reason diagnostics matter (later in this lecture).
+:::
 
 The normal equations give us the exact solution in one step. For larger problems or different loss functions where no closed-form solution exists, we'll need an iterative approach called gradient descent (Lecture 13).
 
