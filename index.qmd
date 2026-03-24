@@ -9,3 +9,17 @@ The course is organized in three acts:
 - **Act 1: Build Models** (Lectures 1--7) — From raw data to prediction
 - **Act 2: Trust Models** (Lectures 8--12) — Statistical inference and diagnostics
 - **Act 3: See Further** (Lectures 13--19) — Classification, dimensionality reduction, causality, and the frontier
+
+## How to cite this book
+
+Udell, M. (2026). *MS&E 125: Applied Statistics*. Stanford University. Available at [https://stanford-mse-125.github.io/book/](https://stanford-mse-125.github.io/book/).
+
+```bibtex
+@book{udell2026mse125,
+  title     = {MS\&E 125: Applied Statistics},
+  author    = {Udell, Madeleine},
+  year      = {2026},
+  publisher = {Stanford University},
+  url       = {https://stanford-mse-125.github.io/book/}
+}
+```
