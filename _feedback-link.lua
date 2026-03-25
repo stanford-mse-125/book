@@ -4,7 +4,14 @@ function Pandoc(doc)
   local base = input:match("([^/]+)%.qmd$")
   if not base or not base:match("^lec%d") then return doc end
 
-  local form_url = "https://forms.gle/PLACEHOLDER?entry.NNNN=" .. base
+  -- Extract chapter number from filename (e.g., "lec03-data-munging" -> "3")
+  local num = base:match("^lec(%d+)")
+  if num then num = tostring(tonumber(num)) end  -- strip leading zero
+
+  local form_url = "https://docs.google.com/forms/d/e/1FAIpQLScokCu2Rsz7zZw7XTOzsE_OBODr6iHjB1ErOw0zizorHD0zXg/viewform"
+    .. "?usp=pp_url"
+    .. "&entry.1875336381=Course+Notes"
+    .. "&entry.1608396530=" .. (num or "")
 
   local feedback_html = '<div class="feedback-link" style="margin-top: 2em; padding: 0.75em 1em; background: #f0f7f5; border-left: 4px solid #5ba899; border-radius: 6px; font-size: 0.9em;">'
     .. 'How was this chapter? Help us improve these notes. '
