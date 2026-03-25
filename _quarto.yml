@@ -36,6 +36,7 @@ book:
 
 filters:
   - _notebook-links.lua
+  - _feedback-link.lua
 
 format:
   html:
