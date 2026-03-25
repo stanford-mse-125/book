@@ -491,7 +491,7 @@ print("This is heteroscedasticity — the model's errors are not constant.")
 :::{.callout-warning}
 ## Heteroscedasticity
 
-When the spread of residuals changes with the predicted value, we have **heteroscedasticity**. The condition does not bias coefficients, but it invalidates standard errors (and confidence intervals) from the usual formulas. We'll revisit heteroscedasticity in Lecture 12.
+When the spread of residuals changes with the predicted value, we have **heteroscedasticity**. Coefficient estimates remain valid, but standard errors from the usual OLS formula become unreliable under heteroscedasticity. We'll revisit this in Lecture 12.
 :::
 
 ## Does popularity cause higher prices?

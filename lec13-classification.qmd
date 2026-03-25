@@ -312,7 +312,7 @@ If you've encountered odds in sports betting -- "3 to 1 odds" -- that's the same
 The logit formula tells us that each coefficient $\beta_j$ affects the **log-odds** linearly. So $e^{\beta_j}$ is the **odds ratio** -- the multiplicative change in odds per one-unit increase in $x_j$.
 :::
 
-Because we standardized the features, each coefficient corresponds to a one-standard-deviation increase, not a one-unit increase. If you fit without standardizing, the coefficient for age would tell you the odds change per one-year increase in age instead.
+Because features are standardized, each coefficient represents the change in log-odds per standard deviation increase, not per unit increase. If you fit without standardizing, the coefficient for age would tell you the odds change per one-year increase in age instead.
 
 ```{python}
 # Create coefficient table
