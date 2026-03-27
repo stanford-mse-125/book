@@ -65,11 +65,11 @@ The Framingham Heart Study is one of the most important longitudinal epidemiolog
 - ROC AUC: 0.726
 - The model has very low recall on the positive class (0.14), because the class imbalance biases it toward predicting "no CHD"
 
-## AI Traps
+## Naive Analysis Traps
 
 1. **Correlated risk factors**: sysBP and diaBP are correlated at r=0.78. BMI, blood pressure, and cholesterol cluster together. A naive model double-counts these overlapping signals. Students should think about multicollinearity.
 
-2. **Confounding by SES**: Education (a proxy for socioeconomic status) is negatively correlated with sysBP (-0.13) and BMI (-0.14). Risk factors are not independent of social context. An AI model ignores this causal structure and may produce misleading feature importances.
+2. **Confounding by SES**: Education (a proxy for socioeconomic status) is negatively correlated with sysBP (-0.13) and BMI (-0.14). Risk factors are not independent of social context. A naive model ignores this causal structure and may produce misleading feature importances.
 
 3. **Class imbalance**: With only 15.2% positive rate, accuracy is misleading (a "predict all negative" model gets 85%). Students need to use AUC, precision/recall, or resampling.
 

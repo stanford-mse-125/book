@@ -62,7 +62,7 @@ Daily Air Quality Index (AQI) data for all U.S. counties, filtered to California
 - **Proper temporal split MAE**: 19.5
 - The naive split leaks future information through lag features, making the model appear 3.2 MAE points better than it actually is
 
-## AI Traps
+## Naive Analysis Traps
 
 1. **Regime changes**: Wildfire smoke events are fundamentally different from normal air quality. A linear model trained on "normal" data underpredicts AQI by ~27 points during smoke events. AI models extrapolate linearly and fail during regime changes.
 

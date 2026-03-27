@@ -62,13 +62,13 @@ Randomized clinical trial comparing HIV treatments in adults with CD4 counts 200
 - **Event rate**: 24.4% experienced AIDS or death
 - **Randomization balance**: Excellent across all covariates (age, gender, race, baseline CD4)
 
-### AI Traps
+### Naive Analysis Traps
 
 These are mistakes that LLMs and naive analysts commonly make with this data:
 
 1. **Multiple comparisons (primary trap)**: Testing treatment effect in 20 subgroups (by age, race, gender, baseline CD4, etc.) and reporting the most significant one. With 20 tests at alpha=0.05, we expect ~1 false positive. In our analysis, testing for *differential* treatment effects across 20 subgroups found 1/20 "significant" (Baseline CD4 Q2, p=0.017) -- exactly the false positive rate we'd predict by chance. After Bonferroni correction: 0/20 significant.
 
-2. **Ignoring the `treat` vs `arms` distinction**: The `treat` column (0/1) collapses three different combination arms. An AI might use this and miss that ZDV+ddI (arm 1, mean change +54.4) is substantially better than ZDV+ddC (arm 2, mean change +19.3).
+2. **Ignoring the `treat` vs `arms` distinction**: The `treat` column (0/1) collapses three different combination arms. A naive analysis might use this and miss that ZDV+ddI (arm 1, mean change +54.4) is substantially better than ZDV+ddC (arm 2, mean change +19.3).
 
 3. **Survivorship bias in cd496**: Only 62.7% of patients have a 96-week CD4 count (`r` column). Analyzing cd496 without accounting for informative missingness (sicker patients drop out) biases results.
 

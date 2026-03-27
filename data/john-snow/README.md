@@ -90,11 +90,11 @@ Snow's most powerful evidence was not the map -- it was the comparison of water 
 
 This is a textbook example of how to reason about causation without a randomized controlled trial.
 
-## AI Traps
+## Naive Analysis Traps
 
 1. **Confusing the map with the experiment**: The map (deaths near Broad St pump) is suggestive but could be explained by confounders (poverty, crowding in that area). The water company comparison is the real causal evidence because it controls for neighborhood factors.
 
-2. **Post hoc ergo propter hoc**: The epidemic was already declining before the pump handle was removed on Sep 8. An AI might naively attribute the decline to the intervention, but the timing is ambiguous.
+2. **Post hoc ergo propter hoc**: The epidemic was already declining before the pump handle was removed on Sep 8. A naive analysis might attribute the decline to the intervention, but the timing is ambiguous.
 
 3. **Ecological fallacy**: The water company data is at the household level, not individual level. We know which company served each house, not which water each person actually drank.
 

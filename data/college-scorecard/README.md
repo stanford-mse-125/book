@@ -53,7 +53,7 @@
 - **Pell grant %**: median 52%; mean 53% (proxy for fraction of low-income students)
 - **Stanford**: SAT_AVG 1,465; MD_EARN_WNE_P10 $86,000; completion rate 0.95
 
-## AI traps
+## Naive Analysis Traps
 
 This dataset is a minefield for naive AI/LLM analysis. Three major traps:
 

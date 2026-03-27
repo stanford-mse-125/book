@@ -64,9 +64,9 @@
 | Short rest (3 days) | 11,385 | 14.7% |
 | Extended (4+ days) | 12,268 | 15.8% |
 
-## AI Traps (Pedagogical Warning)
+## Naive Analysis Traps (Pedagogical Warning)
 
-This dataset is designed to teach students about common statistical pitfalls. An AI or naive analyst will fall into these traps:
+This dataset is designed to teach students about common statistical pitfalls. A naive analyst will fall into these traps:
 
 ### 1. Multiple Comparisons Trap
 Running a separate t-test for each of 431 players (BTB vs. rested) yields **30 "significant" results at p<0.05** (7.0%). This looks exciting, but:
