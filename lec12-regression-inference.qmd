@@ -13,6 +13,18 @@ in roster flexibility based on this finding? We also examine Airbnb listings to 
 what happens when the effect IS real and large. Same tools, very different conclusions.
 
 :::{.callout-note}
+## Why inference, not just prediction?
+
+In Act 1, we built regression models to predict — given a listing's features, what price should we expect? Prediction works well when you observe a new unit from the same population: a new listing appears, you plug in its features, you get a price.
+
+But now consider a different question. An Airbnb host is thinking about spending \$50,000 to convert a closet into a second bedroom. The regression coefficient on `bedrooms` is +\$85/night. Does that mean the renovation will pay for itself in two years?
+
+Not necessarily. The coefficient tells you that listings *with* more bedrooms tend to cost more — but it doesn't tell you that *adding* a bedroom to *your* listing would increase your price by \$85. Maybe the real driver is apartment size, or building quality, or neighborhood. Larger apartments happen to have more bedrooms *and* higher prices, but the extra bedroom isn't doing the work.
+
+Prediction asks: **what will happen to a new unit from this population?** Inference asks: **what would happen if I changed something?** The second question is harder — and it's the one that matters when the decision involves an investment, a policy, or an intervention. This lecture gives you the tools to start answering it.
+:::
+
+:::{.callout-note}
 ## Act 1 meets Act 2
 Act 1 built regression models for prediction. Act 2 introduced hypothesis testing and
 confidence intervals. This lecture combines both toolkits: we apply inference to

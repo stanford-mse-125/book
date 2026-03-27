@@ -115,7 +115,11 @@ A 95% confidence interval from the bootstrap says: "if we repeated this study un
 Before trusting a confidence interval for a decision, ask: is the uncertainty that matters for my decision the kind the bootstrap captures? Or is it the kind where the whole system might shift?
 :::
 
-This question will return in [Lecture 16](lec16-backtesting.qmd) (backtesting), where we confront models that looked excellent in historical data but failed catastrophically when conditions changed. For now, keep it in mind as a healthy skepticism: **the bootstrap is a powerful tool, but it lives inside the assumption that tomorrow's data comes from the same process as today's.**
+This question will return in [Lecture 16](lec16-backtesting.qmd) (backtesting), where we confront models that looked excellent in historical data but failed catastrophically when conditions changed — and again in [Lectures 18–19](lec18-causal-dags.qmd) (causal inference), where the estimand is a counterfactual quantity: not "what is the population mean?" but "what *would have happened* if the treatment had been different?" Counterfactual estimands push the ontological question even further, because the "population" now includes events that never occurred.
+
+For now, keep it in mind as a healthy skepticism: **the bootstrap is a powerful tool, but it lives inside the assumption that tomorrow's data comes from the same process as today's.**
+
+So why use it? Because the decision still has to be made. A hospital administrator facing an ERR of 1.05 cannot wait for philosophical certainty about what "population" means — the CMS penalty is real and the budget is due. Acting *as if* the population parameter exists, while being explicit about what your confidence interval does and does not cover, is often the best available strategy. The model is a useful fiction: wrong in its ontology, but disciplined in its accounting of one important source of uncertainty. The job of a good analyst is to name the sources of uncertainty the model *doesn't* cover, so the decision-maker can weigh them.
 
 :::{.callout-tip}
 ## Discussion: What is the population?
