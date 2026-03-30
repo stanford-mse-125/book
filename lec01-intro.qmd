@@ -1,5 +1,5 @@
 ---
-title: "Lecture 1: Introduction to Applied Statistics"
+title: "Introduction to Applied Statistics"
 execute:
   enabled: true
 jupyter: python3
@@ -18,7 +18,7 @@ Here are ten examples we'll return to throughout the quarter:
 | Question | Data | Decision |
 |----------|------|----------|
 | Hospital readmission penalties | CMS readmission rates by hospital | Which hospitals should be fined? |
-| Harden's mid-range shot | NBA shot charts (location, outcome) | Should he stop shooting mid-range twos? |
+| NBA shot selection | NBA shot charts (location, outcome) | Are mid-range twos a bad shot? |
 | Wealthfront tax-loss harvesting | Portfolio returns, covariance matrices | Which lots to sell today to save on taxes? |
 | WFP food allocation in Yemen | Hunger indicators from surveys and satellites | How to feed 2M more people at the same cost? |
 | NextEra solar farm siting | 30 years of hourly solar irradiance (NREL) | Which parcels maximize energy per dollar? |
@@ -88,31 +88,6 @@ By the end of the quarter, you'll have a toolkit to approach any data-driven dec
 
 As John Tukey put it: *"The best thing about being a statistician is that you get to play in everyone's backyard."* The same tools you'll learn here apply to healthcare, housing, sports, and drug development.
 
-## Problems with messy data
-
-Real data is never clean. Before you build a model or run a test, you need to understand three ways data goes wrong:
-
-**Noisy data.** Some values suffer errors, inaccuracies, or even malicious corruption. A sensor drifts out of calibration. A human mistypes a zip code. An adversary submits fake reviews. The values are present but wrong — and the damage can be subtle. A single decimal-point error in a drug dosage field could flip a clinical conclusion.
-
-**Missing data.** Some values are not recorded, suppressed, lost, or inconsistent. We saw this in the hospital data: "Too Few to Report" means small hospitals lack enough cases, so their readmission numbers are systematically absent. Missing data is not just a gap to fill — it's a signal about the data-generating process.
-
-**Heterogeneous data.** Real datasets mix many types of values: continuous measurements (temperature, price), discrete counts (readmissions), nominal categories (neighborhood, diagnosis), ordinal rankings (star ratings), free text (reviews), networks (social graphs), and images. Most statistical methods assume one type. Working with real data means choosing how to represent — or discard — each type.
-
-:::{.callout-note}
-## Informative vs. uninformative missingness
-Not all missing data is created equal. Consider two examples:
-
-- **Ambulance heart-rate monitor:** The reading is missing because the patient was too critical to hook up — the missingness itself predicts the outcome. This is **informative missingness** (also called *missing not at random*, or MNAR).
-- **Weather station:** The reading is missing because the battery died — the gap has nothing to do with the weather. This is **uninformative missingness** (also called *missing completely at random*, or MCAR).
-
-The distinction matters enormously. If you drop rows with informative missingness, you bias your analysis — the missing cases are systematically different from the observed ones. We'll return to this idea throughout the course.
-:::
-
-:::{.callout-warning}
-## Outliers distort everything
-An **outlier** is an observation far from the bulk of the data. Sometimes it's a genuine extreme value (a $10,000/night penthouse on Airbnb); sometimes it's a data error (a price of -$1). Either way, outliers can dominate summary statistics like the mean and standard deviation. Robust alternatives — the median, trimmed means, the interquartile range — resist their influence. Always plot the distribution before trusting a summary number.
-:::
-
 ## The three acts of this course
 
 The course follows a three-act structure. Each act builds on the last:
@@ -128,7 +103,7 @@ We'll see the ten questions from the opening recur throughout the course:
 | Question | Topics | Act |
 |----------|--------|-----|
 | Hospital readmission penalties | EDA, hypothesis testing | I → II |
-| Harden's mid-range shot | EDA, conditional expected value | I |
+| NBA shot selection | EDA, conditional expected value | I |
 | Wealthfront tax-loss harvesting | Optimization, regression | I |
 | WFP food allocation | Linear algebra, optimization | I |
 | NextEra solar farm siting | Feature engineering, regression | I |
@@ -184,125 +159,10 @@ Notice the distribution is centered near 1.0 — hospitals with ratios above 1.0
 If you ran a hospital and saw your ratio was 1.05 (the orange line), would you panic? How do you know if that's bad luck or a real problem? That's a statistics question.
 :::
 
-## Another dataset: Airbnb pricing
-
-Now a completely different question. You're an Airbnb host in New York City. You want to set your price. Too high and nobody books; too low and you leave money on the table. What's the right price?
-
-```{python}
-# Load Airbnb data (just a few key columns for now)
-airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False,
-                     usecols=['name', 'neighbourhood_group_cleansed', 'room_type',
-                              'price', 'bedrooms', 'number_of_reviews'])
-
-# Clean price column (may contain $ and commas in raw Airbnb data)
-airbnb['price'] = airbnb['price'].astype(str).str.replace('[$,]', '', regex=True).astype(float)
-print(f"{airbnb.shape[0]:,} listings in NYC")
-airbnb.head()
-```
-
-```{python}
-airbnb['price'].describe()
-```
-
-Look at the output above: the mean and the max. And there are listings near \$0. Already the data is telling us something: the "average" might not be very meaningful here. Extreme values — \$0 listings that aren't real prices, and sky-high outliers — distort the mean. *Outliers distort averages* — that's a theme we'll return to all quarter.
-
-```{python}
-# Price distribution — notice the long right tail
-fig, ax = plt.subplots(figsize=(8, 5))
-sns.histplot(airbnb['price'].dropna(), bins=100, ax=ax, edgecolor='white')
-ax.set_xlabel('Price per night ($)')
-ax.set_ylabel('Count')
-ax.set_title('NYC Airbnb Price Distribution')
-ax.axvline(airbnb['price'].median(), color='orange', linestyle='--', lw=2,
-           label=f'Median = ${airbnb["price"].median():.0f}')
-ax.axvline(airbnb['price'].mean(), color='red', linestyle='--', lw=2,
-           label=f'Mean = ${airbnb["price"].mean():.0f}')
-ax.set_xlim(0, 1000)
-ax.legend()
-plt.tight_layout()
-plt.show()
-```
-
-Notice how far the mean (red) is pulled to the right by expensive listings. The median is a better summary here. We'll dive deep into this data in Lecture 2.
-
-:::{.callout-tip}
-## Think About It
-If you had a 1-bedroom apartment in Manhattan, would you price at the mean? Why or why not? What other information would you want?
-:::
-
-## Why quick analyses go wrong
-
-Suppose you need a fast answer. You hand the hospital dataset to an AI assistant — or to an intern, or to a colleague who skims the columns and writes a quick script. The prompt: *"Which hospitals have the worst readmission rates?"*
-
-### What a quick analysis gets right
-
-- **Fast summary statistics**: histograms, means, counts — all in seconds
-- **Decent plots**: bar charts of top/bottom hospitals, distributions by condition
-- **Code that runs**: syntactically correct pandas and matplotlib
-
-### What a quick analysis misses
-
-- **No skepticism about the data**: the analysis won't ask "why are 15% of the values missing?" It will silently drop those rows.
-- **No domain context**: "Too Few to Report" means small and rural hospitals lack enough cases to report — dropping those rows biases the results toward large urban hospitals.
-- **Plausible nonsense**: ranking hospitals by raw readmission count instead of the risk-adjusted ERR would penalize hospitals that treat sicker patients. The ranking would *look* reasonable but be *wrong*.
-
-```{python}
-# Here's what "Too Few to Report" looks like in the data
-non_numeric = readmissions[pd.to_numeric(readmissions['Number of Readmissions'],
-                                         errors='coerce').isna()]
-print(f"Rows with non-numeric readmission counts: {len(non_numeric):,}")
-print(f"That's {len(non_numeric)/len(readmissions)*100:.1f}% of the data")
-print()
-print("What values do they have?")
-print(non_numeric['Number of Readmissions'].value_counts())
-```
-
-:::{.callout-important}
-## Definition: Missing Data Mechanism
-A **missing data mechanism** describes *why* data is absent — not just *that* it's absent. Here, the data isn't missing randomly; a systematic pattern drives the gaps (small hospitals don't have enough cases to report).
-:::
-
-A quick analysis would drop these rows without mentioning it. But *dropping them changes the answer* — the results would be biased toward large urban hospitals.
-
-```{python}
-# Which hospitals have "Too Few to Report"? Let's look at a sample.
-cols_to_show = ['Facility Name', 'State', 'Measure Name', 'Number of Readmissions']
-available_cols = [c for c in cols_to_show if c in non_numeric.columns]
-non_numeric[available_cols].head(8)
-```
-
-```{python}
-# How many hospitals are affected, by condition?
-fig, ax = plt.subplots(figsize=(8, 5))
-(non_numeric['Measure Name']
- .value_counts()
- .plot.barh(ax=ax, color='C3', edgecolor='white'))
-ax.set_xlabel('Number of hospitals with "Too Few to Report"')
-ax.set_title('Missing data is NOT random — some conditions are harder to track')
-plt.tight_layout()
-plt.show()
-```
-
-**Catching problems like these is what this course teaches.** Whether the analysis comes from an AI, a colleague, or your own first pass, the habit is the same: verify the data before trusting the conclusions.
-
-:::{.callout-warning}
-## When the model moves the market: Zillow's \$881M lesson
-In 2021, Zillow's iBuying program used its Zestimate algorithm to purchase homes directly from sellers. The model said "this home is worth \$400K," so Zillow bought it. In Q3 alone, the company purchased 9,790 homes — and overpaid on nearly all of them. By November, Zillow wrote down \$881M and shut down the program.
-
-Three statistical failures compounded:
-
-1. **No prediction intervals.** A point estimate ("worth \$400K") is useless without a range ("... plus or minus \$30K"). If you systematically buy at the upper end of your uncertainty, you overpay on average.
-2. **Distribution shift.** The model was trained on pre-2020 sales. The post-COVID housing market behaved differently — prices were volatile, supply was tight, and bidding wars were common. Historical patterns broke down.
-3. **Feedback loops.** Zillow's own aggressive buying inflated prices in the neighborhoods it targeted. The model's predictions changed the data it would later learn from — a vicious cycle that made the training data less representative over time.
-
-We'll build the tools to diagnose each of these failures: prediction intervals in Act 1, hypothesis testing for distribution shift in Act 2, and causal reasoning about feedback loops in Act 3.
-:::
-
 ## Key Takeaways
 
 - **Applied statistics is about decisions under uncertainty**, not formulas in a vacuum.
-- Real data is messy: missing values, outliers, confounding variables. That mess is the point.
-- Any analysis — whether from an AI, a colleague, or your own first pass — deserves skepticism. Your job is to verify.
+- Consequential decisions have financial impact, human impact, irreversibility, and scale — most hit more than one.
 - The course has three acts: Build Models, Trust Models, See Further. Each act builds on the last.
 - Every dataset has a story. Learning to read that story — and question it — is the core skill of a statistician.
 
@@ -311,14 +171,9 @@ We'll build the tools to diagnose each of these failures: prediction intervals i
 ### Key ideas
 
 - **Applied statistics** is the science of making decisions under uncertainty using data.
+- A decision is **consequential** when getting it wrong has serious impact — financial, human, irreversible, or at scale.
 - The **Excess Readmission Ratio (ERR)** compares a hospital's readmissions to what's expected given its patient mix. Above 1.0 = more readmissions than expected.
-- A **missing data mechanism** describes *why* data is absent, not just *that* it's absent. In the hospital data, "Too Few to Report" means small hospitals lack enough cases — so their data is systematically suppressed, not randomly missing.
 - The **null hypothesis** (preview) is the default assumption that nothing interesting is happening (e.g., "this hospital is no different from average"). Formalized in Lectures 9–10.
-- Real data is **noisy** (errors, corruption), **missing** (not recorded, suppressed), and **heterogeneous** (numbers, categories, text, networks). These are the three dimensions of messy data.
-- **Informative missingness** (MNAR) means the reason data is missing is related to the missing value itself. **Uninformative missingness** (MCAR) means the gap is unrelated to the value. Dropping MNAR data biases your analysis.
-- Missing data is often a signal, not just a nuisance — *why* data is missing matters as much as *that* it's missing.
-- Any quick analysis — from an AI, a script, or a first pass — can produce plausible-looking results that miss critical problems in the data.
-- Outliers distort averages — always look at the distribution, not just summary statistics.
 
 ### Computational tools
 
@@ -327,7 +182,6 @@ We'll build the tools to diagnose each of these failures: prediction intervals i
 - `.describe()` — summary statistics (mean, std, min, max, quartiles)
 - `.value_counts()` — count unique values in a column
 - `sns.histplot()` — plot a histogram
-- `pd.to_numeric(errors='coerce')` — convert to numeric, turning non-numbers into NaN
 
 ### For the quiz
 
