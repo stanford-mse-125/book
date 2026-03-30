@@ -68,14 +68,27 @@ jobs:
                           nb["cells"][0]["source"] = [new_src]
                           print(f"  Converted frontmatter to heading in {os.path.basename(nb_path)}")
 
-              # --- Fix DATA_DIR for Colab ---
+              # --- Fix data paths for Colab ---
+              # LFS files need media.githubusercontent.com; all others use raw.githubusercontent.com
+              RAW = "https://raw.githubusercontent.com/stanford-mse-125/book/main/data"
+              LFS = "https://media.githubusercontent.com/media/stanford-mse-125/book/main/data"
+              LFS_FILES = {"airbnb/listings.csv"}
+
               for cell in nb["cells"]:
                   if cell["cell_type"] == "code":
-                      cell["source"] = [
-                          line.replace("DATA_DIR = 'data'", "DATA_DIR = 'https://media.githubusercontent.com/media/stanford-mse-125/book/main/data'")
-                               .replace("pd.read_csv(f'{DATA_DIR}/", "pd.read_csv(f'{DATA_DIR}/")
-                          for line in cell["source"]
-                      ]
+                      new_source = []
+                      for line in cell["source"]:
+                          # Remove DATA_DIR definition
+                          if line.strip().startswith("DATA_DIR"):
+                              line = ""
+                          else:
+                              # Replace each f'{DATA_DIR}/path/file.csv' with full URL
+                              import re
+                              for m in re.findall(r"f'\{DATA_DIR\}/([^']+)'", line):
+                                  base = LFS if m in LFS_FILES else RAW
+                                  line = line.replace(f"f'{{DATA_DIR}}/{m}'", f"'{base}/{m}'")
+                          new_source.append(line)
+                      cell["source"] = new_source
 
               with open(nb_path, "w") as f:
                   json.dump(nb, f, indent=1)
