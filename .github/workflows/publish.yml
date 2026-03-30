@@ -95,18 +95,6 @@ jobs:
               print(f"  Patched {os.path.basename(nb_path)}")
           PYEOF
 
-      - name: Commit notebooks to main branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add notebooks/
-          if git diff --cached --quiet; then
-            echo "No notebook changes to commit"
-          else
-            git commit -m "Auto-generate Jupyter notebooks from .qmd sources"
-            git push
-          fi
-
       - name: Render Quarto book
         run: quarto render --execute
 
@@ -117,6 +105,18 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: _book
+
+      - name: Push notebooks to notebooks branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cd notebooks
+          git init
+          git checkout -b notebooks
+          git add *.ipynb
+          git commit -m "Auto-generate Jupyter notebooks from .qmd sources"
+          git remote add origin https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+          git push origin notebooks --force
 
   deploy:
     needs: build

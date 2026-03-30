@@ -4,7 +4,7 @@ function Pandoc(doc)
   local base = input:match("([^/]+)%.qmd$")
   if not base or not base:match("^lec%d") then return doc end
   
-  local colab_url = "https://colab.research.google.com/github/stanford-mse-125/book/blob/main/notebooks/" .. base .. ".ipynb"
+  local colab_url = "https://colab.research.google.com/github/stanford-mse-125/book/blob/notebooks/" .. base .. ".ipynb"
   local download_url = "notebooks/" .. base .. ".ipynb"
   
   local link_html = '<div class="notebook-links" style="margin-bottom: 1em; padding: 0.5em 1em; background: #f8f9fa; border-radius: 6px; font-size: 0.9em;">'
