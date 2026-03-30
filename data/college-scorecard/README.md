@@ -55,7 +55,7 @@
 
 ## Naive Analysis Traps
 
-This dataset is a minefield for naive AI/LLM analysis. Three major traps:
+This dataset is a minefield for naive analysis. Three major traps:
 
 ### 1. Massive missingness — `dropna()` destroys the data
 
@@ -63,7 +63,7 @@ This dataset is a minefield for naive AI/LLM analysis. Three major traps:
 - Adding SAT_AVG to a query drops you from 6,990 to 1,304 schools (83% gone)
 - Adding completion rate + earnings + retention: only **1,236 schools** (16%) survive
 - **Survivorship of `dropna()` is severely biased**: 98.4% of survivors are Bachelor's-granting institutions. Certificate programs (43% of all schools) and community colleges (20%) are almost completely eliminated.
-- AI tools that silently run `dropna()` will produce analysis that only describes selective 4-year colleges, not American higher education.
+- A naive analysis that silently runs `dropna()` will produce results that only describe selective 4-year colleges, not American higher education.
 
 ### 2. Survivorship bias in earnings data
 

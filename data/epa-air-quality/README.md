@@ -64,7 +64,7 @@ Daily Air Quality Index (AQI) data for all U.S. counties, filtered to California
 
 ## Naive Analysis Traps
 
-1. **Regime changes**: Wildfire smoke events are fundamentally different from normal air quality. A linear model trained on "normal" data underpredicts AQI by ~27 points during smoke events. AI models extrapolate linearly and fail during regime changes.
+1. **Regime changes**: Wildfire smoke events are fundamentally different from normal air quality. A linear model trained on "normal" data underpredicts AQI by ~27 points during smoke events. Naive models extrapolate linearly and fail during regime changes.
 
 2. **Naive train/test split**: Random splitting of time series data leaks future information through lag features, producing optimistically biased error estimates. Students must use temporal backtesting (train on past, test on future).
 

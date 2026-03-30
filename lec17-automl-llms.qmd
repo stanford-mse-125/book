@@ -31,11 +31,9 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-## Opening the black box: how trees and forests work
+## How trees and forests work
 
-In Lectures 6–7, you used decision trees and random forests as practical tools: you fit them to Airbnb data, compared them to linear models, and saw how averaging many overfit trees reduces variance without increasing bias. You know *what* trees and forests do. Today we explain *why* they work — the recursive splitting criterion, why bootstrap samples and feature subsets decorrelate the trees, and how gradient boosting builds on the same gradient descent idea from Lecture 13.
-
-Every call to `RandomForestRegressor` has been doing the following under the hood. Let us unpack the algorithm step by step, starting with a single **decision tree**.
+In Lectures 6--7, you built decision trees and random forests for prediction. Trees split data recursively to minimize prediction error; forests average many overfit trees, using bootstrap samples and feature subsets to decorrelate them so averaging reduces variance. Here we examine which features matter most.
 
 ```{python}
 # Load College Scorecard data
@@ -53,88 +51,12 @@ print(f"Complete cases: {len(model_data)} out of {len(scorecard)} ({len(model_da
 ```
 
 ```{python}
-# Fit a shallow decision tree (max_depth=3) so we can see what it does
 earnings_features = model_data[feature_cols]
 earnings_target = model_data[target_col]
 
-shallow_tree = DecisionTreeRegressor(max_depth=3, random_state=42)
-shallow_tree.fit(earnings_features, earnings_target)
-
-fig, ax = plt.subplots(figsize=(11, 5.5))
-plot_tree(shallow_tree, feature_names=feature_cols, filled=True,
-          rounded=True, fontsize=8, ax=ax, impurity=False)
-ax.set_title('A decision tree for predicting graduate earnings (depth = 3)')
-plt.tight_layout()
-plt.show()
-```
-
-:::{.callout-important}
-## Definition: Recursive Partitioning
-At each **node**, the algorithm tries every feature and every possible threshold, and picks the split that minimizes the prediction error (mean squared error for regression, Gini impurity or entropy for classification). It keeps splitting until it reaches a **leaf**, where it predicts the average outcome for all data points in that group.
-:::
-
-Read the tree top-down. The first split asks: is `SAT_AVG` above or below a threshold? The algorithm chose this split — it produces the largest reduction in MSE across all possible first splits. Each subsequent split refines the prediction further.
-
-:::{.callout-tip}
-## Think About It
-Why might a tree choose SAT_AVG as its first split? What does that tell you about which feature is most informative for predicting earnings?
-:::
-
-### Why trees are useful (recap from Lecture 6)
-
-You saw these properties in Lecture 6; now you can see *why* each one follows from the splitting mechanism:
-
-- They handle **nonlinearities** naturally — each split creates a step function, and many splits approximate any shape
-- They handle **interactions** automatically — a split on feature B inside a branch defined by feature A captures an A-B interaction
-- They can even handle **missing values** in some implementations (by splitting on "is this value missing?")
-- The output is **interpretable** — you can trace the path from root to leaf and see exactly which conditions led to a prediction
-
-### The overfitting problem
-
-But there's a catch. Let's see what happens when we let the tree grow deep.
-
-```{python}
-# Compare shallow vs. deep trees
-deep_tree = DecisionTreeRegressor(random_state=42)  # no depth limit
-deep_tree.fit(earnings_features, earnings_target)
-
-# Cross-validation comparison
-shallow_cv = cross_val_score(shallow_tree, earnings_features, earnings_target, cv=5, scoring='r2')
-deep_cv = cross_val_score(deep_tree, earnings_features, earnings_target, cv=5, scoring='r2')
-
-print(f"Shallow tree (depth=3):  Train R-sq = {shallow_tree.score(earnings_features, earnings_target):.3f}, "
-      f"CV R-sq = {shallow_cv.mean():.3f}")
-print(f"Deep tree (no limit):    Train R-sq = {deep_tree.score(earnings_features, earnings_target):.3f}, "
-      f"CV R-sq = {deep_cv.mean():.3f}")
-print(f"\nThe deep tree memorizes the training data (R-sq near 1.0)")
-print(f"but generalizes poorly. This gap is overfitting.")
-```
-
-The deep tree memorizes every quirk in the training data. Its training R-squared is nearly perfect, but its cross-validation R-squared is worse than the shallow tree. This gap illustrates the bias-variance tradeoff from Lecture 7: deep trees have low bias but high variance.
-
-### Random forests: the mechanism behind the magic
-
-In Lecture 7, you saw the punchline: averaging many overfit trees produces a model that generalizes well. Now let's understand the mechanism.
-
-A **random forest** uses two sources of randomness to make sure the trees disagree with each other:
-
-1. **Bagging** (bootstrap aggregation): each tree is trained on a random sample (with replacement) of the data, so each tree sees slightly different examples
-2. **Feature subsampling**: at each split, each tree considers only a random subset of features, so even on similar data, trees make different splits
-
-Why does decorrelation matter? If every tree made the same errors, averaging wouldn't help. The two sources of randomness force the trees to overfit in different directions, so averaging cancels out the noise. The variance drops without the bias increasing.
-
-```{python}
-# Compare: one deep tree vs. a forest of 100 deep trees
 forest = RandomForestRegressor(n_estimators=100, random_state=42)
 forest.fit(earnings_features, earnings_target)
 forest_cv = cross_val_score(forest, earnings_features, earnings_target, cv=5, scoring='r2')
-
-print(f"Single deep tree:  CV R-sq = {deep_cv.mean():.3f} (std = {deep_cv.std():.3f})")
-print(f"Random forest:     CV R-sq = {forest_cv.mean():.3f} (std = {forest_cv.std():.3f})")
-print(f"\nAveraging 100 overfit trees produces a model that generalizes well.")
-print(f"You saw this result in Lecture 7. Now you know the mechanism:")
-print(f"bootstrap samples + feature subsets decorrelate the trees,")
-print(f"so averaging reduces variance without increasing bias.")
 ```
 
 ```{python}
@@ -532,21 +454,6 @@ print("would account for game context. But the point is that controlling for")
 print("player identity reverses the naive finding.")
 ```
 
-```{python}
-# Side-by-side: LLM analysis vs. course-trained analysis
-print("=" * 60)
-print("LLM analysis vs. course-trained analysis")
-print("=" * 60)
-print()
-print(f"{'Finding':<30} {'LLM says...':<20} {'You know...'}")
-print("-" * 75)
-print(f"{'Rest effect on scoring':<30} {'Rest hurts!':<20} {'Confounded by player quality'}")
-print(f"{'Statistical test':<30} {'p < 0.05 !':<20} {'Independence violated'}")
-print(f"{'Comparison type':<30} {'Aggregate':<20} {'Within-player needed'}")
-print(f"{'Multiple testing':<30} {'(not checked)':<20} {'Most positives are false'}")
-print(f"{'Effect size':<30} {'(not reported)':<20} {'Near zero per player'}")
-```
-
 The LLM gave you a result in seconds. But it took 16 lectures of statistical training to know:
 
 1. The aggregate comparison is confounded — this is Simpson's paradox (Lecture 11), formalized causally in Lecture 18
@@ -613,18 +520,6 @@ Each step gives you a checkpoint. If the LLM silently drops 60% of the data in s
 ## Think About It
 You've probably used AI tools for homework this quarter. Think of a time the AI gave you something that looked right but wasn't — or a time you caught a mistake the AI missed. What course concept helped you catch it?
 :::
-
-## Reflecting on the course
-
-Over 17 lectures, you've built a statistical toolkit. Here are the big themes:
-
-- **Lectures 1–5 (EDA and regression):** You can spot when data is missing, biased, or misrepresented — whether by a human or an AI.
-- **Lectures 6–7 (Features, trees, and validation):** You can engineer features, use trees and forests, and evaluate whether a model's predictions generalize.
-- **Lectures 8–12 (Inference and diagnostics):** You understand what p-values mean, why multiple testing matters, and how to check a model's assumptions.
-- **Lectures 13, 18-19 (Classification and causation):** You won't confuse correlation with causation — the most common error in AI-generated analyses.
-- **Lectures 15–17 (Modern tools):** You can use time series, tree-based models in depth, and AI tools critically and effectively.
-
-You now have the vocabulary to be a sophisticated consumer — and critic — of data analysis, whether it's done by a human, an algorithm, or an AI.
 
 ## Key takeaways
 

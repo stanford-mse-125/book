@@ -262,29 +262,6 @@ Neither plot gives a definitive answer. The "elbow" is gradual — there's no sh
 
 These heuristics won't give you a magic number, but they can rule out bad choices. If the silhouette score is terrible at k=10, don't use 10 clusters. Think of them as sanity checks, not oracles.
 
-Let's look at the per-point silhouette values for k=3 to see which listings are well-clustered and which are on the boundary.
-
-```{python}
-# Per-point silhouette plot for k=3
-sil_vals = silhouette_samples(X_scaled, listings['cluster_k3'])
-fig, ax = plt.subplots(figsize=(8, 5))
-y_lower = 0
-for c in range(3):
-    cluster_sils = np.sort(sil_vals[listings['cluster_k3'] == c])
-    ax.barh(range(y_lower, y_lower + len(cluster_sils)),
-            cluster_sils, height=1.0, alpha=0.7, label=f'Cluster {c}')
-    y_lower += len(cluster_sils)
-ax.set_xlabel('Silhouette Value')
-ax.set_ylabel('Listings (sorted within cluster)')
-ax.set_title('Per-Point Silhouette Plot (k=3)')
-ax.axvline(x=0, color='black', linestyle='-', linewidth=0.5)
-ax.legend()
-plt.tight_layout()
-plt.show()
-```
-
-Each horizontal bar is one listing. Wide bars (high silhouette values) mean the listing sits comfortably inside its cluster. Short or negative bars mean the listing is ambiguous — it's nearly equidistant between two clusters.
-
 But there's an even bigger issue than choosing k. The clusters you get depend on which features you include — and that choice can completely change the story.
 
 ## Geography dominates (unless you remove it)
@@ -344,17 +321,6 @@ plt.show()
 If you include latitude and longitude (even standardized), they often dominate — spatial separation is strong and clean. Remove them, and you discover listing-type structure instead.
 :::
 
-:::{.callout-important}
-## Distance metrics beyond Euclidean
-K-means uses **Euclidean distance** (L2) by default, but the choice of distance metric shapes what "close" means — and therefore what clusters the algorithm finds.
-
-- **Manhattan distance** (L1): the sum of absolute differences along each axis. Each feature contributes independently rather than blending through squares, which can be more appropriate when features represent genuinely different quantities.
-- **Cosine similarity**: measures the angle between two vectors, ignoring their magnitude. Text analysis and recommendation systems use cosine similarity whenever the *direction* of a profile matters more than its *size*.
-
-**Concrete example.** Consider two Airbnb listings with proportionally similar profiles — a budget listing ($100/night, 1 bedroom, 50 reviews) and a scaled-up version ($200/night, 2 bedrooms, 100 reviews). Euclidean distance sees these as far apart; every feature value has doubled. Cosine similarity sees them as nearly identical, since the vectors point in the same direction. A host deciding whether these two listings compete would get different answers depending on the metric.
-
-Standard k-means only supports Euclidean distance (the mean minimizes squared Euclidean error). To use other metrics, you'd need a variant like **k-medoids**, which replaces the mean with the most central observed point and works with any distance function.
-:::
 
 ```{python}
 # Visualize market segments: price vs accommodates

@@ -31,6 +31,7 @@ confidence intervals. This lecture combines both toolkits: we apply inference to
 regression coefficients and check whether the model's assumptions justify that inference.
 :::
 
+
 The central question: **is each predictor in our model useful, or could we
 drop it without loss?** Parsimony matters -- the best model is the simplest one that
 adequately fits the data (an idea sometimes called *Occam's razor*).
@@ -413,14 +414,6 @@ print("in this dataset — a genuine finding, not an artifact of omitted variabl
 print("Sometimes the data simply do not support the hypothesis we hoped for.")
 ```
 
-:::{.callout-note}
-## Why diagnostics come after inference
-We presented the regression results and inference first, then check assumptions below.
-The pedagogical logic is deliberate: show the exciting results first, then check whether
-you should trust them. In practice, you should run diagnostics early and often -- but
-in a lecture, the punchline motivates the careful checking that follows.
-:::
-
 ## Regression diagnostics: checking the model's assumptions
 
 The t-tests and confidence intervals above assume residuals are
@@ -436,71 +429,7 @@ The assumptions for regression inference are remembered by the **LINE** mnemonic
 - **E**qual variance: the spread of residuals is roughly constant across fitted values (no heteroscedasticity).
 :::
 
-### What LINE looks like: satisfied vs. violated
-
-Before examining our NBA residuals, it helps to see what each LINE condition looks like
-when it holds and when it fails. The following synthetic examples illustrate four
-diagnostic scenarios in a single panel.
-
-```{python}
-# Synthetic examples: LINE satisfied vs. violated
-np.random.seed(0)
-n_syn = 300
-
-fig, axes = plt.subplots(2, 2, figsize=(10, 8))
-
-# (a) Good residuals — LINE satisfied
-x_good = np.random.uniform(0, 10, n_syn)
-y_good = 2 + 1.5 * x_good + np.random.normal(0, 2, n_syn)
-fit_good = np.polyval(np.polyfit(x_good, y_good, 1), x_good)
-resid_good = y_good - fit_good
-axes[0, 0].scatter(fit_good, resid_good, alpha=0.4, s=12, color='steelblue')
-axes[0, 0].axhline(0, color='red', linestyle='--', linewidth=1)
-axes[0, 0].set_title('(a) LINE Satisfied\nRandom scatter, constant spread')
-axes[0, 0].set_xlabel('Fitted values')
-axes[0, 0].set_ylabel('Residuals')
-
-# (b) Non-linearity — curved pattern
-x_nl = np.random.uniform(0, 10, n_syn)
-y_nl = 2 + 0.5 * x_nl**2 + np.random.normal(0, 3, n_syn)
-fit_nl = np.polyval(np.polyfit(x_nl, y_nl, 1), x_nl)
-resid_nl = y_nl - fit_nl
-axes[0, 1].scatter(fit_nl, resid_nl, alpha=0.4, s=12, color='#e74c3c')
-axes[0, 1].axhline(0, color='red', linestyle='--', linewidth=1)
-axes[0, 1].set_title('(b) Non-linearity\nCurved pattern in residuals')
-axes[0, 1].set_xlabel('Fitted values')
-axes[0, 1].set_ylabel('Residuals')
-
-# (c) Heteroscedasticity — funnel shape
-x_het = np.random.uniform(0, 10, n_syn)
-y_het = 2 + 1.5 * x_het + np.random.normal(0, 1, n_syn) * x_het
-fit_het = np.polyval(np.polyfit(x_het, y_het, 1), x_het)
-resid_het = y_het - fit_het
-axes[1, 0].scatter(fit_het, resid_het, alpha=0.4, s=12, color='#e67e22')
-axes[1, 0].axhline(0, color='red', linestyle='--', linewidth=1)
-axes[1, 0].set_title('(c) Heteroscedasticity\nFunnel-shaped spread')
-axes[1, 0].set_xlabel('Fitted values')
-axes[1, 0].set_ylabel('Residuals')
-
-# (d) Non-normality — heavy tails in Q-Q plot
-resid_heavy = np.random.standard_t(df=3, size=n_syn) * 2
-theoretical_q = np.sort(np.random.normal(0, 1, n_syn))
-sample_q = np.sort((resid_heavy - resid_heavy.mean()) / resid_heavy.std())
-axes[1, 1].scatter(theoretical_q, sample_q, alpha=0.4, s=12, color='#9b59b6')
-lims = [min(theoretical_q.min(), sample_q.min()), max(theoretical_q.max(), sample_q.max())]
-axes[1, 1].plot(lims, lims, 'r--', linewidth=1)
-axes[1, 1].set_title('(d) Non-normality\nHeavy tails in Q-Q plot')
-axes[1, 1].set_xlabel('Theoretical quantiles')
-axes[1, 1].set_ylabel('Sample quantiles')
-
-plt.tight_layout()
-plt.show()
-
-print("(a) No pattern, constant spread — LINE conditions hold.")
-print("(b) Curvature signals a missing nonlinear term (L violated).")
-print("(c) Spread that fans out signals heteroscedasticity (E violated).")
-print("(d) Points deviating from the diagonal in the tails signal non-normality (N violated).")
-```
+Each LINE condition has a characteristic diagnostic signature. As a homework exercise, you'll generate synthetic data that violates each assumption and create the corresponding diagnostic plots.
 
 ### Residual plot: do residuals have constant spread?
 
@@ -767,35 +696,6 @@ print(f"Interpretation: controlling for bedrooms and borough, each additional ba
 print(f"is associated with ${beta_bath:.2f} more per night.")
 print()
 print("This IS practically meaningful -- unlike the NBA rest effect!")
-```
-
-## Bonus: interaction terms -- does the bathroom premium vary by borough?
-
-Perhaps an extra bathroom matters more in Manhattan than in the Bronx. We can test this
-with an **interaction term** (recall these from Lecture 6).
-
-```{python}
-# Model with interaction: bathrooms x borough
-airbnb_interact = smf.ols(
-    'price_clean ~ bathrooms * C(neighbourhood_group_cleansed) + bedrooms',
-    data=airbnb_clean
-).fit()
-
-# Extract bathroom effects by borough (main effect + interaction)
-boroughs = sorted(airbnb_clean['neighbourhood_group_cleansed'].unique())
-base_borough = boroughs[0]
-base_effect = airbnb_interact.params['bathrooms']
-
-print("Bathroom premium by borough:")
-print("=" * 50)
-print(f"  {base_borough} (baseline): ${base_effect:.2f}/night per bathroom")
-for b in boroughs[1:]:
-    key = f'bathrooms:C(neighbourhood_group_cleansed)[T.{b}]'
-    if key in airbnb_interact.params:
-        interaction = airbnb_interact.params[key]
-        total = base_effect + interaction
-        p_int = airbnb_interact.pvalues[key]
-        print(f"  {b}: ${total:.2f}/night per bathroom (interaction p = {format_pvalue(p_int)})")
 ```
 
 ## Prediction intervals vs. confidence intervals

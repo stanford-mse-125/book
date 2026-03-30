@@ -109,7 +109,7 @@ Key columns for analysis:
 
 ### 1. Simpson's Paradox (Confounding)
 
-**The core trap**: Hospitals treating sicker patients (higher Expected Readmission Rate) naturally have higher raw readmission counts. Ranking hospitals by raw readmission rate would penalize academic medical centers and safety-net hospitals.
+**The core trap**: Hospitals treating sicker patients (higher Expected Readmission Rate) naturally have higher raw readmission counts. A naive analyst ranking hospitals by raw readmission rate would penalize academic medical centers and safety-net hospitals.
 
 CMS addresses this with the **Excess Readmission Ratio** = Predicted / Expected. But:
 - The adjustment may be incomplete (residual confounding from unmeasured SES factors)
@@ -119,11 +119,11 @@ CMS addresses this with the **Excess Readmission Ratio** = Predicted / Expected.
 
 ### 2. Data Leakage
 
-A naive analysis predicting readmission performance would likely include `Expected Readmission Rate` as a feature — but this is mathematically part of the target variable (`Excess Readmission Ratio = Predicted / Expected`). This is textbook data leakage.
+A naive analyst asked to "predict readmission performance" would likely include `Expected Readmission Rate` as a feature — but this is mathematically part of the target variable (`Excess Readmission Ratio = Predicted / Expected`). This is textbook data leakage.
 
 ### 3. Missing Not At Random (MNAR)
 
-The "Too Few to Report" entries are not randomly missing. They are systematically small/rural hospitals with low case volumes. Dropping them biases the analysis toward large urban hospitals.
+The "Too Few to Report" entries are not randomly missing. They are systematically small/rural hospitals with low case volumes. Dropping them (which a naive analysis would do) biases the analysis toward large urban hospitals.
 
 ### 4. Unit of Analysis Confusion
 

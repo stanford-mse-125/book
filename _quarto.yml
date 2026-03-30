@@ -33,6 +33,9 @@ book:
         - lec17-automl-llms.qmd
         - lec18-causal-inference-1.qmd
         - lec19-causal-inference-2.qmd
+    - part: "Appendices"
+      chapters:
+        - appendix-probability.qmd
 
 filters:
   - _notebook-links.lua
@@ -51,6 +54,8 @@ format:
     mainfont: "system-ui, -apple-system, sans-serif"
     include-after-body:
       - code-tools-fix.html
+
+jupyter: python3
 
 execute:
   freeze: auto

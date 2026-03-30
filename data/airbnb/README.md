@@ -78,19 +78,19 @@ Price has a heavy right tail (up to $999/night) and 25 listings at $0. A naive O
 About 25% of listings have zero reviews and therefore have NaN for all `review_scores_*` columns. Dropping rows with any NaN silently removes all new/unreviewed listings, biasing the sample toward established listings. `weekly_price` (87% missing) and `monthly_price` (99% missing) should not be imputed from `price` because real weekly/monthly discounts vary.
 
 ### 3. Spatial Confounding
-Latitude and longitude are numeric and will be happily consumed by any regression or PCA. But the relationship between location and price is highly nonlinear: Manhattan listings cost 2--3x more than outer-borough listings at similar distances. A linear function of lat/lon cannot capture borough boundaries, subway proximity, or neighborhood desirability. A naive model will include lat/lon as features without noting this.
+Latitude and longitude are numeric and will be happily consumed by any regression or PCA. But the relationship between location and price is highly nonlinear: Manhattan listings cost 2--3x more than outer-borough listings at similar distances. A linear function of lat/lon cannot capture borough boundaries, subway proximity, or neighborhood desirability. A naive analysis will include lat/lon as features without noting this.
 
 ### 4. Multicollinearity Among Review Scores
 The six `review_scores_*` sub-scores are all correlated > 0.6 with each other and with the overall `review_scores_rating`. Including all of them as features inflates coefficient variance and makes individual coefficients uninterpretable.
 
-### 5. Confident Garbage
-A naive analysis that fits OLS, reports R^2, prints coefficients, and declares success will miss that the residual plot shows severe heteroscedasticity (variance increases with predicted price), that the model is misspecified (categorical variables like room_type and neighbourhood are omitted), and that the coefficients are unreliable due to multicollinearity.
+### 5. Naive analysis fits confident garbage
+A naive analyst asked to "build a regression model" will: fit OLS, report R^2, print coefficients, and declare success. They will not mention that the residual plot shows severe heteroscedasticity (variance increases with predicted price), that the model is misspecified (categorical variables like room_type and neighbourhood are omitted), or that the coefficients are unreliable due to multicollinearity.
 
 ### 6. PCA Mixes Geography With Amenities
 PCA on numeric features blends lat/lon with accommodates/bedrooms/price into single components. The first PC explains only 26% of variance, and 9 components are needed for 90%. The mixed components are uninterpretable -- what does "0.3*latitude + 0.4*bedrooms" mean?
 
 ### 7. K-Means Rediscovers Boroughs
-K-Means clustering on features including lat/lon is dominated by spatial separation. Clusters largely correspond to Manhattan vs Brooklyn vs Queens -- information already available in the `neighbourhood_group_cleansed` column. A naive analysis will present these clusters as novel insights.
+K-Means clustering on features including lat/lon is dominated by spatial separation. Clusters largely correspond to Manhattan vs Brooklyn vs Queens -- information already available in the `neighbourhood_group_cleansed` column. A naive analyst will present these clusters as novel insights.
 
 ## Suggested Uses by Lecture
 

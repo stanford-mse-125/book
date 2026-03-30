@@ -376,41 +376,6 @@ Room types show some separation along PC2 (the size/luxury axis): entire homes t
 
 Boroughs show less separation in these first two PCs. Geography isn't the dominant source of variance in the standardized data — review patterns and listing size matter more.
 
-## Standardization changes everything
-
-Let's put the two PCA results side by side.
-
-```{python}
-# Side by side comparison: loadings of PC1
-fig, axes = plt.subplots(1, 2, figsize=(11, 5))
-
-# Unstandardized PC1
-loadings_raw_pc1 = pd.Series(pca_raw.components_[0], index=numeric_cols)
-loadings_raw_pc1.sort_values().plot.barh(ax=axes[0], color='coral')
-pct_raw = pca_raw.explained_variance_ratio_[0]*100
-axes[0].set_title(f'PC1 — WITHOUT Standardization\n({pct_raw:.1f}% var)')
-axes[0].set_xlabel('Loading')
-axes[0].axvline(x=0, color='black', linewidth=0.5)
-
-# Standardized PC1
-loadings_std_pc1 = pd.Series(pca.components_[0], index=numeric_cols)
-loadings_std_pc1.sort_values().plot.barh(ax=axes[1], color='steelblue')
-pct_std = pca.explained_variance_ratio_[0]*100
-axes[1].set_title(f'PC1 — WITH Standardization\n({pct_std:.1f}% var)')
-axes[1].set_xlabel('Loading')
-axes[1].axvline(x=0, color='black', linewidth=0.5)
-
-plt.tight_layout()
-plt.show()
-```
-
-**Completely different!** Without standardization, PC1 is dominated by `maximum_nights` and `availability_365` — those columns simply have the biggest numbers. With standardization, PC1 captures the review quality pattern we identified earlier.
-
-:::{.callout-warning}
-## Always standardize before PCA
-This mistake is one of the most common PCA errors in practice. Always check whether your data has been standardized. Standardize before PCA unless you have a specific reason not to (e.g., all features are already on the same scale).
-:::
-
 ## PCA vs. feature selection
 
 :::{.callout-tip}

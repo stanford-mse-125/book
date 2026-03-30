@@ -69,7 +69,7 @@ The Framingham Heart Study is one of the most important longitudinal epidemiolog
 
 1. **Correlated risk factors**: sysBP and diaBP are correlated at r=0.78. BMI, blood pressure, and cholesterol cluster together. A naive model double-counts these overlapping signals. Students should think about multicollinearity.
 
-2. **Confounding by SES**: Education (a proxy for socioeconomic status) is negatively correlated with sysBP (-0.13) and BMI (-0.14). Risk factors are not independent of social context. A naive model ignores this causal structure and may produce misleading feature importances.
+2. **Confounding by SES**: Education (a proxy for socioeconomic status) is negatively correlated with sysBP (-0.13) and BMI (-0.14). Risk factors are not independent of social context. A naive analysis ignores this causal structure and may produce misleading feature importances.
 
 3. **Class imbalance**: With only 15.2% positive rate, accuracy is misleading (a "predict all negative" model gets 85%). Students need to use AUC, precision/recall, or resampling.
 

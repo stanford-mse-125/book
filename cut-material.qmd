@@ -1,0 +1,1257 @@
+---
+title: "Cut Material — Staging Area"
+subtitle: "Removed from book for tightness. Tagged for homework, exam, or archive use."
+format: html
+execute:
+  eval: false
+---
+
+## [1A] Lecture 1: The $2 billion question
+
+**Source:** lec01-intro.qmd, lines 298-315 | **Tag:** EXAM
+**Reuse:** Describe the logic of hypothesis testing in 3 steps
+
+## The \$2 billion question
+
+The third scenario we opened with — does this drug work? — is perhaps the highest-stakes application of statistics.
+
+In a clinical trial, you randomly assign patients to get the drug or a placebo. You measure outcomes. Then you ask: is the difference between the groups real, or could it be due to chance?
+
+This question is the domain of **hypothesis testing**, which we'll spend several weeks on in Act 2. The logic in brief:
+
+1. Assume the drug does nothing (the "null hypothesis")
+2. Ask: if the drug does nothing, how likely is it that we'd see a difference this large?
+3. If the answer is "very unlikely" — below a threshold we set in advance, called the **significance level** — we reject the null hypothesis
+
+We won't analyze clinical trial data today. But notice: the same logic applies whether you're testing a drug, comparing hospitals, or checking if an Airbnb price is unusual. The framework is universal — the context changes everything.
+
+:::{.callout-tip}
+## Think About It
+In the hospital example, what would the null hypothesis be? (Hint: "This hospital's readmission rate is no different from expected.")
+:::
+
+
+## [1B] Lecture 1: What you'll be able to do by the end
+
+**Source:** lec01-intro.qmd, lines 317-327 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+## What you'll be able to do by the end
+
+By the end of MSE 125, you'll be able to:
+
+1. **Explore** a dataset and identify problems before they ruin your analysis
+2. **Model** relationships in data using regression and classification
+3. **Quantify uncertainty** — not just give a number, but say how confident you are
+4. **Reason about causation** — not just correlation. Two variables can be strongly associated without one causing the other; distinguishing association from causation is one of the central challenges of data science.
+5. **Critically evaluate** statistical claims — whether they come from a news article, a colleague, or an AI tool
+
+Any analysis can be misleading: the data may be biased, the model may be wrong, or the conclusions may not follow from the evidence. By the end of this course, you'll have the tools to tell the difference.
+
+
+## [1C] Lecture 1: Coming up next
+
+**Source:** lec01-intro.qmd, lines 329-335 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+## Coming up next
+
+In **Lecture 2**, we'll do exploratory data analysis (EDA) on the hospital and Airbnb datasets — distributions, missing data, and outliers.
+
+In **Lecture 3**, we'll tackle data munging and put an AI assistant to the test on real data.
+
+And in the final weeks of the course, we'll return to this hospital data and ask a harder question: does a hospital's readmission rate *cause* its penalty, or is something else going on?
+
+
+## [5A] Lecture 5: Worked example — normal equations by hand
+
+**Source:** lec05-regression.qmd, lines 229-271 | **Tag:** HW
+**Reuse:** Compute the normal equations by hand for this 4-point dataset
+
+### Worked example: normal equations by hand
+
+To build intuition for the normal equations, let's work through a tiny example — four listings, one feature — and verify every step against sklearn.
+
+```{python}
+# Four fictitious listings: bedrooms → price
+bedrooms_ex = np.array([1, 2, 3, 4])
+prices_ex = np.array([80, 120, 160, 220])
+
+# Build the design matrix (intercept + bedrooms)
+X_ex = np.column_stack([np.ones(4), bedrooms_ex])
+print("X =")
+print(X_ex)
+print()
+print("prices =", prices_ex)
+```
+
+```{python}
+# Step 1: compute X^T X and X^T y
+XtX = X_ex.T @ X_ex
+Xty = X_ex.T @ prices_ex
+
+print("X^T X =")
+print(XtX)
+print()
+print("X^T y =", Xty)
+```
+
+```{python}
+# Step 2: solve X^T X beta = X^T y
+beta_ex = np.linalg.solve(XtX, Xty)
+print(f"beta = [{beta_ex[0]:.1f}, {beta_ex[1]:.1f}]")
+print(f"Interpretation: predicted price = {beta_ex[0]:.1f} + {beta_ex[1]:.1f} × bedrooms")
+print()
+
+# Step 3: verify against sklearn
+from sklearn.linear_model import LinearRegression
+model_ex = LinearRegression().fit(bedrooms_ex.reshape(-1, 1), prices_ex)
+print(f"sklearn intercept = {model_ex.intercept_:.1f}, slope = {model_ex.coef_[0]:.1f}")
+print("The normal equations and sklearn agree.")
+```
+
+The steps are always the same: form $X^TX$ and $X^Ty$, then solve the linear system. On the Airbnb dataset with thousands of listings, sklearn performs these same matrix operations internally.
+
+
+## [5B] Lecture 5: Seeing projection in 3D
+
+**Source:** lec05-regression.qmd, lines 273-325 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+## Seeing projection in 3D
+
+Let's make the geometry concrete with 3 data points and 1 feature. The true $y$ is a vector in $\mathbb{R}^3$. The column space of $X$ is a plane in $\mathbb{R}^3$. The prediction $\hat{y}$ is the shadow of $y$ onto that plane.
+
+```{python}
+# Visualization code — focus on the output, not the plotting details.
+# 3D projection: col(X) is a plane in R^3. ŷ is the shadow of y onto that plane.
+
+y_3 = np.array([3, 5, 4])
+X_3 = np.array([[1, 1], [1, 2], [1, 3]])  # intercept + feature
+
+beta_3 = np.linalg.solve(X_3.T @ X_3, X_3.T @ y_3)
+yhat_3 = X_3 @ beta_3
+e_3 = y_3 - yhat_3
+
+fig = plt.figure(figsize=(8, 7))
+ax = fig.add_subplot(111, projection='3d')
+
+# Draw the column space plane
+s = np.linspace(-1, 2, 10)
+t = np.linspace(-1, 2, 10)
+S, T = np.meshgrid(s, t)
+plane_x = S * X_3[0, 0] + T * X_3[0, 1]
+plane_y = S * X_3[1, 0] + T * X_3[1, 1]
+plane_z = S * X_3[2, 0] + T * X_3[2, 1]
+ax.plot_surface(plane_x, plane_y, plane_z, alpha=0.15, color='blue')
+
+# y
+ax.scatter(*y_3, color='red', s=100, zorder=5)
+ax.text(y_3[0], y_3[1], y_3[2]+0.2, '$y$', fontsize=14, color='red')
+
+# ŷ
+ax.scatter(*yhat_3, color='blue', s=100, zorder=5)
+ax.text(yhat_3[0], yhat_3[1], yhat_3[2]-0.3, '$\hat{y}$', fontsize=14, color='blue')
+
+# Residual line
+ax.plot([yhat_3[0], y_3[0]], [yhat_3[1], y_3[1]], [yhat_3[2], y_3[2]],
+        'g--', lw=2)
+ax.text((y_3[0]+yhat_3[0])/2 + 0.2, (y_3[1]+yhat_3[1])/2,
+        (y_3[2]+yhat_3[2])/2, '$e$', fontsize=14, color='green')
+
+ax.set_xlabel('$y_1$')
+ax.set_ylabel('$y_2$')
+ax.set_zlabel('$y_3$')
+ax.set_title('Projection: $\hat{y}$ is the closest point\nin col($X$) to $y$')
+plt.tight_layout()
+plt.show()
+
+print(f"y    = {y_3}")
+print(f"ŷ    = [{', '.join(f'{v:.2f}' for v in yhat_3)}]")
+print(f"e    = [{', '.join(f'{v:.2f}' for v in e_3)}]")
+print(f"||e|| = {np.linalg.norm(e_3):.3f}")
+```
+
+
+## [5C] Lecture 5: Connection to maximum likelihood
+
+**Source:** lec05-regression.qmd, lines 188-192 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+:::{.callout-note}
+## Connection to maximum likelihood
+When the errors are normally distributed, least squares and maximum likelihood estimation (MLE) produce identical coefficient estimates. MLE chooses the parameters that make the observed data most probable — a principle that extends to logistic regression ([Lecture 13](lec13-classification.qmd)) and many other models. The equivalence breaks down when errors are non-normal, which is one reason diagnostics matter (later in this lecture).
+:::
+
+
+## [7A] Lecture 7: A dramatic demonstration
+
+**Source:** lec07-trees-validation.qmd, lines 188-257 | **Tag:** HW
+**Reuse:** Using a smaller sample (n=500), increase polynomial degree from 1 to 7. At what degree does test R^2 go negative? Why?
+
+### A dramatic demonstration
+
+Let's drive the point home with a more extreme example. We'll use a smaller sample (500 listings) and increase the polynomial degree from 1 to 7. With a small sample and many features, the overfitting is dramatic.
+
+```{python}
+np.random.seed(42)
+
+# Smaller sample — overfitting is more dramatic with less data
+df_small = df.sample(500, random_state=42).reset_index(drop=True)
+y_small = df_small['price']
+train_i, test_i = train_test_split(range(len(df_small)), test_size=0.4, random_state=42)
+
+# Base features: numeric + dummies
+base_cat = pd.get_dummies(df_small[['room_type', 'borough']], drop_first=True)
+X_base_small = pd.concat([df_small[['bedrooms', 'bathrooms']], base_cat], axis=1)
+
+degrees = [1, 2, 3, 4, 5, 6, 7]
+train_scores_poly = []
+test_scores_poly = []
+n_feat_poly = []
+
+for deg in degrees:
+    poly = PolynomialFeatures(degree=deg, include_bias=False)
+    X_poly = pd.DataFrame(poly.fit_transform(X_base_small))
+    n_feat_poly.append(X_poly.shape[1])
+
+    X_tr = X_poly.iloc[train_i]
+    X_te = X_poly.iloc[test_i]
+    y_tr = y_small.iloc[train_i]
+    y_te = y_small.iloc[test_i]
+
+    m = LinearRegression().fit(X_tr, y_tr)
+    train_scores_poly.append(m.score(X_tr, y_tr))
+    test_r2 = r2_score(y_te, m.predict(X_te))
+    test_scores_poly.append(test_r2)
+
+    print(f"Degree {deg}: {X_poly.shape[1]:5d} features | "
+          f"Train R² = {train_scores_poly[-1]:.3f} | Test R² = {test_r2:.3f}")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 6))
+
+ax.plot(degrees, train_scores_poly, 'o-', color='steelblue', linewidth=2.5, markersize=10,
+        label='Training R²', zorder=3)
+ax.plot(degrees, test_scores_poly, 's-', color='orangered', linewidth=2.5, markersize=10,
+        label='Test R²', zorder=3)
+
+# Shade the overfitting region
+best_test_idx = np.argmax(test_scores_poly)
+if best_test_idx < len(degrees) - 1:
+    ax.axvspan(degrees[best_test_idx] + 0.5, degrees[-1] + 0.5, alpha=0.1, color='red',
+               label='Overfitting zone')
+
+ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+ax.set_xlabel('Polynomial degree')
+ax.set_ylabel('R²')
+ax.set_title('Training R² approaches 1. Test R² goes NEGATIVE.\nMore features ≠ better predictions.')
+ax.legend(fontsize=11)
+ax.set_xticks(degrees)
+ax.set_xticklabels([f'Degree {d}\n({n} feat)' for d, n in zip(degrees, n_feat_poly)],
+                   fontsize=8)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+The training $R^2$ approaches 1 — the model nearly perfectly memorizes the training data. Meanwhile, the test $R^2$ plummets, eventually going *negative*.
+
+Wait — can $R^2$ be negative? Yes, on test data. On training data, $R^2$ is always between 0 and 1. On test data, no such guarantee holds. Recall that $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$. When a model's predictions on new data are worse than simply predicting the mean every time, the residual sum of squares exceeds the total sum of squares, and $R^2$ drops below zero. A negative test $R^2$ signals catastrophic overfitting: the model has memorized training noise so thoroughly that it actively harms predictions.
+
+
+## [7B] Lecture 7: Beyond the U-shape — double descent
+
+**Source:** lec07-trees-validation.qmd, lines 591-611 | **Tag:** EXAM
+**Reuse:** Describe the double descent phenomenon. Why doesn't it contradict bias-variance? (bonus question)
+
+## Beyond the U-shape: double descent
+
+The classical bias-variance picture predicts a clean U-shape: test error decreases, hits a sweet spot, then increases as model complexity grows. For decades, the prescription was clear — stop before the curve turns upward. But recent empirical work has revealed that the U-shape is not the end of the story.
+
+If you keep increasing model complexity *far* past the point where the model perfectly interpolates the training data, test error can start *decreasing again*. The test-error curve traces not a U but an "M" — or more precisely, a double descent. The first descent is the classical regime. The peak occurs near the **interpolation threshold**, where the number of parameters roughly equals the number of training observations and the model barely has enough capacity to memorize the data. Beyond the threshold, in the **overparameterized regime**, test error drops a second time. Belkin et al. (2019) documented the phenomenon; Hastie et al. (2022) provided theoretical analysis for linear models.
+
+Why does the second descent happen? In the overparameterized regime, there are many models that perfectly fit the training data. The learning algorithm (gradient descent, minimum-norm solution) implicitly selects among these interpolating models, and the one it finds tends to be "smooth" — it generalizes well. Averaging, as in bagging and random forests, amplifies the effect: each overfit tree interpolates its bootstrap sample, but their average cancels the idiosyncratic noise, much as we saw in the tree-averaging demo above.
+
+The double-descent curve reframes how we think about modern machine learning. Large language models and deep neural networks operate firmly in the overparameterized regime — GPT-class models have billions of parameters, far exceeding the number of training examples by some measures. The classical U-shape would predict catastrophic overfitting. Instead, these models generalize remarkably well. Understanding which regime your model occupies — left of the interpolation threshold (where regularization helps) or right of it (where more capacity helps) — is essential for making sound modeling decisions.
+
+:::{.callout-note}
+## Double Descent — Conceptual Picture
+Imagine a plot with "model complexity (number of parameters)" on the horizontal axis and "test error" on the vertical axis. From left to right: test error first falls (underfitting resolves), then rises to a sharp peak at the interpolation threshold (where parameters $\approx$ observations), then falls again in the overparameterized regime. The classical U-shape captures only the left half of the picture. The full curve has two descents separated by the interpolation peak.
+
+*Key references: Belkin, M. et al. (2019), "Reconciling modern machine-learning practice and the classical bias-variance trade-off," PNAS; Hastie, T. et al. (2022), "Surprises in High-Dimensional Ridgeless Least Squares Interpolation," Annals of Statistics.*
+:::
+
+:::{.callout-tip}
+## Think About It
+When you train a random forest with very deep trees (no max depth), each tree interpolates its bootstrap sample. Where does the ensemble sit on the double-descent curve? How does averaging move the effective test error?
+:::
+
+
+## [7C] Lecture 7: When R^2 is low — hospital data
+
+**Source:** lec07-trees-validation.qmd, lines 614-673 | **Tag:** HW
+**Reuse:** Fit models to predict hospital readmission rates. Why is R^2 low regardless of features?
+
+## When R² is low — hospital data
+
+We've seen $R^2$ go up and down with model complexity. But what if $R^2$ is low no matter what you do? Does that mean you're doing something wrong, or that the problem is genuinely hard? Let's find out with a different dataset.
+
+```{python}
+hosp = pd.read_csv(f'{DATA_DIR}/hospital-readmissions/hrrp_with_hospital_info.csv')
+
+# Aggregate to hospital level: mean readmission rate and characteristics
+hosp_agg = hosp.groupby('Facility ID').agg({
+    'Excess Readmission Ratio': 'mean',
+    'Number of Discharges': 'sum',
+    'Hospital overall rating': 'first',
+    'Hospital Type': 'first',
+    'Hospital Ownership': 'first',
+    'Emergency Services': 'first',
+    'State': 'first'
+}).dropna().reset_index()
+
+hosp_agg = hosp_agg.rename(columns={'Excess Readmission Ratio': 'readmission_ratio'})
+
+# Convert rating to numeric
+hosp_agg['Hospital overall rating'] = pd.to_numeric(
+    hosp_agg['Hospital overall rating'], errors='coerce')
+hosp_agg = hosp_agg.dropna(subset=['Hospital overall rating']).reset_index(drop=True)
+
+print(f"{len(hosp_agg)} hospitals")
+hosp_agg.head()
+```
+
+Three feature levels, evaluated with cross-validation:
+
+```{python}
+y_hosp = hosp_agg['readmission_ratio']
+
+# Level 1: just rating
+X_h1 = hosp_agg[['Hospital overall rating']].copy()
+
+# Level 2: + discharges (log scale — raw counts are highly skewed)
+X_h2 = X_h1.copy()
+X_h2['log_discharges'] = np.log1p(hosp_agg['Number of Discharges'])
+
+# Level 3: + hospital type and ownership dummies
+type_dum = pd.get_dummies(hosp_agg['Hospital Type'], drop_first=True, prefix='type')
+own_dum = pd.get_dummies(hosp_agg['Hospital Ownership'], drop_first=True, prefix='own')
+emerg = (hosp_agg['Emergency Services'] == 'Yes').astype(int)
+X_h3 = pd.concat([X_h2, type_dum, own_dum, pd.DataFrame({'emergency': emerg})], axis=1)
+
+print("Cross-validated R² at each feature level:\n")
+for name, X_h in [('Rating only', X_h1), ('+ log(discharges)', X_h2),
+                   ('+ type/ownership', X_h3)]:
+    scores = cross_val_score(LinearRegression(), X_h, y_hosp, cv=5, scoring='r2')
+    print(f"  {name:25s}: CV R² = {scores.mean():.4f} ± {scores.std():.4f}  ({X_h.shape[1]} features)")
+```
+
+Even with thoughtful feature engineering, hospital readmission rates are hard to predict from hospital-level characteristics alone. The $R^2$ is low across all levels.
+
+:::{.callout-tip}
+## Think About It
+Does a low $R^2$ mean the model is bad, or that the outcome is inherently hard to predict from the available features? Much of the variation in readmission rates likely comes from **patient-level** factors — age, comorbidities, social determinants of health — that hospital-level data simply doesn't capture. A model can only be as good as the information it receives.
+:::
+
+
+## [7D] Lecture 7: Von Neumann elephant quote
+
+**Source:** lec07-trees-validation.qmd, lines 284-289 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+:::{.callout-note}
+## Von Neumann's Warning
+"With four parameters I can fit an elephant, and with five I can make him wiggle his trunk." — John von Neumann
+
+Von Neumann's warning applies directly: a model with enough parameters can fit *anything*, including complete nonsense. The fact that a model fits the training data well tells you nothing about whether it captures genuine patterns.
+:::
+
+
+## [8A] Lecture 8: Three random samples of 50
+
+**Source:** lec08-sampling.qmd, lines 96-107 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+```{python}
+treatment_cd4 = treatment['cd4_change'].dropna().values
+
+# Take 3 random samples of 50 from the treatment group
+print("Three random samples of 50 patients from the treatment group:\n")
+for i in range(3):
+    sample = np.random.choice(treatment_cd4, size=50, replace=False)
+    print(f"  Sample {i+1}: mean CD4 change = {sample.mean():.1f}")
+
+print(f"\n  Full treatment group mean:    {treatment_cd4.mean():.1f}")
+```
+
+Three different samples, three different estimates. Sample-to-sample variation is a fundamental feature of statistical estimation, not a bug. The question that motivates the rest of this lecture: **how much do these estimates vary, and what can we say about that variation?**
+
+
+## [8B] Lecture 8: Bootstrap for regression coefficients
+
+**Source:** lec08-sampling.qmd, lines 465-529 | **Tag:** HW
+**Reuse:** Apply the bootstrap to estimate the SE of a regression coefficient. Compare to the formula SE.
+
+## Bootstrap for regression coefficients
+
+The bootstrap works for **any** statistic — including regression coefficients. Let's demonstrate with Airbnb data.
+
+```{python}
+# Load and clean Airbnb data (same pipeline as Lecture 6)
+cols = ['price', 'bedrooms', 'bathrooms', 'room_type', 'neighbourhood_group_cleansed']
+airbnb = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
+airbnb = airbnb.rename(columns={'neighbourhood_group_cleansed': 'borough'})
+airbnb['price'] = airbnb['price'].astype(str).str.replace('[$,]', '', regex=True).astype(float)
+airbnb = airbnb[(airbnb['price'] >= 10) & (airbnb['price'] <= 500)]
+
+# One-hot encode categorical features
+X = pd.get_dummies(airbnb[['bedrooms', 'bathrooms', 'room_type', 'borough']], drop_first=True).astype(float)
+y = airbnb['price'].values
+
+print(f"Working with {len(airbnb):,} listings, {X.shape[1]} features")
+print(f"Features: {list(X.columns)}")
+```
+
+```{python}
+# Fit once on the full data
+model = LinearRegression().fit(X, y)
+bedroom_idx = list(X.columns).index('bedrooms')
+observed_beta = model.coef_[bedroom_idx]
+print(f"Observed coefficient for bedrooms: ${observed_beta:.2f}")
+```
+
+```{python}
+# Bootstrap 1,000 times: resample rows, refit, collect beta_bedrooms
+B_reg = 1_000
+boot_betas = []
+
+for _ in range(B_reg):
+    idx = np.random.choice(len(X), size=len(X), replace=True)
+    X_boot = X.iloc[idx]
+    y_boot = y[idx]
+    m = LinearRegression().fit(X_boot, y_boot)
+    boot_betas.append(m.coef_[bedroom_idx])
+
+boot_betas = np.array(boot_betas)
+beta_ci_low, beta_ci_high = np.percentile(boot_betas, [2.5, 97.5])
+
+print(f"Bootstrap mean:  ${boot_betas.mean():.2f}")
+print(f"Bootstrap SD:    ${boot_betas.std():.2f}")
+print(f"95% Bootstrap CI: [${beta_ci_low:.2f}, ${beta_ci_high:.2f}]")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+
+ax.hist(boot_betas, bins=40, density=True, color='steelblue', alpha=0.7, edgecolor='white',
+        label='Bootstrap distribution')
+ax.axvline(observed_beta, color='red', lw=2, ls='--', label=f'Observed β = ${observed_beta:.2f}')
+ax.axvspan(beta_ci_low, beta_ci_high, alpha=0.15, color='steelblue',
+           label=f'95% CI: [${beta_ci_low:.2f}, ${beta_ci_high:.2f}]')
+
+ax.set_xlabel('Coefficient for Bedrooms ($)')
+ax.set_ylabel('Density')
+ax.set_title('Bootstrap Distribution of the Bedrooms Coefficient')
+ax.legend(fontsize=10)
+plt.tight_layout()
+plt.show()
+```
+
+The bootstrap distribution shows us the uncertainty in the bedrooms coefficient. We'll use this tool extensively in [Lecture 12](lec12-regression-inference.qmd) when we ask which regression coefficients are "real."
+
+
+## [10A] Lecture 10: Fisher vs. Neyman-Pearson and Bayesian preview callouts
+
+**Source:** lec10-hypothesis-testing.qmd, lines 179-188 | **Tag:** EXAM
+**Reuse:** Briefly describe the difference between Fisher's and Neyman-Pearson's views of hypothesis testing
+
+::: {.callout-note}
+## What does a hypothesis test *mean*? Fisher vs. Neyman-Pearson
+
+The framework we've just laid out — $H_0$, $H_1$, $\alpha$, Type I and Type II errors — is actually a blend of two competing philosophies that were never fully reconciled. Fisher saw the p-value as a *continuous measure of evidence against the null*: a small p-value means the data are surprising, and the scientist should use judgment about what to do next. Neyman and Pearson saw hypothesis testing as a *decision procedure*: fix $\alpha$ in advance, and then mechanically reject or fail to reject, optimizing long-run error rates. Fisher was furious at the Neyman-Pearson formulation — he thought reducing scientific inference to a binary decision was absurd. Neyman and Pearson thought Fisher's approach lacked rigor. The textbook version you learn today awkwardly combines both: we compute Fisher's p-value but make Neyman-Pearson's binary decision. Knowing this history helps explain why the framework can feel philosophically unsatisfying — it *is* a compromise. (See Salsburg, *The Lady Tasting Tea*, Ch. 6–7.)
+:::
+
+:::{.callout-note}
+## Preview: Bayesian inference
+The frequentist framework treats parameters as fixed and data as random. **Bayesian inference** inverts this: start with a **prior** belief about the parameter, observe data, and update to a **posterior** belief using Bayes' theorem. The posterior quantifies uncertainty directly — "there is a 95% probability the effect is between 2 and 8" — rather than the frequentist inversion ("if we repeated this experiment, 95% of intervals would contain the true value"). Both perspectives have merits; a more advanced course explores the tradeoffs.
+:::
+
+
+## [10B] Lecture 10: Chi-Squared Test — Testing Categorical Data
+
+**Source:** lec10-hypothesis-testing.qmd, lines 444-485 | **Tag:** HW
+**Reuse:** Use the chi-squared test to check whether treatment assignment in ACTG 175 was balanced across gender and race.
+
+## Chi-Squared Test: Testing Categorical Data
+
+So far, our tests have compared means of numerical data. But what if the data are categorical? For instance, was the treatment assignment in ACTG 175 balanced across demographic groups? If randomization were imbalanced, the FDA could reject the entire trial -- wasting years and hundreds of millions of dollars.
+
+The **chi-squared test** compares observed frequencies to expected frequencies:
+
+$$\chi^2 = \sum \frac{(\text{observed} - \text{expected})^2}{\text{expected}}$$
+
+```{python}
+# Is treatment assignment balanced across gender?
+contingency = pd.crosstab(df['gender'], df['treat'])
+contingency.index = ['Female', 'Male']
+contingency.columns = ['Control', 'Treatment']
+print("Treatment assignment by gender:")
+print(contingency)
+```
+
+```{python}
+chi2, p_chi, dof, expected = stats.chi2_contingency(contingency)
+print(f"\nChi-squared statistic: {chi2:.2f}")
+print(f"Degrees of freedom: {dof}")
+print(f"p-value: {p_chi:.4f}")
+print(f"\nAt alpha = 0.05: {'Reject H0' if p_chi < 0.05 else 'Fail to reject H0'}")
+print(f"Treatment assignment appears {'unbalanced' if p_chi < 0.05 else 'balanced'} across gender.")
+```
+
+```{python}
+# Test across race categories too
+contingency_race = pd.crosstab(df['race'], df['treat'])
+contingency_race.columns = ['Control', 'Treatment']
+chi2_r, p_r, dof_r, _ = stats.chi2_contingency(contingency_race)
+print("Treatment assignment by race:")
+print(contingency_race)
+print(f"\nChi-squared statistic: {chi2_r:.2f}, p-value: {p_r:.4f}")
+print(f"At alpha = 0.05: {'Reject H0' if p_r < 0.05 else 'Fail to reject H0'}")
+```
+
+The chi-squared test is the go-to tool for categorical data. Use it for:
+
+- **Goodness of fit:** Does the observed distribution match an expected one?
+- **Independence:** Are two categorical variables associated?
+
+
+## [10C] Lecture 10: Statistical Significance Is Not the Same as Importance
+
+**Source:** lec10-hypothesis-testing.qmd, lines 486-589 | **Tag:** HW (partial)
+**Reuse:** Simulate: at what sample size does a treatment effect of 0.5 CD4 cells become significant? Note: only the 2nd simulation and effect-size plot are being cut; the subsampling table and p-value vs n plot are being kept.
+
+## Statistical Significance Is Not the Same as Importance
+
+With ACTG175's large sample size, even tiny, clinically meaningless effects would be "statistically significant." Let's see this in action.
+
+::: {.callout-tip}
+## Think About It
+
+If we subsample to n = 50 per group, will the treatment still be significant? What about n = 25? Predict what happens before running the cell.
+:::
+
+```{python}
+# Subsample the data and test at each sample size
+np.random.seed(42)  # for reproducibility
+subsample_sizes = [50, 100, 200, 500, 1000, len(control)]
+
+print(f"{'n per group':>12}  {'Effect':>8}  {'p-value':>12}  {'Significant?':>14}")
+print("-" * 55)
+
+for n in subsample_sizes:
+    n_use = min(n, len(control), len(treatment))
+    sub_ctrl = control.sample(n_use, replace=False, random_state=42)
+    sub_trt = treatment.sample(n_use, replace=False, random_state=42)
+    effect = sub_trt.mean() - sub_ctrl.mean()
+    _, p = stats.ttest_ind(sub_trt, sub_ctrl, equal_var=False)
+    sig = "Yes" if p < 0.05 else "No"
+    print(f"{n_use:>12}  {effect:>8.1f}  {p:>12.4f}  {sig:>14}")
+```
+
+The same underlying effect can be "significant" or "not significant" depending on sample size. The p-value is a function of **both** the effect size and the sample size.
+
+Let's make this even more dramatic. What if the true effect were only 5 CD4 cells -- clinically meaningless -- but we had a huge sample?
+
+```{python}
+# Simulate: tiny effect + huge sample = "significant"
+tiny_effect = 5  # clinically meaningless
+sigma = control.std()
+
+for n in [100, 500, 2000, 10000]:
+    sig_count = 0
+    for _ in range(1000):
+        a = np.random.normal(0, sigma, n)
+        b = np.random.normal(tiny_effect, sigma, n)
+        _, p = stats.ttest_ind(a, b)
+        if p < 0.05:
+            sig_count += 1
+    print(f"n = {n:>5d}: effect = {tiny_effect} CD4 cells, "
+          f"significant {sig_count/1000*100:.0f}% of the time")
+```
+
+::: {.callout-tip}
+## Think About It
+
+If a 5 CD4 cell change is "significant" with n = 10,000, should we change treatment guidelines?
+:::
+
+```{python}
+# p-value as a function of sample size (fixed effect)
+ns = np.arange(20, 2001, 20)
+p_vals_vs_n = []
+for n in ns:
+    se = sigma * np.sqrt(2/n)
+    t = observed_effect / se
+    p_vals_vs_n.append(2 * (1 - norm.cdf(abs(t))))
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.semilogy(ns, p_vals_vs_n, color='steelblue', lw=2)
+ax.axhline(0.05, color='red', ls='--', label='$\\alpha$ = 0.05')
+ax.set_xlabel('Sample Size (per group)')
+ax.set_ylabel('p-value (log scale)')
+ax.set_title(f'p-value vs Sample Size (true effect = {observed_effect:.0f} CD4 cells)')
+ax.legend()
+plt.show()
+```
+
+```{python}
+# p-value as a function of effect size (fixed n)
+effects = np.linspace(0, 100, 200)
+n_fixed = 500
+p_vals_vs_eff = []
+for eff in effects:
+    se = sigma * np.sqrt(2/n_fixed)
+    t = eff / se
+    p_vals_vs_eff.append(2 * (1 - norm.cdf(abs(t))))
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.semilogy(effects, p_vals_vs_eff, color='darkorange', lw=2)
+ax.axhline(0.05, color='red', ls='--', label='$\\alpha$ = 0.05')
+ax.axvline(observed_effect, color='gray', ls=':', label=f'Observed = {observed_effect:.0f}')
+ax.set_xlabel('True Effect Size (CD4 cells)')
+ax.set_ylabel('p-value (log scale)')
+ax.set_title(f'p-value vs Effect Size (n = {n_fixed} per group)')
+ax.legend()
+plt.show()
+```
+
+The first plot shows that for a fixed (real) effect, the p-value shrinks as we add data. Eventually *any* effect, no matter how small, becomes "significant."
+
+The second plot shows that for a fixed sample size, the p-value shrinks as the effect gets larger. A non-significant result might just mean you don't have enough data.
+
+::: {.callout-warning}
+## Always report effect sizes
+
+The lesson: always report effect sizes and confidence intervals alongside p-values. A small p-value tells you the effect is unlikely to be zero -- it does not tell you the effect is large or important.
+:::
+
+
+## [12A] Lecture 12: Bonus — interaction terms
+
+**Source:** lec12-regression-inference.qmd, lines 760-787 | **Tag:** HW
+**Reuse:** Add interaction terms (bathrooms x borough) to the Airbnb model. Does the bathroom premium vary across boroughs?
+
+## Bonus: interaction terms -- does the bathroom premium vary by borough?
+
+Perhaps an extra bathroom matters more in Manhattan than in the Bronx. We can test this
+with an **interaction term** (recall these from Lecture 6).
+
+```{python}
+# Model with interaction: bathrooms x borough
+airbnb_interact = smf.ols(
+    'price_clean ~ bathrooms * C(neighbourhood_group_cleansed) + bedrooms',
+    data=airbnb_clean
+).fit()
+
+# Extract bathroom effects by borough (main effect + interaction)
+boroughs = sorted(airbnb_clean['neighbourhood_group_cleansed'].unique())
+base_borough = boroughs[0]
+base_effect = airbnb_interact.params['bathrooms']
+
+print("Bathroom premium by borough:")
+print("=" * 50)
+print(f"  {base_borough} (baseline): ${base_effect:.2f}/night per bathroom")
+for b in boroughs[1:]:
+    key = f'bathrooms:C(neighbourhood_group_cleansed)[T.{b}]'
+    if key in airbnb_interact.params:
+        interaction = airbnb_interact.params[key]
+        total = base_effect + interaction
+        p_int = airbnb_interact.pvalues[key]
+        print(f"  {b}: ${total:.2f}/night per bathroom (interaction p = {format_pvalue(p_int)})")
+```
+
+
+## [12B] Lecture 12: Synthetic LINE diagnostic examples
+
+**Source:** lec12-regression-inference.qmd, lines 432-491 | **Tag:** HW
+**Reuse:** Generate synthetic data violating each LINE assumption. Create the diagnostic plot and describe what you see.
+
+```{python}
+# Synthetic examples: LINE satisfied vs. violated
+np.random.seed(0)
+n_syn = 300
+
+fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+
+# (a) Good residuals — LINE satisfied
+x_good = np.random.uniform(0, 10, n_syn)
+y_good = 2 + 1.5 * x_good + np.random.normal(0, 2, n_syn)
+fit_good = np.polyval(np.polyfit(x_good, y_good, 1), x_good)
+resid_good = y_good - fit_good
+axes[0, 0].scatter(fit_good, resid_good, alpha=0.4, s=12, color='steelblue')
+axes[0, 0].axhline(0, color='red', linestyle='--', linewidth=1)
+axes[0, 0].set_title('(a) LINE Satisfied\nRandom scatter, constant spread')
+axes[0, 0].set_xlabel('Fitted values')
+axes[0, 0].set_ylabel('Residuals')
+
+# (b) Non-linearity — curved pattern
+x_nl = np.random.uniform(0, 10, n_syn)
+y_nl = 2 + 0.5 * x_nl**2 + np.random.normal(0, 3, n_syn)
+fit_nl = np.polyval(np.polyfit(x_nl, y_nl, 1), x_nl)
+resid_nl = y_nl - fit_nl
+axes[0, 1].scatter(fit_nl, resid_nl, alpha=0.4, s=12, color='#e74c3c')
+axes[0, 1].axhline(0, color='red', linestyle='--', linewidth=1)
+axes[0, 1].set_title('(b) Non-linearity\nCurved pattern in residuals')
+axes[0, 1].set_xlabel('Fitted values')
+axes[0, 1].set_ylabel('Residuals')
+
+# (c) Heteroscedasticity — funnel shape
+x_het = np.random.uniform(0, 10, n_syn)
+y_het = 2 + 1.5 * x_het + np.random.normal(0, 1, n_syn) * x_het
+fit_het = np.polyval(np.polyfit(x_het, y_het, 1), x_het)
+resid_het = y_het - fit_het
+axes[1, 0].scatter(fit_het, resid_het, alpha=0.4, s=12, color='#e67e22')
+axes[1, 0].axhline(0, color='red', linestyle='--', linewidth=1)
+axes[1, 0].set_title('(c) Heteroscedasticity\nFunnel-shaped spread')
+axes[1, 0].set_xlabel('Fitted values')
+axes[1, 0].set_ylabel('Residuals')
+
+# (d) Non-normality — heavy tails in Q-Q plot
+resid_heavy = np.random.standard_t(df=3, size=n_syn) * 2
+theoretical_q = np.sort(np.random.normal(0, 1, n_syn))
+sample_q = np.sort((resid_heavy - resid_heavy.mean()) / resid_heavy.std())
+axes[1, 1].scatter(theoretical_q, sample_q, alpha=0.4, s=12, color='#9b59b6')
+lims = [min(theoretical_q.min(), sample_q.min()), max(theoretical_q.max(), sample_q.max())]
+axes[1, 1].plot(lims, lims, 'r--', linewidth=1)
+axes[1, 1].set_title('(d) Non-normality\nHeavy tails in Q-Q plot')
+axes[1, 1].set_xlabel('Theoretical quantiles')
+axes[1, 1].set_ylabel('Sample quantiles')
+
+plt.tight_layout()
+plt.show()
+
+print("(a) No pattern, constant spread — LINE conditions hold.")
+print("(b) Curvature signals a missing nonlinear term (L violated).")
+print("(c) Spread that fans out signals heteroscedasticity (E violated).")
+print("(d) Points deviating from the diagonal in the tails signal non-normality (N violated).")
+```
+
+
+## [12C] Lecture 12: "Act 1 meets Act 2" meta-callout
+
+**Source:** lec12-regression-inference.qmd, lines 16-19 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+:::{.callout-note}
+## Act 1 meets Act 2
+Act 1 built regression models for prediction. Act 2 introduced hypothesis testing and
+confidence intervals. This lecture combines both toolkits: we apply inference to
+regression coefficients and check whether the model's assumptions justify that inference.
+:::
+
+
+## [12D] Lecture 12: "Why diagnostics come after inference" callout
+
+**Source:** lec12-regression-inference.qmd, lines 404-410 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+:::{.callout-note}
+## Why diagnostics come after inference
+We presented the regression results and inference first, then check assumptions below.
+The pedagogical logic is deliberate: show the exciting results first, then check whether
+you should trust them. In practice, you should run diagnostics early and often -- but
+in a lecture, the punchline motivates the careful checking that follows.
+:::
+
+
+## [13A] Lecture 13: Gradient descent + hiking metaphor
+
+**Source:** lec13-classification.qmd, lines 182-240 | **Tag:** HW
+**Reuse:** Implement a simple gradient descent loop to fit logistic regression on this dataset
+
+## Fitting logistic regression: gradient descent
+
+In Lecture 5, we solved linear regression using the normal equations — projection onto the column space gave us an exact, closed-form solution. OLS has a closed-form solution; logistic regression does not — the sigmoid makes the loss nonlinear, so the loss function no longer simplifies to a nice linear system. We need an iterative algorithm: **gradient descent**.
+
+### The hiking metaphor
+
+Imagine you're hiking in thick fog on a hilly landscape. You can't see the bottom of the valley, but you can feel the slope at your feet. Strategy: always step downhill. If the landscape has a single valley (**convex**), you're guaranteed to reach the bottom.
+
+The **gradient** tells us the direction of steepest ascent. To minimize the loss, we go the opposite way -- steepest *descent*. The update rule is:
+
+$$\beta \leftarrow \beta - \eta \cdot \nabla L(\beta)$$
+
+where $\eta$ is the **learning rate** (step size) and $\nabla L(\beta)$ is the gradient of the loss at the current $\beta$. Too large a step and you overshoot; too small and you crawl.
+
+The good news: the logistic loss is **convex** -- one valley, one **global minimum**. So gradient descent finds THE answer, no matter where you start. A more formal treatment derives logistic regression from maximum likelihood estimation — choosing the parameters that make the observed data most probable. For neural networks, the loss landscape is **non-convex** -- multiple valleys, multiple **local minima** -- and going downhill doesn't always lead to the ocean. That's a story for another course.
+
+Let's see gradient descent in action. We'll standardize our features first (so the coefficients are comparable), then fit the model and watch the loss converge.
+
+```{python}
+# Standardize features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+```
+
+```{python}
+# Gradient descent in action: watch the loss decrease over iterations
+from sklearn.linear_model import SGDClassifier
+
+# Fit with SGDClassifier to track loss over epochs
+gd_model = SGDClassifier(loss='log_loss', learning_rate='constant',
+                         eta0=0.01, max_iter=1, warm_start=True,
+                         random_state=42, penalty=None)
+
+losses = []
+for i in range(100):
+    gd_model.fit(X_train_scaled, y_train)
+    # Compute log-loss on training data
+    from sklearn.metrics import log_loss
+    y_proba_train = gd_model.predict_proba(X_train_scaled)[:, 1]
+    losses.append(log_loss(y_train, y_proba_train))
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(range(1, 101), losses, linewidth=2)
+ax.set_xlabel('Iteration')
+ax.set_ylabel('Logistic loss (log-loss)')
+ax.set_title('Gradient Descent Convergence: loss decreases and flattens')
+ax.annotate('Fast early progress', xy=(5, losses[4]),
+            xytext=(20, losses[4]+0.02),
+            arrowprops=dict(arrowstyle='->', color='red'), fontsize=11)
+ax.annotate('Convergence: nearly flat', xy=(80, losses[79]),
+            xytext=(50, losses[79]+0.03),
+            arrowprops=dict(arrowstyle='->', color='red'), fontsize=11)
+plt.tight_layout()
+plt.show()
+```
+
+The characteristic pattern: fast progress early (steep slope), then the curve flattens as we approach the minimum. This flattening is **convergence** — each step shrinks as the gradient approaches zero near the bottom of the valley.
+
+Now let's fit the final model using sklearn's `LogisticRegression`, which uses a sophisticated version of this same idea under the hood.
+
+```{python}
+# Fit logistic regression
+model = LogisticRegression(penalty=None, max_iter=1000, random_state=42)
+model.fit(X_train_scaled, y_train)
+
+print("Logistic regression fitted.")
+print(f"Training accuracy: {model.score(X_train_scaled, y_train):.3f}")
+```
+
+
+## [14A] Lecture 14: Standardization changes everything (redundant recap)
+
+**Source:** lec14-pca.qmd, lines 379-412 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+## Standardization changes everything
+
+Let's put the two PCA results side by side.
+
+```{python}
+# Side by side comparison: loadings of PC1
+fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+
+# Unstandardized PC1
+loadings_raw_pc1 = pd.Series(pca_raw.components_[0], index=numeric_cols)
+loadings_raw_pc1.sort_values().plot.barh(ax=axes[0], color='coral')
+pct_raw = pca_raw.explained_variance_ratio_[0]*100
+axes[0].set_title(f'PC1 — WITHOUT Standardization\n({pct_raw:.1f}% var)')
+axes[0].set_xlabel('Loading')
+axes[0].axvline(x=0, color='black', linewidth=0.5)
+
+# Standardized PC1
+loadings_std_pc1 = pd.Series(pca.components_[0], index=numeric_cols)
+loadings_std_pc1.sort_values().plot.barh(ax=axes[1], color='steelblue')
+pct_std = pca.explained_variance_ratio_[0]*100
+axes[1].set_title(f'PC1 — WITH Standardization\n({pct_std:.1f}% var)')
+axes[1].set_xlabel('Loading')
+axes[1].axvline(x=0, color='black', linewidth=0.5)
+
+plt.tight_layout()
+plt.show()
+```
+
+**Completely different!** Without standardization, PC1 is dominated by `maximum_nights` and `availability_365` — those columns simply have the biggest numbers. With standardization, PC1 captures the review quality pattern we identified earlier.
+
+:::{.callout-warning}
+## Always standardize before PCA
+This mistake is one of the most common PCA errors in practice. Always check whether your data has been standardized. Standardize before PCA unless you have a specific reason not to (e.g., all features are already on the same scale).
+:::
+
+
+## [15A] Lecture 15: Distance metrics callout
+
+**Source:** lec15-clustering.qmd, lines 348-357 | **Tag:** EXAM
+**Reuse:** Name two distance metrics other than Euclidean. When might you prefer them?
+
+:::{.callout-important}
+## Distance metrics beyond Euclidean
+K-means uses **Euclidean distance** (L2) by default, but the choice of distance metric shapes what "close" means — and therefore what clusters the algorithm finds.
+
+- **Manhattan distance** (L1): the sum of absolute differences along each axis. Each feature contributes independently rather than blending through squares, which can be more appropriate when features represent genuinely different quantities.
+- **Cosine similarity**: measures the angle between two vectors, ignoring their magnitude. Text analysis and recommendation systems use cosine similarity whenever the *direction* of a profile matters more than its *size*.
+
+**Concrete example.** Consider two Airbnb listings with proportionally similar profiles — a budget listing ($100/night, 1 bedroom, 50 reviews) and a scaled-up version ($200/night, 2 bedrooms, 100 reviews). Euclidean distance sees these as far apart; every feature value has doubled. Cosine similarity sees them as nearly identical, since the vectors point in the same direction. A host deciding whether these two listings compete would get different answers depending on the metric.
+
+Standard k-means only supports Euclidean distance (the mean minimizes squared Euclidean error). To use other metrics, you'd need a variant like **k-medoids**, which replaces the mean with the most central observed point and works with any distance function.
+:::
+
+
+## [15B] Lecture 15: Per-point silhouette plot
+
+**Source:** lec15-clustering.qmd, lines 267-286 | **Tag:** HW
+**Reuse:** Create and interpret a per-point silhouette plot for your k-means clustering
+
+```{python}
+# Per-point silhouette plot for k=3
+sil_vals = silhouette_samples(X_scaled, listings['cluster_k3'])
+fig, ax = plt.subplots(figsize=(8, 5))
+y_lower = 0
+for c in range(3):
+    cluster_sils = np.sort(sil_vals[listings['cluster_k3'] == c])
+    ax.barh(range(y_lower, y_lower + len(cluster_sils)),
+            cluster_sils, height=1.0, alpha=0.7, label=f'Cluster {c}')
+    y_lower += len(cluster_sils)
+ax.set_xlabel('Silhouette Value')
+ax.set_ylabel('Listings (sorted within cluster)')
+ax.set_title('Per-Point Silhouette Plot (k=3)')
+ax.axvline(x=0, color='black', linestyle='-', linewidth=0.5)
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+Each horizontal bar is one listing. Wide bars (high silhouette values) mean the listing sits comfortably inside its cluster. Short or negative bars mean the listing is ambiguous — it's nearly equidistant between two clusters.
+
+
+## [16A] Lecture 16: Backtesting a betting strategy
+
+**Source:** lec16-backtesting.qmd, lines 465-527 | **Tag:** HW
+**Reuse:** Backtest a simple betting strategy using your NBA model. Why doesn't a decent R^2 translate to profit?
+
+## Backtesting a betting strategy
+
+Here's where backtesting gets really interesting. Suppose you use the model to bet: if the model predicts a player will score above their season average, bet the "over."
+
+:::{.callout-note}
+## Sports Betting Terminology
+Sportsbooks charge a fee called the **vig** (short for vigorish). At standard **-110 odds**, you risk \$110 to win \$100. That means you need to win about 52.4% of your bets just to break even. A **unit** is one standard bet amount — we'll track profit/loss in units so the math is clean.
+:::
+
+We'll use the player's trailing season average as a rough proxy for the sportsbook line. Real lines incorporate much more information (injuries, matchups, rest days), so this is a generous setup for our model.
+
+:::{.callout-tip}
+## Think About It
+Will this strategy make money? Our model has decent R-squared on the temporal split. Is that enough?
+:::
+
+```{python}
+# Simple betting backtest on the temporal test set
+test_nba['predicted'] = pred_t
+
+# "Line" = player's trailing season average (simple proxy for the sportsbook line)
+test_nba['line'] = test_nba.groupby('PLAYER_NAME')['PTS'].transform(
+    lambda x: x.expanding().mean().shift(1)
+)
+test_nba = test_nba.dropna(subset=['line'])
+
+# Strategy: bet "over" when model predicts above the line
+test_nba['bet_over'] = (test_nba['predicted'] > test_nba['line']).astype(int)
+test_nba['actual_over'] = (test_nba['PTS'] > test_nba['line']).astype(int)
+
+# Simple P/L: win +1, lose -1.1 (the -1.1 reflects the "vig" -- sportsbook's cut)
+test_nba['pl'] = np.where(
+    test_nba['bet_over'] == test_nba['actual_over'], 1.0, -1.1
+)
+test_nba['cumulative_pl'] = test_nba['pl'].cumsum()
+
+win_rate = (test_nba['bet_over'] == test_nba['actual_over']).mean()
+print(f"Win rate: {win_rate:.1%}")
+print(f"Need ~52.4% to break even (with -110 vig)")
+print(f"Final P/L: {test_nba['cumulative_pl'].iloc[-1]:+.0f} units")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(test_nba['cumulative_pl'].values, linewidth=0.8, alpha=0.8)
+ax.axhline(y=0, color='black', linewidth=0.5)
+ax.set_xlabel('Bet number')
+ax.set_ylabel('Cumulative P/L (units)')
+ax.set_title('Betting Backtest: "Bet Over When Model Says Over"')
+ax.annotate(f'Final: {test_nba["cumulative_pl"].iloc[-1]:+.0f}',
+            xy=(len(test_nba), test_nba['cumulative_pl'].iloc[-1]),
+            fontsize=11, color='red')
+plt.tight_layout()
+plt.show()
+
+print("Even a model with decent R-squared doesn't necessarily make money.")
+print("The market is efficient -- the line already accounts for recent performance.")
+```
+
+:::{.callout-warning}
+## The Backtesting Illusion
+In-sample performance does not equal out-of-sample performance. Sportsbooks already factor in rest days, recent form, and home/away. Your model isn't finding an edge — it's rediscovering information the market already knows.
+:::
+
+
+## [16B] Lecture 16: The 3-point revolution (gradual shift)
+
+**Source:** lec16-backtesting.qmd, lines 622-649 | **Tag:** HW
+**Reuse:** Plot the evolution of 3-point attempt rate over NBA history. What would happen to a shot prediction model trained on 2005 data?
+
+### Gradual shift: the 3-point revolution
+
+Not all distribution shifts are sudden. Sometimes the world changes slowly enough that you don't notice — until your model is stale.
+
+```{python}
+# The NBA's shot selection has changed dramatically over 20 years
+shot_mix = pd.read_csv(f'{DATA_DIR}/nba/shot_mix_by_season.csv')
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(range(len(shot_mix)), shot_mix['mid-range 2'] * 100, 'o-', label='Mid-range 2s', color='C3')
+ax.plot(range(len(shot_mix)), shot_mix['3-pointer'] * 100, 's-', label='3-pointers', color='C0')
+ax.plot(range(len(shot_mix)), shot_mix['at rim'] * 100, '^-', label='At rim', color='C2')
+ax.set_xticks(range(0, len(shot_mix), 3))
+ax.set_xticklabels(shot_mix['SEASON_2'].iloc[::3], rotation=45, ha='right')
+ax.set_ylabel('% of all shots')
+ax.set_title('NBA Shot Selection: 2003–2025')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+In 2003, 45% of NBA shots were mid-range two-pointers. By 2025, that number had dropped to 23% — and three-pointers rose from 19% to 42%. A model trained on 2005 shot data would badly mispredict a 2025 game. The data-generating process changed, not because of randomness, but because teams learned that mid-range twos are the least efficient shot in basketball (~0.81 expected points per attempt vs ~1.09 for threes).
+
+This is *gradual* distribution shift — the kind that doesn't trigger alarms but quietly erodes model performance. A walk-forward backtest (retraining periodically) handles this better than a single fixed train/test split, because it continuously adapts to the changing distribution.
+
+:::{.callout-tip}
+## Think About It
+Suppose you trained a model in 2015 to predict an NBA team's win total from its shot distribution. Would that model still work in 2025? What about a model trained on 2020 data? How often should you retrain?
+:::
+
+
+## [17A] Lecture 17: Tree mechanics recap (Opening the black box through Random forests)
+
+**Source:** lec17-automl-llms.qmd, lines 34-155 | **Tag:** ARCHIVE (already covered in Lec 6-7)
+**Reuse:** (archive only)
+
+## Opening the black box: how trees and forests work
+
+In Lectures 6–7, you used decision trees and random forests as practical tools: you fit them to Airbnb data, compared them to linear models, and saw how averaging many overfit trees reduces variance without increasing bias. You know *what* trees and forests do. Today we explain *why* they work — the recursive splitting criterion, why bootstrap samples and feature subsets decorrelate the trees, and how gradient boosting builds on the same gradient descent idea from Lecture 13.
+
+Every call to `RandomForestRegressor` has been doing the following under the hood. Let us unpack the algorithm step by step, starting with a single **decision tree**.
+
+```{python}
+# Load College Scorecard data
+scorecard = pd.read_csv(f'{DATA_DIR}/college-scorecard/scorecard.csv')
+
+feature_cols = ['SAT_AVG', 'UGDS', 'PCTPELL', 'PCTFLOAN', 'RET_FT4',
+                'C150_4_POOLED_SUPP', 'CONTROL']
+target_col = 'MD_EARN_WNE_P10'
+
+for col in feature_cols + [target_col]:
+    scorecard[col] = pd.to_numeric(scorecard[col], errors='coerce')
+
+model_data = scorecard[feature_cols + [target_col]].dropna()
+print(f"Complete cases: {len(model_data)} out of {len(scorecard)} ({len(model_data)/len(scorecard):.1%})")
+```
+
+```{python}
+# Fit a shallow decision tree (max_depth=3) so we can see what it does
+earnings_features = model_data[feature_cols]
+earnings_target = model_data[target_col]
+
+shallow_tree = DecisionTreeRegressor(max_depth=3, random_state=42)
+shallow_tree.fit(earnings_features, earnings_target)
+
+fig, ax = plt.subplots(figsize=(11, 5.5))
+plot_tree(shallow_tree, feature_names=feature_cols, filled=True,
+          rounded=True, fontsize=8, ax=ax, impurity=False)
+ax.set_title('A decision tree for predicting graduate earnings (depth = 3)')
+plt.tight_layout()
+plt.show()
+```
+
+:::{.callout-important}
+## Definition: Recursive Partitioning
+At each **node**, the algorithm tries every feature and every possible threshold, and picks the split that minimizes the prediction error (mean squared error for regression, Gini impurity or entropy for classification). It keeps splitting until it reaches a **leaf**, where it predicts the average outcome for all data points in that group.
+:::
+
+Read the tree top-down. The first split asks: is `SAT_AVG` above or below a threshold? The algorithm chose this split — it produces the largest reduction in MSE across all possible first splits. Each subsequent split refines the prediction further.
+
+:::{.callout-tip}
+## Think About It
+Why might a tree choose SAT_AVG as its first split? What does that tell you about which feature is most informative for predicting earnings?
+:::
+
+### Why trees are useful (recap from Lecture 6)
+
+You saw these properties in Lecture 6; now you can see *why* each one follows from the splitting mechanism:
+
+- They handle **nonlinearities** naturally — each split creates a step function, and many splits approximate any shape
+- They handle **interactions** automatically — a split on feature B inside a branch defined by feature A captures an A-B interaction
+- They can even handle **missing values** in some implementations (by splitting on "is this value missing?")
+- The output is **interpretable** — you can trace the path from root to leaf and see exactly which conditions led to a prediction
+
+### The overfitting problem
+
+But there's a catch. Let's see what happens when we let the tree grow deep.
+
+```{python}
+# Compare shallow vs. deep trees
+deep_tree = DecisionTreeRegressor(random_state=42)  # no depth limit
+deep_tree.fit(earnings_features, earnings_target)
+
+# Cross-validation comparison
+shallow_cv = cross_val_score(shallow_tree, earnings_features, earnings_target, cv=5, scoring='r2')
+deep_cv = cross_val_score(deep_tree, earnings_features, earnings_target, cv=5, scoring='r2')
+
+print(f"Shallow tree (depth=3):  Train R-sq = {shallow_tree.score(earnings_features, earnings_target):.3f}, "
+      f"CV R-sq = {shallow_cv.mean():.3f}")
+print(f"Deep tree (no limit):    Train R-sq = {deep_tree.score(earnings_features, earnings_target):.3f}, "
+      f"CV R-sq = {deep_cv.mean():.3f}")
+print(f"\nThe deep tree memorizes the training data (R-sq near 1.0)")
+print(f"but generalizes poorly. This gap is overfitting.")
+```
+
+The deep tree memorizes every quirk in the training data. Its training R-squared is nearly perfect, but its cross-validation R-squared is worse than the shallow tree. This gap illustrates the bias-variance tradeoff from Lecture 7: deep trees have low bias but high variance.
+
+### Random forests: the mechanism behind the magic
+
+In Lecture 7, you saw the punchline: averaging many overfit trees produces a model that generalizes well. Now let's understand the mechanism.
+
+A **random forest** uses two sources of randomness to make sure the trees disagree with each other:
+
+1. **Bagging** (bootstrap aggregation): each tree is trained on a random sample (with replacement) of the data, so each tree sees slightly different examples
+2. **Feature subsampling**: at each split, each tree considers only a random subset of features, so even on similar data, trees make different splits
+
+Why does decorrelation matter? If every tree made the same errors, averaging wouldn't help. The two sources of randomness force the trees to overfit in different directions, so averaging cancels out the noise. The variance drops without the bias increasing.
+
+```{python}
+# Compare: one deep tree vs. a forest of 100 deep trees
+forest = RandomForestRegressor(n_estimators=100, random_state=42)
+forest.fit(earnings_features, earnings_target)
+forest_cv = cross_val_score(forest, earnings_features, earnings_target, cv=5, scoring='r2')
+
+print(f"Single deep tree:  CV R-sq = {deep_cv.mean():.3f} (std = {deep_cv.std():.3f})")
+print(f"Random forest:     CV R-sq = {forest_cv.mean():.3f} (std = {forest_cv.std():.3f})")
+print(f"\nAveraging 100 overfit trees produces a model that generalizes well.")
+print(f"You saw this result in Lecture 7. Now you know the mechanism:")
+print(f"bootstrap samples + feature subsets decorrelate the trees,")
+print(f"so averaging reduces variance without increasing bias.")
+```
+
+```{python}
+# Feature importances: one of the most practically useful RF outputs
+importances = forest.feature_importances_
+sorted_idx = np.argsort(importances)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.barh(np.array(feature_cols)[sorted_idx], importances[sorted_idx], color='#4C72B0')
+ax.set_xlabel('Feature importance (mean decrease in impurity)')
+ax.set_title('Random forest feature importances for predicting graduate earnings')
+plt.tight_layout()
+plt.show()
+```
+
+:::{.callout-tip}
+## Think About It
+Why does averaging many overfitting trees produce a good model? Hint: each tree overfits to *different* noise, given that it sees different bootstrap samples and different feature subsets.
+:::
+
+
+## [17B] Lecture 17: Reflecting on the course
+
+**Source:** lec17-automl-llms.qmd, lines 617-627 | **Tag:** ARCHIVE
+**Reuse:** (archive only)
+
+## Reflecting on the course
+
+Over 17 lectures, you've built a statistical toolkit. Here are the big themes:
+
+- **Lectures 1–5 (EDA and regression):** You can spot when data is missing, biased, or misrepresented — whether by a human or an AI.
+- **Lectures 6–7 (Features, trees, and validation):** You can engineer features, use trees and forests, and evaluate whether a model's predictions generalize.
+- **Lectures 8–12 (Inference and diagnostics):** You understand what p-values mean, why multiple testing matters, and how to check a model's assumptions.
+- **Lectures 13, 18-19 (Classification and causation):** You won't confuse correlation with causation — the most common error in AI-generated analyses.
+- **Lectures 15–17 (Modern tools):** You can use time series, tree-based models in depth, and AI tools critically and effectively.
+
+You now have the vocabulary to be a sophisticated consumer — and critic — of data analysis, whether it's done by a human, an algorithm, or an AI.
+
+
+## [17C] Lecture 17: LLM vs. course-trained comparison table
+
+**Source:** lec17-automl-llms.qmd, lines 536-548 | **Tag:** EXAM
+**Reuse:** Compare what an LLM would produce vs. a statistician's analysis for [scenario]
+
+```{python}
+# Side-by-side: LLM analysis vs. course-trained analysis
+print("=" * 60)
+print("LLM analysis vs. course-trained analysis")
+print("=" * 60)
+print()
+print(f"{'Finding':<30} {'LLM says...':<20} {'You know...'}")
+print("-" * 75)
+print(f"{'Rest effect on scoring':<30} {'Rest hurts!':<20} {'Confounded by player quality'}")
+print(f"{'Statistical test':<30} {'p < 0.05 !':<20} {'Independence violated'}")
+print(f"{'Comparison type':<30} {'Aggregate':<20} {'Within-player needed'}")
+print(f"{'Multiple testing':<30} {'(not checked)':<20} {'Most positives are false'}")
+print(f"{'Effect size':<30} {'(not reported)':<20} {'Near zero per player'}")
+```
+
+
+## [19A] Lecture 19: John Snow's Natural Experiment re-analysis
+
+**Source:** lec19-causal-inference-2.qmd, lines 206-252 | **Tag:** ARCHIVE (identical to Lec 18)
+**Reuse:** (archive only)
+
+### John Snow's Natural Experiment: The Most Famous Natural Experiment in History
+
+:::{.callout-note}
+## Historical Context: Snow's Grand Experiment
+Last lecture we learned that John Snow's most powerful evidence for waterborne cholera was *not* his famous map — it was his comparison of water companies. In the 1850s, two water companies served intermingled houses on the same streets of South London. Lambeth Company moved its water intake upstream (away from sewage) in 1852. Southwark & Vauxhall kept drawing from the polluted Thames. Houses were served essentially at random based on which company had laid pipes, making this arrangement a **natural experiment** --- nature created near-random assignment.
+:::
+
+Let's compute the actual numbers.
+
+```{python}
+# Load Snow's water company data
+snow = pd.read_csv(f'{DATA_DIR}/john-snow/snow_water_companies.csv')
+print("John Snow's Water Company Comparison (1854 cholera epidemic)")
+print("=" * 60)
+print(snow.to_string(index=False))
+print(f"\nRelative risk: {snow.loc[snow['company'] == 'Southwark & Vauxhall', 'death_rate_per_10000'].values[0] / snow.loc[snow['company'] == 'Lambeth', 'death_rate_per_10000'].values[0]:.1f}x")
+print("Houses served by the polluted company had 8x the death rate.")
+```
+
+```{python}
+# Two-proportion z-test: is the difference statistically significant?
+sv = snow[snow['company'] == 'Southwark & Vauxhall'].iloc[0]
+lam = snow[snow['company'] == 'Lambeth'].iloc[0]
+
+p_sv = sv['deaths'] / sv['houses']
+p_lam = lam['deaths'] / lam['houses']
+n_sv, n_lam = sv['houses'], lam['houses']
+
+p_pool = (sv['deaths'] + lam['deaths']) / (n_sv + n_lam)
+se = np.sqrt(p_pool * (1 - p_pool) * (1/n_sv + 1/n_lam))
+z = (p_sv - p_lam) / se
+p_val = 2 * (1 - stats.norm.cdf(abs(z)))
+
+print(f"Death rate (Southwark & Vauxhall): {p_sv*10000:.0f} per 10,000")
+print(f"Death rate (Lambeth):              {p_lam*10000:.0f} per 10,000")
+print(f"Difference:                        {(p_sv - p_lam)*10000:.0f} per 10,000")
+print(f"\nz = {z:.1f}, p < 0.0001")
+print("\nSame streets. Same neighborhoods. Different water. Massively different death rates.")
+print("This result is the power of a natural experiment.")
+```
+
+Why is this comparison a natural experiment rather than just an observational study? The two companies served *intermingled* houses on the same streets. A household's water company was determined by which company happened to have laid pipes to that address — essentially arbitrary. This arrangement eliminates confounding by neighborhood poverty, crowding, or sanitation.
+
+:::{.callout-tip}
+## Think About It
+Why can't we frame Snow's water company comparison as a standard DiD with before/after data? (Hint: we only have data from the 1854 epidemic, not from before Lambeth moved its intake.) What assumption are we making instead?
+:::

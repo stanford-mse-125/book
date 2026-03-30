@@ -203,7 +203,7 @@ print(f"is the DiD estimate, with 95% CI: [{model.conf_int().loc['treated_x_post
 print("It captures the causal effect of the protocol on readmissions.")
 ```
 
-### John Snow's Natural Experiment: The Most Famous Natural Experiment in History
+### John Snow's Natural Experiment
 
 :::{.callout-note}
 ## Historical Context: Snow's Grand Experiment

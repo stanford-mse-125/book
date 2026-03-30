@@ -11,7 +11,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import norm
-from sklearn.linear_model import LinearRegression
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
@@ -159,6 +158,10 @@ The **bootstrap** resamples the observed data **with replacement** to approximat
 :::
 
 Let's start with one resample of the treatment group.
+
+```{python}
+treatment_cd4 = treatment['cd4_change'].dropna().values
+```
 
 ```{python}
 # One bootstrap resample: same size as original, drawn with replacement
@@ -503,76 +506,9 @@ At $n = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clear
 
 > "When in doubt, bootstrap. It's slower but honest."
 
-## Bootstrap for regression coefficients
-
-The bootstrap works for **any** statistic — including regression coefficients. Let's demonstrate with Airbnb data.
-
-```{python}
-# Load and clean Airbnb data (same pipeline as Lecture 6)
-cols = ['price', 'bedrooms', 'bathrooms', 'room_type', 'neighbourhood_group_cleansed']
-airbnb = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
-airbnb = airbnb.rename(columns={'neighbourhood_group_cleansed': 'borough'})
-airbnb['price'] = airbnb['price'].astype(str).str.replace('[$,]', '', regex=True).astype(float)
-airbnb = airbnb[(airbnb['price'] >= 10) & (airbnb['price'] <= 500)]
-
-# One-hot encode categorical features
-X = pd.get_dummies(airbnb[['bedrooms', 'bathrooms', 'room_type', 'borough']], drop_first=True).astype(float)
-y = airbnb['price'].values
-
-print(f"Working with {len(airbnb):,} listings, {X.shape[1]} features")
-print(f"Features: {list(X.columns)}")
-```
-
-```{python}
-# Fit once on the full data
-model = LinearRegression().fit(X, y)
-bedroom_idx = list(X.columns).index('bedrooms')
-observed_beta = model.coef_[bedroom_idx]
-print(f"Observed coefficient for bedrooms: ${observed_beta:.2f}")
-```
-
-```{python}
-# Bootstrap 1,000 times: resample rows, refit, collect beta_bedrooms
-B_reg = 1_000
-boot_betas = []
-
-for _ in range(B_reg):
-    idx = np.random.choice(len(X), size=len(X), replace=True)
-    X_boot = X.iloc[idx]
-    y_boot = y[idx]
-    m = LinearRegression().fit(X_boot, y_boot)
-    boot_betas.append(m.coef_[bedroom_idx])
-
-boot_betas = np.array(boot_betas)
-beta_ci_low, beta_ci_high = np.percentile(boot_betas, [2.5, 97.5])
-
-print(f"Bootstrap mean:  ${boot_betas.mean():.2f}")
-print(f"Bootstrap SD:    ${boot_betas.std():.2f}")
-print(f"95% Bootstrap CI: [${beta_ci_low:.2f}, ${beta_ci_high:.2f}]")
-```
-
-```{python}
-fig, ax = plt.subplots(figsize=(8, 5))
-
-ax.hist(boot_betas, bins=40, density=True, color='steelblue', alpha=0.7, edgecolor='white',
-        label='Bootstrap distribution')
-ax.axvline(observed_beta, color='red', lw=2, ls='--', label=f'Observed β = ${observed_beta:.2f}')
-ax.axvspan(beta_ci_low, beta_ci_high, alpha=0.15, color='steelblue',
-           label=f'95% CI: [${beta_ci_low:.2f}, ${beta_ci_high:.2f}]')
-
-ax.set_xlabel('Coefficient for Bedrooms ($)')
-ax.set_ylabel('Density')
-ax.set_title('Bootstrap Distribution of the Bedrooms Coefficient')
-ax.legend(fontsize=10)
-plt.tight_layout()
-plt.show()
-```
-
-The bootstrap distribution shows us the uncertainty in the bedrooms coefficient. We'll use this tool extensively in [Lecture 12](lec12-regression-inference.qmd) when we ask which regression coefficients are "real."
-
 ## Key takeaways
 
-- **Bootstrap:** resample with replacement to estimate uncertainty. Works for *any* statistic — means, medians, regression coefficients, anything. The bootstrap generalizes far beyond means — in later courses you may see it used as a general-purpose inference engine.
+- **Bootstrap:** resample with replacement to estimate uncertainty. Works for *any* statistic — means, medians, regression coefficients, anything. The bootstrap generalizes to regression coefficients ([Lecture 12](lec12-regression-inference.qmd)) and beyond.
 - **The CLT explains why** bootstrap distributions often look normal — at least for means and other "average-like" statistics.
 - **Normal approximation:** a fast, analytical shortcut when the CLT applies (large $n$, well-behaved data, mean-like statistics). Replace 10,000 resamples with $\hat{\theta} \pm 1.96 \cdot \text{SE}$.
 - **When the CLT fails** (median, heavy tails, small $n$), the bootstrap is the fallback. It's slower but always works.

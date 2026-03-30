@@ -181,21 +181,9 @@ This loss penalizes confident wrong predictions *much* more heavily than squared
 
 ## Fitting logistic regression: gradient descent
 
-In Lecture 5, we solved linear regression using the normal equations — projection onto the column space gave us an exact, closed-form solution. OLS has a closed-form solution; logistic regression does not — the sigmoid makes the loss nonlinear, so the loss function no longer simplifies to a nice linear system. We need an iterative algorithm: **gradient descent**.
+In Lecture 5, we solved linear regression with the normal equations — a closed-form solution. Logistic regression has no such shortcut: the sigmoid makes the loss nonlinear. Instead, we use **gradient descent**, an iterative algorithm that repeatedly steps in the direction that decreases the loss most steeply.
 
-### The hiking metaphor
-
-Imagine you're hiking in thick fog on a hilly landscape. You can't see the bottom of the valley, but you can feel the slope at your feet. Strategy: always step downhill. If the landscape has a single valley (**convex**), you're guaranteed to reach the bottom.
-
-The **gradient** tells us the direction of steepest ascent. To minimize the loss, we go the opposite way -- steepest *descent*. The update rule is:
-
-$$\beta \leftarrow \beta - \eta \cdot \nabla L(\beta)$$
-
-where $\eta$ is the **learning rate** (step size) and $\nabla L(\beta)$ is the gradient of the loss at the current $\beta$. Too large a step and you overshoot; too small and you crawl.
-
-The good news: the logistic loss is **convex** -- one valley, one **global minimum**. So gradient descent finds THE answer, no matter where you start. A more formal treatment derives logistic regression from maximum likelihood estimation — choosing the parameters that make the observed data most probable. For neural networks, the loss landscape is **non-convex** -- multiple valleys, multiple **local minima** -- and going downhill doesn't always lead to the ocean. That's a story for another course.
-
-Let's see gradient descent in action. We'll standardize our features first (so the coefficients are comparable), then fit the model and watch the loss converge.
+The key formula: $\beta \leftarrow \beta - \eta \cdot \nabla L(\beta)$ where $\eta$ is the **learning rate** (step size). The logistic loss is **convex** — one valley, one global minimum — so gradient descent finds THE answer regardless of starting point.
 
 ```{python}
 # Standardize features
@@ -203,40 +191,6 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 ```
-
-```{python}
-# Gradient descent in action: watch the loss decrease over iterations
-from sklearn.linear_model import SGDClassifier
-
-# Fit with SGDClassifier to track loss over epochs
-gd_model = SGDClassifier(loss='log_loss', learning_rate='constant',
-                         eta0=0.01, max_iter=1, warm_start=True,
-                         random_state=42, penalty=None)
-
-losses = []
-for i in range(100):
-    gd_model.fit(X_train_scaled, y_train)
-    # Compute log-loss on training data
-    from sklearn.metrics import log_loss
-    y_proba_train = gd_model.predict_proba(X_train_scaled)[:, 1]
-    losses.append(log_loss(y_train, y_proba_train))
-
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.plot(range(1, 101), losses, linewidth=2)
-ax.set_xlabel('Iteration')
-ax.set_ylabel('Logistic loss (log-loss)')
-ax.set_title('Gradient Descent Convergence: loss decreases and flattens')
-ax.annotate('Fast early progress', xy=(5, losses[4]),
-            xytext=(20, losses[4]+0.02),
-            arrowprops=dict(arrowstyle='->', color='red'), fontsize=11)
-ax.annotate('Convergence: nearly flat', xy=(80, losses[79]),
-            xytext=(50, losses[79]+0.03),
-            arrowprops=dict(arrowstyle='->', color='red'), fontsize=11)
-plt.tight_layout()
-plt.show()
-```
-
-The characteristic pattern: fast progress early (steep slope), then the curve flattens as we approach the minimum. This flattening is **convergence** — each step shrinks as the gradient approaches zero near the bottom of the valley.
 
 Now let's fit the final model using sklearn's `LogisticRegression`, which uses a sophisticated version of this same idea under the hood.
 
