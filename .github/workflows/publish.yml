@@ -72,7 +72,7 @@ jobs:
               for cell in nb["cells"]:
                   if cell["cell_type"] == "code":
                       cell["source"] = [
-                          line.replace("DATA_DIR = 'data'", "DATA_DIR = 'https://raw.githubusercontent.com/stanford-mse-125/book/main/data'")
+                          line.replace("DATA_DIR = 'data'", "DATA_DIR = 'https://media.githubusercontent.com/media/stanford-mse-125/book/main/data'")
                                .replace("pd.read_csv(f'{DATA_DIR}/", "pd.read_csv(f'{DATA_DIR}/")
                           for line in cell["source"]
                       ]
