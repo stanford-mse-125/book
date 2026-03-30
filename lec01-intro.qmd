@@ -159,7 +159,7 @@ readmissions['Measure Name'].value_counts()
 
 :::{.callout-important}
 ## Definition: Excess Readmission Ratio (ERR)
-The **Excess Readmission Ratio (ERR)** is the ratio of a hospital's predicted readmission number to its expected number, after adjusting for patient risk. Above 1.0 means more readmissions than expected.
+The **Excess Readmission Ratio (ERR)** is a CMS measure that compares a hospital's predicted readmissions to its expected number, after adjusting for patient risk. A value above 1.0 means more readmissions than expected given the hospital's patient mix.
 :::
 
 ```{python}
