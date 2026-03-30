@@ -88,6 +88,36 @@ By the end of the quarter, you'll have a toolkit to approach any data-driven dec
 
 As John Tukey put it: *"The best thing about being a statistician is that you get to play in everyone's backyard."* The same tools you'll learn here apply to healthcare, housing, sports, and drug development.
 
+## Four ways to reason with data
+
+The same dataset can answer very different questions depending on how you reason about it. Consider the hospital readmissions data. Here are four questions — each requiring a different mode of thinking:
+
+| Mode | Question | Decision |
+|------|----------|----------|
+| **Summary** | What does the ERR distribution look like across U.S. hospitals? | Which hospitals are outliers? |
+| **Prediction** | Given a hospital's characteristics, what ERR should we expect? | Should CMS flag this hospital for review? |
+| **Inference** | Is this hospital's ERR of 1.05 statistically different from 1.0? | Should the hospital be fined? |
+| **Causation** | Do the fines actually reduce readmissions? | Should CMS continue the penalty program? |
+
+: {.striped .hover tbl-colwidths="[15,40,45]"}
+
+These four modes — **summary, prediction, inference, and causation** — form the backbone of applied statistics. Each one requires different tools and answers a fundamentally different kind of question.
+
+**Summary** asks: *what happened?* You compute statistics, make plots, and describe the data as it is. We just did this — loading the hospital data, counting conditions with `value_counts()`, and plotting the ERR distribution. Summary is the starting point, but it's not the end. A histogram tells you what the data looks like; it doesn't tell you what to do about it.
+
+**Prediction** asks: *what will happen next?* Given a new hospital's patient mix, neighborhood, and staffing levels, what ERR should we expect? Prediction doesn't require understanding *why* — a model can predict accurately without explaining the mechanism. In Act 1, we'll build prediction models using regression, feature engineering, and decision trees.
+
+**Inference** asks: *what can we conclude about the population?* If a hospital's ERR is 1.05, is that a real signal or just noise from a small sample? Inference quantifies uncertainty — it tells you how confident to be. A single number without an uncertainty estimate is dangerous: Zillow's algorithm predicted home prices without prediction intervals and lost $881 million. In Act 2, we'll build the tools for inference: confidence intervals, hypothesis tests, and p-values.
+
+**Causation** asks: *what would happen if we intervened?* Does fining hospitals actually reduce readmissions — or do penalized hospitals just learn to game the metrics? Causal questions are the hardest because correlation doesn't imply causation. Observing that fined hospitals improve doesn't prove the fine caused the improvement — maybe those hospitals were already investing in quality. In Act 3, we'll develop frameworks for causal reasoning.
+
+:::{.callout-tip}
+## Think About It
+Pick one of the ten questions from the opening table. Which of the four modes — summary, prediction, inference, or causation — does it primarily involve? Most involve more than one.
+:::
+
+Each mode builds on the last. You can't predict without first summarizing. You can't infer without a prediction model. And you can't reason about causation without understanding what inference can and can't tell you. The three acts of this course follow this progression.
+
 ## The three acts of this course
 
 The course follows a three-act structure. Each act builds on the last:
