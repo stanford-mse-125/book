@@ -7,9 +7,9 @@ jupyter: python3
 
 ## Consequential decisions with data
 
-A hospital gets fined \$500K for "too many" readmissions — but does it actually have a quality problem, or does it just serve sicker patients? An Airbnb host wonders if they're underpricing by \$50/night. A pharmaceutical company must decide whether a \$2 billion drug actually works.
+A hospital gets fined \$500K for "too many" readmissions — but does it actually have a quality problem, or does it just serve sicker patients? A home-pricing algorithm overpays on thousands of houses — why? A pharmaceutical company must decide whether a \$2 billion drug actually works.
 
-These are kind of questions that drive this course. 
+These are the kind of questions that drive this course. 
 Each one involves real data, a model that could be wrong, 
 and a decision with a major impact.
 
@@ -103,7 +103,7 @@ The same dataset can answer very different questions depending on how you reason
 
 These four modes — **summary, prediction, inference, and causation** — form the backbone of applied statistics. Each one requires different tools and answers a fundamentally different kind of question.
 
-**Summary** asks: *what happened?* You compute statistics, make plots, and describe the data as it is. We just did this — loading the hospital data, counting conditions with `value_counts()`, and plotting the ERR distribution. Summary is the starting point, but it's not the end. A histogram tells you what the data looks like; it doesn't tell you what to do about it.
+**Summary** asks: *what happened?* You compute statistics, make plots, and describe the data as it is. Later in this chapter, we'll do exactly that — loading hospital data, counting conditions with `value_counts()`, and plotting the ERR distribution. Summary is the starting point, but it's not the end. A histogram tells you what the data looks like; it doesn't tell you what to do about it.
 
 **Prediction** asks: *what will happen next?* Given a new hospital's patient mix, neighborhood, and staffing levels, what ERR should we expect? Prediction doesn't require understanding *why* — a model can predict accurately without explaining the mechanism. In Act 1, we'll build prediction models using regression, feature engineering, and decision trees.
 
@@ -122,11 +122,13 @@ Each mode builds on the last. You can't predict without first summarizing. You c
 
 The course follows a three-act structure. Each act builds on the last:
 
-**Act 1: Build Models** (Lectures 1–7) — Explore data, clean it, and build predictive models. We'll use regression, feature engineering, and decision trees on the Airbnb and hospital datasets.
+**Act 1: Build Models** (Lectures 1–7) — Explore data, clean it, and build predictive models. We'll use regression, feature engineering, and decision trees on real datasets.
 
 **Act 2: Trust Models** (Lectures 8–12) — Sampling, hypothesis testing, and regression inference. We'll ask: how precise are our estimates? Is the drug effect real? Which coefficients matter?
 
 **Act 3: See Further** (Lectures 13–19) — Classification, PCA, clustering, time series, tree-based methods, and causal inference. We'll move from "what happened" to "why."
+
+Acts 1–3 correspond to the four modes of reasoning: Act 1 covers summary and prediction, Act 2 covers inference, and Act 3 adds causation.
 
 We'll see the ten questions from the opening recur throughout the course:
 
@@ -230,8 +232,9 @@ If you ran a hospital and your heart failure ERR was 1.05, would you worry? How 
 ## Key Takeaways
 
 - **Applied statistics is about decisions under uncertainty**, not formulas in a vacuum.
-- Consequential decisions have financial impact, human impact, irreversibility, and scale — most hit more than one.
-- The course has three acts: Build Models, Trust Models, See Further. Each act builds on the last.
+- The same dataset supports four different modes of reasoning: **summary** (what happened?), **prediction** (what will happen?), **inference** (what can we conclude?), and **causation** (what would happen if we intervened?).
+- Each mode requires different tools and answers a different kind of question. The three acts of this course build them in sequence.
+- Any analysis — from an AI, a colleague, or your own first pass — deserves skepticism. Your job is to verify.
 - Every dataset has a story. Learning to read that story — and question it — is the core skill of a statistician.
 
 ## Study guide
@@ -239,17 +242,22 @@ If you ran a hospital and your heart failure ERR was 1.05, would you worry? How 
 ### Key ideas
 
 - **Applied statistics** is the science of making decisions under uncertainty using data.
-- A decision is **consequential** when getting it wrong has serious impact — financial, human, irreversible, or at scale.
+- Four modes of reasoning with data: **summary** (describe what happened), **prediction** (forecast what will happen), **inference** (quantify uncertainty about a conclusion), **causation** (determine what would happen under an intervention).
+- These four modes map onto the course: summary and prediction in Act 1, inference in Act 2, causation in Act 3.
 - The **Excess Readmission Ratio (ERR)** compares a hospital's readmissions to what's expected given its patient mix. Above 1.0 = more readmissions than expected.
-- The **null hypothesis** (preview) is the default assumption that nothing interesting is happening (e.g., "this hospital is no different from average"). Formalized in Lectures 9–10.
+- Real data is **noisy** (errors, corruption), **missing** (not recorded, suppressed), and **heterogeneous** (numbers, categories, text, networks).
+- A single number without an uncertainty estimate is dangerous — Zillow's $881M loss illustrates why prediction intervals matter.
+- Any quick analysis — from an AI, a script, or a first pass — can produce plausible-looking results that miss critical problems in the data.
 
 ### Computational tools
 
 - `pd.read_csv()` — load a CSV file into a DataFrame
+- `df['column_name']` — select a single column (returns a Series)
 - `.head()` — peek at the first few rows
 - `.describe()` — summary statistics (mean, std, min, max, quartiles)
 - `.value_counts()` — count unique values in a column
 - `sns.histplot()` — plot a histogram
+- `df[df['col'] == value]` — filter rows by a condition (boolean indexing)
 
 ### For the quiz
 
