@@ -729,9 +729,11 @@ Two patterns jump out:
 
 ### What is confounding?
 
-Suppose you survey children and find that shoe size correlates with reading ability. The correlation is real and reproducible — children with bigger feet genuinely do read better, on average. But bigger shoes don't *cause* better reading. **Age** drives both: older children have bigger feet *and* read better.
+Suppose you survey Stanford undergrads and find that students who attend office hours get higher grades. Should you start going to office hours to boost your GPA?
 
-The association between shoe size and reading ability is a statistical fact. The mistake would be interpreting it as causal. When you ask whether X *causes* Y, a variable that drives both X and Y creates an association that doesn't reflect a causal effect. That variable is a **confounder**.
+The association is real — OH attenders genuinely do earn higher grades, on average. But **student motivation** drives both: motivated students are more likely to attend office hours *and* more likely to study hard, do the readings, and start problem sets early. Some of the grade benefit attributed to office hours actually reflects motivation.
+
+Motivation is a **confounder**: it affects both the treatment (attending OH) and the outcome (grades), creating an association between them that overstates the causal effect of OH attendance alone.
 
 :::{.callout-important}
 ## Definition: Confounding
