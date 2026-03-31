@@ -733,7 +733,7 @@ Suppose you survey Stanford undergrads and find that students who attend office 
 
 The association is real — OH attenders genuinely do earn higher grades, on average. But **student motivation** drives both: motivated students are more likely to attend office hours *and* more likely to study hard, do the readings, and start problem sets early. Some of the grade benefit attributed to office hours actually reflects motivation.
 
-Motivation is a **confounder**: it affects both the treatment (attending OH) and the outcome (grades), creating an association between them that overstates the causal effect of OH attendance alone.
+Here the **treatment** is attending office hours and the **outcome** is your grade. Motivation is a **confounder**: it affects both the treatment and the outcome, creating an association between them that overstates the causal effect of OH attendance alone.
 
 :::{.callout-important}
 ## Definition: Confounding
