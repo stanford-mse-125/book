@@ -246,6 +246,8 @@ We've seen how missing data can hide systematic bias in healthcare. Now let's se
 
 We'll work with 29,000+ Airbnb listings in New York City. An Airbnb host losing bookings to cheaper listings might wonder: how should I reprice? We'll answer that question in Chapter 5, once we have regression tools. For now, we focus on understanding the data itself.
 
+We'll use the Airbnb data to answer a series of increasingly specific questions: What does a typical listing cost? How does price vary across neighborhoods and room types? And are those differences real — or confounded by lurking variables?
+
 ```{python}
 # Load Airbnb data
 # low_memory=False prevents mixed-type warnings for large files
@@ -355,11 +357,9 @@ Look at the left plot: the distribution is so skewed that you can barely see any
 
 Now look at the zoomed-in version on the right. Most listings are \$50–\$200/night, with a peak around \$100. Much more informative.
 
-The distribution is clearly right-skewed.
-
 :::{.callout-tip}
 ## Think About It
-Will the mean be higher or lower than the median? What happens if we naively compute the mean?
+Before looking at the numbers below: how large do you think the gap between mean and median price is? $5? $20? $100? What does the size of that gap tell you about the distribution?
 :::
 
 ```{python}
@@ -439,6 +439,8 @@ If a large fraction is missing, your histogram may not represent the full datase
 > **Key principle**: When a distribution has a heavy tail, the mean doesn't represent a typical value. Always look at the distribution before relying on any single number.
 
 ### Log scales for skewed data
+
+The raw distribution is so skewed that standard summaries are misleading. Can we find a better way to see the structure?
 
 When data is heavily right-skewed, the first thing to try is a **log axis**. It shows the same data on a logarithmic scale, compressing the long right tail and stretching out the bunched-up left side — without changing the data itself.
 
@@ -532,6 +534,8 @@ The 2D histogram reveals that the overwhelming majority of listings accommodate 
 
 ### Categorical variables: room types and boroughs
 
+Price depends on more than just the listing itself. Which features drive the biggest differences?
+
 Not all data is numeric. Let's look at the categorical variables. So far we've used **histograms** to see the shape of a single numeric variable. Now we need different tools.
 
 ### Choosing the right plot
@@ -620,6 +624,8 @@ The dodged chart (left) shows that Manhattan has the most listings overall. The 
 
 ### Faceted plots for aligned comparisons
 
+Now let's look at how variables relate to each other — and whether those relationships are what they seem.
+
 When overlapping histograms get crowded, **faceting** splits the data into separate panels that share the same x-axis. This makes it much easier to compare distributions across groups.
 
 ```{python}
@@ -681,6 +687,8 @@ plt.show()
 The median price roughly doubles from 1-guest to 6-guest listings. The boxes also show that spread increases with group size — larger listings have more price variability.
 
 ## Ranking hospitals: a cautionary tale
+
+We noticed that Manhattan is more expensive than Brooklyn — but Manhattan also has more entire homes. Is the borough effect real, or is it confounded by room type? This question mirrors the hospital ranking problem we're about to revisit.
 
 Let's go back to the hospital data for the punchline of this chapter.
 
