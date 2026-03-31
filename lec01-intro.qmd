@@ -109,7 +109,7 @@ These four modes — **summary, prediction, inference, and causation** — form 
 
 **Inference** asks: *what can we conclude about the population?* If a hospital's ERR is 1.05, is that a real signal or just noise from a small sample? Inference quantifies uncertainty — it tells you how confident to be. A single number without an uncertainty estimate is dangerous: Zillow's algorithm predicted home prices without prediction intervals and lost $881 million. In Act 2, we'll build the tools for inference: confidence intervals, hypothesis tests, and p-values.
 
-**Causation** asks: *what would happen if we intervened?* Does fining hospitals actually reduce readmissions — or do penalized hospitals just learn to game the metrics? Causal questions are the hardest because correlation doesn't imply causation. Observing that fined hospitals improve doesn't prove the fine caused the improvement — maybe those hospitals were already investing in quality. In Act 3, we'll develop frameworks for causal reasoning.
+**Causation** asks: *what would happen if we intervened?* Does fining hospitals actually reduce readmissions — or do penalized hospitals just learn to game the metrics? Causal questions are the hardest because correlation doesn't imply causation. Observing that fined hospitals improve doesn't prove the fine caused the improvement — maybe those hospitals were already investing in quality. The comparison may be **confounded** by other changes happening at the same time. We'll define and study confounding starting in Chapter 2. In Act 3, we'll develop frameworks for causal reasoning.
 
 :::{.callout-tip}
 ## Think About It
