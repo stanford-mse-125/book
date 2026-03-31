@@ -246,15 +246,38 @@ print(f"Shape: {airbnb.shape}")
 cols = ['name', 'neighbourhood_group_cleansed', 'neighbourhood_cleansed',
         'room_type', 'price', 'bedrooms', 'beds',
         'number_of_reviews', 'review_scores_rating', 'accommodates']
-airbnb_slim = airbnb[cols].copy()
-
-# Price is often stored as "$1,200.00" — strip symbols and convert to float
-airbnb_slim['price'] = (airbnb_slim['price']
-                        .replace(r'[\$,]', '', regex=True)
-                        .astype(float))
-
-airbnb_slim.head()
+airbnb = airbnb[cols].copy()
+airbnb.head()
 ```
+
+### When data needs cleaning
+
+In our dataset, the `price` column is already stored as integers — we got lucky. But many real-world CSVs aren't so tidy. Here's what raw Airbnb price data sometimes looks like before it's been cleaned:
+
+```{python}
+# Simulating raw price data — what Inside Airbnb's CSV sometimes looks like
+raw_prices = pd.Series(['$1,200.00', '$85.00', '$250.00', '$0.00', None])
+print("Raw format:")
+print(raw_prices)
+print(f"\nType: {raw_prices.dtype}")
+# raw_prices.mean()  # Would raise TypeError — can't average strings!
+```
+
+The fix: strip the dollar signs and commas, then convert to a numeric type.
+
+```{python}
+clean_prices = raw_prices.str.replace(r'[\$,]', '', regex=True).astype(float)
+print("After cleaning:")
+print(clean_prices)
+print(f"\nMean: ${clean_prices.mean():.2f}")
+```
+
+Always check `df.dtypes` early. A column that *looks* numeric may be stored as strings — and pandas won't warn you until you try to compute with it.
+
+:::{.callout-tip}
+## Think About It
+Our dataset has 25 listings at \$0/night. Are those real prices, data entry errors, or something else? How would you decide?
+:::
 
 ### The price distribution: beware the right tail
 
@@ -264,13 +287,13 @@ Let's look at the distribution of nightly prices.
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Raw distribution
-airbnb_slim['price'].hist(bins=100, ax=axes[0], edgecolor='white')
+airbnb['price'].hist(bins=100, ax=axes[0], edgecolor='white')
 axes[0].set_xlabel('Price ($)')
 axes[0].set_ylabel('Count')
 axes[0].set_title('All prices')
 
 # Zoomed in
-airbnb_slim[airbnb_slim['price'].between(1, 500)]['price'].hist(bins=50, ax=axes[1], edgecolor='white')
+airbnb[airbnb['price'].between(1, 500)]['price'].hist(bins=50, ax=axes[1], edgecolor='white')
 axes[1].set_xlabel('Price ($)')
 axes[1].set_ylabel('Count')
 axes[1].set_title('Prices $1–$500 (zoomed in)')
@@ -279,7 +302,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-Look at the left plot: the distribution is so skewed that you can barely see anything. A few very expensive listings (some over \$10,000/night!) dominate the scale.
+Look at the left plot: the distribution is so skewed that you can barely see anything. The most expensive listings reach \$999/night, and a long tail of pricey listings dominates the scale.
 
 Now look at the zoomed-in version on the right. Most listings are \$50–\$200/night, with a peak around \$100. Much more informative.
 
@@ -291,19 +314,77 @@ Will the mean be higher or lower than the median? What happens if we naively com
 :::
 
 ```{python}
-print(f"Mean price:   ${airbnb_slim['price'].mean():.0f}/night")
-print(f"Median price: ${airbnb_slim['price'].median():.0f}/night")
-print(f"Listings at $0: {(airbnb_slim['price'] == 0).sum()}")
-print(f"Max price: ${airbnb_slim['price'].max():,.0f}")
-print(f"Listings over $1000: {(airbnb_slim['price'] > 1000).sum()}")
+print(f"Mean price:   ${airbnb['price'].mean():.0f}/night")
+print(f"Median price: ${airbnb['price'].median():.0f}/night")
+print(f"Listings at $0: {(airbnb['price'] == 0).sum()}")
+print(f"Max price: ${airbnb['price'].max():,.0f}")
+print(f"Listings over $500: {(airbnb['price'] > 500).sum()}")
 ```
 
 The mean is about \$33 higher than the median. That gap is driven entirely by the right tail — a few hundred expensive listings pull the average up. If you're an Airbnb host trying to price a typical apartment, the mean is misleading. The median is a better summary here.
+
+### Summarizing center and spread
+
+We just saw that the mean and median can disagree. Let's define the key summaries precisely.
+
+:::{.callout-important}
+## Definitions: Center and Spread
+
+- **Mean** ($\bar{x}$): the arithmetic average, $\bar{x} = \frac{1}{n}\sum_{i=1}^n x_i$. Sensitive to extreme values.
+- **Median**: the middle value when observations are sorted. Half the data falls below it, half above. Robust to outliers.
+- **Quartiles**: sort the data and split into four equal parts. **Q1** (25th percentile) is the median of the lower half, **Q2** is the median itself (50th percentile), and **Q3** (75th percentile) is the median of the upper half.
+- **Interquartile Range (IQR)**: $\text{IQR} = Q3 - Q1$. The width of the middle 50% of the data. Robust to outliers.
+:::
+
+Let's see these on the Airbnb price distribution.
+
+```{python}
+prices = airbnb['price'].dropna()
+
+q1 = prices.quantile(0.25)
+median = prices.median()
+q3 = prices.quantile(0.75)
+mean = prices.mean()
+
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.histplot(prices[prices <= 500], bins=60, ax=ax, color='steelblue', edgecolor='white')
+
+# Vertical lines for mean, median, Q1, Q3
+ax.axvline(mean, color='red', linestyle='--', linewidth=2, label=f'Mean = ${mean:.0f}')
+ax.axvline(median, color='orange', linestyle='-', linewidth=2, label=f'Median (Q2) = ${median:.0f}')
+ax.axvline(q1, color='green', linestyle=':', linewidth=2, label=f'Q1 = ${q1:.0f}')
+ax.axvline(q3, color='green', linestyle=':', linewidth=2, label=f'Q3 = ${q3:.0f}')
+
+# Shaded IQR band
+ax.axvspan(q1, q3, alpha=0.15, color='green', label=f'IQR = ${q3 - q1:.0f}')
+
+ax.set_xlabel('Price ($)')
+ax.set_ylabel('Count')
+ax.set_title('Airbnb prices with center and spread markers')
+ax.set_xlim(0, 500)
+ax.legend(fontsize=10)
+plt.tight_layout()
+plt.show()
+```
+
+The mean (red dashed line) is pulled to the right of the median (orange solid line) by the long tail of expensive listings. The shaded green band shows the IQR — the middle 50% of prices. Most listings fall in a fairly narrow range, but the tail extends far to the right.
 
 :::{.callout-important}
 ## Definition: Robust Statistics
 
 A statistic is **robust** if extreme values barely affect it. The **median** and **interquartile range (IQR)** are robust: moving one observation to \$100,000 hardly changes either one. The **mean** and **standard deviation** are not robust: a single extreme value can shift them dramatically. When a distribution has heavy tails or outliers, robust summaries give a more reliable picture of the typical value and spread.
+:::
+
+:::{.callout-warning}
+## Silent NA dropping
+
+Functions like `sns.histplot()`, `sns.boxplot()`, and `.describe()` all drop `NaN` values silently — they won't warn you that rows were excluded. Before plotting or summarizing, always check how much data is missing:
+
+```python
+df['col'].isna().sum()
+```
+
+If a large fraction is missing, your histogram may not represent the full dataset.
 :::
 
 > **Key principle**: When a distribution has a heavy tail, the mean doesn't represent a typical value. Always look at the distribution before relying on any single number.
@@ -314,7 +395,7 @@ When data is heavily right-skewed, a **log transform** can reveal patterns that 
 
 ```{python}
 # Add log-price column (filter out $0 listings first)
-airbnb_pos = airbnb_slim[airbnb_slim['price'] > 0].copy()
+airbnb_pos = airbnb[airbnb['price'] > 0].copy()
 airbnb_pos['log_price'] = np.log10(airbnb_pos['price'])
 
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
@@ -358,7 +439,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-On the raw scale, a handful of luxury listings ($5,000+) make it hard to see any pattern. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a multiplicative increase in price. We'll use this idea extensively when we build regression models in Chapter 5.
+On the raw scale, expensive listings in the $500–$999 range make it hard to see any pattern among the majority. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a multiplicative increase in price. We'll use this idea extensively when we build regression models in Chapter 5.
 
 ### Categorical variables: room types and boroughs
 
@@ -374,14 +455,14 @@ Choosing the right plot for the question is half the battle.
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Room type
-room_counts = airbnb_slim['room_type'].value_counts()
+room_counts = airbnb['room_type'].value_counts()
 room_counts.plot.bar(ax=axes[0], color=sns.color_palette()[:len(room_counts)], edgecolor='white')
 axes[0].set_title('Listings by Room Type')
 axes[0].set_ylabel('Count')
 axes[0].tick_params(axis='x', rotation=0)
 
 # Borough
-borough_counts = airbnb_slim['neighbourhood_group_cleansed'].value_counts()
+borough_counts = airbnb['neighbourhood_group_cleansed'].value_counts()
 borough_counts.plot.bar(ax=axes[1], color=sns.color_palette()[3:8], edgecolor='white')
 axes[1].set_title('Listings by Borough')
 axes[1].set_ylabel('Count')
@@ -396,7 +477,7 @@ plt.show()
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
 # Price by room type (cap at $500 for visibility)
-filtered = airbnb_slim[airbnb_slim['price'].between(1, 500)]
+filtered = airbnb[airbnb['price'].between(1, 500)]
 sns.boxplot(data=filtered, x='room_type', y='price', ax=axes[0])
 axes[0].set_title('Price by Room Type')
 axes[0].set_ylabel('Price ($)')
