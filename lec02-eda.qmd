@@ -5,9 +5,9 @@ execute:
 jupyter: python3
 ---
 
-## A hospital is about to be fined \$350,000. Is that fair?
+## Which hospitals have surprisingly high readmission rates?
 
-Under the CMS Hospital Readmissions Reduction Program, hospitals with excess readmissions face penalties that can reach hundreds of thousands of dollars per year. A hospital administrator staring at a \$350,000 fine wants to know: are we actually performing worse than expected, or are we just treating sicker patients? Answering that question requires looking at the data before jumping to conclusions.
+You run the data team at the CMS Hospital Readmissions Reduction Program. Your mandate: identify hospitals whose patients are readmitted within 30 days more often than expected, and penalize them. You have readmission data on 3,000+ hospitals across six medical conditions. Where do you start?
 
 :::{.callout-important}
 ## Definition: Exploratory Data Analysis (EDA)
@@ -15,9 +15,10 @@ Under the CMS Hospital Readmissions Reduction Program, hospitals with excess rea
 **Exploratory Data Analysis (EDA)** is the practice of examining a dataset's structure, distributions, and quirks before fitting any model. EDA is the most important step in any analysis — and the one most often skipped.
 :::
 
-In Chapter 1, we introduced four modes of reasoning with data: summary, prediction, inference, and causation. This chapter focuses on the first: **summary**. Before you predict, infer, or ask causal questions, you need to understand what's in your data. EDA is how you build that understanding.
+In Chapter 1, we introduced four modes of reasoning with data: summary, prediction, inference, and causation. This chapter focuses on the first: **summary**. Before you predict, infer, or ask causal questions, you need to understand what's in your data. EDA builds that understanding.
 
-Today we'll explore two real datasets: hospital readmissions and NYC Airbnb listings. Along the way, we'll find **outliers**, missing data patterns, and a lesson about adjusting for context.
+Today we'll explore two real datasets: hospital readmissions and NYC Airbnb listings. Along the way, we'll learn to visualize outliers, missing data patterns, 
+and relationships between variables.
 
 ```{python}
 import numpy as np
@@ -58,19 +59,27 @@ Same mean of *x*. Same mean of *y*. Same correlation. Same regression line. Comp
 
 Let's start with the CMS Hospital Readmissions Reduction Program data. Recall from Chapter 1 that this dataset tracks how often patients are readmitted within 30 days, for six medical conditions, across about 3,000 U.S. hospitals.
 
-The EDA checklist is always the same: (1) **Shape** — how many rows and columns? (2) **Types** — what are the column types? Any surprises? (3) **Distributions** — what does each variable look like? (4) **Missing data** — how much, and why? (5) **Relationships** — how do variables relate to each other?
+The EDA checklist:
 
+- **Shape** — how many rows and columns?
+- **Types** — what are the column types? Any surprises?
+- **Distributions** — what does each variable look like?
+- **Missing data** — how much, and why?
+- **Relationships** — how do variables relate to each other?
+
+First, we load our data, check how big it is, and check which columns are present.
 ```{python}
 hrrp = pd.read_csv(f'{DATA_DIR}/hospital-readmissions/hrrp_full.csv')
 print(f"Shape: {hrrp.shape}")
 print(f"Columns: {list(hrrp.columns)}")
 ```
 
+Our analysis always starts here: what does the data look like?
 ```{python}
-# Always start here: what does the data look like?
 hrrp.head()
 ```
 
+Now let's summarize the numeric columns to get a quick sense of their ranges and typical values.
 ```{python}
 # Quick summary of numeric columns
 hrrp[['Excess Readmission Ratio', 'Predicted Readmission Rate',
@@ -79,7 +88,7 @@ hrrp[['Excess Readmission Ratio', 'Predicted Readmission Rate',
 
 ### Shape, types, and first impressions
 
-Every EDA starts the same way: How many rows? How many columns? What types are they? Are there surprises?
+Let's look a bit deeper: How many rows? How many columns? What types are they? Are there surprises?
 
 ```{python}
 # Data types and non-null counts
@@ -106,6 +115,7 @@ plt.tight_layout()
 plt.show()
 ```
 
+We'll filter the data to show distributions by condition. The `Measure Name` column encodes the medical condition — but it's a bit messy. Let's clean it up for better labels.
 ```{python}
 # Distribution by condition
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -121,7 +131,8 @@ plt.tight_layout()
 plt.show()
 ```
 
-The distributions look roughly symmetric and unimodal, centered near 1.0 (though with a slight right skew — we'll revisit what "normal" really means in Chapter 8). But notice the spread differs by condition — heart failure (HF) has more variation than hip/knee replacement.
+The distributions look roughly symmetric and unimodal, centered near 1.0.
+But notice the spread differs by condition — heart failure (HF) has more variation than hip/knee replacement.
 
 :::{.callout-tip}
 ## Think About It
@@ -139,14 +150,20 @@ missing_pct = (missing / len(hrrp) * 100).round(1)
 pd.DataFrame({'Missing': missing, '% Missing': missing_pct}).query('Missing > 0')
 ```
 
-About 15% of `Excess Readmission Ratio` and `Predicted Readmission Rate` are missing. But is this random?
+A substantial fraction of `Excess Readmission Ratio` and `Predicted Readmission Rate` values are missing — check the percentages in the table above. Why might they be missing?
 
 Let's check the `Number of Readmissions` column — the one stored as a string.
 
+Let's find the non-numeric entries using `pd.to_numeric()` with `errors='coerce'` — values that can't be converted become NaN.
+
 ```{python}
-# What non-numeric values are in Number of Readmissions?
-hrrp['Number of Readmissions'].value_counts().tail(5)
+# Which values in 'Number of Readmissions' can't be converted to numbers?
+non_numeric = hrrp[pd.to_numeric(hrrp['Number of Readmissions'], errors='coerce').isna()
+                   & hrrp['Number of Readmissions'].notna()]
+non_numeric['Number of Readmissions'].value_counts()
 ```
+
+The output reveals that "Too Few to Report" is the culprit. Let's see how these suppressed entries are distributed across conditions. The `.groupby()` method splits the data into groups for aggregation — here, counting suppressed entries per condition.
 
 ```{python}
 # How many "Too Few to Report" entries, by condition?
@@ -159,6 +176,8 @@ total_by_condition = hrrp.groupby('Measure Name').size()
 pct_missing = (too_few_by_condition / total_by_condition * 100).round(1)
 pd.DataFrame({'Too Few': too_few_by_condition, 'Total': total_by_condition, '% Missing': pct_missing})
 ```
+
+A bar chart makes the pattern easier to scan across all six conditions at once.
 
 ```{python}
 # Visualize the missingness pattern
@@ -178,7 +197,7 @@ The pattern in the bar chart is a critical finding. Statisticians distinguish th
 :::{.callout-important}
 ## Definition: Patterns of Missingness
 
-- **Missing Completely At Random (MCAR)**: no pattern at all. A lab assistant randomly spills coffee on some data sheets — the ruined records have nothing in common with each other.
+- **Missing Completely At Random (MCAR)**: no pattern at all. Mold damages a random subset of paper medical records in a basement archive — the destroyed records have nothing in common with each other.
 - **Missing At Random (MAR)**: missingness depends on other *observed* data, but not on the missing value itself. Older patients are less likely to complete a follow-up survey, and we have each patient's age on file — so we can account for the gap.
 - **Missing Not At Random (MNAR)**: missingness depends on the *unobserved value itself*. Patients with the worst health outcomes are the ones who skip the follow-up survey, and we never observe their outcomes.
 :::
@@ -190,6 +209,11 @@ CABG (coronary artery bypass graft surgery) has ~50% missing — fewer hospitals
 :::{.callout-warning}
 ## Dropping missing data can introduce bias
 If you drop these rows, you're analyzing only the large, urban hospitals. Your conclusions would be biased.
+:::
+
+:::{.callout-important}
+## Definition: Bias
+A statistical estimate is **biased** when it systematically deviates from the true value. Bias is not random error — it doesn't shrink with more data. Dropping MNAR data introduces **selection bias**: the remaining sample no longer represents the population. An estimate computed from a biased sample will consistently over- or under-estimate the quantity of interest, no matter how large the sample grows.
 :::
 
 For now, we're just diagnosing — noticing what's going on. In Chapter 3, we'll decide what to do about it.
@@ -235,6 +259,7 @@ ax.set_title('Suppression rate by condition')
 ax.set_ylabel('Condition')
 ax.set_xlabel('Suppressed')
 plt.tight_layout()
+ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
 plt.show()
 ```
 
@@ -242,12 +267,13 @@ Now the pattern pops out: about half of CABG records are suppressed, compared to
 
 ## Part 2: Airbnb listings
 
-We've seen how missing data can hide systematic bias in healthcare. Now let's see how outliers and skewness can mislead in a completely different domain — showing that EDA principles are universal.
+We've seen how missing data can hide systematic bias in healthcare. Now let's see how outliers and skewness can mislead in a completely different domain.
 
 We'll work with 29,000+ Airbnb listings in New York City. An Airbnb host losing bookings to cheaper listings might wonder: how should I reprice? We'll answer that question in Chapter 5, once we have regression tools. For now, we focus on understanding the data itself.
 
-We'll use the Airbnb data to answer a series of increasingly specific questions: What does a typical listing cost? How does price vary across neighborhoods and room types? And are those differences real — or confounded by lurking variables?
+We'll use the Airbnb data to answer a series of increasingly specific questions: What does a typical listing cost? How does price vary across neighborhoods and room types? And should we attribute the price variation to the location and room type — or could these differences be confounded by other variables?
 
+First, we load our data, check how big it is, and select columns to explore.
 ```{python}
 # Load Airbnb data
 # low_memory=False prevents mixed-type warnings for large files
@@ -256,7 +282,7 @@ print(f"Shape: {airbnb.shape}")
 
 # Select key columns for exploration
 cols = ['name', 'neighbourhood_group_cleansed', 'neighbourhood_cleansed',
-        'room_type', 'price', 'bedrooms', 'beds',
+        'room_type', 'price', 'bedrooms', 'beds', 'security_deposit',
         'number_of_reviews', 'review_scores_rating', 'accommodates']
 airbnb = airbnb[cols].copy()
 airbnb.head()
@@ -268,20 +294,28 @@ In our dataset, the `price` column is already stored as integers — we got luck
 
 ```{python}
 # Simulating raw price data — what Inside Airbnb's CSV sometimes looks like
-raw_prices = pd.Series(['$1,200.00', '$85.00', '$250.00', '$0.00', None])
+raw_prices = pd.Series(['$1,200.00', '$85.00', '$250.00', '$0.00', 'unknown', 'NA', '-50', 'Inf', None])
 print("Raw format:")
 print(raw_prices)
 print(f"\nType: {raw_prices.dtype}")
 # raw_prices.mean()  # Would raise TypeError — can't average strings!
 ```
 
-The fix: strip the dollar signs and commas, then convert to a numeric type.
+The fix: replace non-numeric placeholders, strip dollar signs and commas, convert to numeric, and handle invalid values like negatives.
 
 ```{python}
-clean_prices = raw_prices.str.replace(r'[\$,]', '', regex=True).astype(float)
+# Step 1: Replace non-numeric placeholders with NaN
+cleaned = raw_prices.replace(['unknown', 'NA', 'Inf', '-Inf'], np.nan)
+# Step 2: Strip dollar signs and commas
+cleaned = cleaned.str.replace(r'[\$,]', '', regex=True)
+# Step 3: Convert to numeric, coercing remaining problems to NaN
+cleaned = pd.to_numeric(cleaned, errors='coerce')
+# Step 4: Replace negative values with NaN (prices can't be negative)
+cleaned = cleaned.where(cleaned >= 0)
 print("After cleaning:")
-print(clean_prices)
-print(f"\nMean: ${clean_prices.mean():.2f}")
+print(cleaned)
+print(f"\nValid prices: {cleaned.notna().sum()} out of {len(cleaned)}")
+print(f"Mean of valid: ${cleaned.mean():.2f}")
 ```
 
 Always check `df.dtypes` early. A column that *looks* numeric may be stored as strings — and pandas won't warn you until you try to compute with it.
@@ -295,32 +329,33 @@ Our dataset has 25 listings at \$0/night. Are those real prices, data entry erro
 
 Missing values are data too. Instead of silently dropping them, consider making them visible in your plots.
 
-For categorical variables, include NaN as its own category:
+About 40% of listings have no security deposit recorded. Let's make that missingness visible instead of hiding it.
 
 ```{python}
-bedrooms_display = airbnb['bedrooms'].copy()
-bedrooms_display = bedrooms_display.fillna('Missing')
-fig, ax = plt.subplots(figsize=(7, 4))
-bedrooms_display.value_counts().sort_index().plot.bar(ax=ax, edgecolor='white')
-ax.set_xlabel('Bedrooms')
+# Visualize missingness: security deposit
+deposit_status = airbnb['security_deposit'].apply(
+    lambda x: f'${x:.0f}' if pd.notna(x) else 'Missing')
+fig, ax = plt.subplots(figsize=(8, 4))
+deposit_status.value_counts().head(10).plot.bar(ax=ax, edgecolor='white')
+ax.set_xlabel('Security Deposit')
 ax.set_ylabel('Count')
-ax.set_title('Bedrooms (including missing)')
+ax.set_title('Security deposit (40% of listings have no value)')
 plt.tight_layout()
 plt.show()
 ```
 
-For numeric variables, compare distributions for rows where a related column is missing vs. present:
+Do listings with missing deposits have different prices? Comparing the price distributions reveals whether the missingness is informative.
 
 ```{python}
-airbnb['bedrooms_missing'] = airbnb['bedrooms'].isna()
+airbnb['deposit_missing'] = airbnb['security_deposit'].isna()
 fig, ax = plt.subplots(figsize=(8, 4))
-for label, group in airbnb[airbnb['price'] > 0].groupby('bedrooms_missing'):
-    tag = 'Missing bedrooms' if label else 'Has bedrooms'
+for label, group in airbnb[airbnb['price'] > 0].groupby('deposit_missing'):
+    tag = 'No deposit listed' if label else 'Deposit listed'
     sns.histplot(group['price'][group['price'] <= 500], bins=40, ax=ax,
                  label=tag, alpha=0.5, stat='density')
 ax.set_xlabel('Price ($)')
 ax.set_ylabel('Density')
-ax.set_title('Price distribution: missing vs. present bedroom count')
+ax.set_title('Price distribution: missing vs. present security deposit')
 ax.legend()
 plt.tight_layout()
 plt.show()
@@ -370,7 +405,7 @@ print(f"Max price: ${airbnb['price'].max():,.0f}")
 print(f"Listings over $500: {(airbnb['price'] > 500).sum()}")
 ```
 
-The mean is about \$33 higher than the median. That gap is driven entirely by the right tail — a few hundred expensive listings pull the average up. If you're an Airbnb host trying to price a typical apartment, the mean is misleading. The median is a better summary here.
+The mean is noticeably higher than the median — compare the two values printed above. That gap is driven entirely by the right tail: a few hundred expensive listings pull the average up. If you're an Airbnb host trying to price a typical apartment, the mean is misleading. The median is a better summary here.
 
 ### Summarizing center and spread
 
@@ -456,17 +491,19 @@ axes[0].set_xlabel('Price ($)')
 axes[0].set_ylabel('Count')
 axes[0].set_title('Linear scale (raw prices)')
 
-# Panel 2: Log axis — same data, log scale on x-axis
-sns.histplot(airbnb_pos['price'], bins=100, ax=axes[1], edgecolor='white', color='seagreen')
+# Panel 2: Log axis with log-spaced bins (equal visual area = equal count)
+log_bins = np.logspace(np.log10(airbnb_pos['price'].min()),
+                       np.log10(airbnb_pos['price'].max()), 50)
+axes[1].hist(airbnb_pos['price'], bins=log_bins, edgecolor='white', color='seagreen')
 axes[1].set_xscale('log')
-axes[1].set_xlabel('Price ($)')
+axes[1].set_xlabel('Price ($, log scale)')
 axes[1].set_ylabel('Count')
-axes[1].set_title('Log axis (preferred for visualization)')
+axes[1].set_title('Log axis with log-spaced bins')
 
 # Panel 3: Log-transformed data — for modeling
 airbnb_pos['log_price'] = np.log10(airbnb_pos['price'])
 sns.histplot(airbnb_pos['log_price'], bins=50, ax=axes[2], edgecolor='white', color='mediumpurple')
-axes[2].set_xlabel('log₁₀(Price)')
+axes[2].set_xlabel('log10(Price)')
 axes[2].set_ylabel('Count')
 axes[2].set_title('Log-transformed data (for modeling)')
 
@@ -474,7 +511,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The linear histogram (left) is nearly useless — everything is piled up on the left. The log-axis histogram (center) shows the same data on a logarithmic scale: the shape is clear, and the x-axis labels are still in dollars. The log-transformed histogram (right) plots $\log_{10}(\text{price})$ directly — useful when you need to feed the data into a model.
+The linear histogram (left) is nearly useless — everything is piled up on the left. The log-axis histogram (center) uses logarithmically-spaced bins so that each bar covers an equal range on the log scale — this ensures bar *areas* are proportional to counts, avoiding the visual distortion that equal-width bins create on a log axis. (We use `axes[1].hist()` from matplotlib here instead of `sns.histplot()` because we need custom bin edges.) The log-transformed histogram (right) plots $\log_{10}(\text{price})$ directly — useful when you need to feed the data into a model.
 
 > **Use a log *axis* when you want to *look* at skewed data. Use a log *transform* when you need to *model* it (e.g., in a regression).**
 
@@ -518,10 +555,12 @@ axes[0].set_ylabel('Price ($)')
 axes[0].set_title('Scatter plot (overplotted)')
 axes[0].set_ylim(0, 700)
 
-# 2D histogram
-sns.histplot(data=prices_pos[prices_pos['price'] <= 700],
-             x='accommodates', y='price', bins=30, ax=axes[1],
-             cbar=True, cbar_kws={'label': 'Count'})
+# 2D histogram with log color scale to reveal structure in dense regions
+from matplotlib.colors import LogNorm
+h = axes[1].hist2d(prices_pos['accommodates'][prices_pos['price'] <= 700],
+                   prices_pos['price'][prices_pos['price'] <= 700],
+                   bins=30, cmap='viridis', norm=LogNorm())
+plt.colorbar(h[3], ax=axes[1], label='Count (log scale)')
 axes[1].set_xlabel('Accommodates (guests)')
 axes[1].set_ylabel('Price ($)')
 axes[1].set_title('2D histogram (reveals density)')
@@ -545,7 +584,7 @@ Not all data is numeric. Let's look at the categorical variables. So far we've u
 | One numeric | Histogram | Shape, center, spread |
 | One numeric (skewed) | Histogram with log axis | Reveal structure in heavy-tailed data |
 | One categorical | Bar chart | Counts/proportions per category |
-| One categorical (NOT) | Pie chart | Almost never — use bar chart instead |
+| One categorical | Pie chart | Almost never — use bar chart instead |
 | Two numeric | Scatter plot | Relationships (small-moderate n) |
 | Two numeric (dense) | 2D histogram / heatmap | Relationships (large n) |
 | Numeric × categorical | Box plot | Compare distributions across groups |
@@ -577,10 +616,31 @@ plt.tight_layout()
 plt.show()
 ```
 
-:::{.callout-warning}
-## Why pie charts are almost always a bad choice
-Pie charts only make sense when you have a small number of categories (3--5) and the slices represent parts of a meaningful whole. Even then, bar charts are easier to read --- humans judge lengths more accurately than angles. Pie charts make it especially hard to compare categories of similar size. For the Airbnb data, a bar chart of room types is far more readable than a pie chart would be.
-:::
+### Why pie charts are almost always a bad choice
+
+Compare the same data in two formats:
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+room_counts = airbnb['room_type'].value_counts()
+
+# Pie chart
+axes[0].pie(room_counts, labels=room_counts.index, autopct='%1.0f%%',
+            startangle=90, colors=sns.color_palette()[:len(room_counts)])
+axes[0].set_title('Pie chart')
+
+# Bar chart
+room_counts.plot.bar(ax=axes[1], color=sns.color_palette()[:len(room_counts)],
+                     edgecolor='white')
+axes[1].set_title('Bar chart')
+axes[1].set_ylabel('Count')
+axes[1].tick_params(axis='x', rotation=0)
+
+plt.tight_layout()
+plt.show()
+```
+
+Which format makes it easier to tell whether "Private room" or "Entire home/apt" is more common? In the pie chart, the two slices look nearly the same size. In the bar chart, the difference is obvious. Pie charts only work well for 3-5 categories where the sizes are very different. For most data, bar charts are clearer.
 
 ### Comparing composition across groups
 
@@ -620,7 +680,8 @@ plt.tight_layout()
 plt.show()
 ```
 
-The dodged chart (left) shows that Manhattan has the most listings overall. The standardized chart (right) reveals something different: Manhattan has a higher *proportion* of entire homes than Brooklyn does. Composition matters.
+The dodged chart (left) allows comparisons between each type of listing.
+The stacked chart reveals that Manhattan has the most listings overall. The standardized chart (right) shows Manhattan has a higher *proportion* of entire homes than Brooklyn does.
 
 ### Faceted plots for aligned comparisons
 
@@ -631,14 +692,15 @@ When overlapping histograms get crowded, **faceting** splits the data into separ
 ```{python}
 prices_filt = airbnb[(airbnb['price'] > 0) & (airbnb['price'] <= 500)]
 g = sns.displot(data=prices_filt, x='price', col='room_type',
-                col_wrap=2, bins=40, height=3, aspect=1.5)
+                col_wrap=1, bins=40, height=3, aspect=1.5)
 g.set_titles('{col_name}')
 g.set_xlabels('Price ($)')
 plt.tight_layout()
 plt.show()
 ```
 
-Faceting splits the data into separate panels that share the same x-axis. Comparing price distributions across room types is much easier here than in a single overlapping histogram.
+Faceting splits the data into separate panels that share the same x or y-axis. 
+Comparing distributions - here, prices across room types - is much easier when the shared axis is aligned. 
 
 ```{python}
 # Price by room type and borough
@@ -662,8 +724,21 @@ plt.show()
 
 Two patterns jump out:
 
-1. **Entire homes/apartments** cost roughly 2x more than private rooms, which makes intuitive sense.
+1. **Entire homes/apartments** cost roughly 2x more than private rooms.
 2. **Manhattan** is the most expensive borough. But notice the overlap — there are cheap Manhattan listings and expensive Brooklyn listings.
+
+### What is confounding?
+
+Two variables can appear related even when neither causes the other — if a third variable drives both.
+
+Consider a simple example. Suppose you survey children and find that shoe size correlates with reading ability. Bigger feet → better reading? Of course not. **Age** is the lurking variable: older children have bigger feet *and* read better. Shoe size and reading ability are **confounded** by age.
+
+:::{.callout-important}
+## Definition: Confounding
+Two variables are **confounded** when a third variable — the **confounder** — is associated with both, making the apparent relationship between them misleading. Controlling for the confounder (here, comparing children of the same age) reveals whether the relationship is real.
+:::
+
+The same logic applies to the Airbnb data.
 
 :::{.callout-tip}
 ## Think About It
@@ -686,11 +761,35 @@ plt.show()
 
 The median price roughly doubles from 1-guest to 6-guest listings. The boxes also show that spread increases with group size — larger listings have more price variability.
 
+### Violin plots: seeing the full shape
+
+Box plots summarize distributions with five numbers (min, Q1, median, Q3, max). **Violin plots** show the full distribution shape — revealing patterns that box plots hide.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+filtered = airbnb[airbnb['price'].between(1, 500)]
+
+# Box plot
+sns.boxplot(data=filtered, x='room_type', y='price', ax=axes[0])
+axes[0].set_title('Box plot')
+axes[0].set_ylabel('Price ($)')
+
+# Violin plot
+sns.violinplot(data=filtered, x='room_type', y='price', ax=axes[1], inner='quartile')
+axes[1].set_title('Violin plot')
+axes[1].set_ylabel('Price ($)')
+
+plt.tight_layout()
+plt.show()
+```
+
+The violin plot reveals that private room prices cluster tightly around \$60, while entire home prices spread broadly from \$100 to \$300. The box plot's median and quartiles can't convey this shape difference.
+
 ## Ranking hospitals: a cautionary tale
 
 We noticed that Manhattan is more expensive than Brooklyn — but Manhattan also has more entire homes. Is the borough effect real, or is it confounded by room type? This question mirrors the hospital ranking problem we're about to revisit.
 
-Let's go back to the hospital data for the punchline of this chapter.
+Let's go back to the hospital data for the central finding of this chapter.
 
 Quick reference for the three metrics we'll use:
 
@@ -762,26 +861,20 @@ big_movers
 
 The naive ranking unfairly penalizes these hospitals. Their high raw rates reflect the complexity of the patients they treat — after adjustment, they're performing fine.
 
-The ranking reversal we just witnessed is a form of **confounding**: patient severity is a lurking variable that distorts the naive comparison. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix. We'll study confounding formally in Chapter 18. For now, the lesson is simpler:
-
-:::{.callout-important}
-## Definition: Confounding
-
-Two variables are **confounded** when a third variable — the **confounder** — is associated with both, making it impossible to tell from the data alone whether the apparent relationship is real or an artifact. Here, patient severity is a confounder: it affects both which hospital a patient goes to *and* the readmission outcome. Ranking hospitals by raw readmission rates conflates hospital quality with patient severity.
-:::
+The ranking reversal we just witnessed is a form of **confounding** (defined earlier in the Airbnb section): patient severity is a lurking variable that distorts the naive comparison. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix. Here, patient severity is the confounder — it affects both which hospital a patient goes to *and* the readmission outcome. We'll study confounding formally in Chapter 18. For now, the lesson is simpler:
 
 :::{.callout-warning}
 ## Don't rank before you adjust
 The "worst" hospitals might just be the ones treating the hardest cases.
 :::
 
-We'll revisit this hospital data in Chapter 18 when we ask: *is this causal?* Does the penalty actually reduce readmissions, or does it just punish hospitals that serve vulnerable populations?
+We'll revisit this hospital data in Chapter 18 when we ask a causal question: does the penalty actually reduce readmissions, or does it just punish hospitals that serve vulnerable populations?
 
 ## Key Takeaways
 
 - **EDA is the summary mode** — understand your data before modeling it.
 - **Always check data types.** A column that looks numeric may be stored as strings. Clean before computing.
-- **Distributions matter.** The mean can be misleading when distributions are skewed. Always plot a histogram. Use a log axis for heavy-tailed data.
+- **Distributions reveal what summaries hide.** The mean can be misleading when distributions are skewed. Always plot a histogram. Use a log axis for heavy-tailed data.
 - **Missing data tells a story.** Data that's Missing Not At Random (MNAR) can bias your analysis if you drop it. Visualize missingness — don't hide it.
 - **Confounding makes naive comparisons misleading.** The "worst" hospitals might just be treating the hardest cases. Always ask: what lurking variable could explain this pattern?
 
@@ -807,6 +900,7 @@ We'll revisit this hospital data in Chapter 18 when we ask: *is this causal?* Do
 - `sns.histplot()` — histogram of one numeric variable
 - `sns.histplot(x=..., y=..., bins=N)` — 2D histogram / heatmap for two numeric variables
 - `sns.boxplot(data=df, x='cat', y='num')` — compare distributions across groups
+- `sns.violinplot(data=df, x='cat', y='num')` — compare full distribution shapes across groups
 - `sns.countplot()` — bar chart of a categorical variable
 - `sns.displot(col='group')` — faceted histograms for comparing distributions
 - `pd.crosstab()` — contingency table for two categorical variables
