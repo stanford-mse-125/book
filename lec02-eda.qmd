@@ -199,45 +199,6 @@ For now, we're just diagnosing — noticing what's going on. In Chapter 3, we'll
 If you drop all the "Too Few to Report" rows, what kind of hospitals are left in your dataset? What conclusions might change?
 :::
 
-### Visualizing missing data
-
-Missing values are data too. Instead of silently dropping them, consider making them visible in your plots.
-
-For categorical variables, include NaN as its own category:
-
-```{python}
-bedrooms_display = airbnb['bedrooms'].copy()
-bedrooms_display = bedrooms_display.fillna('Missing')
-fig, ax = plt.subplots(figsize=(7, 4))
-bedrooms_display.value_counts().sort_index().plot.bar(ax=ax, edgecolor='white')
-ax.set_xlabel('Bedrooms')
-ax.set_ylabel('Count')
-ax.set_title('Bedrooms (including missing)')
-plt.tight_layout()
-plt.show()
-```
-
-For numeric variables, compare distributions for rows where a related column is missing vs. present:
-
-```{python}
-airbnb['bedrooms_missing'] = airbnb['bedrooms'].isna()
-fig, ax = plt.subplots(figsize=(8, 4))
-for label, group in airbnb[airbnb['price'] > 0].groupby('bedrooms_missing'):
-    tag = 'Missing bedrooms' if label else 'Has bedrooms'
-    sns.histplot(group['price'][group['price'] <= 500], bins=40, ax=ax,
-                 label=tag, alpha=0.5, stat='density')
-ax.set_xlabel('Price ($)')
-ax.set_ylabel('Density')
-ax.set_title('Price distribution: missing vs. present bedroom count')
-ax.legend()
-plt.tight_layout()
-plt.show()
-```
-
-If the distributions differ, the missingness may be informative — a signal, not just a nuisance.
-
-> **Key principle**: Before you handle missing data, you must understand *why* it's missing. The "why" determines the "how."
-
 ### Contingency tables: two categorical variables at once
 
 We've been looking at one variable at a time. A **contingency table** (or cross-tabulation) counts how often each combination of two categorical variables occurs. It's the categorical equivalent of a scatter plot.
@@ -327,6 +288,45 @@ Always check `df.dtypes` early. A column that *looks* numeric may be stored as s
 ## Think About It
 Our dataset has 25 listings at \$0/night. Are those real prices, data entry errors, or something else? How would you decide?
 :::
+
+### Visualizing missing data
+
+Missing values are data too. Instead of silently dropping them, consider making them visible in your plots.
+
+For categorical variables, include NaN as its own category:
+
+```{python}
+bedrooms_display = airbnb['bedrooms'].copy()
+bedrooms_display = bedrooms_display.fillna('Missing')
+fig, ax = plt.subplots(figsize=(7, 4))
+bedrooms_display.value_counts().sort_index().plot.bar(ax=ax, edgecolor='white')
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Count')
+ax.set_title('Bedrooms (including missing)')
+plt.tight_layout()
+plt.show()
+```
+
+For numeric variables, compare distributions for rows where a related column is missing vs. present:
+
+```{python}
+airbnb['bedrooms_missing'] = airbnb['bedrooms'].isna()
+fig, ax = plt.subplots(figsize=(8, 4))
+for label, group in airbnb[airbnb['price'] > 0].groupby('bedrooms_missing'):
+    tag = 'Missing bedrooms' if label else 'Has bedrooms'
+    sns.histplot(group['price'][group['price'] <= 500], bins=40, ax=ax,
+                 label=tag, alpha=0.5, stat='density')
+ax.set_xlabel('Price ($)')
+ax.set_ylabel('Density')
+ax.set_title('Price distribution: missing vs. present bedroom count')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+If the distributions differ, the missingness may be informative — a signal, not just a nuisance.
+
+> **Key principle**: Before you handle missing data, you must understand *why* it's missing. The "why" determines the "how."
 
 ### The price distribution: beware the right tail
 
@@ -682,7 +682,7 @@ The median price roughly doubles from 1-guest to 6-guest listings. The boxes als
 
 ## Ranking hospitals: a cautionary tale
 
-Let's go back to the hospital data for the punchline of today's lecture.
+Let's go back to the hospital data for the punchline of this chapter.
 
 Quick reference for the three metrics we'll use:
 
@@ -771,38 +771,40 @@ We'll revisit this hospital data in Chapter 18 when we ask: *is this causal?* Do
 
 ## Key Takeaways
 
-- **Always look at your data before modeling.** Use `.shape`, `.head()`, `.info()`, `.describe()` as your first moves.
-- **Distributions matter.** The mean can be misleading when distributions are skewed. Always plot a histogram.
-- **Missing data tells a story.** Data that's Missing Not At Random (MNAR) can bias your analysis if you just drop it. Ask *why* it's missing.
-- **Outliers and confounders make naive comparisons misleading.** A few extreme values can distort means and conclusions. When you compare groups without adjusting for context (patient severity, room type, etc.), you can reach the wrong conclusion.
+- **EDA is the summary mode** — understand your data before modeling it.
+- **Always check data types.** A column that looks numeric may be stored as strings. Clean before computing.
+- **Distributions matter.** The mean can be misleading when distributions are skewed. Always plot a histogram. Use a log axis for heavy-tailed data.
+- **Missing data tells a story.** Data that's Missing Not At Random (MNAR) can bias your analysis if you drop it. Visualize missingness — don't hide it.
+- **Confounding makes naive comparisons misleading.** The "worst" hospitals might just be treating the hardest cases. Always ask: what lurking variable could explain this pattern?
 
 ## Study guide
 
 ### Key ideas
 
-- **Exploratory Data Analysis (EDA)**: Getting to know your data — shape, types, distributions, missingness, relationships — before modeling.
-- **Distribution**: The pattern of values a variable takes. Described by shape (symmetric, skewed), center (mean, median), and spread.
-- **Histogram**: Shows the shape of one numeric variable by binning values and counting. **Box plot**: Compares distributions across groups, showing median, quartiles, and outliers. **Scatter plot**: Reveals relationships between two numeric variables. **Bar chart**: Shows counts or proportions for categorical data.
-- **Contingency table**: A table summarizing counts for two categorical variables. **Row and column proportions** show the conditional distribution of one variable given the other.
-- **Outlier**: An observation far from the bulk of the data. Can be real (a penthouse) or an error.
+- **Exploratory Data Analysis (EDA)**: Examining a dataset's structure, distributions, and quirks before fitting any model.
+- **Mean, median, quartiles, IQR**: The mean is the arithmetic average (sensitive to outliers). The median is the middle value (robust). Quartiles divide data into four parts. IQR = Q3 − Q1 measures spread of the middle 50%.
 - **Robust statistics**: The median and IQR are robust — barely affected by extreme values. The mean and standard deviation are not.
-- **Patterns of missingness**: **MCAR** — no pattern at all. **MAR** — missingness depends on observed variables. **MNAR** — missingness depends on the unobserved value itself, the most dangerous pattern.
-- Always visualize before summarizing. Summary statistics can hide wildly different data (Anscombe's quartet).
-- When a distribution is skewed, the mean doesn't represent a typical value — the median is more informative.
-- Missing data is a signal, not just a nuisance. Ask *why* it's missing before deciding how to handle it.
+- **Log axis vs. log transform**: Use a log axis to *visualize* skewed data (keeps original units on the axis). Use a log transform to *model* skewed data (creates a new variable for regression).
+- **Patterns of missingness**: **MCAR** — no pattern at all. **MAR** — missingness depends on observed variables. **MNAR** — missingness depends on the unobserved value itself.
+- **Confounding**: When a third variable is associated with both the predictor and the outcome, distorting the apparent relationship.
+- Plotting functions (`sns.histplot`, `sns.boxplot`, `.describe()`) drop NAs silently. Always check `df['col'].isna().sum()` first.
 - Naive rankings can be unfair: the "worst" hospitals may just be treating the hardest cases.
+- Pie charts are almost always a bad choice — use bar charts instead.
 
 ### Computational tools
 
-- `df.shape` — number of rows and columns
-- `df.head()` — first few rows
-- `df.info()` — column types and non-null counts
-- `df.describe()` — summary statistics for numeric columns
-- `sns.histplot(df['col'])` — histogram of one column
+- `df.shape`, `df.head()`, `df.info()`, `df.describe()` — first moves in any EDA
+- `df['col'].isna().sum()` — count missing values
 - `df['col'].value_counts()` — frequency table for categorical data
+- `sns.histplot()` — histogram of one numeric variable
+- `sns.histplot(x=..., y=..., bins=N)` — 2D histogram / heatmap for two numeric variables
+- `sns.boxplot(data=df, x='cat', y='num')` — compare distributions across groups
+- `sns.countplot()` — bar chart of a categorical variable
+- `sns.displot(col='group')` — faceted histograms for comparing distributions
 - `pd.crosstab()` — contingency table for two categorical variables
-- `sns.boxplot()` — box plot comparing groups
-- `df.isnull().sum()` — count missing values per column
+- `sns.heatmap()` — heatmap of a matrix (e.g., contingency table)
+- `ax.set_xscale('log')` — set axis to log scale
+- `df.plot.bar(stacked=True)` — stacked bar chart
 
 ### For the quiz
 
