@@ -54,7 +54,7 @@ Answer these 12 questions before reading further. If you get 10 or more right, y
 
 10. If $\text{Cov}(X, Y) > 0$, what does that tell you about the relationship between $X$ and $Y$?
 
-11. You run 20 independent hypothesis tests, each at significance level $\alpha = 0.05$, and none of the effects are real. How many false positives do you expect?
+11. Let $X$ be the number showing on a fair die and let $Y$ be the number showing on a second independent fair die. What is $E[3X + Y]$?
 
 12. If 1% of emails are spam and a filter catches 90% of spam but flags 5% of legitimate email, what fraction of flagged emails are actually spam?
 :::
@@ -72,7 +72,7 @@ Answer these 12 questions before reading further. If you get 10 or more right, y
 8. The population mean $\mu$
 9. A normal distribution (specifically $\text{Normal}(\mu, \sigma/\sqrt{n})$)
 10. $X$ and $Y$ tend to move in the same direction — when $X$ is above its mean, $Y$ tends to be above its mean too
-11. $20 \times 0.05 = 1$ false positive (by linearity of expectation)
+11. By linearity of expectation, $E[3X + Y] = 3E[X] + E[Y] = 3(3.5) + 3.5 = 14$
 12. About 15%. By Bayes' rule: $P(\text{spam} \mid \text{flagged}) = \frac{0.90 \times 0.01}{0.90 \times 0.01 + 0.05 \times 0.99} \approx 0.154$. Most flagged emails are false alarms because spam is rare.
 :::
 
@@ -83,9 +83,9 @@ The rest of this appendix covers twelve ideas, grouped into four clusters:
 | Cluster | Concepts | Where they appear |
 |---------|----------|-------------------|
 | **Random variables** | random variables, probability distributions | throughout |
-| **Summaries** | expected value, variance, covariance | throughout, especially Lectures 5--14 |
-| **Named distributions** | normal, binomial, uniform | Lectures 8--13 |
-| **Convergence & sampling** | independence, iid, LLN, CLT, sampling distributions | Lectures 8--12 |
+| **Summaries** | expected value, variance, covariance | throughout, especially Chapters 5--14 |
+| **Named distributions** | normal, binomial, uniform | Chapters 8--13 |
+| **Convergence & sampling** | independence, iid, LLN, CLT, sampling distributions | Chapters 8--12 |
 
 
 ## Random variables
@@ -95,7 +95,7 @@ You measure the height of a randomly chosen Stanford student — call that $X$. 
 - **Discrete** random variables take on a countable set of values: the number of heads in 10 coin flips, the number of patients in a clinical trial who respond to treatment.
 - **Continuous** random variables can take any value in an interval: a patient's blood pressure, the price of a rental listing.
 
-The distinction matters because discrete random variables have **probability mass functions** (PMFs) while continuous ones have **probability density functions** (PDFs), but the intuition is the same: both tell you which values are more or less likely.
+The distinction matters for how we assign probabilities: discrete random variables have **probability mass functions** (PMFs) while continuous ones have **probability density functions** (PDFs). The intuition is the same — both tell you which values are more or less likely.
 
 ### Probability distributions
 
@@ -166,8 +166,8 @@ The running average settles down near 3.5 — that's the Law of Large Numbers in
 
 Two useful properties you'll see throughout this book:
 
-- **Linearity of expectation:** $E[aX + bY] = aE[X] + bE[Y]$, always — even when $X$ and $Y$ are dependent. This is the reason we can compute the expected number of false positives in Lecture 11 without knowing the dependence structure of our test statistics.
-- **Conditional expectation:** $E[X \mid Y = y]$ is the expected value of $X$ given that $Y$ takes the value $y$. In Lecture 1, we ask: what's the expected points per shot for James Harden from mid-range? That's a conditional expectation — the mean outcome conditioned on shot location.
+- **Linearity of expectation:** $E[aX + bY] = aE[X] + bE[Y]$, always — even when $X$ and $Y$ are dependent. Linearity of expectation allows us to compute the expected number of false positives in Chapter 11 without knowing the dependence structure of our test statistics.
+- **Conditional expectation:** $E[X \mid Y = y]$ is the expected value of $X$ given that $Y$ takes the value $y$. For example, the expected points per shot from mid-range is a conditional expectation — the mean outcome conditioned on shot location.
 
 
 ## Variance and standard deviation
@@ -196,7 +196,11 @@ Key properties:
 
 - $\text{Var}(aX + b) = a^2 \text{Var}(X)$ — shifting by $b$ doesn't change spread; scaling by $a$ scales variance by $a^2$.
 - For **independent** random variables: $\text{Var}(X + Y) = \text{Var}(X) + \text{Var}(Y)$.
-- In Lecture 7, the bias-variance decomposition splits test error into squared bias plus variance plus irreducible noise. The "variance" there is exactly $\text{Var}(\hat{f}(x))$ — how much the model's prediction varies across different training sets (you'll see the full decomposition in Lecture 7).
+
+:::{.callout-note}
+## Looking ahead
+In the bias-variance decomposition (Chapter 7), the "variance" term is exactly $\text{Var}(\hat{f}(x))$ — how much the model's prediction varies across different training sets.
+:::
 
 ## Covariance and correlation
 
@@ -212,7 +216,12 @@ $$\text{Cov}(X, Y) = E\big[(X - E[X])(Y - E[Y])\big] = E[XY] - E[X]E[Y]$$
 
 $$\rho(X, Y) = \frac{\text{Cov}(X, Y)}{\text{SD}(X) \cdot \text{SD}(Y)}$$
 
-This is the population version of Pearson's $r$, which you'll compute from data in Lecture 11. The key advantage of correlation over covariance: it's unitless, so $\rho = 0.8$ means the same thing whether we're measuring height in centimeters or inches.
+:::{.callout-note}
+## Looking ahead
+The population correlation $\rho$ is the theoretical version of Pearson's $r$, which you'll compute from data in Chapter 11.
+:::
+
+The key advantage of correlation over covariance: it's unitless, so $\rho = 0.8$ means the same thing whether we're measuring height in centimeters or inches.
 
 ```{python}
 fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
@@ -271,7 +280,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The **standard normal** is the special case $Z \sim \text{Normal}(0, 1)$. Any normal can be standardized: if $X \sim \text{Normal}(\mu, \sigma)$, then $Z = (X - \mu)/\sigma$ is standard normal. The number 1.96 that appears throughout Lectures 8--12 is the critical value where $P(Z > 1.96) = 0.025$ — so 95% of the standard normal falls between $-1.96$ and $+1.96$.
+The **standard normal** is the special case $Z \sim \text{Normal}(0, 1)$. Any normal can be standardized: if $X \sim \text{Normal}(\mu, \sigma)$, then $Z = (X - \mu)/\sigma$ is standard normal. The number 1.96 that appears throughout Chapters 8--12 is the critical value where $P(Z > 1.96) = 0.025$ — so 95% of the standard normal falls between $-1.96$ and $+1.96$.
 
 For reference, the PDF of the normal distribution is the bell curve formula:
 
@@ -291,7 +300,7 @@ Key facts:
 - $E[X] = np$
 - $\text{Var}(X) = np(1-p)$
 
-The special case $n = 1$ is the **Bernoulli distribution**: $X \sim \text{Bernoulli}(p)$ takes value 1 with probability $p$ and 0 with probability $1 - p$. You'll see this in Lecture 13, where each patient either has coronary heart disease or doesn't — a single Bernoulli trial.
+The special case $n = 1$ is the **Bernoulli distribution**: $X \sim \text{Bernoulli}(p)$ takes value 1 with probability $p$ and 0 with probability $1 - p$. You'll see this in Chapter 13, where each patient either has coronary heart disease or doesn't — a single Bernoulli trial.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(10, 3.5))
@@ -318,20 +327,24 @@ plt.tight_layout()
 plt.show()
 ```
 
-The right panel is directly relevant: in Lecture 11, if you run 100 hypothesis tests and all null hypotheses are true, the number of false rejections follows $\text{Binomial}(100, 0.05)$ — you expect 5 false positives by chance alone.
+:::{.callout-note}
+## Looking ahead
+In Chapter 11, if you run 100 hypothesis tests and all null hypotheses are true, the number of false rejections follows $\text{Binomial}(100, 0.05)$ — you expect 5 false positives by chance alone.
+:::
 
 
 ## The uniform distribution
 
-In Lecture 9, you'll see histograms of p-values. When there's no real effect, these histograms look flat — that's the **Uniform(0, 1) distribution** in action.
-
-A uniform random variable is equally likely to take any value in an interval:
+A **uniform** random variable is equally likely to take any value in an interval:
 
 $$X \sim \text{Uniform}(a, b) \qquad f(x) = \frac{1}{b - a} \text{ for } a \le x \le b$$
 
 With $E[X] = (a+b)/2$ and $\text{Var}(X) = (b-a)^2/12$.
 
-The key fact: **p-values are Uniform(0, 1) when the null hypothesis is true.** This is the foundation of multiple-testing diagnostics in Lectures 9--11 — a uniform p-value histogram means no signal, while a spike near zero means some effects are real.
+:::{.callout-note}
+## Looking ahead
+A key fact for Act 2: **p-values are Uniform(0, 1) when the null hypothesis is true.** A uniform p-value histogram means no signal; a spike near zero means some effects are real. You'll use this diagnostic in Chapters 9--11.
+:::
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(10, 3.5))
@@ -366,7 +379,7 @@ Two random variables $X$ and $Y$ are **independent** if knowing the value of one
 
 $$P(X = x \text{ and } Y = y) = P(X = x) \cdot P(Y = y) \quad \text{for all } x, y$$
 
-Equivalently, $P(Y = y \mid X = x) = P(Y = y)$ — conditioning on $X$ doesn't change the distribution of $Y$. (For continuous random variables, the same idea holds with densities in place of probabilities.)
+Equivalently, $P(Y = y \mid X = x) = P(Y = y)$ — conditioning on $X$ doesn't change the distribution of $Y$. In plain language, $X$ *doesn't affect* $Y$ (and vice versa). (For continuous random variables, the same idea holds with densities in place of probabilities.)
 
 Independence simplifies everything:
 
@@ -377,7 +390,7 @@ Independence simplifies everything:
 :::{.callout-warning}
 ## Independence is an assumption, not a fact
 
-In practice, independence is something we *assume* (and sometimes check), not something we prove from data. In Lecture 8, the bootstrap assumes observations are independent. In Lecture 19, A/B tests require that one user's outcome doesn't affect another's (the "no interference" condition). When independence fails — social networks, spatial data, time series — standard tools can give misleading answers.
+In practice, independence is an assumption. We sometimes try to check independence, but it can be difficult to infer from data! In Chapter 8, the bootstrap assumes observations are independent. In Chapter 19, A/B tests require that one user's outcome doesn't affect another's (the "no interference" condition). When independence fails — social networks, spatial data, time series — standard tools can give misleading answers.
 :::
 
 
@@ -388,7 +401,7 @@ The most common assumption in statistics combines two ideas:
 - **Independent:** each observation is drawn without being influenced by any other.
 - **Identically distributed:** each observation is drawn from the same probability distribution.
 
-Together, **iid** means: every data point in your sample was generated by the same random process, and they don't affect each other. This is the key assumption behind the bootstrap (Lecture 8) and most of the inference tools in Act 2.
+Together, **iid** means: every data point in your sample was generated by the same random process, and they don't affect each other. The iid assumption underlies the bootstrap (Chapter 8) and most of the inference tools in Act 2.
 
 When does iid fail?
 
@@ -405,7 +418,7 @@ $$\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i \xrightarrow{n \to \infty} E[X]$$
 
 provided the $X_i$ are iid with finite mean.
 
-This is the formal justification for something intuitive: flip a coin enough times and the fraction of heads approaches 0.5. It's also why bigger samples give more reliable estimates — the running average plot in the Expected Value section illustrates LLN in action.
+The LLN provides the formal justification for something intuitive: flip a coin enough times and the fraction of heads approaches 0.5. It's also why bigger samples give more reliable estimates — the running average plot in the Expected Value section illustrates LLN in action.
 
 
 ## The Central Limit Theorem
@@ -441,7 +454,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The population here is Exponential(1) — visibly skewed. But by $n = 30$, the distribution of sample means is nearly bell-shaped. This is why the normal distribution shows up everywhere in Lectures 8--12, even when the underlying data aren't normal: we're usually looking at *averages* (or functions of averages), and the CLT guarantees those are approximately normal.
+The population here is Exponential(1) — visibly skewed. But by $n = 30$, the distribution of sample means is nearly bell-shaped. The CLT explains why the normal distribution shows up everywhere in Chapters 8--12, even when the underlying data aren't normal: we're usually looking at *averages* (or functions of averages), and the CLT guarantees those are approximately normal.
 
 :::{.callout-important}
 ## What the CLT requires
@@ -458,13 +471,13 @@ The CLT needs:
 
 The CLT is a specific instance of a broader idea: any statistic you compute from random data — a mean, a median, a regression coefficient — is itself a random variable. Compute it on a different sample, and you'll get a different number.
 
-The **sampling distribution** of a statistic is the distribution of values that statistic would take across all possible samples from the population. You can't observe it directly (you only have one sample), but the bootstrap (Lecture 8) approximates it by resampling.
+The **sampling distribution** of a statistic is the distribution of values that statistic would take across all possible samples from the population. You can't observe it directly (you only have one sample), but the bootstrap (Chapter 8) approximates it by resampling.
 
 The **standard error** of a statistic is the standard deviation of its sampling distribution — it measures how much the statistic varies from sample to sample. For a sample mean, the CLT gives us a formula: $\text{SE}(\bar{X}) = \sigma / \sqrt{n}$. For other statistics (medians, regression coefficients, etc.), we typically estimate the standard error via the bootstrap.
 
-These two concepts — sampling distributions and standard errors — are the foundation of all the inference tools in Act 2 (Lectures 8--12). Whenever you see a confidence interval or a p-value, there's a sampling distribution and a standard error behind it.
+These two concepts — sampling distributions and standard errors — are the foundation of all the inference tools in Act 2 (Chapters 8--12). Whenever you see a confidence interval or a p-value, there's a sampling distribution and a standard error behind it.
 
-You'll also encounter the **$t$-distribution** starting in Lecture 10: it looks like a normal distribution but with heavier tails, and it's what you use when you estimate $\sigma$ from the data (which is almost always). As the sample size grows, the $t$-distribution converges to the normal — another instance of the CLT at work.
+You'll also encounter the **$t$-distribution** starting in Chapter 10: it looks like a normal distribution but with heavier tails, and it arises when you replace the unknown population standard deviation $\sigma$ with the sample standard deviation $s$ — which is almost always necessary in practice. As the sample size grows, the $t$-distribution converges to the normal — another instance of the CLT at work.
 
 
 ## Conditional probability
@@ -480,7 +493,10 @@ Two derived rules you'll use implicitly throughout the book:
 - **Multiplication rule:** $P(A \text{ and } B) = P(A) \cdot P(B \mid A)$
 - **Bayes' rule:** $P(A \mid B) = \frac{P(B \mid A) \cdot P(A)}{P(B)}$
 
-Conditional probability is the engine behind classification (Lecture 13): a logistic regression model estimates $P(\text{disease} \mid \text{features})$. It's also the conceptual foundation for causal inference (Lectures 18--19): conditioning on confounders changes the conditional distribution of the outcome. The closely related **likelihood function**, $P(\text{data} \mid \theta)$, reverses the conditioning — you'll see this in Lectures 5 and 13.
+:::{.callout-note}
+## Looking ahead
+Conditional probability is the engine behind classification (Chapter 13), where logistic regression estimates $P(\text{disease} \mid \text{features})$, and causal inference (Chapters 18--19), where conditioning on confounders changes the conditional distribution of the outcome. The closely related **likelihood function**, $P(\text{data} \mid \theta)$, reverses the conditioning — you'll see this formulation in Chapters 5 and 13.
+:::
 
 ```{python}
 # Spam filter example: Bayes' rule in action
@@ -504,7 +520,7 @@ print(f"\nEven with a good filter, only {p_spam_given_flagged:.0%} of flagged em
 print("are actually spam — because spam is rare (the 'base rate').")
 ```
 
-This "base rate" effect — where a low prior probability dominates even a good classifier — shows up whenever you interpret predictions on imbalanced data (Lecture 13). A model with 95% accuracy can still be mostly wrong on the rare class.
+This "base rate" effect — where a low prior probability dominates even a good classifier — shows up whenever you interpret predictions on imbalanced data (Chapter 13). A model with 95% accuracy can still be mostly wrong on the rare class.
 
 
 ## Summary
@@ -512,16 +528,16 @@ This "base rate" effect — where a low prior probability dominates even a good 
 | Concept | Notation | Where it matters most |
 |---------|----------|----------------------|
 | Random variable | $X$ | throughout |
-| Expected value | $E[X]$ | throughout, especially Lectures 5--8, 11 |
-| Variance | $\text{Var}(X)$ | Lectures 5, 7--8, 12, 14 |
-| Covariance | $\text{Cov}(X, Y)$ | Lectures 2, 5, 11, 14 |
-| Normal distribution | $\text{Normal}(\mu, \sigma)$ | Lectures 8--13 |
-| Binomial / Bernoulli | $\text{Bin}(n, p)$ | Lectures 11, 13 |
-| Uniform distribution | $\text{Unif}(a, b)$ | Lectures 9--11 |
-| Independence | $P(A \cap B) = P(A)P(B)$ | Lectures 8, 12, 19 |
-| iid | $X_1, \ldots, X_n$ iid | Lectures 8--12 |
-| Law of Large Numbers | $\bar{X}_n \to \mu$ | Lecture 8 |
-| Central Limit Theorem | $\bar{X}_n \approx \text{Normal}(\mu, \sigma/\sqrt{n})$ | Lectures 8--12 |
-| Sampling distribution | distribution of a statistic | Lectures 8--12 |
-| Standard error | $\text{SE} = \sigma/\sqrt{n}$ | Lectures 8--12 |
-| Conditional probability | $P(A \mid B)$ | Lectures 13, 18--19 |
+| Expected value | $E[X]$ | throughout, especially Chapters 5--8, 11 |
+| Variance | $\text{Var}(X)$ | Chapters 5, 7--8, 12, 14 |
+| Covariance | $\text{Cov}(X, Y)$ | Chapters 2, 5, 11, 14 |
+| Normal distribution | $\text{Normal}(\mu, \sigma)$ | Chapters 8--13 |
+| Binomial / Bernoulli | $\text{Bin}(n, p)$ | Chapters 11, 13 |
+| Uniform distribution | $\text{Unif}(a, b)$ | Chapters 9--11 |
+| Independence | $P(A \cap B) = P(A)P(B)$ | Chapters 8, 12, 19 |
+| iid | $X_1, \ldots, X_n$ iid | Chapters 8--12 |
+| Law of Large Numbers | $\bar{X}_n \to \mu$ | Chapter 8 |
+| Central Limit Theorem | $\bar{X}_n \approx \text{Normal}(\mu, \sigma/\sqrt{n})$ | Chapters 8--12 |
+| Sampling distribution | distribution of a statistic | Chapters 8--12 |
+| Standard error | $\text{SE} = \sigma/\sqrt{n}$ | Chapters 8--12 |
+| Conditional probability | $P(A \mid B)$ | Chapters 13, 18--19 |
