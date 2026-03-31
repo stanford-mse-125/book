@@ -1,5 +1,5 @@
 ---
-title: "Lecture 2: Exploratory Data Analysis & Visualization"
+title: "Exploratory Data Analysis & Visualization"
 execute:
   enabled: true
 jupyter: python3
@@ -14,6 +14,8 @@ Under the CMS Hospital Readmissions Reduction Program, hospitals with excess rea
 
 **Exploratory Data Analysis (EDA)** is the practice of examining a dataset's structure, distributions, and quirks before fitting any model. EDA is the most important step in any analysis — and the one most often skipped.
 :::
+
+In Chapter 1, we introduced four modes of reasoning with data: summary, prediction, inference, and causation. This chapter focuses on the first: **summary**. Before you predict, infer, or ask causal questions, you need to understand what's in your data. EDA is how you build that understanding.
 
 Today we'll explore two real datasets: hospital readmissions and NYC Airbnb listings. Along the way, we'll find **outliers**, missing data patterns, and a lesson about adjusting for context.
 
@@ -54,7 +56,7 @@ Same mean of *x*. Same mean of *y*. Same correlation. Same regression line. Comp
 
 ## Part 1: Hospital readmissions
 
-Let's start with the CMS Hospital Readmissions Reduction Program data. Recall from Lecture 1 that this dataset tracks how often patients are readmitted within 30 days, for six medical conditions, across about 3,000 U.S. hospitals.
+Let's start with the CMS Hospital Readmissions Reduction Program data. Recall from Chapter 1 that this dataset tracks how often patients are readmitted within 30 days, for six medical conditions, across about 3,000 U.S. hospitals.
 
 The EDA checklist is always the same: (1) **Shape** — how many rows and columns? (2) **Types** — what are the column types? Any surprises? (3) **Distributions** — what does each variable look like? (4) **Missing data** — how much, and why? (5) **Relationships** — how do variables relate to each other?
 
@@ -119,7 +121,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The distributions look roughly symmetric and unimodal, centered near 1.0 (though with a slight right skew — we'll revisit what "normal" really means in Lecture 8). But notice the spread differs by condition — heart failure (HF) has more variation than hip/knee replacement.
+The distributions look roughly symmetric and unimodal, centered near 1.0 (though with a slight right skew — we'll revisit what "normal" really means in Chapter 8). But notice the spread differs by condition — heart failure (HF) has more variation than hip/knee replacement.
 
 :::{.callout-tip}
 ## Think About It
@@ -190,7 +192,7 @@ CABG (coronary artery bypass graft surgery) has ~50% missing — fewer hospitals
 If you drop these rows (which an AI tool would do silently), you're analyzing only the large, urban hospitals. Your conclusions would be biased.
 :::
 
-For now, we're just diagnosing — noticing what's going on. In the next lecture (Lecture 3), we'll decide what to do about it.
+For now, we're just diagnosing — noticing what's going on. In Chapter 3, we'll decide what to do about it.
 
 :::{.callout-tip}
 ## Think About It
@@ -232,7 +234,7 @@ Now the pattern pops out: about half of CABG records are suppressed, compared to
 
 We've seen how missing data can hide systematic bias in healthcare. Now let's see how outliers and skewness can mislead in a completely different domain — showing that EDA principles are universal.
 
-We'll work with 29,000+ Airbnb listings in New York City. An Airbnb host losing bookings to cheaper listings might wonder: how should I reprice? We'll answer that question in Lecture 5, once we have regression tools. For now, we focus on understanding the data itself.
+We'll work with 29,000+ Airbnb listings in New York City. An Airbnb host losing bookings to cheaper listings might wonder: how should I reprice? We'll answer that question in Chapter 5, once we have regression tools. For now, we focus on understanding the data itself.
 
 ```{python}
 # Load Airbnb data
@@ -356,7 +358,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-On the raw scale, a handful of luxury listings ($5,000+) make it hard to see any pattern. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a multiplicative increase in price. We'll use this idea extensively when we build regression models in Lecture 5.
+On the raw scale, a handful of luxury listings ($5,000+) make it hard to see any pattern. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a multiplicative increase in price. We'll use this idea extensively when we build regression models in Chapter 5.
 
 ### Categorical variables: room types and boroughs
 
@@ -493,14 +495,14 @@ big_movers
 
 The naive ranking unfairly penalizes these hospitals. Their high raw rates reflect the complexity of the patients they treat — after adjustment, they're performing fine.
 
-The ranking reversal we just witnessed is a form of **confounding**: patient severity is a lurking variable that distorts the naive comparison. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix. We'll study confounding formally in Lecture 18. For now, the lesson is simpler:
+The ranking reversal we just witnessed is a form of **confounding**: patient severity is a lurking variable that distorts the naive comparison. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix. We'll study confounding formally in Chapter 18. For now, the lesson is simpler:
 
 :::{.callout-warning}
 ## Don't rank before you adjust
 The "worst" hospitals might just be the ones treating the hardest cases.
 :::
 
-We'll revisit this hospital data in Lecture 18 when we ask: *is this causal?* Does the penalty actually reduce readmissions, or does it just punish hospitals that serve vulnerable populations?
+We'll revisit this hospital data in Chapter 18 when we ask: *is this causal?* Does the penalty actually reduce readmissions, or does it just punish hospitals that serve vulnerable populations?
 
 ## Key Takeaways
 
