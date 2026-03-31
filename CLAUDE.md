@@ -1,10 +1,13 @@
-# MSE 125 Course Book
+# Applied Statistics: From Data to Decisions
 
 ## Structure
-- 19 lectures as .qmd files at repo root, rendered as Quarto book
+- 19 chapters as .qmd files at repo root, plus `appendix-probability.qmd`
 - `_quarto.yml` — book config (3 acts: Build Models, Trust Models, See Further)
+- `key-concepts.md` — learning objectives, vocabulary, prerequisites per chapter
 - `data/` — datasets (large CSVs via Git LFS)
 - `DATA_DIR = 'data'` in all .qmd files
+- Chapter titles are topic only (no "Lecture N:" prefix)
+- Four modes of reasoning thread the book: summary, prediction, inference, causation
 
 ## Rendering
 - `quarto render lecNN-slug.qmd` to verify a single lecture
