@@ -271,7 +271,7 @@ We've seen how missing data can hide systematic bias in healthcare. Now let's se
 
 We'll work with 29,000+ Airbnb listings in New York City. An Airbnb host losing bookings to cheaper listings might wonder: how should I reprice? We'll answer that question in Chapter 5, once we have regression tools. For now, we focus on understanding the data itself.
 
-We'll use the Airbnb data to answer a series of increasingly specific questions: What does a typical listing cost? How does price vary across neighborhoods and room types? And should we attribute the price variation to the location and room type — or could these differences be confounded by other variables?
+We'll use the Airbnb data to answer a series of increasingly specific questions: What does a typical listing cost? How does price vary across neighborhoods and room types? And if Manhattan listings cost more, does that reflect the borough itself — or the fact that Manhattan has more entire homes?
 
 First, we load our data, check how big it is, and select columns to explore.
 ```{python}
@@ -729,14 +729,16 @@ Two patterns jump out:
 
 ### What is confounding?
 
-Two variables can appear related even when neither causes the other — if a third variable drives both.
+Suppose you survey children and find that shoe size correlates with reading ability. The correlation is real and reproducible — children with bigger feet genuinely do read better, on average. But bigger shoes don't *cause* better reading. **Age** drives both: older children have bigger feet *and* read better.
 
-Consider a simple example. Suppose you survey children and find that shoe size correlates with reading ability. Bigger feet → better reading? Of course not. **Age** is the lurking variable: older children have bigger feet *and* read better. Shoe size and reading ability are **confounded** by age.
+The association between shoe size and reading ability is a statistical fact. The mistake would be interpreting it as causal. When you ask whether X *causes* Y, a variable that drives both X and Y creates an association that doesn't reflect a causal effect. That variable is a **confounder**.
 
 :::{.callout-important}
 ## Definition: Confounding
-Two variables are **confounded** when a third variable — the **confounder** — is associated with both, making the apparent relationship between them misleading. Controlling for the confounder (here, comparing children of the same age) reveals whether the relationship is real.
+A **confounder** is a variable that affects both the treatment (or exposure) and the outcome, creating an association between them that does not reflect a causal effect of the treatment on the outcome. The association between the treatment and outcome is real — but it doesn't mean the treatment causes the outcome. Confounding is inherently a *causal* concept: it only arises when you interpret an association as evidence for or against a causal claim.
 :::
+
+We'll develop formal tools for reasoning about confounders — including directed acyclic graphs (DAGs) and the potential outcomes framework — in Chapters 18–19. For now, the key habit: when you see an association, ask *what else could be driving both variables?*
 
 The same logic applies to the Airbnb data.
 
@@ -769,15 +771,15 @@ Box plots summarize distributions with five numbers (min, Q1, median, Q3, max). 
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 filtered = airbnb[airbnb['price'].between(1, 500)]
 
-# Box plot
-sns.boxplot(data=filtered, x='room_type', y='price', ax=axes[0])
-axes[0].set_title('Box plot')
-axes[0].set_ylabel('Price ($)')
-
 # Violin plot
 sns.violinplot(data=filtered, x='room_type', y='price', ax=axes[1], inner='quartile')
 axes[1].set_title('Violin plot')
 axes[1].set_ylabel('Price ($)')
+
+# Box plot
+sns.boxplot(data=filtered, x='room_type', y='price', ax=axes[0])
+axes[0].set_title('Box plot')
+axes[0].set_ylabel('Price ($)')
 
 plt.tight_layout()
 plt.show()
@@ -861,7 +863,7 @@ big_movers
 
 The naive ranking unfairly penalizes these hospitals. Their high raw rates reflect the complexity of the patients they treat — after adjustment, they're performing fine.
 
-The ranking reversal we just witnessed is a form of **confounding** (defined earlier in the Airbnb section): patient severity is a lurking variable that distorts the naive comparison. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix. Here, patient severity is the confounder — it affects both which hospital a patient goes to *and* the readmission outcome. We'll study confounding formally in Chapter 18. For now, the lesson is simpler:
+The ranking reversal illustrates **confounding**. Patient severity is a confounder: it affects both which hospital a patient goes to *and* the readmission outcome. The association between hospital identity and high readmission rates is real — those hospitals genuinely have more readmissions. But interpreting that association as evidence of poor quality is wrong, because patient severity drives both. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix.
 
 :::{.callout-warning}
 ## Don't rank before you adjust
@@ -876,7 +878,7 @@ We'll revisit this hospital data in Chapter 18 when we ask a causal question: do
 - **Always check data types.** A column that looks numeric may be stored as strings. Clean before computing.
 - **Distributions reveal what summaries hide.** The mean can be misleading when distributions are skewed. Always plot a histogram. Use a log axis for heavy-tailed data.
 - **Missing data tells a story.** Data that's Missing Not At Random (MNAR) can bias your analysis if you drop it. Visualize missingness — don't hide it.
-- **Confounding makes naive comparisons misleading.** The "worst" hospitals might just be treating the hardest cases. Always ask: what lurking variable could explain this pattern?
+- **An association can be real without being causal.** A confounder drives both the treatment and the outcome, creating an association that doesn't reflect a causal effect. The "worst" hospitals might just be treating the hardest cases.
 
 ## Study guide
 
@@ -887,7 +889,7 @@ We'll revisit this hospital data in Chapter 18 when we ask a causal question: do
 - **Robust statistics**: The median and IQR are robust — barely affected by extreme values. The mean and standard deviation are not.
 - **Log axis vs. log transform**: Use a log axis to *visualize* skewed data (keeps original units on the axis). Use a log transform to *model* skewed data (creates a new variable for regression).
 - **Patterns of missingness**: **MCAR** — no pattern at all. **MAR** — missingness depends on observed variables. **MNAR** — missingness depends on the unobserved value itself.
-- **Confounding**: When a third variable is associated with both the predictor and the outcome, distorting the apparent relationship.
+- **Confounding**: A confounder is a variable that affects both the treatment and the outcome, creating an association that does not reflect a causal effect. Confounding is a causal concept — it arises when you ask whether X causes Y, not just whether X and Y are correlated.
 - Plotting functions (`sns.histplot`, `sns.boxplot`, `.describe()`) drop NAs silently. Always check `df['col'].isna().sum()` first.
 - Naive rankings can be unfair: the "worst" hospitals may just be treating the hardest cases.
 - Pie charts are almost always a bad choice — use bar charts instead.
