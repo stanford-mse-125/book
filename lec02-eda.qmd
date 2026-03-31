@@ -189,7 +189,7 @@ CABG (coronary artery bypass graft surgery) has ~50% missing — fewer hospitals
 
 :::{.callout-warning}
 ## Dropping missing data can introduce bias
-If you drop these rows (which an AI tool would do silently), you're analyzing only the large, urban hospitals. Your conclusions would be biased.
+If you drop these rows, you're analyzing only the large, urban hospitals. Your conclusions would be biased.
 :::
 
 For now, we're just diagnosing — noticing what's going on. In Chapter 3, we'll decide what to do about it.
@@ -198,6 +198,43 @@ For now, we're just diagnosing — noticing what's going on. In Chapter 3, we'll
 ## Think About It
 If you drop all the "Too Few to Report" rows, what kind of hospitals are left in your dataset? What conclusions might change?
 :::
+
+### Visualizing missing data
+
+Missing values are data too. Instead of silently dropping them, consider making them visible in your plots.
+
+For categorical variables, include NaN as its own category:
+
+```{python}
+bedrooms_display = airbnb['bedrooms'].copy()
+bedrooms_display = bedrooms_display.fillna('Missing')
+fig, ax = plt.subplots(figsize=(7, 4))
+bedrooms_display.value_counts().sort_index().plot.bar(ax=ax, edgecolor='white')
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Count')
+ax.set_title('Bedrooms (including missing)')
+plt.tight_layout()
+plt.show()
+```
+
+For numeric variables, compare distributions for rows where a related column is missing vs. present:
+
+```{python}
+airbnb['bedrooms_missing'] = airbnb['bedrooms'].isna()
+fig, ax = plt.subplots(figsize=(8, 4))
+for label, group in airbnb[airbnb['price'] > 0].groupby('bedrooms_missing'):
+    tag = 'Missing bedrooms' if label else 'Has bedrooms'
+    sns.histplot(group['price'][group['price'] <= 500], bins=40, ax=ax,
+                 label=tag, alpha=0.5, stat='density')
+ax.set_xlabel('Price ($)')
+ax.set_ylabel('Density')
+ax.set_title('Price distribution: missing vs. present bedroom count')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+If the distributions differ, the missingness may be informative — a signal, not just a nuisance.
 
 > **Key principle**: Before you handle missing data, you must understand *why* it's missing. The "why" determines the "how."
 
@@ -718,6 +755,12 @@ big_movers
 The naive ranking unfairly penalizes these hospitals. Their high raw rates reflect the complexity of the patients they treat — after adjustment, they're performing fine.
 
 The ranking reversal we just witnessed is a form of **confounding**: patient severity is a lurking variable that distorts the naive comparison. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix. We'll study confounding formally in Chapter 18. For now, the lesson is simpler:
+
+:::{.callout-important}
+## Definition: Confounding
+
+Two variables are **confounded** when a third variable — the **confounder** — is associated with both, making it impossible to tell from the data alone whether the apparent relationship is real or an artifact. Here, patient severity is a confounder: it affects both which hospital a patient goes to *and* the readmission outcome. Ranking hospitals by raw readmission rates conflates hospital quality with patient severity.
+:::
 
 :::{.callout-warning}
 ## Don't rank before you adjust
