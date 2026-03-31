@@ -228,6 +228,18 @@ ct_pct.index = ct_pct.index.str.replace('READM-30-', '').str.replace('-HRRP', ''
 ct_pct.round(3)
 ```
 
+A heatmap makes the same proportions easier to scan visually:
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 4))
+sns.heatmap(ct_pct, annot=True, fmt='.1%', cmap='YlOrRd', ax=ax)
+ax.set_title('Suppression rate by condition')
+ax.set_ylabel('Condition')
+ax.set_xlabel('Suppressed')
+plt.tight_layout()
+plt.show()
+```
+
 Now the pattern pops out: about half of CABG records are suppressed, compared to only ~8% of heart failure records. The contingency table confirms the same finding we saw in the bar chart, but makes the comparison precise and easy to read across all conditions at once.
 
 ## Part 2: Airbnb listings
@@ -451,15 +463,57 @@ plt.show()
 
 On the linear scale, expensive listings in the \$500–\$999 range make it hard to see any pattern among the majority. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a multiplicative increase in price. Notice the y-axis still shows dollar amounts — the log axis just spreads them out. We'll use this idea extensively when we build regression models in Chapter 5.
 
+### When scatter plots fail: 2D histograms
+
+With thousands of points, scatter plots become overplotted — every point lands on top of the others and you can't see where the data is concentrated. A **2D histogram** (or heatmap) bins the data in both directions and uses color to show density.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+prices_pos = airbnb[airbnb['price'] > 0]
+
+# Scatter — overplotted
+axes[0].scatter(prices_pos['accommodates'], prices_pos['price'],
+                alpha=0.1, s=5)
+axes[0].set_xlabel('Accommodates (guests)')
+axes[0].set_ylabel('Price ($)')
+axes[0].set_title('Scatter plot (overplotted)')
+axes[0].set_ylim(0, 700)
+
+# 2D histogram
+sns.histplot(data=prices_pos[prices_pos['price'] <= 700],
+             x='accommodates', y='price', bins=30, ax=axes[1],
+             cbar=True, cbar_kws={'label': 'Count'})
+axes[1].set_xlabel('Accommodates (guests)')
+axes[1].set_ylabel('Price ($)')
+axes[1].set_title('2D histogram (reveals density)')
+
+plt.tight_layout()
+plt.show()
+```
+
+The 2D histogram reveals that the overwhelming majority of listings accommodate 1–4 guests at \$50–\$200/night — a pattern the scatter plot hides behind overplotting.
+
 ### Categorical variables: room types and boroughs
 
-Not all data is numeric. Let's look at the categorical variables. So far we've used **histograms** to see the shape of a single numeric variable. Now we need different tools:
+Not all data is numeric. Let's look at the categorical variables. So far we've used **histograms** to see the shape of a single numeric variable. Now we need different tools.
 
-- One categorical variable → **bar chart** (count per category)
-- One numeric variable across groups → **box plot** (compare distributions)
-- Two numeric variables → **scatter plot** (reveal relationships)
+### Choosing the right plot
 
-Choosing the right plot for the question is half the battle.
+| Variable types | Plot | When to use |
+|----------------|------|-------------|
+| One numeric | Histogram | Shape, center, spread |
+| One numeric (skewed) | Histogram with log axis | Reveal structure in heavy-tailed data |
+| One categorical | Bar chart | Counts/proportions per category |
+| One categorical (NOT) | Pie chart | Almost never — use bar chart instead |
+| Two numeric | Scatter plot | Relationships (small-moderate n) |
+| Two numeric (dense) | 2D histogram / heatmap | Relationships (large n) |
+| Numeric × categorical | Box plot | Compare distributions across groups |
+| Numeric × categorical | Faceted histogram / ridge plot | Compare with aligned axes |
+| Two categorical | Contingency table | Exact counts/proportions |
+| Two categorical | Heatmap of contingency table | Visual comparison |
+| Categorical × categorical | Stacked/dodged/standardized bar | Compare composition across groups |
+
+: {.striped .hover}
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
@@ -572,6 +626,22 @@ Two patterns jump out:
 ## Think About It
 If someone told you "Manhattan Airbnbs cost more," is that the full story? What if Manhattan has more entire homes and Brooklyn has more private rooms? The comparison might be confounded by room type.
 :::
+
+Box plots also clarify the relationship between a numeric and a numeric variable — just discretize one of them. Earlier we saw that accommodates vs. price was hard to read as a scatter plot. Treating accommodates as a categorical variable gives us a box plot that's much clearer:
+
+```{python}
+fig, ax = plt.subplots(figsize=(9, 4.5))
+box_data = airbnb[(airbnb['price'] > 0) & (airbnb['price'] <= 500) &
+                  (airbnb['accommodates'] <= 10)]
+sns.boxplot(data=box_data, x='accommodates', y='price', ax=ax)
+ax.set_xlabel('Accommodates (guests)')
+ax.set_ylabel('Price ($)')
+ax.set_title('Price by number of guests')
+plt.tight_layout()
+plt.show()
+```
+
+The median price roughly doubles from 1-guest to 6-guest listings. The boxes also show that spread increases with group size — larger listings have more price variability.
 
 ## Ranking hospitals: a cautionary tale
 
