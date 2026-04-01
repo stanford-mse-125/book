@@ -1,5 +1,5 @@
 ---
-title: "Lecture 17: AutoML, LLMs, and the Future of Data Analysis"
+title: "AutoML, LLMs, and the Future of Data Analysis"
 execute:
   enabled: true
 jupyter: python3
