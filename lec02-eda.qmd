@@ -28,32 +28,12 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (7, 4.5)
+plt.rcParams['figure.figsize'] = (8, 5)
 plt.rcParams['font.size'] = 12
 
 # Load data
 DATA_DIR = 'data'
 ```
-
-:::{.callout-note}
-## Why "always visualize"? Anscombe's quartet
-
-Before we dive in, here's the single best argument for plotting your data. These four datasets have *identical* means, standard deviations, correlations, and regression lines:
-
-```{python}
-# Anscombe's quartet: same summary stats, wildly different shapes
-anscombe = sns.load_dataset('anscombe')
-g = sns.lmplot(data=anscombe, x='x', y='y', col='dataset',
-               col_wrap=2, ci=None, height=3,
-               scatter_kws={'s': 40, 'edgecolor': 'white'})
-g.set_titles('Dataset {col_name}')
-g.figure.suptitle("Anscombe's Quartet: identical summary statistics, very different data", y=1.02)
-plt.tight_layout()
-plt.show()
-```
-
-Same mean of *x*. Same mean of *y*. Same correlation. Same regression line. Completely different stories. **Summary statistics can lie. Always visualize.**
-:::
 
 ## Part 1: Hospital readmissions
 
@@ -177,7 +157,7 @@ pct_missing = (too_few_by_condition / total_by_condition * 100).round(1)
 pd.DataFrame({'Too Few': too_few_by_condition, 'Total': total_by_condition, '% Missing': pct_missing})
 ```
 
-A bar chart makes the pattern easier to scan across all six conditions at once.
+A bar chart makes the pattern easier to scan across all six conditions at once. We use pandas `.plot.bar()` here because we're plotting from a pre-computed Series rather than raw data.
 
 ```{python}
 # Visualize the missingness pattern
@@ -227,7 +207,7 @@ If you drop all the "Too Few to Report" rows, what kind of hospitals are left in
 
 We've been looking at one variable at a time. A **contingency table** (or cross-tabulation) counts how often each combination of two categorical variables occurs. It's the categorical equivalent of a scatter plot.
 
-Let's see which conditions tend to have suppressed data. We'll create a binary column for whether data was suppressed, then cross-tabulate it with the medical condition.
+Let's see which conditions tend to have suppressed data. We'll create a binary column for whether data was suppressed, then use `pd.crosstab()` to cross-tabulate it with the medical condition.
 
 ```{python}
 # Create a flag for suppressed data
@@ -250,7 +230,7 @@ ct_pct.index = ct_pct.index.str.replace('READM-30-', '').str.replace('-HRRP', ''
 ct_pct.round(3)
 ```
 
-A heatmap makes the same proportions easier to scan visually:
+We use `sns.heatmap()` to visualize the contingency table as a color-coded grid:
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 4))
@@ -268,6 +248,8 @@ Now the pattern pops out: about half of CABG records are suppressed, compared to
 ## Part 2: Airbnb listings
 
 We've seen how missing data can hide systematic bias in healthcare. Now let's see how outliers and skewness can mislead in a completely different domain.
+
+An **outlier** is an observation that falls far from the bulk of the data — either a genuine extreme value (a $999/night penthouse) or a data error (a negative price).
 
 We'll work with 29,000+ Airbnb listings in New York City. An Airbnb host losing bookings to cheaper listings might wonder: how should I reprice? We'll answer that question in Chapter 5, once we have regression tools. For now, we focus on understanding the data itself.
 
@@ -287,43 +269,6 @@ cols = ['name', 'neighbourhood_group_cleansed', 'neighbourhood_cleansed',
 airbnb = airbnb[cols].copy()
 airbnb.head()
 ```
-
-### When data needs cleaning
-
-In our dataset, the `price` column is already stored as integers — we got lucky. But many real-world CSVs aren't so tidy. Here's what raw Airbnb price data sometimes looks like before it's been cleaned:
-
-```{python}
-# Simulating raw price data — what Inside Airbnb's CSV sometimes looks like
-raw_prices = pd.Series(['$1,200.00', '$85.00', '$250.00', '$0.00', 'unknown', 'NA', '-50', 'Inf', None])
-print("Raw format:")
-print(raw_prices)
-print(f"\nType: {raw_prices.dtype}")
-# raw_prices.mean()  # Would raise TypeError — can't average strings!
-```
-
-The fix: replace non-numeric placeholders, strip dollar signs and commas, convert to numeric, and handle invalid values like negatives.
-
-```{python}
-# Step 1: Replace non-numeric placeholders with NaN
-cleaned = raw_prices.replace(['unknown', 'NA', 'Inf', '-Inf'], np.nan)
-# Step 2: Strip dollar signs and commas
-cleaned = cleaned.str.replace(r'[\$,]', '', regex=True)
-# Step 3: Convert to numeric, coercing remaining problems to NaN
-cleaned = pd.to_numeric(cleaned, errors='coerce')
-# Step 4: Replace negative values with NaN (prices can't be negative)
-cleaned = cleaned.where(cleaned >= 0)
-print("After cleaning:")
-print(cleaned)
-print(f"\nValid prices: {cleaned.notna().sum()} out of {len(cleaned)}")
-print(f"Mean of valid: ${cleaned.mean():.2f}")
-```
-
-Always check `df.dtypes` early. A column that *looks* numeric may be stored as strings — and pandas won't warn you until you try to compute with it.
-
-:::{.callout-tip}
-## Think About It
-Our dataset has 25 listings at \$0/night. Are those real prices, data entry errors, or something else? How would you decide?
-:::
 
 ### Visualizing missing data
 
@@ -511,7 +456,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The linear histogram (left) is nearly useless — everything is piled up on the left. The log-axis histogram (center) uses logarithmically-spaced bins so that each bar covers an equal range on the log scale — this ensures bar *areas* are proportional to counts, avoiding the visual distortion that equal-width bins create on a log axis. (We use `axes[1].hist()` from matplotlib here instead of `sns.histplot()` because we need custom bin edges.) The log-transformed histogram (right) plots $\log_{10}(\text{price})$ directly — useful when you need to feed the data into a model.
+The linear histogram (left) is nearly useless — everything is piled up on the left. The log-axis histogram (center) uses logarithmically-spaced bins so that each bar covers an equal range on the log scale — this spacing ensures bar *areas* are proportional to counts, avoiding the visual distortion that equal-width bins create on a log axis. (We use `axes[1].hist()` from matplotlib here instead of `sns.histplot()`, since custom bin edges require direct access to the matplotlib API.) The log-transformed histogram (right) plots $\log_{10}(\text{price})$ directly — useful when you need to feed the data into a model.
 
 > **Use a log *axis* when you want to *look* at skewed data. Use a log *transform* when you need to *model* it (e.g., in a regression).**
 
@@ -541,7 +486,7 @@ On the linear scale, expensive listings in the \$500–\$999 range make it hard 
 
 ### When scatter plots fail: 2D histograms
 
-With thousands of points, scatter plots become overplotted — every point lands on top of the others and you can't see where the data is concentrated. A **2D histogram** (or heatmap) bins the data in both directions and uses color to show density.
+With thousands of points, scatter plots become overplotted — every point lands on top of the others and you can't see where the data is concentrated. A **2D histogram** (or heatmap) bins the data in both directions and uses color to show density. We use matplotlib's `.hist2d()` to create one below.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
@@ -577,23 +522,7 @@ Price depends on more than just the listing itself. Which features drive the big
 
 Not all data is numeric. Let's look at the categorical variables. So far we've used **histograms** to see the shape of a single numeric variable. Now we need different tools.
 
-### Choosing the right plot
-
-| Variable types | Plot | When to use |
-|----------------|------|-------------|
-| One numeric | Histogram | Shape, center, spread |
-| One numeric (skewed) | Histogram with log axis | Reveal structure in heavy-tailed data |
-| One categorical | Bar chart | Counts/proportions per category |
-| One categorical | Pie chart | Almost never — use bar chart instead |
-| Two numeric | Scatter plot | Relationships (small-moderate n) |
-| Two numeric (dense) | 2D histogram / heatmap | Relationships (large n) |
-| Numeric × categorical | Box plot | Compare distributions across groups |
-| Numeric × categorical | Faceted histogram / ridge plot | Compare with aligned axes |
-| Two categorical | Contingency table | Exact counts/proportions |
-| Two categorical | Heatmap of contingency table | Visual comparison |
-| Categorical × categorical | Stacked/dodged/standardized bar | Compare composition across groups |
-
-: {.striped .hover}
+The study guide at the end of this chapter includes a reference table for choosing the right plot.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
@@ -687,7 +616,7 @@ The stacked chart reveals that Manhattan has the most listings overall. The stan
 
 Now let's look at how variables relate to each other — and whether those relationships are what they seem.
 
-When overlapping histograms get crowded, **faceting** splits the data into separate panels that share the same x-axis. This makes it much easier to compare distributions across groups.
+When overlapping histograms get crowded, **faceting** splits the data into separate panels that share the same x-axis. We use `sns.displot()` to create faceted histograms with a shared x-axis:
 
 ```{python}
 prices_filt = airbnb[(airbnb['price'] > 0) & (airbnb['price'] <= 500)]
@@ -767,7 +696,7 @@ The median price roughly doubles from 1-guest to 6-guest listings. The boxes als
 
 ### Violin plots: seeing the full shape
 
-Box plots summarize distributions with five numbers (min, Q1, median, Q3, max). **Violin plots** show the full distribution shape — revealing patterns that box plots hide.
+Box plots summarize distributions with five numbers (min, Q1, median, Q3, max). **Violin plots** show the full distribution shape — revealing patterns that box plots hide. We use `sns.violinplot()` to compare the two side by side:
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
@@ -865,7 +794,7 @@ big_movers
 
 The naive ranking unfairly penalizes these hospitals. Their high raw rates reflect the complexity of the patients they treat — after adjustment, they're performing fine.
 
-The ranking reversal illustrates **confounding**. Patient severity is a confounder: it affects both which hospital a patient goes to *and* the readmission outcome. The association between hospital identity and high readmission rates is real — those hospitals genuinely have more readmissions. But interpreting that association as evidence of poor quality is wrong, because patient severity drives both. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix.
+The ranking reversal illustrates **confounding**. Patient severity is a confounder: it affects both which hospital a patient goes to *and* the readmission outcome. The association between hospital identity and high readmission rates is real — those hospitals genuinely have more readmissions. But patient severity drives both the choice of hospital and the readmission outcome, so the association overstates the causal effect of hospital quality. A hospital can rank among the worst on raw rates yet perform at or below expectations after adjusting for its patient mix.
 
 :::{.callout-warning}
 ## Don't rank before you adjust
@@ -889,12 +818,31 @@ We'll revisit this hospital data in Chapter 18 when we ask a causal question: do
 - **Exploratory Data Analysis (EDA)**: Examining a dataset's structure, distributions, and quirks before fitting any model.
 - **Mean, median, quartiles, IQR**: The mean is the arithmetic average (sensitive to outliers). The median is the middle value (robust). Quartiles divide data into four parts. IQR = Q3 − Q1 measures spread of the middle 50%.
 - **Robust statistics**: The median and IQR are robust — barely affected by extreme values. The mean and standard deviation are not.
+- **Outlier**: An observation far from the bulk of the data. Can be a genuine extreme or a data error. Outliers can dominate non-robust summaries like the mean.
 - **Log axis vs. log transform**: Use a log axis to *visualize* skewed data (keeps original units on the axis). Use a log transform to *model* skewed data (creates a new variable for regression).
 - **Patterns of missingness**: **MCAR** — no pattern at all. **MAR** — missingness depends on observed variables. **MNAR** — missingness depends on the unobserved value itself.
 - **Confounding**: A confounder is a variable that affects both the treatment and the outcome, creating an association that does not reflect a causal effect. Confounding is a causal concept — it arises when you ask whether X causes Y, not just whether X and Y are correlated.
 - Plotting functions (`sns.histplot`, `sns.boxplot`, `.describe()`) drop NAs silently. Always check `df['col'].isna().sum()` first.
 - Naive rankings can be unfair: the "worst" hospitals may just be treating the hardest cases.
 - Pie charts are almost always a bad choice — use bar charts instead.
+
+### Plot type reference
+
+| Variable types | Plot | When to use |
+|----------------|------|-------------|
+| One numeric | Histogram | Shape, center, spread |
+| One numeric (skewed) | Histogram with log axis | Reveal structure in heavy-tailed data |
+| One categorical | Bar chart | Counts/proportions per category |
+| One categorical | Pie chart | Almost never — use bar chart instead |
+| Two numeric | Scatter plot | Relationships (small-moderate n) |
+| Two numeric (dense) | 2D histogram / heatmap | Relationships (large n) |
+| Numeric × categorical | Box plot | Compare distributions across groups |
+| Numeric × categorical | Faceted histogram / ridge plot | Compare with aligned axes |
+| Two categorical | Contingency table | Exact counts/proportions |
+| Two categorical | Heatmap of contingency table | Visual comparison |
+| Categorical × categorical | Stacked/dodged/standardized bar | Compare composition across groups |
+
+: {.striped .hover}
 
 ### Computational tools
 

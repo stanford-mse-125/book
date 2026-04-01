@@ -78,7 +78,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Forward: Lec 3 (cleaning what we found), Lec 5 (Airbnb regression)
 - ORIE 4741: EDA lecture opens with "always visualize before modeling" (Anscombe's quartet)
 
-**Surprise moment:** Are the "worst" hospitals really the worst? Small/rural hospitals have noisy estimates
+**Surprise moment:** Naive hospital rankings penalize hospitals treating sicker patients — the "worst" hospitals by raw readmission rates are often performing at or below expectations after adjusting for patient mix (confounding by severity)
 
 ---
 
