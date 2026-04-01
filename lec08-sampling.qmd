@@ -1,5 +1,5 @@
 ---
-title: "Lecture 8: Bootstrap and the Normal Approximation"
+title: "Bootstrap and the Normal Approximation"
 execute:
   enabled: true
 jupyter: python3
@@ -54,6 +54,8 @@ observed_effect = treatment['cd4_change'].mean() - control['cd4_change'].mean()
 print(f"\nObserved treatment effect:   {observed_effect:.1f} CD4 cells")
 ```
 
+The treatment group improved more, on average. Let's visualize the full distributions to see how much overlap there is.
+
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
 
@@ -95,13 +97,13 @@ But wait — *fixed relative to what?* The claim that a population parameter exi
 
 ### When does the "population" exist?
 
-**Case 1: Your data really is a sample.** The ACTG 175 trial enrolled 2,139 patients, but HIV-positive adults number in the millions. The trial is a literal subset of a larger population; the population mean genuinely exists. Polling works the same way: 1,000 voters are a sample of millions. The bootstrap simulates what would happen if we re-ran the study with different patients or different respondents. This is the cleanest case.
+**Case 1: Your data really is a sample.** The ACTG 175 trial enrolled 2,139 patients, but HIV-positive adults number in the millions. The trial is a literal subset of a larger population; the population mean genuinely exists. Polling works the same way: 1,000 voters are a sample of millions. The bootstrap simulates what would happen if we re-ran the study with different patients or different respondents. This scenario is the cleanest case.
 
 **Case 2: You have all the data, but the process is noisy.** The CMS hospital readmissions dataset contains *every* hospital in the country. There is no larger population of hospitals to sample from. Yet it still makes sense to ask about uncertainty, because different patients could have shown up at each hospital. If Stanford Hospital's ERR is 1.05, that number reflects the particular mix of patients who happened to be admitted during the measurement window. A different year, with different patients, might yield 0.98 or 1.12. The "population" is not a set of hospitals — it is the set of possible patient streams a hospital could receive. The bootstrap resamples patients within each hospital, capturing this idiosyncratic variation.
 
 **Case 3: The whole world shifts.** Now consider what the bootstrap *cannot* capture. Hospital readmission rates changed dramatically during COVID-19 — not because different patients showed up, but because a pandemic altered the entire healthcare system simultaneously. A similar problem affects election polling: in 2016, polls captured sampling variability well (the margin of error was honest), but missed a late systematic shift that moved *all* respondents in the same direction. Resampling rows of a poll cannot simulate the Comey letter arriving — it affected every voter, not a random subset.
 
-The distinction matters:
+The distinction determines what the bootstrap can and cannot tell you:
 
 - **Idiosyncratic variation** is unit-level randomness: which patients happened to arrive, which voters happened to be sampled. Resampling captures this.
 - **Systematic variation** is a shift that affects all units at once: a pandemic, a policy change, a recession. Resampling *cannot* capture this, because every bootstrap resample is built from the same pool of data that all experienced the same conditions.
@@ -114,7 +116,7 @@ A 95% confidence interval from the bootstrap says: "if we repeated this study un
 Before trusting a confidence interval for a decision, ask: is the uncertainty that matters for my decision the kind the bootstrap captures? Or is it the kind where the whole system might shift?
 :::
 
-This question will return in [Lecture 16](lec16-backtesting.qmd) (backtesting), where we confront models that looked excellent in historical data but failed catastrophically when conditions changed — and again in [Lectures 18–19](lec18-causal-dags.qmd) (causal inference), where the estimand is a counterfactual quantity: not "what is the population mean?" but "what *would have happened* if the treatment had been different?" Counterfactual estimands push the ontological question even further, because the "population" now includes events that never occurred.
+This question will return in [Chapter 16](lec16-backtesting.qmd) (backtesting), where we confront models that looked excellent in historical data but failed catastrophically when conditions changed — and again in [Chapters 18–19](lec18-causal-dags.qmd) (causal inference), where the estimand is a counterfactual quantity: not "what is the population mean?" but "what *would have happened* if the treatment had been different?" Counterfactual estimands push the ontological question even further, because the "population" now includes events that never occurred.
 
 For now, keep it in mind as a healthy skepticism: **the bootstrap is a powerful tool, but it lives inside the assumption that tomorrow's data comes from the same process as today's.**
 
@@ -132,6 +134,8 @@ For each dataset below, answer three questions: (1) What is the "population"? (2
 
 Some of these have clean answers. Others don't — and the discomfort you feel is the point.
 :::
+
+We extract the treatment group's CD4 changes as a NumPy array, dropping any missing values with `.dropna()`. (Always check how many rows you lose: `treatment['cd4_change'].isna().sum()` would tell you.)
 
 ```{python}
 treatment_cd4 = treatment['cd4_change'].dropna().values
@@ -162,6 +166,8 @@ Let's start with one resample of the treatment group.
 ```{python}
 treatment_cd4 = treatment['cd4_change'].dropna().values
 ```
+
+We begin with a single bootstrap resample of the treatment group.
 
 ```{python}
 # One bootstrap resample: same size as original, drawn with replacement
@@ -236,6 +242,8 @@ print(f"95% Bootstrap CI:          [{ci_low:.1f}, {ci_high:.1f}]")
 print(f"\nDoes the CI include zero?  {'Yes' if ci_low <= 0 <= ci_high else 'No'}")
 ```
 
+Let's visualize the bootstrap distribution along with the confidence interval.
+
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -257,7 +265,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The confidence interval is entirely above zero, suggesting the treatment genuinely helps. We'll formalize this reasoning in [Lecture 9](lec09-permutation-tests.qmd) (permutation tests) and [Lecture 10](lec10-hypothesis-testing.qmd) (hypothesis testing). For now, focus on the *shape* of that histogram.
+The confidence interval is entirely above zero, suggesting the treatment genuinely helps. We'll formalize this reasoning in [Chapter 9](lec09-permutation-tests.qmd) (permutation tests) and [Chapter 10](lec10-hypothesis-testing.qmd) (hypothesis testing). For now, focus on the *shape* of that histogram.
 
 ## "It looks normal!"
 
@@ -405,9 +413,9 @@ They agree closely. So why bother with the normal approximation if we have the b
 
 **Advantages of the normal approximation:**
 
-1. **Speed.** One formula vs. 10,000 resamples. For large datasets or complex models, that difference matters.
+1. **Speed.** One formula vs. 10,000 resamples. For large datasets or complex models, that speed advantage is substantial.
 2. **Less code.** `mean +/- 1.96 * sigma / sqrt(n)` fits on one line.
-3. **Analytical.** You can derive power formulas and sample size calculations — how many patients do we need to detect a 50-cell effect? (Preview: [Lecture 10](lec10-hypothesis-testing.qmd).)
+3. **Analytical.** You can derive power formulas and sample size calculations — how many patients do we need to detect a 50-cell effect? (Preview: [Chapter 10](lec10-hypothesis-testing.qmd).)
 4. **Composable.** You can combine standard errors across studies (meta-analysis) without re-bootstrapping everything.
 
 :::{.callout-warning}
@@ -468,6 +476,8 @@ print(f"Mean: ${airbnb_prices.mean():.0f},  Median: ${np.median(airbnb_prices):.
 print(f"Skewness is extreme — the mean is far above the median.")
 ```
 
+Let's bootstrap the mean of Airbnb prices at two sample sizes to see how tail weight affects convergence.
+
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
@@ -508,11 +518,11 @@ At $n = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clear
 
 ## Key takeaways
 
-- **Bootstrap:** resample with replacement to estimate uncertainty. Works for *any* statistic — means, medians, regression coefficients, anything. The bootstrap generalizes to regression coefficients ([Lecture 12](lec12-regression-inference.qmd)) and beyond.
+- **Bootstrap:** resample with replacement to estimate uncertainty. Works for *any* statistic — means, medians, regression coefficients, anything. The bootstrap generalizes to regression coefficients ([Chapter 12](lec12-regression-inference.qmd)) and beyond.
 - **The CLT explains why** bootstrap distributions often look normal — at least for means and other "average-like" statistics.
 - **Normal approximation:** a fast, analytical shortcut when the CLT applies (large $n$, well-behaved data, mean-like statistics). Replace 10,000 resamples with $\hat{\theta} \pm 1.96 \cdot \text{SE}$.
 - **When the CLT fails** (median, heavy tails, small $n$), the bootstrap is the fallback. It's slower but always works.
-- **Next:** [Lecture 9](lec09-permutation-tests.qmd) asks "is the treatment effect *real* or could it be zero?" — introducing permutation tests and hypothesis testing.
+- **Next:** [Chapter 9](lec09-permutation-tests.qmd) asks "is the treatment effect *real* or could it be zero?" — introducing permutation tests and hypothesis testing.
 
 ## Study guide
 
