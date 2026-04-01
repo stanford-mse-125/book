@@ -1,5 +1,5 @@
 ---
-title: "Lecture 18: Causal Inference I — DAGs and Confounding"
+title: "Causal Inference I — DAGs and Confounding"
 execute:
   enabled: true
 jupyter: python3
@@ -104,7 +104,7 @@ Here, **family wealth** is a classic confounder:
 - Wealthy families invest in SAT prep, better schools, tutors $\rightarrow$ **higher SAT scores**
 - Wealthy families provide professional networks, connections, inheritance $\rightarrow$ **higher earnings**
 
-If family wealth drives both, then the SAT–earnings correlation could be entirely **spurious** — a **spurious association** that exists only from a shared cause. The SAT doesn't *cause* anything; it's just a proxy for wealth. (Recall from Lecture 11: "correlation is not causation." Now let's formalize *why*.)
+If family wealth drives both, then the SAT–earnings correlation could be entirely **spurious** — a **spurious association** that exists only from a shared cause. The SAT doesn't *cause* anything; it's just a proxy for wealth. (Recall from Chapter 11: "correlation is not causation." Now let's formalize *why*.)
 
 ## Causal Diagrams (DAGs)
 
@@ -161,7 +161,7 @@ draw_dag(
 
 ## When Does Regression Estimate a Causal Effect?
 
-In Lecture 12, we interpreted regression coefficients as "holding everything else constant." Now we can see when that interpretation is *causal* and when it's just descriptive.
+In Chapter 12, we interpreted regression coefficients as "holding everything else constant." Now we can see when that interpretation is *causal* and when it's just descriptive.
 
 Regression estimates a causal effect **only** when you **block all backdoor paths** between treatment and outcome — by controlling for at least one non-collider variable on each backdoor path — without blocking any causal paths.
 
@@ -180,7 +180,7 @@ With observational data, you can never be sure you've blocked every backdoor pat
 
 ## Simpson's Paradox: A Confounding Problem
 
-In Lecture 11, you saw Simpson's Paradox in NBA rest data: extended-rest players scored fewer points overall, but *more* points within each position group. The aggregate lied. We first saw hospital readmission data in Lecture 2, where the "worst" hospitals turned out to be small rural ones with noisy estimates. Now let's see another way this data can mislead — and explain *why* using DAGs.
+In Chapter 11, you saw Simpson's Paradox in NBA rest data: extended-rest players scored fewer points overall, but *more* points within each position group. The aggregate lied. We first saw hospital readmission data in Chapter 2, where the "worst" hospitals turned out to be small rural ones with noisy estimates. Now let's see another way this data can mislead — and explain *why* using DAGs.
 
 The question: are **high-volume hospitals** better or worse at preventing readmissions?
 
@@ -419,12 +419,12 @@ Snow's investigation illustrates a hierarchy of evidence that we'll use througho
 
 | Level | Method | Example | Strength |
 |-------|--------|---------|----------|
-| 1 | **Randomized experiment** | Clinical trial (ACTG175 from Lecture 10) | Gold standard |
+| 1 | **Randomized experiment** | Clinical trial (ACTG 175 from Chapter 10) | Gold standard |
 | 2 | **Natural experiment** | Snow's water companies | Very strong |
 | 3 | **Regression with confounders** | SAT $\to$ earnings controlling for wealth | Depends on what you control for |
 | 4 | **Simple correlation** | SAT and earnings ($r = 0.66$) | Weakest — could be confounded |
 
-We'll see more of levels 1 and 2 in Lecture 19.
+We'll see more of levels 1 and 2 in Chapter 19.
 
 ## Can We Fix Regression? Controlling for Confounders
 
@@ -469,7 +469,7 @@ Adding control variables to a regression can help — but only if:
 2. **You measure them well.** A rough proxy for "family wealth" isn't the same as actual wealth.
 3. **You don't control for the wrong things.** Controlling for a **mediator** (something on the causal path) or a **collider** (something caused by both treatment and outcome) can make bias *worse*.
 
-This difficulty is the core challenge of observational studies. You're always one unmeasured confounder away from a wrong answer.
+The difficulty of controlling for all confounders is the core challenge of observational studies. You're always one unmeasured confounder away from a wrong answer.
 
 :::{.callout-tip}
 ## Think About It
@@ -496,7 +496,7 @@ A variable is a **collider** on a particular path if both arrows on that path po
 
 Among all people, talent and connections may be unrelated. But among people hired at top firms (conditioning on the collider), they're **negatively** correlated — you got in either through talent OR connections.
 
-This phenomenon is called **collider bias** or **selection bias**, and it's a common trap in regression analysis.
+The resulting artifact is called **collider bias** or **selection bias**, and it's a common trap in regression analysis.
 
 ```{python}
 # Simulate collider bias
