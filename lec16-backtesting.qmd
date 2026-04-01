@@ -7,7 +7,7 @@ jupyter: python3
 
 You build a model to predict tomorrow's air quality. It scores R² = 0.85 on your test set. You deploy it. It's terrible. *What happened?*
 
-The problem isn't your model — it's how you evaluated it. When data has a **temporal structure**, the standard random train/test split silently lies to you. Today we'll see exactly how, quantify the damage, and learn the right way to validate time series models.
+The problem isn't your model — it's how you evaluated it. When data has a **temporal structure**, the standard random train/test split silently lies to you. This chapter shows exactly how, quantifies the damage, and demonstrates the right way to validate time series models.
 
 ```{python}
 import numpy as np
@@ -48,6 +48,8 @@ print(f"Counties: {aqi['county Name'].nunique()}")
 print(f"Date range: {aqi['Date'].min().date()} to {aqi['Date'].max().date()}")
 ```
 
+We'll focus on three counties with good daily coverage and distinct air quality patterns: Los Angeles (urban smog), Sacramento (valley pollution), and Mono (extreme dust events).
+
 ```{python}
 # Pick 3 counties with good daily coverage and interesting patterns
 counties = ['Los Angeles', 'Sacramento', 'Mono']
@@ -84,12 +86,12 @@ Mono County is wild — AQI values above 1,000 (and once above 8,000!) from extr
 
 :::{.callout-important}
 ## Definition: Non-Stationarity
-A time series is **non-stationary** when its statistical properties (mean, variance) change over time. The AQI data above is non-stationary: the mean and variance shift with the seasons, and extreme events (wildfire spikes) appear unpredictably. We'll explore why this matters throughout this lecture.
+A time series is **non-stationary** when its statistical properties (mean, variance) change over time. The AQI data above is non-stationary: the mean and variance shift with the seasons, and extreme events (wildfire spikes) appear unpredictably. The rest of this chapter explores why non-stationarity undermines standard evaluation methods.
 :::
 
 ## Building a prediction model
 
-Let's try to predict tomorrow's AQI. A natural approach: use **lag features** — yesterday's AQI, the 7-day average, etc. This approach is just the feature engineering from Lecture 6, applied to time.
+Let's try to predict tomorrow's AQI. A natural approach: use **lag features** — yesterday's AQI, the 7-day average, etc. This approach is just the feature engineering from Chapter 6, applied to time.
 
 We'll focus on Los Angeles for a clean demonstration.
 
@@ -112,7 +114,7 @@ la.head(10)
 
 ## The standard split — and why it fails here
 
-Recall from Lecture 7 that we split data randomly into training and test sets. That approach assumed each observation was independent of the others. Time-ordered observations violate that assumption.
+Recall from Chapter 7 that we split data randomly into training and test sets. That approach assumed each observation was independent of the others. Time-ordered observations violate that assumption.
 
 Here's what most tutorials (and most AI tools) would do — randomly shuffle the data and split 80/20. Let's see how well it works.
 
@@ -211,6 +213,8 @@ print(f"  MAE = {mae_temporal:.1f}")
 print(f"  Train size: {len(train_temporal)}, Test size: {len(test_temporal)}")
 ```
 
+Now let's compare the two approaches side by side.
+
 ```{python}
 # Side-by-side comparison
 print("=" * 50)
@@ -251,7 +255,7 @@ print("The naive baseline is surprisingly hard to beat!")
 print("This is common in time series: yesterday is a strong predictor of today.")
 ```
 
-This result is why backtesting matters. In production, your model only ever sees the past. Your evaluation should reflect that constraint.
+This result illustrates why backtesting is essential. In production, your model only ever sees the past. Your evaluation should reflect that constraint.
 
 ### Scale-independent accuracy: MAPE and MASE
 
@@ -345,6 +349,8 @@ wf_results['month_label'] = wf_results['month'].dt.strftime('%b %Y')
 print(wf_results[['month_label', 'mae', 'r2', 'max_aqi']].to_string(index=False))
 ```
 
+The monthly results tell a richer story than a single annual number. Let's visualize the performance over time.
+
 ```{python}
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
 
@@ -372,7 +378,7 @@ This pattern is the value of walk-forward validation: it reveals *when* your mod
 
 ## Lag features are just feature engineering
 
-Recall from Lecture 6 that feature engineering transforms raw data into more useful predictors. Lag features are the same idea applied to time:
+Recall from Chapter 6 that feature engineering transforms raw data into more useful predictors. Lag features are the same idea applied to time:
 
 | Feature | What it captures |
 |---------|-----------------|
@@ -417,6 +423,8 @@ print(f"Records: {len(nba_active):,}")
 print(f"Seasons: {nba_active['SEASON'].unique()}")
 ```
 
+We construct rolling lag features for each player using `groupby` combined with `.shift()` and `.rolling()` — the same temporal feature engineering from the AQI example, but now grouped by player.
+
 ```{python}
 # Create rolling features: last-5-game averages
 nba_active = nba_active.sort_values(['PLAYER_NAME', 'GAME_DATE']).reset_index(drop=True)
@@ -433,6 +441,8 @@ nba_features = ['pts_lag1', 'pts_lag5_avg', 'min_lag5_avg', 'HOME']
 
 print(f"Modeling dataset: {len(nba_model):,} player-games")
 ```
+
+Now we repeat the same experiment: random split versus temporal split. For the temporal split, we train on the first two seasons and test on the third.
 
 ```{python}
 # Standard random split vs temporal split
@@ -493,6 +503,8 @@ print(f"\nDays above 500: {(mono['AQI'] > 500).sum()}")
 print(f"Max AQI: {mono['AQI'].max()}")
 ```
 
+Let's train a linear model on "normal" days (AQI below 300) and see what it predicts during extreme events.
+
 ```{python}
 # Train a model on "normal" data (AQI < 300) and see what it predicts for extremes
 normal_mono = mono[mono['AQI'] < 300]
@@ -516,6 +528,8 @@ if len(extreme_mono) > 0:
 else:
     print("No extreme events found in Mono County subset.")
 ```
+
+The numbers are stark, but the visualization makes the failure visceral.
 
 ```{python}
 # Visualize the model's failure during extreme events
@@ -553,9 +567,9 @@ Distribution shift is the deepest problem in time series forecasting:
 
 > "Prediction is very difficult, especially about the future." — attr. Niels Bohr
 
-In Lecture 10, we saw that a clinical trial on adults can't tell you about children. Same idea here: a model trained on AQI 0--300 can't tell you what happens at AQI 8,000. You can't extrapolate beyond the range of your data.
+In Chapter 10, we saw that a clinical trial on adults can't tell you about children. Same idea here: a model trained on AQI 0--300 can't tell you what happens at AQI 8,000. You can't extrapolate beyond the range of your data.
 
-In Lecture 17, we'll see that AutoML tools often make this same mistake — they use standard cross-validation by default and don't know your data is temporal.
+In Chapter 17, we'll see that AutoML tools often make this same mistake — they use standard cross-validation by default and don't know your data is temporal.
 
 Distribution shift can also be gradual — styles of play, market conditions, or climate patterns that evolve slowly can erode model performance without triggering obvious alarms.
 
@@ -590,6 +604,8 @@ print(f"95% bootstrap prediction interval:")
 print(f"  Coverage: {coverage:.1%} of test days (target: 95%)")
 print(f"  Average width: {avg_width:.1f} AQI points")
 ```
+
+Let's visualize the prediction intervals for the first two months of the test period. The shaded band shows the 95% interval around each point forecast.
 
 ```{python}
 # Visualize prediction intervals for a 60-day window

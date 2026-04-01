@@ -3,7 +3,7 @@ project:
   output-dir: _book
 
 book:
-  title: "MS&E 125: Applied Statistics"
+  title: "Applied Statistics: From Data to Decisions"
   author: "Madeleine Udell"
   date: "Spring 2026"
   chapters:

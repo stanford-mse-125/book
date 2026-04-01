@@ -56,6 +56,8 @@ print(f"Stanford median earnings (10 yrs): ${stanford['MD_EARN_WNE_P10'].values[
 print(f"\nSchools with both SAT and earnings data: {len(colleges):,}")
 ```
 
+We use `pd.to_numeric()` with `errors='coerce'` to convert non-numeric entries to NaN, then `dropna()` to keep only complete rows. Now let's plot SAT scores against earnings with `stats.linregress()` to fit a regression line.
+
 ```{python}
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.scatter(colleges['SAT_AVG'], colleges['MD_EARN_WNE_P10'], alpha=0.3, s=15, color='steelblue')
@@ -148,6 +150,8 @@ def draw_dag(nodes, edges, annotations=None, title='', figsize=(8, 6)):
     plt.tight_layout(); plt.show()
 ```
 
+The `draw_dag()` helper above draws nodes as rectangles and connects them with arrows. Let's use it to visualize the SAT–earnings DAG.
+
 ```{python}
 draw_dag(
     nodes={'Family Wealth': (5, 7), 'SAT Score': (2, 4),
@@ -201,6 +205,8 @@ for group_name, group in hospitals.groupby('is_high_volume'):
 
 print("\nHigh-volume hospitals appear WORSE overall.")
 ```
+
+We use `pd.qcut()` to split hospitals into three severity groups of roughly equal size, then compare readmission rates within each group.
 
 ```{python}
 # Create severity categories for within-group comparison
@@ -281,6 +287,8 @@ print(f"\nTotal deaths recorded: {len(deaths)}")
 print(f"\nWater pumps:")
 print(pumps[['pump', 'label']].to_string(index=False))
 ```
+
+Snow's famous map plots each death as a point and each pump as a triangle. Let's recreate it.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(10, 8))

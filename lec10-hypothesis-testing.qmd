@@ -519,7 +519,7 @@ We'll revisit these ideas in Lecture 11 when we ask: what happens when you run 2
 ### Computational tools
 
 - `stats.ttest_ind(a, b, equal_var=False)` — Welch's t-test for two independent samples
-- `stats.ttest_ind(..., alternative='greater')` —one-sided t-test
+- `stats.ttest_ind(..., alternative='greater')` — one-sided t-test
 - `TTestIndPower().solve_power(effect_size, power, alpha)` — compute required sample size for a t-test
 - `TTestIndPower().solve_power(effect_size, nobs1, alpha)` — compute power given sample size
 

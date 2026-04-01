@@ -75,7 +75,7 @@ Let's look a bit deeper: How many rows? How many columns? What types are they? A
 hrrp.info()
 ```
 
-Scan the `Dtype` column in the output. Most columns are `float64` (numbers), but `Number of Readmissions` is `object` (string). That's our first clue that something is weird. And `Number of Discharges` has fewer non-null values than other columns. Let's investigate.
+Scan the `Dtype` column in the output. Most columns are `float64` (numbers), but `Number of Readmissions` is `str`. That's our first clue that something is weird. And `Number of Discharges` has fewer non-null values than other columns. Let's investigate.
 
 ### Distributions: what does "normal" look like?
 
