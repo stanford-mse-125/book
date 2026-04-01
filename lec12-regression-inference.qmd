@@ -146,6 +146,11 @@ Before looking at the numbers, do you think the rest effect will
 be positive or negative? Large or small?
 :::
 
+:::{.callout-note}
+## The matrix API
+Statsmodels also provides a lower-level matrix interface, `sm.OLS(y, X)`, where you pass arrays directly. The formula API (`smf.ols('y ~ x1 + x2', data=df)`) is more readable and handles categorical encoding automatically, so we use it throughout this course.
+:::
+
 ```{python}
 # Model 1: naive — just rest days
 model_1 = smf.ols('GAME_SCORE ~ REST_DAYS', data=nba_games).fit()
@@ -639,6 +644,8 @@ airbnb['price_clean'] = pd.to_numeric(
 )
 
 # Filter to typical listings (under $500/night removes extreme luxury outliers)
+airbnb = airbnb.rename(columns={'neighbourhood_group_cleansed': 'borough'})
+
 airbnb_clean = airbnb[
     (airbnb['price_clean'] > 0) &
     (airbnb['price_clean'] <= 500) &
@@ -652,7 +659,7 @@ print(f"Price range: ${airbnb_clean['price_clean'].min():.0f} - ${airbnb_clean['
 print(f"Bathrooms range: {airbnb_clean['bathrooms'].min():.0f} - {airbnb_clean['bathrooms'].max():.0f}")
 ```
 
-Before modeling, let us visualize. The `neighbourhood_group_cleansed` column represents
+Before modeling, let us visualize. The `borough` column represents
 NYC boroughs (Manhattan, Brooklyn, Queens, Bronx, Staten Island).
 
 ```{python}
@@ -664,7 +671,7 @@ axes[0].set_xlabel('Number of Bathrooms')
 axes[0].set_ylabel('Price per Night ($)')
 axes[0].set_title('Airbnb Price by Bathrooms')
 
-sns.boxplot(x='neighbourhood_group_cleansed', y='price_clean',
+sns.boxplot(x='borough', y='price_clean',
             data=airbnb_clean, ax=axes[1], color='steelblue')
 axes[1].set_xlabel('Borough')
 axes[1].set_ylabel('Price per Night ($)')
@@ -682,7 +689,7 @@ We fit a regression using `smf.ols()` with the formula interface. The `C()` wrap
 ```{python}
 # Regression: price ~ bathrooms + bedrooms + borough
 airbnb_model = smf.ols(
-    'price_clean ~ bathrooms + bedrooms + C(neighbourhood_group_cleansed)',
+    'price_clean ~ bathrooms + bedrooms + C(borough)',
     data=airbnb_clean
 ).fit()
 
@@ -737,7 +744,7 @@ bath_vals = np.arange(1, airbnb_clean['bathrooms'].max() + 0.5, 0.5)
 grid = pd.DataFrame({
     'bathrooms': bath_vals,
     'bedrooms': [airbnb_clean['bedrooms'].median()] * len(bath_vals),
-    'neighbourhood_group_cleansed': ['Manhattan'] * len(bath_vals),
+    'borough': ['Manhattan'] * len(bath_vals),
 })
 grid_pred = airbnb_model.get_prediction(grid).summary_frame(alpha=0.05)
 
@@ -765,7 +772,7 @@ Both intervals for a specific prediction point make the difference concrete.
 example = pd.DataFrame({
     'bathrooms': [2],
     'bedrooms': [2],
-    'neighbourhood_group_cleansed': ['Manhattan'],
+    'borough': ['Manhattan'],
 })
 example_pred = airbnb_model.get_prediction(example).summary_frame(alpha=0.05)
 
