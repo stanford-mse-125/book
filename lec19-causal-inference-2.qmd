@@ -1,5 +1,5 @@
 ---
-title: "Lecture 19: Causal Inference II — Natural Experiments and A/B Tests"
+title: "Causal Inference II — Natural Experiments and A/B Tests"
 execute:
   enabled: true
 jupyter: python3
