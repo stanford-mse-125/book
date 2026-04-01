@@ -20,9 +20,11 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-# What predictions are possible?
+# Organizing data as matrices
 
-You have 3 features to predict Airbnb price: bedrooms, bathrooms, neighborhood quality score.
+You're an analyst at a hospital network with data on 3,000 hospitals — each described by dozens of features: readmission rates, bed count, staffing ratios, patient demographics. How do you represent this data in a way that lets you compare hospitals, find patterns, and build models? The answer: organize it as a matrix, and use linear algebra to work with it.
+
+Suppose you pick 3 features to predict Airbnb price: bedrooms, bathrooms, neighborhood quality score.
 A linear model says:
 
 $$\hat{\text{price}} = \beta_1 \cdot \text{bedrooms} + \beta_2 \cdot \text{bathrooms} + \beta_3 \cdot \text{neighborhood}$$
@@ -96,6 +98,15 @@ A positive inner product indicates the vectors tend to point in the same directi
 :::
 
 A word of caution: the raw inner product depends on both direction *and* magnitude. A listing with 10 bedrooms and 10 bathrooms would have a large inner product with almost any other listing, simply from its scale. To isolate directional similarity, divide by the lengths of both vectors — a quantity called **cosine similarity**, which we return to below.
+
+:::{.callout-important}
+## Definition: Cosine Similarity
+The **cosine similarity** between two vectors $\mathbf{a}$ and $\mathbf{b}$ measures the cosine of the angle between them:
+
+$$\text{cosine similarity} = \frac{\mathbf{a} \cdot \mathbf{b}}{\|\mathbf{a}\| \, \|\mathbf{b}\|}$$
+
+Values range from $-1$ (opposite directions) to $+1$ (same direction). A value of $0$ means the vectors are perpendicular (orthogonal). Cosine similarity measures *direction*, ignoring *magnitude* — two vectors that point the same way have cosine similarity 1 regardless of their lengths.
+:::
 
 How large *is* a feature vector? The length generalizes the Pythagorean theorem.
 
