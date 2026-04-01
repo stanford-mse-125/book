@@ -1,5 +1,5 @@
 ---
-title: "Lecture 14: PCA — Dimensionality Reduction"
+title: "PCA — Dimensionality Reduction"
 execute:
   enabled: true
 jupyter: python3
@@ -40,6 +40,8 @@ airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 print(f"Raw data: {airbnb.shape[0]:,} rows x {airbnb.shape[1]} columns")
 ```
 
+Before selecting numeric columns, we clean the price and bathrooms columns, which require type conversion.
+
 ```{python}
 # Clean price column (stored as string like "$150.00" in many Airbnb exports)
 if airbnb['price'].dtype == object:
@@ -53,6 +55,8 @@ if 'bathrooms' not in airbnb.columns and 'bathrooms_text' in airbnb.columns:
         .astype(float)
     )
 ```
+
+Now we select the 23 numeric columns and drop rows with missing values. Note that `.dropna()` silently removes any row with at least one NaN — we print the count so the loss is visible.
 
 ```{python}
 # Select numeric columns suitable for PCA
@@ -87,7 +91,7 @@ Imagine plotting listings in 23-dimensional space (one axis per feature). The po
 PCA finds the best $k$-dimensional subspace to project your data onto. "Best" means it minimizes the total squared distance between the original points and their projections — the same idea as regression minimizing squared residuals, but now the residuals are *perpendicular* to the fitted subspace, not vertical.
 :::
 
-In Lecture 5, regression projected $y$ onto a fixed set of features $X$. PCA asks: what if we could *choose* the subspace to make that projection as good as possible?
+In Chapter 5, regression projected $y$ onto a fixed set of features $X$. PCA asks: what if we could *choose* the subspace to make that projection as good as possible?
 
 ## First attempt: PCA without standardization
 
@@ -109,6 +113,8 @@ print("PC1 loadings (unstandardized data) — top 5 by absolute value:")
 print(loadings_raw.abs().sort_values(ascending=False).head())
 ```
 
+PC1 explains almost all the variance — suspiciously so. Let's check which features have the largest raw variance.
+
 ```{python}
 # Variance explained
 print(f"PC1 explains {pca_raw.explained_variance_ratio_[0]*100:.1f}% of all variance")
@@ -127,7 +133,7 @@ PCA on unstandardized data just picks up whichever column has the biggest number
 
 :::{.callout-warning}
 ## PCA is dominated by scale
-This lesson is critical: without standardization, PCA is dominated by whichever feature has the largest scale.
+Without standardization, PCA is dominated by whichever feature has the largest scale.
 :::
 
 ## The fix: standardize first
@@ -145,6 +151,8 @@ X_scaled = scaler.fit_transform(df)
 pca = PCA()
 scores = pca.fit_transform(X_scaled)
 ```
+
+How much variance does each PC capture now?
 
 ```{python}
 print("Variance explained by each PC (standardized):")
@@ -183,6 +191,8 @@ plt.tight_layout()
 plt.show()
 ```
 
+How many PCs do we need to reach common variance thresholds?
+
 ```{python}
 # How many PCs for various thresholds?
 for threshold in [0.7, 0.8, 0.9]:
@@ -219,6 +229,8 @@ plt.tight_layout()
 plt.show()
 ```
 
+Let's look at the strongest contributors to PC1 and PC2.
+
 ```{python}
 # Interpret PC1: show top positive and negative loadings
 print("PC1: Top loadings")
@@ -230,6 +242,8 @@ print("  Most positive:")
 for feat, val in pc1.tail(3).items():
     print(f"    {feat:>35s}: {val:+.3f}")
 ```
+
+Now PC2:
 
 ```{python}
 print("PC2: Top loadings")
@@ -270,6 +284,8 @@ for i in range(3):
     print(f"  PC{i+1}: {example_scores[i]:+.2f}")
 ```
 
+What do those scores tell us about this listing?
+
 ```{python}
 # What does this listing's PC1 score mean?
 print("PC1 is the 'review quality' factor.")
@@ -288,7 +304,7 @@ else:
 
 ## The math behind PCA: SVD
 
-To understand what the SVD produces, two definitions from linear algebra are needed. These definitions build on the vector and span concepts from Lecture 4.
+To understand what the SVD produces, two definitions from linear algebra are needed. These definitions build on the vector and span concepts from Chapter 4.
 
 :::{.callout-important}
 ## Definition: Basis and Orthonormal Basis
@@ -320,7 +336,7 @@ Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest tot
 
 Here's the key insight that connects PCA to everything we've learned.
 
-In regression (Lecture 5), we had a fixed set of features $X$ and found the best weights $w$ to minimize $\|y - Xw\|^2$. We chose the features; the math found the coefficients.
+In regression (Chapter 5), we had a fixed set of features $X$ and found the best weights $w$ to minimize $\|y - Xw\|^2$. We chose the features; the math found the coefficients.
 
 PCA is the same optimization, except we also get to choose $X$. We're minimizing $\|Y - XW\|_F^2$ over *both* the scores $X$ ($= U_k S_k$) and the directions $W$ ($= V_k^T$) simultaneously. PCA finds the best covariates AND the best coefficients.
 
@@ -344,6 +360,8 @@ plot_df = pd.DataFrame({
     'borough': airbnb.loc[df.index, borough_col].values
 })
 ```
+
+Let's plot every listing in PC space, coloring by room type and borough.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(11, 5))
@@ -380,7 +398,7 @@ Boroughs show less separation in these first two PCs. Geography isn't the domina
 
 :::{.callout-tip}
 ## Think About It
-Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Lecture 7)?
+Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Chapter 7)?
 :::
 
 PCA creates *new* features that are combinations of the originals — it's **dimensionality reduction**. Lasso picks a subset of existing features — that's **feature selection**. PCA is especially useful when your original features are correlated (like the six review scores): it creates uncorrelated summaries that capture more information per component.
@@ -406,7 +424,7 @@ For this course, just use the numeric columns. If you're curious about mixed dat
 
 ## Coming up next
 
-In **Lecture 15**, we'll move from summarizing data to *grouping* data. **K-means clustering** tries to automatically discover market segments in the Airbnb listings — budget, mid-range, luxury — without being told the categories. A natural approach: cluster the PC scores from today's analysis rather than the original 23 features. PCA and K-means are cousins — same optimization framework, different constraints.
+In **Chapter 15**, we'll move from summarizing data to *grouping* data. **K-means clustering** tries to automatically discover market segments in the Airbnb listings — budget, mid-range, luxury — without being told the categories. A natural approach: cluster the PC scores from today's analysis rather than the original 23 features. PCA and K-means are cousins — same optimization framework, different constraints.
 
 ## Study guide
 
