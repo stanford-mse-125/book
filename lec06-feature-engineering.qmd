@@ -303,6 +303,42 @@ for name, (r2, k) in models_adj.items():
 ```
 :::
 
+## Missing values as features
+
+A missing value can carry signal. If a hospital's readmission count is suppressed ("Too Few to Report"), the suppression itself tells you the hospital is small — and hospital size correlates with outcomes. Dropping that row throws away useful information.
+
+For categorical variables, the simplest approach: treat "missing" as its own category.
+
+```{python}
+# Example: create a 'bedroom_known' indicator from Airbnb data
+import pandas as pd
+bedrooms = pd.Series([1, 2, None, 3, None, 1])
+bedrooms_filled = bedrooms.fillna('Missing')
+print(bedrooms_filled)
+```
+
+For numeric variables, create a binary **missingness indicator** alongside an imputed value:
+
+```{python}
+# Indicator: was the value missing?
+bedrooms_missing = bedrooms.isna().astype(int)
+# Impute with median for the numeric column
+bedrooms_imputed = bedrooms.fillna(bedrooms.median())
+
+result = pd.DataFrame({
+    'bedrooms_imputed': bedrooms_imputed,
+    'bedrooms_missing': bedrooms_missing
+})
+print(result)
+```
+
+The imputed value lets the model use the column normally. The indicator lets the model learn whether missingness itself predicts the outcome — for example, listings without a bedroom count might systematically differ in price.
+
+:::{.callout-warning}
+## Don't impute blindly
+Imputation replaces missing values with plausible substitutes (median, mean, or a model-based prediction). Without a missingness indicator, the model can't distinguish real values from imputed ones. Always pair imputation with an indicator column when missingness might be informative (MNAR or MAR — see Chapter 2).
+:::
+
 ## A different approach — decision trees
 
 Engineering features by hand is creative but tedious. What if the model could find the right splits on its own?
@@ -532,6 +568,8 @@ print(f"With LLM features:    Test R² = {r2_with:.3f}  ({X_with_llm.shape[1]} f
 print(f"Improvement:           {r2_with - r2_no:+.3f}")
 ```
 
+The LLM features provide a modest improvement. Let's see which extracted features carry the most weight by examining the regression coefficients.
+
 ```{python}
 # Show which LLM features matter most
 all_features_llm = list(X_with_llm.columns)
@@ -580,6 +618,7 @@ LLM featurization replaces an entire natural language processing pipeline with a
 - **Adjusted R^2** penalizes model complexity, preventing R^2 from rewarding useless features. Use it to compare models with different numbers of predictors.
 - **Decision trees** recursively split the feature space into regions, predicting the mean (regression) or majority class (classification) in each region — no manual feature engineering needed.
 - **Random forests** average many decision trees trained on random subsets of data and features, reducing overfitting. More trees never hurts.
+- **Missing values as features** — missing values can be turned into features. For categoricals, treat "missing" as its own category. For numerics, pair an imputed value with a binary missingness indicator so the model can learn whether missingness itself predicts the outcome.
 - **Weak supervision** — using noisy, programmatic labels (e.g., from an LLM) instead of expensive hand labels. LLM featurization converts unstructured text into structured features via a well-specified prompt. Good prompts define each field precisely, request a structured output format, and target features that complement (rather than duplicate) existing columns.
 
 ### Computational tools
@@ -588,6 +627,7 @@ LLM featurization replaces an entire natural language processing pipeline with a
 - `PolynomialFeatures(degree=d)` — generates polynomial features up to degree $d$; still linear in parameters
 - `DecisionTreeRegressor(max_depth=k)` — fits a regression tree with at most $k$ levels of splits
 - `RandomForestRegressor(n_estimators=100)` — fits 100 trees and averages predictions
+- `df['col'].isna().astype(int)` — create a missingness indicator column
 - `train_test_split(X, y, test_size=0.3, random_state=42)` — splits data for honest evaluation
 
 ### For the quiz
