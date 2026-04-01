@@ -1,5 +1,5 @@
 ---
-title: "Lecture 11: Multiple Testing and Correlation"
+title: "Multiple Testing and Correlation"
 execute:
   enabled: true
 jupyter: python3
@@ -42,7 +42,7 @@ DATA_DIR = 'data'
 
 ## The setup: 431 hypothesis tests
 
-Recall from Lecture 10 that we test at significance level $\alpha = 0.05$, accepting a 5% false positive rate for a *single* test. But what happens when we run hundreds of tests?
+Recall from Chapter 10 that we test at significance level $\alpha = 0.05$, accepting a 5% false positive rate for a *single* test. But what happens when we run hundreds of tests?
 
 We have three seasons of NBA game logs (2021--2024). For each player, we can compute how many
 days of rest they had before each game. The question: *does rest help?*
@@ -58,6 +58,8 @@ print(f"Unique players: {nba['PLAYER_NAME'].nunique()}")
 print(f"Games with rest info: {nba['REST_DAYS'].notna().sum():,}")
 nba[['PLAYER_NAME', 'GAME_DATE', 'PTS', 'REST_DAYS', 'REST_CATEGORY']].head(8)
 ```
+
+Each row is one player-game. The `REST_DAYS` column records how many days elapsed since that player's previous game. Let's see how rest days are distributed using a histogram.
 
 ```{python}
 # How are rest days distributed?
@@ -106,6 +108,8 @@ for player_id, group in df.groupby('PLAYER_ID'):
 
 results_df = pd.DataFrame(results).sort_values('p_value')
 ```
+
+How many players show a "significant" rest effect at the conventional $\alpha = 0.05$ threshold?
 
 ```{python}
 n_players = len(results_df)
@@ -238,6 +242,8 @@ else:
     sorted_pvals['reject_BH'] = False
 ```
 
+Let's display the sorted p-values alongside their BH thresholds to see the step-up rule in action.
+
 ```{python}
 # Show the procedure for the top 15 p-values
 display_cols = ['PLAYER_NAME', 'p_value', 'rank', 'BH_threshold', 'reject_BH']
@@ -251,7 +257,7 @@ print(f"  Bonferroni:   {n_bonf}")
 print(f"  BH (FDR):     {n_bh}")
 ```
 
-The two corrections answer different questions. FWER asks: *did I make any mistake at all?* FDR asks: *among the things I called discoveries, what fraction are wrong?* Use Bonferroni when *any* false positive is costly (e.g., drug safety). Use BH when you can tolerate some false discoveries (e.g., screening genes for further study). A sportsbook evaluating hundreds of player props per night faces this same multiple testing problem. The stakes determine the correction — a connection to the consequential decisions from Lecture 10.
+The two corrections answer different questions. FWER asks: *did I make any mistake at all?* FDR asks: *among the things I called discoveries, what fraction are wrong?* Use Bonferroni when *any* false positive is costly (e.g., drug safety). Use BH when you can tolerate some false discoveries (e.g., screening genes for further study). A sportsbook evaluating hundreds of player props per night faces this same multiple testing problem. The stakes determine the correction — a connection to the consequential decisions from Chapter 10.
 
 ```{python}
 # Visualize the BH procedure
@@ -382,7 +388,7 @@ Coaches don't randomly assign rest. Consider:
 - Players returning from minor injuries get extended rest
 - Back-to-backs cluster during road trips (schedule-driven)
 
-The **reason** for rest is **confounded** with the **outcome** of rest. We'll formalize this idea in Lecture 18 using causal diagrams (DAGs), which make it precise to say exactly which variables are confounders.
+The **reason** for rest is **confounded** with the **outcome** of rest. We'll formalize this idea in Chapter 18 using causal diagrams (DAGs), which make it precise to say exactly which variables are confounders.
 
 ```{python}
 # Who gets extended rest? Compare player quality across rest categories.
@@ -397,6 +403,8 @@ player_stats = player_stats.reset_index().merge(ext_rest, on='PLAYER_NAME', how=
 player_stats['ext_rest_games'] = player_stats['ext_rest_games'].fillna(0)
 player_stats['ext_rest_frac'] = player_stats['ext_rest_games'] / player_stats['games']
 ```
+
+Now we can plot each player's scoring average against the fraction of their games with extended rest (4+ days). The `.merge()` call joins the extended-rest counts back to each player's summary row.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -443,6 +451,8 @@ print(f"\nWithin-player, extended rest effect: {within_means.iloc[-1]:+.3f} poin
 print("Almost zero! The aggregate effect was entirely driven by WHO gets rest.")
 ```
 
+The side-by-side visualization below makes the paradox vivid: the left panel shows the misleading aggregate comparison, and the right panel shows the within-player story with 95% confidence intervals.
+
 ```{python}
 # Visualize the paradox
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -474,7 +484,7 @@ print("Always ask: WHY were these groups different to begin with?")
 
 ## Key takeaways
 
-Both halves of today's lecture share a theme: statistical results can be deeply misleading when you don't account for the structure of your analysis.
+Both halves of this chapter share a theme: statistical results can be deeply misleading when you don't account for the structure of your analysis.
 
 **Multiple testing:**
 
@@ -497,7 +507,7 @@ Both halves of today's lecture share a theme: statistical results can be deeply 
 5. **Simpson's paradox is real and common.** Aggregate comparisons can reverse the individual-level
    story when groups are heterogeneous. Always ask what's driving the comparison.
 
-In Lecture 12, we'll use regression to estimate the effect of rest while controlling for player quality, schedule difficulty, and fatigue — and we'll test whether that coefficient is statistically significant.
+In Chapter 12, we'll use regression to estimate the effect of rest while controlling for player quality, schedule difficulty, and fatigue — and we'll test whether that coefficient is statistically significant.
 
 ## Study guide
 
