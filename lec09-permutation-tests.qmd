@@ -1,5 +1,5 @@
 ---
-title: "Lecture 9: Permutation Tests"
+title: "Permutation Tests"
 execute:
   enabled: true
 jupyter: python3
@@ -21,7 +21,7 @@ DATA_DIR = 'data'
 np.random.seed(42)
 ```
 
-In [Lecture 8](lec08-sampling.qmd), we answered the question "how precise is our estimate?" using bootstrap confidence intervals and the normal approximation. Today we ask a sharper question: **is the effect *real*, or could it be zero?**
+In [Chapter 8](lec08-sampling.qmd), we answered the question "how precise is our estimate?" using bootstrap confidence intervals and the normal approximation. Today we ask a sharper question: **is the effect *real*, or could it be zero?**
 
 The distinction matters. The bootstrap measures **precision** — how much our estimate would vary if we repeated the experiment. The permutation test measures **significance** — whether the observed effect is distinguishable from pure chance. These two tools are complementary: one gives you a confidence interval, the other gives you a p-value.
 
@@ -35,7 +35,7 @@ Fisher realized he didn't need any assumptions about probability distributions. 
 
 ## Setup: The Treatment Effect
 
-Let's reload the ACTG 175 clinical trial data and compute the observed treatment effect.
+Let's reload the ACTG 175 clinical trial data and compute the observed treatment effect. (We call `.dropna()` to drop patients with missing CD4 measurements.)
 
 ```{python}
 df = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
@@ -52,7 +52,7 @@ print(f"Control n:           {len(control)}")
 print(f"Treatment n:         {len(treatment)}")
 ```
 
-In [Lecture 8](lec08-sampling.qmd), we computed a bootstrap 95% confidence interval for this treatment effect and found it was entirely above zero — suggestive evidence that the drug works. But can we test this more rigorously? Can we quantify exactly how surprising this result would be if the drug had no effect at all?
+In [Chapter 8](lec08-sampling.qmd), we computed a bootstrap 95% confidence interval for this treatment effect and found it was entirely above zero — suggestive evidence that the drug works. But can we test this more rigorously? Can we quantify exactly how surprising this result would be if the drug had no effect at all?
 
 ## The Permutation Test Idea
 
@@ -85,6 +85,8 @@ n_trt = (all_labels == 1).sum()
 print(f"Total patients: {len(all_cd4)}")
 print(f"Control: {n_ctrl}, Treatment: {n_trt}")
 ```
+
+Now we write a function that performs one permutation: it shuffles the combined data using `np.random.permutation()`, splits into fake control and treatment groups, and computes the difference in means.
 
 ```{python}
 def permutation_effect(cd4_values, n_control):
@@ -127,6 +129,8 @@ print(f"  SD:     {perm_effects.std():.2f}")
 print(f"  Min:    {perm_effects.min():.1f}")
 print(f"  Max:    {perm_effects.max():.1f}")
 ```
+
+The null distribution is tightly centered around zero, with a standard deviation much smaller than our observed effect. Let's plot it.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -193,7 +197,7 @@ The p-value is one of the most misinterpreted quantities in statistics. Before w
 4. **p = 0.049 and p = 0.051 are not meaningfully different.** The conventional threshold of 0.05 is arbitrary. Treat the p-value as a continuous measure of evidence, not a binary verdict.
 :::
 
-We'll formalize hypothesis testing in [Lecture 10](lec10-hypothesis-testing.qmd). For now, think of the p-value as measuring how *surprising* the data are under the null.
+We'll formalize hypothesis testing in [Chapter 10](lec10-hypothesis-testing.qmd). For now, think of the p-value as measuring how *surprising* the data are under the null.
 
 In data analytics, this kind of comparison between two groups is often called **A/B testing** — the labels "A" and "B" stand for the two groups being compared.
 
@@ -221,6 +225,8 @@ print(f"Brooklyn mean price:  ${brooklyn.mean():.2f}")
 print(f"Observed difference:  ${obs_diff:.2f}")
 ```
 
+We follow the same permutation test workflow: combine the data, shuffle labels, and recompute the difference 10,000 times.
+
 ```{python}
 # Full permutation test workflow — same pattern as the ACTG example
 all_prices = np.concatenate([manhattan.values, brooklyn.values])
@@ -238,6 +244,8 @@ perm_diffs = np.array([
 ])
 ```
 
+Now we compute the two-sided p-value and visualize the null distribution.
+
 ```{python}
 n_extreme_airbnb = np.sum(np.abs(perm_diffs) >= np.abs(obs_diff))
 p_value_airbnb = (n_extreme_airbnb + 1) / (n_perms_airbnb + 1)
@@ -245,6 +253,8 @@ p_value_airbnb = (n_extreme_airbnb + 1) / (n_perms_airbnb + 1)
 print(f"Observed difference: ${obs_diff:.2f}")
 print(f"Permutation p-value: {p_value_airbnb:.4f}")
 ```
+
+The plot below shows the null distribution with the observed difference marked in red.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -348,7 +358,7 @@ print(f"\nAirbnb permutation test:")
 print(f"  p-value:     {p_value_airbnb:.4f}")
 ```
 
-The t-test is faster (no simulation needed) but assumes normality. The permutation test is assumption-free but requires computation. In practice, they agree when samples are large. We'll explore the formal testing framework — null and alternative hypotheses, significance levels, Type I and Type II errors, and power — in [Lecture 10](lec10-hypothesis-testing.qmd).
+The t-test is faster (no simulation needed) but assumes normality. The permutation test is assumption-free but requires computation. In practice, they agree when samples are large. We'll explore the formal testing framework — null and alternative hypotheses, significance levels, Type I and Type II errors, and power — in [Chapter 10](lec10-hypothesis-testing.qmd).
 
 ## Key Takeaways
 
@@ -358,7 +368,7 @@ The t-test is faster (no simulation needed) but assumes normality. The permutati
 - **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). Use both.
 - The **two-sample t-test** is the normal approximation analog of the permutation test, just as the CLT-based CI is the analog of the bootstrap CI.
 - In a **randomized experiment** (like ACTG 175), a significant permutation test supports a **causal** conclusion: the treatment caused the difference. Without randomization (like the Airbnb example), the test shows an **association** but cannot rule out confounding.
-- **Next**: [Lecture 10](lec10-hypothesis-testing.qmd) formalizes hypothesis testing — $H_0$, $H_1$, $\alpha$, Type I/II errors, and power.
+- **Next**: [Chapter 10](lec10-hypothesis-testing.qmd) formalizes hypothesis testing — $H_0$, $H_1$, $\alpha$, Type I/II errors, and power.
 
 ## Study guide
 
