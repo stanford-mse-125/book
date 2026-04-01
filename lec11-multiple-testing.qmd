@@ -17,12 +17,8 @@ Their boss isn't convinced. What did the intern miss?
 > — Ronald Coase
 
 :::{.callout-note}
-## The Idol of the Qu
-Salsburg warns about exactly this in *The Lady Tasting Tea*. By the mid-20th century, hypothesis testing had become a ritual: collect data, compute a p-value, publish if $p < 0.05$, move on. Researchers stopped asking whether the question was worth testing and started treating the 0.05 threshold as a stamp of scientific truth. Salsburg calls this the "idol of the Qu" — the worship of quantitative methods for their own sake, divorced from scientific thinking.
-
-The statistician John Ioannidis made this argument rigorous in his landmark paper ["Why Most Published Research Findings Are False"](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124) (*PLOS Medicine*, 2005). The paper's central insight is quantitative: when most tested hypotheses are false and studies are underpowered, the mathematics of Bayes' theorem guarantees that a majority of "statistically significant" findings will be false positives. This result holds even without any p-hacking or researcher misbehavior — it follows from the base rates alone. The paper became one of the most cited in the history of medicine and helped catalyze the reproducibility reforms discussed later in this lecture.
-
-The intern's analysis is a textbook case of both warnings: 431 p-values, no scientific question, no correction for the fact that most "discoveries" are noise. (See Salsburg, *The Lady Tasting Tea*, Ch. 20; Ioannidis, *PLOS Medicine*, 2005.)
+## Why most published research findings are false
+In a landmark 2005 paper, the statistician John Ioannidis argued that [most published research findings are false](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124). His central insight: when researchers test many hypotheses and studies are underpowered, Bayes' theorem guarantees that a majority of "significant" results are false positives — even without any p-hacking. The paper has been cited over 10,000 times and reshaped how scientists think about statistical significance. The intern's 431 tests are a textbook case.
 :::
 
 ```{python}
