@@ -1,5 +1,5 @@
 ---
-title: "Lecture 12: Regression Inference + Diagnostics"
+title: "Regression Inference + Diagnostics"
 execute:
   enabled: true
 jupyter: python3
@@ -21,19 +21,19 @@ But now consider a different question. An Airbnb host is thinking about spending
 
 Not necessarily. The coefficient tells you that listings *with* more bedrooms tend to cost more — but it doesn't tell you that *adding* a bedroom to *your* listing would increase your price by \$85. Maybe the real driver is apartment size, or building quality, or neighborhood. Larger apartments happen to have more bedrooms *and* higher prices, but the extra bedroom isn't doing the work.
 
-Prediction asks: **what will happen to a new unit from this population?** Inference asks: **what would happen if I changed something?** The second question is harder — and it's the one that matters when the decision involves an investment, a policy, or an intervention. This lecture gives you the tools to start answering it.
+Prediction asks: **what will happen to a new unit from this population?** Inference asks: **what would happen if I changed something?** The second question is harder — and it's the one that matters when the decision involves an investment, a policy, or an intervention. This chapter gives you the tools to start answering it.
 :::
 
 :::{.callout-note}
 ## Act 1 meets Act 2
 Act 1 built regression models for prediction. Act 2 introduced hypothesis testing and
-confidence intervals. This lecture combines both toolkits: we apply inference to
+confidence intervals. This chapter combines both toolkits: we apply inference to
 regression coefficients and check whether the model's assumptions justify that inference.
 :::
 
 
 The central question: **is each predictor in our model useful, or could we
-drop it without loss?** Parsimony matters -- the best model is the simplest one that
+drop it without loss?** Parsimony favors the simplest model that
 adequately fits the data (an idea sometimes called *Occam's razor*).
 We also check whether the model's assumptions hold using **regression diagnostics**.
 
@@ -55,6 +55,8 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
+We define a helper function `format_pvalue()` to display very small p-values in scientific notation throughout this chapter.
+
 ```{python}
 def format_pvalue(p):
     """Format p-values: scientific notation for very small values."""
@@ -65,7 +67,7 @@ def format_pvalue(p):
 
 ## Building a regression model for NBA performance
 
-Recall from Lecture 11 that the raw correlation between rest and points was misleading --
+Recall from Chapter 11 that the raw correlation between rest and points was misleading --
 Simpson's paradox showed that bench players dominate the extended-rest group.
 Can regression help us **control for** player quality and isolate the rest effect?
 
@@ -194,7 +196,7 @@ increase in $x_j$ is associated with a $\hat{\beta}_j$ change in game score."
 :::
 
 This phrasing describes what the model estimates -- it does not mean we can literally
-hold everything else constant in the real world. In a more advanced course, you may see the same regression coefficients interpreted from three perspectives: prediction, inference, and causality. We explore the distinction in Lecture 18.
+hold everything else constant in the real world. In a more advanced course, you may see the same regression coefficients interpreted from three perspectives: prediction, inference, and causality. We explore the distinction in Chapter 18.
 
 ```{python}
 # Extract and interpret coefficients
@@ -217,6 +219,8 @@ print()
 print(f"  OPP_STRENGTH:     {coefs['OPP_STRENGTH']:+.3f}")
 print(f"    -> Facing a stronger opponent (by 1 GS point avg) shifts score by {coefs['OPP_STRENGTH']:.2f}")
 ```
+
+Raw coefficients are hard to compare across predictors with different units. **Standardized coefficients** multiply each coefficient by its predictor's standard deviation, putting all effects on a common scale: "the effect of a one-SD change."
 
 ```{python}
 # Visualize CIs for all coefficients (exclude intercept for scale)
@@ -506,7 +510,7 @@ print("distribution would predict. This pattern is common in sports data.")
 If residuals show strong non-normality or heteroscedasticity, the formula-based
 standard errors and p-values may be unreliable. Options include:
 
-- **Bootstrap confidence intervals** (Lecture 8) do not assume normality -- they let
+- **Bootstrap confidence intervals** (Chapter 8) do not assume normality -- they let
   the data speak for itself.
 - **Robust standard errors** adjust for heteroscedasticity without changing the
   coefficient estimates.
@@ -562,6 +566,8 @@ print(f"With n = {len(nba_games):,} observations, we can detect effects that are
 print(f"completely negligible in practice.")
 ```
 
+Placing the rest effect alongside home court advantage and player quality makes the relative magnitudes concrete.
+
 ```{python}
 # Visualize: comparing effect sizes in the model
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -607,7 +613,7 @@ strength, but it does NOT estimate a **causal effect** of rest. Coaches choose w
 rest players for strategic reasons we cannot observe in the data. The coefficient tells
 us about association, not causation.
 
-We formalize this distinction in Lecture 18 using causal DAGs. For now, remember:
+We formalize this distinction in Chapter 18 using causal DAGs. For now, remember:
 regression can adjust for measured confounders, but it cannot eliminate unmeasured ones.
 :::
 
@@ -671,6 +677,8 @@ plt.show()
 print("More bathrooms = higher price. Does this hold after controlling for bedrooms and borough?")
 ```
 
+We fit a regression using `smf.ols()` with the formula interface. The `C()` wrapper tells statsmodels to treat borough as a categorical variable, creating indicator (dummy) columns automatically.
+
 ```{python}
 # Regression: price ~ bathrooms + bedrooms + borough
 airbnb_model = smf.ols(
@@ -680,6 +688,8 @@ airbnb_model = smf.ols(
 
 print(airbnb_model.summary().tables[1])
 ```
+
+Let's isolate the bathrooms coefficient and build a confidence interval for it.
 
 ```{python}
 # Focus on the bathrooms coefficient
@@ -792,7 +802,7 @@ print(f"{'n':30s} {len(nba_games):12,d}  {int(airbnb_model.nobs):12,d}")
 print(f"{'Practically meaningful?':30s} {'No':>12s}  {'Yes':>12s}")
 print("=" * 60)
 print()
-print("Both are 'statistically significant.' Only one matters.")
+print("Both are 'statistically significant.' Only one is large enough to act on.")
 ```
 
 ## Key takeaways
@@ -810,17 +820,17 @@ print("Both are 'statistically significant.' Only one matters.")
 4. **Statistical significance $\neq$ practical importance.** With large $n$, you can detect
    effects too small to matter. Always report **effect sizes** alongside p-values.
 
-5. **Context matters.** The bathroom premium (\$30+/night) is actionable for Airbnb hosts.
+5. **Context determines whether a result is actionable.** The bathroom premium (\$30+/night) is actionable for Airbnb hosts.
    The rest effect (a fraction of a game score point) is not actionable for NBA coaches.
 
 6. **Regression estimates associations, not causal effects** (unless all confounders are
-   controlled for -- more in Lecture 18).
+   controlled for -- more in Chapter 18).
 
-We revisit this topic in Lecture 18 when we ask: coaches *choose* when to rest players --
+We revisit this topic in Chapter 18 when we ask: coaches *choose* when to rest players --
 so is the "rest effect" actually a "coaching strategy" effect? That question is causal,
 and regression alone cannot answer it.
 
-**Next up:** Lecture 13 is the Act 2 capstone on classification, where we apply
+**Next up:** Chapter 13 is the Act 2 capstone on classification, where we apply
 inference ideas to categorical outcomes.
 
 ## Study guide
@@ -843,7 +853,7 @@ inference ideas to categorical outcomes.
 - Building models step by step (adding one predictor at a time) reveals what "controlling for" actually does to coefficients.
 - Statistical significance with large n can detect effects too small to matter -- always check effect size.
 - Regression controls for measured confounders but does not establish causation.
-- Residual plots and Q-Q plots check whether the model's assumptions (LINE conditions) hold; when they do not, use bootstrap CIs (Lecture 8) instead of formula CIs.
+- Residual plots and Q-Q plots check whether the model's assumptions (LINE conditions) hold; when they do not, use bootstrap CIs (Chapter 8) instead of formula CIs.
 
 ### Computational tools
 
@@ -867,4 +877,4 @@ inference ideas to categorical outcomes.
 - Be able to interpret a confidence interval for a regression coefficient in context.
 - Know what a residual plot and Q-Q plot show, and what patterns indicate problems (heteroscedasticity, non-normality).
 - Know the LINE conditions (Linearity, Independence, Normality, Equal variance) and which diagnostic plots check which conditions.
-- Know that bootstrap CIs (Lecture 8) are a fallback when normality assumptions fail.
+- Know that bootstrap CIs (Chapter 8) are a fallback when normality assumptions fail.
