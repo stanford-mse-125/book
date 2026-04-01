@@ -89,8 +89,11 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Key concepts:**
 - Joins: inner vs. left join and when each is appropriate
 - Missing data strategies: drop, impute with mean, leave as NaN — each changes the answer
-- Type conversions (strings to numbers, dates)
-- AI failure modes in data cleaning: silently dropping rows, bad imputation, producing plausible-looking nonsense
+- Type conversions (strings to numbers, dates, categoricals mistaken for numerics)
+- Missing data patterns: MCAR, MAR, MNAR — MNAR is the hardest to handle
+- Informative missingness: the absence of data itself carries a signal
+- Data leakage: features that encode the target by construction
+- AI failure modes in data cleaning: silently dropping rows, wrong metric, data leakage, treating categoricals as numbers
 - Missingness is unevenly distributed across groups → biased comparisons
 
 **Key vocabulary:**
@@ -98,6 +101,9 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Data munging / wrangling
 - Mean imputation
 - Selection bias (from dropping rows)
+- Informative missingness
+- MCAR, MAR, MNAR
+- Data leakage
 
 **Prerequisites:** CS 106A (basic Python, pandas intro)
 
