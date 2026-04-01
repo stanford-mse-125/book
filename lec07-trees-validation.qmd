@@ -7,7 +7,7 @@ jupyter: python3
 
 A fintech startup has built two credit-scoring models — one simple, one complex. The complex model fits the training data beautifully: 95% accuracy on past loan applications. The board approves deployment. Within six months, default rates spike, regulators intervene, and the company loses $40 million. The model had memorized the training data, including its noise, and failed on the borrowers it had never seen. Choosing the wrong model can cost a company its future.
 
-In [Lecture 6](lec06-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. We also met decision trees and random forests, which engineer features automatically. But we've been measuring performance on the *same data we trained on*. Evaluating a model on its training data is like grading a student on the questions they've already seen. Today we confront the most important question in applied modeling: **does this model generalize?**
+In [Chapter 6](lec06-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. We also met decision trees and random forests, which engineer features automatically. But we've been measuring performance on the *same data we trained on*. Evaluating a model on its training data is like grading a student on the questions they've already seen. Today we confront the most important question in applied modeling: **does this model generalize?**
 
 :::{.callout-note}
 ## All Models Are Wrong
@@ -43,7 +43,7 @@ Adding features always improves training $R^2$. But does it improve predictions 
 Let's find out. We'll build feature matrices at six different complexity levels — from minimal (just bedrooms and bathrooms) to kitchen-sink (all pairwise interactions) — and track performance on both the training and test sets.
 
 ```{python}
-# Load Airbnb data (same setup as Lecture 6)
+# Load Airbnb data (same setup as Chapter 6)
 listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 
 cols = ['price', 'bedrooms', 'bathrooms', 'room_type', 'neighbourhood_group_cleansed']
@@ -126,6 +126,8 @@ y_test = df_test['price']
 print(f"Train: {len(df_train):,}  |  Test: {len(df_test):,}")
 ```
 
+We fit a `LinearRegression` at each complexity level and record both training and test $R^2$.
+
 ```{python}
 model_names = [
     '1: bedrooms+bath',
@@ -158,6 +160,8 @@ results_df = pd.DataFrame({
 })
 print(results_df.to_string(index=False))
 ```
+
+Training $R^2$ increases monotonically, as guaranteed. The test $R^2$ tells a different story.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(10, 5))
@@ -224,6 +228,8 @@ for deg in degrees:
     print(f"Degree {deg}: {X_poly.shape[1]:5d} features | "
           f"Train R² = {train_scores_poly[-1]:.3f} | Test R² = {test_r2:.3f}")
 ```
+
+By degree 7, the model has over 3,000 features for only 300 training observations. The result is catastrophic overfitting.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -350,6 +356,8 @@ for level in range(1, 7):
 cv_df = pd.DataFrame(cv_results)
 ```
 
+The CV scores give us a more stable comparison than a single train/test split. Let's visualize them with error bars showing the standard deviation across folds.
+
 ```{python}
 fig, ax = plt.subplots(figsize=(10, 5))
 ax.bar(range(len(cv_df)), cv_df['cv_mean'], yerr=cv_df['cv_std'],
@@ -423,6 +431,8 @@ print()
 print(f"OLS   — Train R²: {ols_ks.score(X_ks_tr, y_tr):.3f}  Test R²: {r2_score(y_te, ols_ks.predict(X_ks_te)):.3f}")
 print(f"Lasso — Train R²: {lasso.score(X_ks_tr, y_tr):.3f}  Test R²: {r2_score(y_te, lasso.predict(X_ks_te)):.3f}")
 ```
+
+Lasso's test $R^2$ dramatically exceeds OLS on the same features. The coefficient plots below show why: OLS spreads weight across all features (many of which are noise), while `Lasso` zeros most of them out.
 
 ```{python}
 # Visualize: Lasso coefficients vs OLS coefficients
@@ -531,7 +541,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-No U-shape! The test $R^2$ increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial story, where more complexity eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in Lecture 17, adding too many trees *can* overfit.)
+No U-shape! The test $R^2$ increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial story, where more complexity eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in Chapter 17, adding too many trees *can* overfit.)
 
 ### Demo 2: individual trees are overfit; their average is smooth
 
@@ -585,7 +595,25 @@ The core insight of **bagging** (bootstrap aggregating): averaging many overfit 
 
 One sentence looking ahead: this same principle — overparameterize, then regularize implicitly through averaging — is part of why large language models work. We'll revisit this connection in [Lecture 17](lec17-automl-llms.qmd).
 
-**The punchline:** the classical advice "regularize and cross-validate" still works. But now you know there's another path: build many diverse models and average them. The bias-variance tradeoff isn't wrong — it's just not the whole story.
+**The upshot:** the classical advice "regularize and cross-validate" still works. But now you know there's another path: build many diverse models and average them. The bias-variance tradeoff isn't wrong — it's just not the whole story.
+
+
+### How trees handle missing data
+
+Unlike linear regression, which requires complete data for every row, decision trees can handle missing values directly. Different implementations use different strategies:
+
+**Surrogate splits.** When a tree encounters a missing value at a split node, it looks for an alternative feature that produces a similar partition. If the best split is on `bedrooms` and a row has a missing bedroom count, the tree might split on `accommodates` instead (a correlated feature). CART and scikit-learn's `DecisionTreeClassifier` use this approach.
+
+**Native missing-value handling.** XGBoost and LightGBM go further: during training, they learn which branch (left or right) missing values should follow at each split, choosing whichever direction reduces the loss more. No imputation needed — the algorithm treats "missing" as just another value to route.
+
+**Why trees handle this well.** A decision tree asks a yes/no question at each node. Missing values simply need a rule for which branch to follow. Linear models, by contrast, need a numeric value to multiply by a coefficient — a missing value breaks the computation entirely.
+
+:::{.callout-tip}
+## Think About It
+If 30% of your `bedrooms` column is missing and you impute with the median before fitting a tree, what information have you destroyed? Would the tree have been better off seeing the missingness directly?
+:::
+
+In practice, tree-based models (especially gradient-boosted trees like XGBoost) are the most popular choice for tabular data with missing values — precisely because they don't require the analyst to make imputation decisions that could introduce bias.
 
 
 ## Key takeaways
@@ -620,6 +648,7 @@ One sentence looking ahead: this same principle — overparameterize, then regul
 - **Leave-one-out CV (LOO-CV)** — the extreme case of $k$-fold CV where $k = n$; each observation gets its own fold. Low bias but high variance and computationally expensive.
 - **Irreducible noise ($\sigma^2$)** — inherent randomness in the outcome that no model can eliminate. Even the true model faces this floor on test error.
 - **Three-way split (train / validation / test)** — training data for fitting, validation data for choosing model complexity, test data for final evaluation. Using the test set for model selection contaminates the performance estimate.
+- **Trees and missing data** — tree-based models handle missing data natively — by learning surrogate splits or optimal missing-value routing. Linear models require complete data or explicit imputation.
 
 ### Computational tools
 
@@ -628,6 +657,7 @@ One sentence looking ahead: this same principle — overparameterize, then regul
 - `Lasso(alpha=1.0).fit(X, y)` — fits a Lasso regression with regularization strength `alpha`
 - `LassoCV(cv=5).fit(X, y)` — searches over `alpha` values by cross-validation, selects the best
 - `RandomForestRegressor(n_estimators=100).fit(X, y)` — fits a random forest; more trees = better or flat, never worse
+- `xgboost.XGBRegressor()` / `lightgbm.LGBMRegressor()` — gradient-boosted tree libraries that handle missing values natively (no imputation required)
 
 ### For the quiz
 
