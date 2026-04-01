@@ -5,7 +5,9 @@ execute:
 jupyter: python3
 ---
 
-## You give an AI your hospital data and ask it to find the hospitals with the highest readmission rates. It gives you a confident answer. Should you trust it?
+## When clean-looking code gives wrong answers
+
+You hand the hospital readmissions dataset to an AI assistant and ask: "Which hospitals have the worst readmission rates?" It returns clean Python code, professional-looking plots, and a confident ranking. The code runs without errors. The answer is wrong.
 
 In Chapter 1, we introduced the hospital readmissions dataset and its consequential decisions. In Chapter 2, we explored the data and found the mess. Now we roll up our sleeves.
 
@@ -119,7 +121,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-We'll use the left join going forward, so we don't lose any readmission data. The hospitals without matching info will simply have NaN for characteristics like ownership and star rating. (We'll see in Chapter 7 how missing values can be turned into useful *features*, and in Chapter 17 that tree-based models handle missing data natively, without requiring imputation.)
+We'll use the left join going forward, so we don't lose any readmission data. The hospitals without matching info will simply have NaN for characteristics like ownership and star rating. (Missing values can sometimes be turned into useful *features* — for example, an indicator column for "was this value missing?" can carry signal. Tree-based models (Chapter 7) can also handle missing data natively, without requiring imputation.)
 
 ## Part 2: Missing data handling
 
@@ -266,7 +268,44 @@ else:
 print(f"Mean price: ${airbnb['price_clean'].mean():.2f}")
 ```
 
-The broader lesson: always inspect dtypes before writing cleaning code. Applying string operations to a column that is already numeric will either fail or produce nonsense. The next example is trickier.
+The broader lesson: always inspect dtypes before writing cleaning code. Applying string operations to a column that is already numeric will either fail or produce nonsense.
+
+### When data needs cleaning
+
+Real-world CSVs are rarely tidy. Here's what raw Airbnb price data looks like before cleaning:
+
+```{python}
+# Simulating raw price data — what Inside Airbnb's CSV sometimes looks like
+raw_prices = pd.Series(['$1,200.00', '$85.00', '$250.00', '$0.00', 'unknown', 'NA', '-50', 'Inf', None])
+print("Raw format:")
+print(raw_prices)
+print(f"\nType: {raw_prices.dtype}")
+# raw_prices.mean()  # Would raise TypeError — can't average strings!
+```
+
+The fix: replace non-numeric placeholders with `NaN`, strip formatting characters, convert to numeric with `pd.to_numeric()`, and handle invalid values like negatives.
+
+```{python}
+# Step 1: Replace non-numeric placeholders with NaN
+cleaned = raw_prices.replace(['unknown', 'NA', 'Inf', '-Inf'], np.nan)
+# Step 2: Strip dollar signs and commas
+cleaned = cleaned.str.replace(r'[\$,]', '', regex=True)
+# Step 3: Convert to numeric, coercing remaining problems to NaN
+cleaned = pd.to_numeric(cleaned, errors='coerce')
+# Step 4: Replace negative values with NaN (prices can't be negative)
+cleaned = cleaned.where(cleaned >= 0)
+print("After cleaning:")
+print(cleaned)
+print(f"\nValid prices: {cleaned.notna().sum()} out of {len(cleaned)}")
+print(f"Mean of valid: ${cleaned.mean():.2f}")
+```
+
+Always check `df.dtypes` early. A column that *looks* numeric may be stored as strings — and pandas won't warn you until you try to compute with it.
+
+:::{.callout-tip}
+## Think About It
+The Airbnb dataset has 25 listings at $0/night. Are those real prices, data entry errors, or something else? How would you decide?
+:::
 
 ### The "Hospital overall rating" trap
 
@@ -311,7 +350,7 @@ print(f"After dropna():  {after:,} rows")
 print(f"Dropped: {before - after:,} rows ({(before - after)/before*100:.1f}%)")
 ```
 
-Where did those rows go? Comparing the state distribution before and after reveals that the drop is uneven.
+Where did those rows go? Comparing the state distribution before and after reveals that the drop is uneven. (Pandas provides `.plot.bar()` as a shorthand for bar charts on pre-computed Series or DataFrames — a convenient alternative to seaborn's `sns.barplot()` when the data is already aggregated.)
 
 ```{python}
 # What changed? Compare the distribution of hospitals by state

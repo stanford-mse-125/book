@@ -186,14 +186,14 @@ Here, CMS suppresses data when counts are too small to report — the data is mi
 
 CABG (coronary artery bypass graft surgery) has ~50% missing — fewer hospitals perform this complex procedure. The hospitals with missing data are systematically different: smaller, often rural, with fewer specialized services.
 
-:::{.callout-warning}
-## Dropping missing data can introduce bias
-If you drop these rows, you're analyzing only the large, urban hospitals. Your conclusions would be biased.
-:::
-
 :::{.callout-important}
 ## Definition: Bias
 A statistical estimate is **biased** when it systematically deviates from the true value. Bias is not random error — it doesn't shrink with more data. Dropping MNAR data introduces **selection bias**: the remaining sample no longer represents the population. An estimate computed from a biased sample will consistently over- or under-estimate the quantity of interest, no matter how large the sample grows.
+:::
+
+:::{.callout-warning}
+## Dropping missing data can introduce bias
+If you drop these rows, you're analyzing only the large, urban hospitals. Your conclusions would be biased — systematically favoring large urban hospitals over the full population.
 :::
 
 For now, we're just diagnosing — noticing what's going on. In Chapter 3, we'll decide what to do about it.
