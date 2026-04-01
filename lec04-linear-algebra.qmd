@@ -1,5 +1,5 @@
 ---
-title: "Lecture 4: Linear Algebra — Vectors, Span, and Column Space"
+title: "Linear Algebra — Vectors, Span, and Column Space"
 execute:
   enabled: true
 jupyter: python3
@@ -27,7 +27,7 @@ A linear model says:
 
 $$\hat{\text{price}} = \beta_1 \cdot \text{bedrooms} + \beta_2 \cdot \text{bathrooms} + \beta_3 \cdot \text{neighborhood}$$
 
-(We're leaving out a constant term $\beta_0$ for now to keep things simple — we'll add it in Lecture 5.)
+(We're leaving out a constant term $\beta_0$ for now to keep things simple — we'll add it in Chapter 5.)
 
 By choosing different weights $\beta_1, \beta_2, \beta_3$, you get different predictions.
 But here's the real question: **what predictions are POSSIBLE?** And what predictions are **IMPOSSIBLE**, no matter what weights you choose?
@@ -55,6 +55,8 @@ print()
 print(f"The 'bedrooms' column is a vector in R^5: {bedrooms}")
 print(f"The 'bathrooms' column is a vector in R^5: {bathrooms}")
 ```
+
+Let's plot the row view: each listing as a point in 2D space, with bedrooms on one axis and bathrooms on the other.
 
 ```{python}
 # View 1: Each listing as a point in R^2
@@ -168,6 +170,8 @@ print(f"Listing 1: {beta1}*{bedrooms_vec[0]} + {beta2}*{bathrooms_vec[0]} = ${pr
 print(f"Listing 3: {beta1}*{bedrooms_vec[2]} + {beta2}*{bathrooms_vec[2]} = ${prediction[2]}")
 ```
 
+Different weights produce different prediction vectors. The plot below shows several linear combinations of two vectors $v_1$ and $v_2$ in $\mathbb{R}^2$ -- each black dot is one choice of weights.
+
 ```{python}
 # Visualize linear combinations in 2D
 v1 = np.array([2, 1])
@@ -276,7 +280,7 @@ plt.show()
 
 Two vectors in $\mathbb{R}^3$ span a *plane*, not all of 3D space. That means some target values $y$ are impossible to reach exactly — there are targets that no linear combination of your features can produce.
 
-The dashed line in the plot above is the **residual**: the gap between the target and the closest reachable point. Next lecture, we'll see that regression finds exactly this closest point — the **projection** of $y$ onto the column space. The residual is what's left over.
+The dashed line in the plot above is the **residual**: the gap between the target and the closest reachable point. In Chapter 5, we'll see that regression finds exactly this closest point — the **projection** of $y$ onto the column space. The residual is what's left over.
 
 ## Column space: from features to matrices
 
@@ -290,6 +294,8 @@ The **column space** of $X$ is the span of its columns:
 $$\text{col}(X) = \text{span}(x_1, x_2) = \{X\beta : \beta \in \mathbb{R}^2\}$$
 This set is exactly the collection of all possible predictions $\hat{y} = X\beta$ for a linear model. Different $\beta$ = different predictions, but they all live in the column space.
 :::
+
+We build the design matrix $X$ by stacking feature columns side by side using `np.column_stack`. The matrix-vector product `X @ beta` then computes the linear combination for all listings at once.
 
 ```{python}
 # Build the design matrix from our tiny example
@@ -312,7 +318,7 @@ print(f"Prediction y_hat = X @ beta = {y_hat}")
 
 :::{.callout-warning}
 ## Linear models can predict impossible values
-Nothing stops $X\beta$ from predicting a *negative* price. The column space doesn't know that prices must be positive. Linear models predict what the math allows, not what makes sense. (We'll revisit this limitation when we encounter logistic regression in Lecture 13.)
+Nothing stops $X\beta$ from predicting a *negative* price. The column space doesn't know that prices must be positive. Linear models predict what the math allows, not what makes sense. (We'll revisit this limitation when we encounter logistic regression in Chapter 13.)
 :::
 
 :::{.callout-tip}
@@ -335,11 +341,15 @@ airbnb['price_clean'] = (
 
 cols = ['bedrooms', 'bathrooms', 'beds', 'price_clean',
         'accommodates', 'number_of_reviews']
+n_before = len(airbnb)
 df = airbnb[cols].dropna()
+print(f"Dropped {n_before - len(df):,} listings with missing values in {cols}")
 df = df[(df['price_clean'] > 0) & (df['price_clean'] <= 500)]
-print(f"Working with {len(df):,} listings")
+print(f"Working with {len(df):,} listings (after removing NAs and extreme prices)")
 df.head(10)
 ```
+
+Each column of the data frame is now a vector in $\mathbb{R}^n$, where $n$ is the number of listings. Let's inspect the first few entries of each feature column.
 
 ```{python}
 # Look at the feature columns as vectors
@@ -409,6 +419,8 @@ print()
 print("When vectors are nearly parallel, adding the second one")
 print("barely expands the span. Your model doesn't gain much.")
 ```
+
+How much independent information does each feature contribute beyond bedrooms? We can project `beds` and `bathrooms` onto the `bedrooms` direction and examine the residual -- the part that bedrooms cannot explain.
 
 ```{python}
 # What's left after removing the bedrooms component?
@@ -502,7 +514,7 @@ The **rank** of a matrix $X$ is the dimension of its column space — equivalent
 - If rank = number of columns, all features contribute non-redundant information.
 :::
 
-Rank is a binary concept: a column is either exactly dependent or it isn't. But in practice, *near*-redundancy matters more, and that's what singular values measure. Let's check.
+Rank is a binary concept: a column is either exactly dependent or it isn't. In code, `np.linalg.matrix_rank(X)` returns the rank. But in practice, *near*-redundancy has a larger effect on model performance, and singular values quantify that effect. Let's check.
 
 ```{python}
 # Build feature matrices and check rank
@@ -520,9 +532,11 @@ print(f"so the rank is {rank_3}. But near-collinearity means the 3rd direction")
 print(f"adds very little. Singular values reveal how much each direction contributes.")
 ```
 
+The **singular values** of $X$ (computed by `np.linalg.svd`) quantify how much variance each independent direction captures. We'll study SVD formally in Chapter 14; for now, the bar chart tells the story.
+
 ```{python}
 # Singular values: how much does each independent direction contribute?
-# (We'll return to singular values formally in Lecture 14 on PCA —
+# (We'll return to singular values formally in Chapter 14 on PCA —
 #  for now, just look at the bar chart.)
 _, singular_values, _ = np.linalg.svd(
     features_3 - features_3.mean(axis=0), full_matrices=False)
@@ -553,7 +567,7 @@ A model with 50 features but rank 3 — what does that tell you about the data? 
 
 ## Orthogonality: a preview of regression
 
-One more concept we'll need immediately in Lecture 5.
+One more concept we'll need immediately in Chapter 5.
 
 :::{.callout-important}
 ## Definition: Orthogonal Vectors
@@ -593,13 +607,13 @@ print("Beds and reviews are nearly orthogonal — they carry independent informa
 print("Beds and bedrooms are far from orthogonal — they carry redundant information.")
 ```
 
-Why does orthogonality matter? In Lecture 5, we'll see that the residual $e = y - \hat{y}$ from regression is **orthogonal** to the column space of $X$. That orthogonality condition defines the least squares solution and gives us the normal equations.
+Why does orthogonality matter? In Chapter 5, we'll see that the residual $e = y - \hat{y}$ from regression is **orthogonal** to the column space of $X$. That orthogonality condition defines the least squares solution and gives us the normal equations.
 
 Orthogonal features (90° apart) expand the column space maximally; parallel features (0°) don't expand it at all.
 
 ## What predictions are possible? An answer
 
-The opening of this lecture asked: given your features, what predictions are possible? We now have the tools to answer concretely. The column space of $X$ is the set of all achievable predictions. Any target vector outside the column space cannot be reached exactly — the best a linear model can do is find the closest point inside the column space.
+The opening of this chapter asked: given your features, what predictions are possible? We now have the tools to answer concretely. The column space of $X$ is the set of all achievable predictions. Any target vector outside the column space cannot be reached exactly — the best a linear model can do is find the closest point inside the column space.
 
 Let's project actual Airbnb prices onto the column space of two feature sets and measure the gap.
 
@@ -630,6 +644,8 @@ print(f"    avg |residual| = ${np.mean(np.abs(resid_large)):.0f} per listing")
 print()
 print("More independent features → larger column space → smaller residual.")
 ```
+
+The scatter plots below compare predicted prices (the projection onto the column space, computed by `np.linalg.lstsq`) against actual prices. Points on the red dashed line would be perfect predictions.
 
 ```{python}
 # Visualize: actual prices vs projected prices
@@ -664,7 +680,7 @@ The gap between the red dashed line and the point cloud is the residual — the 
 
 Linear algebra tells you what your model CAN and CANNOT do, **before you fit anything.**
 
-In Lecture 6, we'll see that choosing the right features — polynomial terms, interactions, category indicators — lets linear models capture nonlinear patterns.
+In Chapter 6, we'll see that choosing the right features — polynomial terms, interactions, category indicators — lets linear models capture nonlinear patterns.
 
 ## Further reading
 
@@ -672,7 +688,7 @@ Want to build more intuition? The [3Blue1Brown "Essence of Linear Algebra"](http
 
 For a deeper formal treatment: **VMLS** (Boyd & Vandenberghe), Chapters 1 (Vectors) and 5 (Linear independence).
 
-Next lecture: we'll use these ideas to understand *why* the linear regression formula works. Specifically, regression finds the **projection** of $y$ onto the column space — the closest reachable prediction to the actual target.
+Next chapter: we'll use these ideas to understand *why* the linear regression formula works. Specifically, regression finds the **projection** of $y$ onto the column space — the closest reachable prediction to the actual target.
 
 ## Study guide
 
@@ -694,7 +710,7 @@ Next lecture: we'll use these ideas to understand *why* the linear regression fo
 - A linear model's predictions live in the column space of $X$.
 - Nearly parallel features don't expand the column space — you get redundancy, not predictive power.
 - Rank tells you how many truly independent features you have; singular values tell you how much each contributes.
-- When the target $y$ isn't in the column space, the best prediction is the closest point in the span (the projection — Lecture 5).
+- When the target $y$ isn't in the column space, the best prediction is the closest point in the span (the projection — Chapter 5).
 
 ### Computational tools
 
@@ -702,7 +718,7 @@ Next lecture: we'll use these ideas to understand *why* the linear regression fo
 - `np.linalg.norm(v)` — Euclidean norm (length) of a vector
 - `np.column_stack([a, b])` — build a design matrix from column vectors
 - `np.linalg.matrix_rank(X)` — rank of a matrix
-- `np.linalg.svd(X)` — singular value decomposition (more in Lecture 14)
+- `np.linalg.svd(X)` — singular value decomposition (more in Chapter 14)
 - `df.corr()` — correlation matrix (related: high correlation ↔ near-collinearity)
 
 ### For the quiz
