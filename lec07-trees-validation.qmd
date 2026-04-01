@@ -1,5 +1,5 @@
 ---
-title: "Lecture 7: Trees, Validation, and Bias-Variance"
+title: "Trees, Validation, and Bias-Variance"
 execute:
   enabled: true
 jupyter: python3
