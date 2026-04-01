@@ -24,7 +24,7 @@ Here are ten examples we'll return to throughout the quarter:
 | NextEra solar farm siting | 30 years of hourly solar irradiance (NREL) | Which parcels maximize energy per dollar? |
 | Pfizer vaccine efficacy | Randomized trial: 8 vs. 162 cases in 43K patients | Enough evidence for emergency authorization? |
 | NC gerrymandering | Precinct-level votes + 24K simulated district maps | Was the 10–3 seat split geographic luck or manipulation? |
-| Zillow's iBuying loss | Home prices, Zestimate predictions | Why did the algorithm overpay on 9,790 homes? |
+| Zillow's iBuying loss | Home prices, Zestimate predictions | Why did the algorithm overpay on most homes? |
 | COMPAS bail scores | Risk scores and recidivism outcomes by race | Why is the false positive rate 45% for Black defendants vs. 23% for white? |
 | Netflix recommendations | 100M ratings from 480K users on 17K movies | Which movies to recommend to which users? |
 
@@ -43,7 +43,7 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (7, 4.5)
+plt.rcParams['figure.figsize'] = (8, 5)
 plt.rcParams['font.size'] = 12
 
 # Load data
@@ -64,7 +64,7 @@ A decision is **consequential** when getting it wrong has serious impact — and
 ## The fairness impossibility
 The COMPAS controversy reveals a deep mathematical constraint, not just a software bug. ProPublica found that Black defendants who did *not* reoffend were nearly twice as likely to be flagged high-risk (false positive rate: 45% vs. 23%). Northpointe, the algorithm's maker, countered that among defendants *scored* as high-risk, the actual recidivism rate was similar across races (~60%). Both were correct — but they measured fairness differently.
 
-It turns out that when two groups have different base rates of reoffending, it is *mathematically impossible* to equalize both false positive rates and predictive values at the same time (Chouldechova 2017; Kleinberg, Mullainathan, and Raghavan 2016). This isn't a bug to fix — it's a tradeoff to navigate. Which fairness criterion to prioritize is a values question, not a statistical one. We'll formalize this in Act 3.
+It turns out that when two groups have different base rates of reoffending, it is *mathematically impossible* to equalize both false positive rates and predictive values at the same time (Chouldechova 2017; Kleinberg, Mullainathan, and Raghavan 2016). This constraint isn't a bug to fix — it's a tradeoff to navigate. Which fairness criterion to prioritize is a values question, not a statistical one. We'll formalize this in Act 3.
 :::
 
 **Scale.** The World Food Programme's reallocation model affects 2 million people simultaneously. Netflix's recommendation algorithm shapes what 200 million users watch. When a decision affects many people at once, even small errors can be consequential.
@@ -107,7 +107,7 @@ These four modes — **summary, prediction, inference, and causation** — form 
 
 **Prediction** asks: *what will happen next?* Given a new hospital's patient mix, neighborhood, and staffing levels, what ERR should we expect? Prediction doesn't require understanding *why* — a model can predict accurately without explaining the mechanism. In Act 1, we'll build prediction models using regression, feature engineering, and decision trees.
 
-**Inference** asks: *what can we conclude about the population?* If a hospital's ERR is 1.05, is that a real signal or just noise from a small sample? Inference quantifies uncertainty — it tells you how confident to be. A single number without an uncertainty estimate is dangerous: Zillow's algorithm predicted home prices without prediction intervals and lost $881 million. In Act 2, we'll build the tools for inference: confidence intervals, hypothesis tests, and p-values.
+**Inference** asks: *what can we conclude about the population?* If a hospital's ERR is 1.05, is that a real signal or just noise from a small sample? Inference quantifies uncertainty — it tells you how confident to be. Consider the Pfizer vaccine trial: the prediction is that the vaccine works (8 cases vs. 162 in 43,000 patients). But should we authorize it for hundreds of millions of people based on one trial? Inference answers that question — by telling us how likely the observed result would be if the vaccine had no effect. In Act 2, we'll build the tools for inference: confidence intervals, hypothesis tests, and p-values.
 
 **Causation** asks: *what would happen if we intervened?* Does fining hospitals actually reduce readmissions — or do penalized hospitals just learn to game the metrics? Causal questions are the hardest because correlation doesn't imply causation. Observing that fined hospitals improve doesn't prove the fine caused the improvement — maybe those hospitals were already investing in quality. The comparison may be **confounded** by other changes happening at the same time. We'll define and study confounding starting in Chapter 2. In Act 3, we'll develop frameworks for causal reasoning.
 
@@ -122,11 +122,11 @@ Each mode builds on the last. You can't predict without first summarizing. You c
 
 The course follows a three-act structure. Each act builds on the last:
 
-**Act 1: Build Models** (Lectures 1–7) — Explore data, clean it, and build predictive models. We'll use regression, feature engineering, and decision trees on real datasets.
+**Act 1: Build Models** (Chapters 1–7) — Explore data, clean it, and build predictive models. We'll use regression, feature engineering, and decision trees on real datasets.
 
-**Act 2: Trust Models** (Lectures 8–12) — Sampling, hypothesis testing, and regression inference. We'll ask: how precise are our estimates? Is the drug effect real? Which coefficients matter?
+**Act 2: Trust Models** (Chapters 8–12) — Sampling, hypothesis testing, and regression inference. We'll ask: how precise are our estimates? Is the drug effect real? Which coefficients matter?
 
-**Act 3: See Further** (Lectures 13–19) — Classification, PCA, clustering, time series, tree-based methods, and causal inference. We'll move from "what happened" to "why."
+**Act 3: See Further** (Chapters 13–19) — Classification, PCA, clustering, time series, tree-based methods, and causal inference. We'll move from "what happened" to "why."
 
 Acts 1–3 correspond to the four modes of reasoning: Act 1 covers summary and prediction, Act 2 covers inference, and Act 3 adds causation.
 
@@ -150,6 +150,8 @@ We'll see the ten questions from the opening recur throughout the course:
 ## A first look at real data
 
 Let's put these ideas to work on a real dataset. The Centers for Medicare & Medicaid Services (CMS) tracks how often patients are readmitted to hospitals within 30 days of discharge. Hospitals with "too many" readmissions get fined.
+
+We load the data with `pd.read_csv()` and inspect the first few rows with `.head()`:
 
 ```{python}
 # Load hospital readmissions data
@@ -192,12 +194,21 @@ The **Excess Readmission Ratio (ERR)** compares a hospital's predicted readmissi
 readmissions['Excess Readmission Ratio'].describe()
 ```
 
-The mean is close to 1.0 — most hospitals are near the expected rate. But the spread matters: some hospitals are well above or below.
+The mean is close to 1.0 — most hospitals are near the expected rate. But the spread tells the real story: some hospitals are well above or below.
 
 ### Visualizing a distribution
 
+Before plotting, note that some ERR values are missing. The `.dropna()` call below removes them — always check how many are absent before dropping:
+
 ```{python}
-fig, ax = plt.subplots(figsize=(8, 5))
+print(f"Missing ERR values: {readmissions['Excess Readmission Ratio'].isna().sum():,} "
+      f"out of {len(readmissions):,}")
+```
+
+Now we use `sns.histplot()` to visualize the distribution:
+
+```{python}
+fig, ax = plt.subplots()
 sns.histplot(readmissions['Excess Readmission Ratio'].dropna(), bins=50, ax=ax,
              edgecolor='white')
 ax.axvline(x=1.0, color='red', linestyle='--', linewidth=2, label='Expected = 1.0')
@@ -217,12 +228,12 @@ What if we want to focus on just one condition? Use boolean filtering:
 
 ```{python}
 # Filter to heart failure only
-heart_failure = readmissions[readmissions['Measure Name'] == 'HF - Heart Failure']
+heart_failure = readmissions[readmissions['Measure Name'] == 'READM-30-HF-HRRP']
 print(f"Heart failure rows: {heart_failure.shape[0]:,}")
 heart_failure[['Facility Name', 'State', 'Excess Readmission Ratio']].head()
 ```
 
-The expression inside the brackets — `readmissions['Measure Name'] == 'HF - Heart Failure'` — produces a True/False value for each row. Only the True rows are kept. This pattern of filtering by a condition is how you slice data in pandas.
+The expression inside the brackets — `readmissions['Measure Name'] == 'READM-30-HF-HRRP'` — produces a True/False value for each row. Only the True rows are kept. Boolean filtering — selecting rows that satisfy a condition — is a fundamental pandas operation.
 
 :::{.callout-tip}
 ## Think About It
