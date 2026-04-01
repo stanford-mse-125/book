@@ -1,5 +1,5 @@
 ---
-title: "Lecture 6: Feature Engineering"
+title: "Feature Engineering"
 execute:
   enabled: true
 jupyter: python3
@@ -7,7 +7,7 @@ jupyter: python3
 
 Regression takes numbers. Real data has categories, text, and nonlinear relationships. Feature engineering bridges that gap — from hand-crafted inputs to AI-generated ones. The central idea: a model can be **linear in its parameters** while capturing wildly **nonlinear relationships in its features**. Every technique in this lecture exploits that fact.
 
-In [Lecture 5](lec05-regression.qmd), we fit a regression predicting Airbnb prices from bedrooms and bathrooms. That model ignored most of the information in the dataset: borough, room type, listing descriptions. **Feature engineering** transforms raw data into inputs a model can use. We start with classical techniques (dummies, polynomials, interactions), meet decision trees that engineer features automatically, and end with a modern approach: using an LLM to extract structured features from unstructured text.
+In [Chapter 5](lec05-regression.qmd), we fit a regression predicting Airbnb prices from bedrooms and bathrooms. That model ignored most of the information in the dataset: borough, room type, listing descriptions. **Feature engineering** transforms raw data into inputs a model can use. We start with classical techniques (dummies, polynomials, interactions), meet decision trees that engineer features automatically, and end with a modern approach: using an LLM to extract structured features from unstructured text.
 
 ```{python}
 import numpy as np
@@ -62,14 +62,14 @@ We can't feed "Manhattan" or "Private room" into a regression equation. The solu
 
 :::{.callout-important}
 ## Definition: Reference level
-We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't in any of the other boroughs, it *must* be in the dropped category (the **reference level**). Including all dummies would make the columns sum to the intercept column — a linearly dependent column space (recall the column space from [Lecture 4](lec04-linear-algebra.qmd)). The dropped category becomes the baseline that all other coefficients are measured against.
+We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't in any of the other boroughs, it *must* be in the dropped category (the **reference level**). Including all dummies would make the columns sum to the intercept column — a linearly dependent column space (recall the column space from [Chapter 4](lec04-linear-algebra.qmd)). The dropped category becomes the baseline that all other coefficients are measured against.
 :::
 
 :::{.callout-tip}
 ## Regularization as an alternative to dropping a category
 Dropping the first category is one way to resolve collinearity. Regularization is another. Even a mild L2 penalty (ridge regression) breaks the perfect linear dependence among dummy columns, making all coefficients well-defined and interpretable — no category needs to serve as a hidden baseline.
 
-The intuition: collinearity is not inherently dangerous. It simply means the model has redundant parameters, so infinitely many coefficient vectors produce the same predictions. Regularization picks one of those vectors (the one with smallest norm), resolving the ambiguity without discarding any information. We develop regularization in [Lecture 7](lec07-trees-validation.qmd).
+The intuition: collinearity is not inherently dangerous. It simply means the model has redundant parameters, so infinitely many coefficient vectors produce the same predictions. Regularization picks one of those vectors (the one with smallest norm), resolving the ambiguity without discarding any information. We develop regularization in [Chapter 7](lec07-trees-validation.qmd).
 :::
 
 ```{python}
@@ -227,6 +227,8 @@ print(f"With interactions:    R² = {r2_interact:.3f}  ({X_interact.shape[1]} fe
 print(f"Improvement: {r2_interact - r2_base:.4f}")
 ```
 
+The interaction terms improve $R^2$, confirming that the value of a bedroom depends on location. Let's visualize the per-borough regression lines.
+
 ```{python}
 # Visualize: different slopes per borough
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -307,7 +309,7 @@ Engineering features by hand is creative but tedious. What if the model could fi
 
 A **decision tree** splits the feature space into regions and predicts the mean price in each region. Each internal node asks an if/then question about one feature: "Is bedrooms > 2?" or "Is borough = Manhattan?" The tree learns which questions to ask and where to split — no manual feature engineering needed.
 
-A model that memorizes training data looks perfect on those same observations but fails on new ones. To get an honest measure of prediction quality, we hold out 30% of listings as a **test set** that the model never sees during fitting. [Lecture 7](lec07-trees-validation.qmd) develops this idea fully.
+A model that memorizes training data looks perfect on those same observations but fails on new ones. To get an honest measure of prediction quality, we hold out 30% of listings as a **test set** that the model never sees during fitting. [Chapter 7](lec07-trees-validation.qmd) develops this idea fully.
 
 ```{python}
 # Hold out 30% of listings for honest evaluation
@@ -334,6 +336,8 @@ print(f"  Train R² = {tree_train_r2:.3f}  |  Test R² = {tree_test_r2:.3f}")
 print(f"\nLinear model with interactions:")
 print(f"  Train R² = {lm_train_r2:.3f}  |  Test R² = {lm_test_r2:.3f}")
 ```
+
+The tree's test performance is comparable to (or slightly worse than) the linear model with hand-engineered interactions. Let's visualize what the tree learned using `plot_tree`.
 
 ```{python}
 # Visualize the tree (using max_depth=3 for readability)
@@ -376,12 +380,12 @@ print(f"  Random Forest (100 trees):   {rf_test_r2:.3f}")
 
 The forest beats our hand-engineered linear model — and we didn't engineer a single feature. It handles nonlinearities, interactions, and complex splits automatically.
 
-How does this work? We'll understand the key idea in [Lecture 7](lec07-trees-validation.qmd) (averaging reduces variance) and go deep on tree-based methods in Lecture 17.
+How does this work? We'll understand the key idea in [Chapter 7](lec07-trees-validation.qmd) (averaging reduces variance) and go deep on tree-based methods in Chapter 17.
 
 ::::{.callout-note}
 ## Preview: classification
 
-Everything above predicts a continuous number (price). **Classification** predicts a discrete category instead — "expensive or not," "spam or not." The same tree-based machinery applies: a classification tree predicts the majority class in each leaf, and a random forest classifier uses majority vote across trees. We develop classification properly with logistic regression in Lecture 13; for projects before then, `RandomForestClassifier` from scikit-learn works out of the box with the same `fit`/`score` interface.
+Everything above predicts a continuous number (price). **Classification** predicts a discrete category instead — "expensive or not," "spam or not." The same tree-based machinery applies: a classification tree predicts the majority class in each leaf, and a random forest classifier uses majority vote across trees. We develop classification properly with logistic regression in Chapter 13; for projects before then, `RandomForestClassifier` from scikit-learn works out of the box with the same `fit`/`score` interface.
 ::::
 
 ## LLM-based featurization
@@ -449,6 +453,8 @@ Return ONLY the JSON object, no other text."""
 print(example_prompt.format(description="<listing text goes here>"))
 ```
 
+In practice, you'd call the LLM API on each listing description and parse the JSON response. The code below shows the pattern (the features for our dataset are pre-computed).
+
 ```{python}
 # How the API call works (not run here — features are pre-computed):
 #
@@ -489,6 +495,8 @@ llm_cols = [c for c in llm_features.columns if c != 'id']
 print(f"\nLLM feature summary:")
 print(df_llm[llm_cols].describe().round(2))
 ```
+
+Now let's build a regression with and without the LLM features, using `train_test_split` to measure honest test performance.
 
 ```{python}
 # Build feature matrix with LLM features included
@@ -559,7 +567,7 @@ LLM featurization replaces an entire natural language processing pipeline with a
 - **Decision trees** find splits automatically — no manual feature engineering needed. Each node asks an if/then question about one feature.
 - **Random forests** average many trees to reduce overfitting. They provide a strong benchmark without any feature engineering.
 - **LLM featurization** extracts structured features from unstructured text — a form of **weak supervision** at scale, where one prompt replaces thousands of hand labels. Good prompts define each feature precisely and request a structured output format.
-- Next: [Lecture 7](lec07-trees-validation.qmd) asks "how do we know these features aren't just overfitting?" — introducing train/test splits, cross-validation, and the bias-variance tradeoff.
+- Next: [Chapter 7](lec07-trees-validation.qmd) asks "how do we know these features aren't just overfitting?" — introducing train/test splits, cross-validation, and the bias-variance tradeoff.
 
 ## Study guide
 
