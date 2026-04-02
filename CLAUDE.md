@@ -6,8 +6,7 @@
 - `key-concepts.md` — learning objectives, vocabulary, prerequisites per chapter
 - `data/` — datasets (large CSVs via Git LFS)
 - `DATA_DIR = 'data'` in all .qmd files
-- Chapter titles are topic only (no "Lecture N:" prefix)
-- Four modes of reasoning thread the book: summary, prediction, inference, causation
+- For content standards, style rules, and authoring conventions, see the `/write-chapter` skill
 
 ## Rendering
 - `quarto render lecNN-slug.qmd` to verify a single chapter
@@ -19,10 +18,7 @@
 - CI/CD regenerates these automatically; to sync locally, run the convert command above for each file
 
 ## Callout syntax
-- `:::{.callout-important}` — definitions and key results (styled blue via custom.scss)
-- `:::{.callout-tip}` — "Think about it" discussion prompts
-- `:::{.callout-note}` — historical asides, conceptual previews (title = story/concept name)
-- `:::{.callout-warning}` — pitfalls and common errors
+See `/write-chapter` skill for full details. Quick reference: important=definitions, tip=discussion, note=asides, warning=pitfalls.
 
 ## CI/CD
 - GitHub Actions renders book, generates .ipynb notebooks, deploys to Pages
