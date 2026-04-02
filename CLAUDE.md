@@ -10,8 +10,13 @@
 - Four modes of reasoning thread the book: summary, prediction, inference, causation
 
 ## Rendering
-- `quarto render lecNN-slug.qmd` to verify a single lecture
+- `quarto render lecNN-slug.qmd` to verify a single chapter
 - `quarto render` to build the full book
+- `quarto convert lecNN-slug.qmd --output notebooks/lecNN-slug.ipynb` to regenerate a notebook
+
+## Notebooks
+- `notebooks/` contains .ipynb versions of each chapter, generated from .qmd via `quarto convert`
+- CI/CD regenerates these automatically; to sync locally, run the convert command above for each file
 
 ## Callout syntax
 - `:::{.callout-important}` — definitions and key results (styled blue via custom.scss)
