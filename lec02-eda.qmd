@@ -112,7 +112,7 @@ plt.show()
 ```
 
 The distributions look roughly symmetric and unimodal, centered near 1.0.
-But notice the spread differs by condition — heart failure (HF) has more variation than hip/knee replacement.
+But notice the spread differs by condition — hip/knee replacement has more variation than other conditions.
 
 :::{.callout-tip}
 ## Think About It
