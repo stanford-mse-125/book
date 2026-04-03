@@ -127,7 +127,7 @@ for col in raw_var.head(5).index:
     print(f"  {col:>35s}: variance = {raw_var[col]:>15,.1f}")
 ```
 
-**There it is.** `maximum_nights` has a variance of millions — some listings allow stays of 1,000+ nights. `availability_365` ranges up to 365. Meanwhile, `bathrooms` ranges from 0 to 10.
+**There it is.** `maximum_nights` has a variance in the trillions — some listings allow stays of 1,000+ nights, creating enormous outliers. `availability_365` ranges up to 365. Meanwhile, `bathrooms` ranges from 0 to 10.
 
 PCA on unstandardized data just picks up whichever column has the biggest numbers. PC1 is basically "maximum_nights" — that's not a useful summary of anything.
 
@@ -200,7 +200,7 @@ for threshold in [0.7, 0.8, 0.9]:
     print(f"  {threshold*100:.0f}% variance: need {n_needed} PCs (out of {len(numeric_cols)})")
 ```
 
-We need about 8-10 PCs to capture 80-90% of the variance. That's a big reduction from 23 columns — but not as dramatic as "just 5 PCs capture everything." Real data is messy, and the variance is spread out.
+We need about 8-10 PCs to capture 70-80% of the variance, or 14 to reach 90%. That's a big reduction from 23 columns — but not as dramatic as "just 5 PCs capture everything." Real data is messy, and the variance is spread out.
 
 Still, the first few PCs do capture meaningful structure. Let's interpret them.
 
@@ -258,11 +258,11 @@ for feat, val in pc2.tail(3).items():
 
 **Telling the story of each PC:**
 
-- **PC1** loads heavily on the review scores (accuracy, cleanliness, communication, value, rating). This component captures a "review quality" factor — listings that score high on PC1 have uniformly good reviews.
+- **PC1** contrasts review scores (positive: rating, value, accuracy) against availability windows (negative: availability_30, _60, _90). Listings that score high on PC1 have strong reviews but low availability — popular, booked-up places. Listings that score low on PC1 have lots of open dates but weaker reviews.
 
-- **PC2** loads on size features (accommodates, bedrooms, beds, bathrooms) and price. This component captures a "size/luxury" factor — bigger, pricier listings score higher on PC2.
+- **PC2** loads heavily on availability_30, _60, and _90 (all positive), with weak negative loadings on latitude, minimum_nights, and maximum_nights. This component captures a "calendar openness" factor — listings with many available dates in the near term score high on PC2, regardless of review quality.
 
-Notice how PCA automatically discovered these natural groupings. We didn't tell it about "review quality" or "listing size" — it found these dimensions by following the variance.
+Notice how PCA automatically discovered these natural groupings. We didn't tell it about "review quality" or "calendar availability" — it found these dimensions by following the variance.
 
 ### Tracing one listing through PCA
 
@@ -288,18 +288,18 @@ What do those scores tell us about this listing?
 
 ```{python}
 # What does this listing's PC1 score mean?
-print("PC1 is the 'review quality' factor.")
+print("PC1 is the 'popular & booked-up' factor (high reviews, low availability).")
 print(f"This listing's PC1 score = {example_scores[0]:+.2f}")
 if example_scores[0] > 0:
-    print("  → Positive: above-average review quality.")
+    print("  → Positive: strong reviews, limited availability.")
 else:
-    print("  → Negative: below-average review quality.")
-print(f"\nPC2 is the 'size/luxury' factor.")
+    print("  → Negative: weaker reviews or lots of open dates.")
+print(f"\nPC2 is the 'calendar openness' factor (high near-term availability).")
 print(f"This listing's PC2 score = {example_scores[1]:+.2f}")
 if example_scores[1] > 0:
-    print("  → Positive: bigger/pricier than average.")
+    print("  → Positive: many available dates in the next 30-90 days.")
 else:
-    print("  → Negative: smaller/cheaper than average.")
+    print("  → Negative: fewer available dates in the near term.")
 ```
 
 ## The math behind PCA: SVD
@@ -390,9 +390,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-Room types show some separation along PC2 (the size/luxury axis): entire homes tend to score higher than private rooms, which makes sense. But there's a lot of overlap — PCA captures broad trends, not clean clusters.
+Room types show some separation along the first two PCs, but there's a lot of overlap — PCA captures broad trends, not clean clusters.
 
-Boroughs show less separation in these first two PCs. Geography isn't the dominant source of variance in the standardized data — review patterns and listing size matter more.
+Boroughs show less separation in these first two PCs. Geography isn't the dominant source of variance in the standardized data — review patterns and availability matter more.
 
 ## PCA vs. feature selection
 

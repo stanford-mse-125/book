@@ -17,9 +17,9 @@ what happens when the effect IS real and large. Same tools, very different concl
 
 In Act 1, we built regression models to predict — given a listing's features, what price should we expect? Prediction works well when you observe a new unit from the same population: a new listing appears, you plug in its features, you get a price.
 
-But now consider a different question. An Airbnb host is thinking about spending \$50,000 to convert a closet into a second bedroom. The regression coefficient on `bedrooms` is +\$85/night. Does that mean the renovation will pay for itself in two years?
+But now consider a different question. An Airbnb host is thinking about spending \$50,000 to convert a closet into a second bedroom. The regression coefficient on `bedrooms` is about +\$34/night. Does that mean the renovation will pay for itself in four years?
 
-Not necessarily. The coefficient tells you that listings *with* more bedrooms tend to cost more — but it doesn't tell you that *adding* a bedroom to *your* listing would increase your price by \$85. Maybe the real driver is apartment size, or building quality, or neighborhood. Larger apartments happen to have more bedrooms *and* higher prices, but the extra bedroom isn't doing the work.
+Not necessarily. The coefficient tells you that listings *with* more bedrooms tend to cost more — but it doesn't tell you that *adding* a bedroom to *your* listing would increase your price by \$34. Maybe the real driver is apartment size, or building quality, or neighborhood. Larger apartments happen to have more bedrooms *and* higher prices, but the extra bedroom isn't doing the work.
 
 Prediction asks: **what will happen to a new unit from this population?** Inference asks: **what would happen if I changed something?** The second question is harder — and it's the one that matters when the decision involves an investment, a policy, or an intervention. This chapter gives you the tools to start answering it.
 :::
@@ -327,7 +327,7 @@ print(f"Formula SE:            {se_rest:.4f}")
 print(f"Bootstrap SE:          {boot_se:.4f}  (close match)")
 print(f"Ratio (coef / SE):     {beta_rest / se_rest:.4f}")
 print()
-print("The ratio is about 2 -- the coefficient sits roughly 2 SEs from zero.")
+print("The ratio is about -7 -- the coefficient sits roughly 7 SEs from zero.")
 ```
 
 :::{.callout-important}
@@ -346,7 +346,7 @@ Under $H_0$, this statistic follows a $t$-distribution with $n - p - 1$ degrees 
 :::
 
 (This derivation assumes approximately normal errors -- reasonable here given our large
-sample size, $n > 100{,}000$. With smaller samples, you would want to check a residual Q-Q plot.)
+sample size, $n > 70{,}000$. With smaller samples, you would want to check a residual Q-Q plot.)
 
 ```{python}
 # T-test for REST_DAYS coefficient — verify by hand
@@ -522,7 +522,7 @@ standard errors and p-values may be unreliable. Options include:
 - **Transform the response** (e.g., log price) to stabilize variance.
 :::
 
-For the NBA model, our sample is large ($n > 100{,}000$) and the Q-Q plot is
+For the NBA model, our sample is large ($n > 70{,}000$) and the Q-Q plot is
 reasonable in the middle, so the formula-based inference is trustworthy here.
 With smaller samples or heavier tails, bootstrap CIs would be the safer choice.
 
@@ -530,7 +530,7 @@ With smaller samples or heavier tails, bootstrap CIs would be the safer choice.
 
 :::{.callout-tip}
 ## Think About It
-The t-test says REST_DAYS is "statistically significant" ($p \approx 0.04$).
+The t-test says REST_DAYS is "statistically significant" ($p < 0.001$).
 Yet the rest-days bar in the coefficient plot above barely clears zero.
 The model scarcely changes when we add rest days. Should we care?
 :::
@@ -542,7 +542,7 @@ This example illustrates the tension between **statistical significance** and **
 A small p-value does not mean a large effect. This principle is one of the most
 frequently misunderstood ideas in applied statistics.
 
-Let us return to the NBA model. The REST_DAYS coefficient was statistically significant ($p \approx 0.04$).
+Let us return to the NBA model. The REST_DAYS coefficient was statistically significant ($p < 0.001$).
 Look at the **effect size**.
 
 ```{python}
@@ -599,7 +599,7 @@ print("The rest effect is dwarfed by player quality and even home court advantag
 ## Think About It
 A sports analytics team comes to you and says "We ran a regression and found a
 negative coefficient for rest days -- extra rest actually *hurts* performance,
-with $p = 0.04$!" What questions should you ask?
+with $p < 0.001$!" What questions should you ask?
 :::
 
 1. How big is the effect? (Tiny -- a fraction of a point, standardized effect near zero.)
@@ -827,7 +827,7 @@ print("Both are 'statistically significant.' Only one is large enough to act on.
 4. **Statistical significance $\neq$ practical importance.** With large $n$, you can detect
    effects too small to matter. Always report **effect sizes** alongside p-values.
 
-5. **Context determines whether a result is actionable.** The bathroom premium (\$30+/night) is actionable for Airbnb hosts.
+5. **Context determines whether a result is actionable.** The bathroom premium (about \$60/night) is actionable for Airbnb hosts.
    The rest effect (a fraction of a game score point) is not actionable for NBA coaches.
 
 6. **Regression estimates associations, not causal effects** (unless all confounders are

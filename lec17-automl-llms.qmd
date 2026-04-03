@@ -157,7 +157,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-Not bad! Gradient Boosting likely wins. AutoML *works* — for the modeling step.
+Not bad! Random Forest edges out gradient boosting here. AutoML *works* — for the modeling step.
 
 :::{.callout-tip}
 ## Think About It
@@ -445,13 +445,13 @@ print()
 print(f"  Mean effect (rested - tired): {effects_df['diff'].mean():+.2f} game score points")
 print(f"  Median effect:                {effects_df['diff'].median():+.2f}")
 print()
-print("After controlling for player identity, the effect nearly vanishes.")
+print("After controlling for player identity, the effect shrinks dramatically.")
 print("Most 'significant' results are likely false positives from")
 print("multiple testing (Lecture 11).")
 print()
 print("Even this within-player t-test is a simplification -- a proper analysis")
 print("would account for game context. But the point is that controlling for")
-print("player identity reverses the naive finding.")
+print("player identity greatly reduces the naive finding.")
 ```
 
 The LLM gave you a result in seconds. But it took 16 lectures of statistical training to know:
@@ -514,7 +514,7 @@ Don't ask an LLM to "analyze this dataset." Break the task into smaller steps wh
 3. **Fit a model:** "Fit a linear regression of Y on X1, X2, X3. Show residual diagnostics."
 4. **Check your work:** "What assumptions did this analysis make? What could go wrong?"
 
-Each step gives you a checkpoint. If the LLM silently drops 60% of the data in step 1, you catch it before it propagates through the entire analysis.
+Each step gives you a checkpoint. If the LLM silently drops 84% of the data in step 1, you catch it before it propagates through the entire analysis.
 
 :::{.callout-tip}
 ## Think About It

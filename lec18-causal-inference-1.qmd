@@ -85,7 +85,7 @@ print(f"Each 100-point SAT increase is associated with ${slope*100:,.0f} higher 
 
 ## Does SAT Score *Cause* Higher Earnings?
 
-The correlation is striking: $r \approx 0.66$. Schools with higher SAT averages have higher-earning graduates. A naive interpretation: "raising SAT scores would raise earnings."
+The correlation is striking: $r \approx 0.65$. Schools with higher SAT averages have higher-earning graduates. A naive interpretation: "raising SAT scores would raise earnings."
 
 But wait. What if something else drives *both* SAT scores and earnings?
 
@@ -203,7 +203,7 @@ for group_name, group in hospitals.groupby('is_high_volume'):
     n = len(group)
     print(f"  {label}: {rate:.2f}%  (n={n})")
 
-print("\nHigh-volume hospitals appear WORSE overall.")
+print("\nHigh-volume hospitals appear BETTER overall.")
 ```
 
 We use `pd.qcut()` to split hospitals into three severity groups of roughly equal size, then compare readmission rates within each group.
@@ -225,7 +225,7 @@ colors_bar = ['#4878CF', '#E24A33']
 axes[0].bar(['Low-volume', 'High-volume'],
             overall.values, color=colors_bar, edgecolor='white', width=0.5)
 axes[0].set_ylabel('Mean Readmission Rate (%)')
-axes[0].set_title('Overall: High-Volume Looks WORSE')
+axes[0].set_title('Overall: High-Volume Looks BETTER')
 
 # Right: within severity categories
 severity_cats = ['Low severity', 'Medium severity', 'High severity']
@@ -244,7 +244,7 @@ axes[1].bar(x + width/2, rates_high, width, label='High-volume', color='#E24A33'
 axes[1].set_xticks(x)
 axes[1].set_xticklabels(severity_cats)
 axes[1].set_ylabel('Mean Readmission Rate (%)')
-axes[1].set_title('Within Severity: High-Volume is BETTER')
+axes[1].set_title('Within Severity: High-Volume is WORSE')
 axes[1].legend()
 
 plt.suptitle("Simpson's Paradox in Hospital Readmissions", fontsize=14, fontweight='bold', y=1.02)
@@ -262,9 +262,9 @@ The DAG tells the story:
          └───────────────────────────────────────┘
 ```
 
-**Patient severity** is a confounder: it causes both Hospital Choice (sicker patients go to high-volume hospitals) and Readmission Rate (sicker patients get readmitted more). The backdoor path through Patient Severity makes high-volume hospitals *look* worse overall. But *within* each severity level — blocking the backdoor path — they perform better.
+**Patient severity** is a confounder: it causes both Hospital Choice (sicker patients tend to go to smaller, specialized hospitals) and Readmission Rate (sicker patients get readmitted more). High-volume hospitals see a less severe case mix, so their aggregate readmission rate looks lower. But *within* each severity level — blocking the backdoor path — high-volume hospitals actually perform worse.
 
-Simpson's Paradox is a confounding problem. The aggregate data tells the opposite story from the disaggregated data. Which one is "right"? The one that blocks the backdoor path by controlling for the confounder.
+Simpson's Paradox is a confounding problem. The aggregate data tells the opposite story from the disaggregated data: high-volume hospitals look *better* overall but *worse* within each severity group. Which one is "right"? The one that blocks the backdoor path by controlling for the confounder.
 
 ## John Snow and the Birth of Epidemiology
 
@@ -417,7 +417,7 @@ deaths_with_pumps['distance'] = distances.min(axis=1)
 pump_deaths = deaths_with_pumps.groupby('nearest_pump').size().sort_values(ascending=False)
 print("Deaths by nearest pump:")
 print(pump_deaths.head(8).to_string())
-print(f"\nBroad Street pump accounts for {pump_deaths.get('Broad Street', 0)} of {len(deaths)} deaths")
+print(f"\nBroad Street pump accounts for {pump_deaths.get('Broad St', 0)} of {len(deaths)} deaths")
 print("\nBut proximity is not causation. Snow knew he needed stronger evidence.")
 ```
 
@@ -430,7 +430,7 @@ Snow's investigation illustrates a hierarchy of evidence that we'll use througho
 | 1 | **Randomized experiment** | Clinical trial (ACTG 175 from Chapter 10) | Gold standard |
 | 2 | **Natural experiment** | Snow's water companies | Very strong |
 | 3 | **Regression with confounders** | SAT $\to$ earnings controlling for wealth | Depends on what you control for |
-| 4 | **Simple correlation** | SAT and earnings ($r = 0.66$) | Weakest — could be confounded |
+| 4 | **Simple correlation** | SAT and earnings ($r = 0.65$) | Weakest — could be confounded |
 
 We'll see more of levels 1 and 2 in Chapter 19.
 
@@ -463,10 +463,9 @@ print(f"  Coefficient on SAT: ${model_multi.coef_[0]:.0f} per point")
 print(f"  Coefficient on private nonprofit: ${model_multi.coef_[1]:,.0f}")
 print(f"  R-squared = {model_multi.score(X_multi, y):.3f}")
 
-change = 'dropped' if model_multi.coef_[0] < model_simple.coef_[0] else 'changed'
-print(f"\nThe SAT coefficient {change} when we controlled for school type.")
-print("Some of the SAT-earnings association was explained by school type.")
-print("But is school type a good enough proxy for wealth? Probably not.")
+print(f"\nThe SAT coefficient barely changed (${model_simple.coef_[0]:.0f} → ${model_multi.coef_[0]:.0f}) when we controlled for school type.")
+print("School type doesn't confound the SAT-earnings relationship much in this data.")
+print("Not every suspected confounder actually confounds — but we still can't rule out other unmeasured confounders like family wealth.")
 ```
 
 ## The Limits of "Controlling For"

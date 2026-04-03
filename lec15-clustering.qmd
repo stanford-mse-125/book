@@ -217,7 +217,7 @@ ax.text(-73.95, 40.68, 'Brooklyn', fontsize=9, fontstyle='italic')
 plt.show()
 ```
 
-**Look at the map.** The clusters are largely geographic — one cluster is mostly Manhattan, another is Brooklyn, and the third is the outer boroughs. K-means with lat/lon included basically rediscovered the boroughs.
+**Look at the map.** The clusters partially reflect geographic patterns — listings in different boroughs do tend to cluster together — but they're also driven by price and listing type. With lat/lon in the feature set, k-means mixes geography and market segment together, so the clusters don't cleanly match boroughs.
 
 Is that useful? We already *have* the borough column. The model spent its effort on geography instead of finding genuine market segments.
 
@@ -370,7 +370,7 @@ for c in range(3):
     print()
 ```
 
-Now we can tell a story: one cluster might be "budget private rooms" (cheap, small, lots of reviews), another might be "mid-range apartments" (moderate price, 1-2 bedrooms), and the third might be "premium/luxury" (high price, more space, fewer reviews).
+Now we can tell a story: one cluster is shared-room budget listings (~$57/night), another is private-room moderate listings (~$77/night), and the third is entire-home premium listings (~$186/night). Reviews per listing are similar across all three clusters — the key split is room type and price, not activity level.
 
 These segments are useful for an Airbnb host trying to figure out their competitive set. The borough-based clusters told us nothing we didn't already know.
 
@@ -423,7 +423,7 @@ print(f"ARI range: {off_diag.min():.3f} to {off_diag.max():.3f}")
 print(f"ARI mean:  {off_diag.mean():.3f}")
 ```
 
-Some pairs of runs produce nearly identical clusters (ARI close to 1). Others are quite different. The clusters are **not stable** — they depend on where k-means happened to start.
+Some pairs of runs produce nearly identical clusters (ARI close to 1). Others show moderate variation. The clusters are **not stable** — they depend on where k-means happened to start.
 
 :::{.callout-tip}
 ## Think About It

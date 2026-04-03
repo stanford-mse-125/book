@@ -7,7 +7,7 @@ jupyter: python3
 
 ## The intern who "discovered" load management
 
-An NBA analytics intern tests whether each of 431 players performs better after rest.
+An NBA analytics intern tests whether each player performs better after rest.
 They find several dozen "significant" results and write a report:
 *"These players benefit from load management."*
 
@@ -18,7 +18,7 @@ Their boss isn't convinced. What did the intern miss?
 
 :::{.callout-note}
 ## Why most published research findings are false
-In a landmark 2005 paper, the statistician John Ioannidis argued that [most published research findings are false](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124). His central insight: when researchers test many hypotheses and studies are underpowered, Bayes' theorem guarantees that a majority of "significant" results are false positives — even without any p-hacking. The paper has been cited over 10,000 times and reshaped how scientists think about statistical significance. The intern's 431 tests are a textbook case.
+In a landmark 2005 paper, the statistician John Ioannidis argued that [most published research findings are false](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124). His central insight: when researchers test many hypotheses and studies are underpowered, Bayes' theorem guarantees that a majority of "significant" results are false positives — even without any p-hacking. The paper has been cited over 10,000 times and reshaped how scientists think about statistical significance. The intern's hundreds of tests are a textbook case.
 :::
 
 ```{python}
@@ -36,7 +36,7 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-## The setup: 431 hypothesis tests
+## The setup: hundreds of hypothesis tests
 
 Recall from Chapter 10 that we test at significance level $\alpha = 0.05$, accepting a 5% false positive rate for a *single* test. But what happens when we run hundreds of tests?
 
@@ -309,11 +309,11 @@ Two structural features of science make the problem worse:
 **Pre-registration** means publicly committing to your research question, data collection plan, and analysis plan *before* looking at the data. This commitment eliminates researcher degrees of freedom by fixing the garden of forking paths in advance. A pre-registered analysis is a single, pre-specified test — not the survivor of many. Pre-registration doesn't prevent exploratory analysis; it simply requires labeling it honestly as exploratory (hypothesis-generating) rather than confirmatory (hypothesis-testing).
 :::
 
-The lesson for this course: multiple testing corrections (Bonferroni, BH) handle the *known* multiplicity — the 431 tests the intern explicitly ran. Pre-registration and transparent reporting handle the *hidden* multiplicity — the choices a researcher makes before the final analysis ever appears. Both are manifestations of the same core problem: **if you test many things and cherry-pick, you will find "significance" whether or not anything is real.**
+The lesson for this course: multiple testing corrections (Bonferroni, BH) handle the *known* multiplicity — the hundreds of tests the intern explicitly ran. Pre-registration and transparent reporting handle the *hidden* multiplicity — the choices a researcher makes before the final analysis ever appears. Both are manifestations of the same core problem: **if you test many things and cherry-pick, you will find "significance" whether or not anything is real.**
 
 ## From testing to correlation
 
-So far we've been testing each player separately — a binary question (*does rest help this player?*). But maybe we're asking the wrong question. Instead of 431 yes/no answers, can we measure one continuous relationship: how does rest relate to performance across all players?
+So far we've been testing each player separately — a binary question (*does rest help this player?*). But maybe we're asking the wrong question. Instead of hundreds of yes/no answers, can we measure one continuous relationship: how does rest relate to performance across all players?
 
 > *"Correlation is not causation."*
 
@@ -419,7 +419,7 @@ print("Low-scoring players have MORE extended rest — they're the ones sitting 
 
 ## Simpson's paradox in rest data
 
-This reversal is **Simpson's paradox** (named after Edward Simpson, 1951): the aggregate comparison shows rest *hurts* by several points, but within individual players, the effect is essentially zero. The aggregate pattern was entirely driven by *who* gets rest, not by rest itself.
+This reversal is **Simpson's paradox** (named after Edward Simpson, 1951): the aggregate comparison shows rest *hurts* by nearly four points, but within individual players, the effect is less than a point. Most of the aggregate pattern was driven by *who* gets rest, not by rest itself.
 
 Let's see this directly.
 
@@ -428,8 +428,8 @@ Let's see this directly.
 print("=== Aggregate Comparison (MISLEADING) ===")
 agg_means = df.groupby('REST_CATEGORY')['PTS'].mean()
 print(agg_means.round(2))
-print(f"\nExtended rest: {agg_means.iloc[-1]:.1f} PPG  vs  Back-to-back: {agg_means.iloc[0]:.1f} PPG")
-print(f"Looks like rest HURTS by {agg_means.iloc[0] - agg_means.iloc[-1]:.1f} points!")
+print(f"\nExtended rest: {agg_means.loc['Extended (4+d)']:.1f} PPG  vs  Back-to-back: {agg_means.loc['Back-to-back (1d)']:.1f} PPG")
+print(f"Looks like rest HURTS by {agg_means.loc['Back-to-back (1d)'] - agg_means.loc['Extended (4+d)']:.1f} points!")
 ```
 
 The fix is to compare each player to *themselves*. For each player-season, we subtract their average points. Now a value of +2 means "this player scored 2 points above their own average." This transformation removes player quality from the comparison.
@@ -443,8 +443,8 @@ df['PTS_DEMEANED'] = df['PTS'] - player_season_avg
 print("=== Within-Player Comparison (CORRECT) ===")
 within_means = df.dropna(subset=['REST_CATEGORY']).groupby('REST_CATEGORY')['PTS_DEMEANED'].mean()
 print(within_means.round(3))
-print(f"\nWithin-player, extended rest effect: {within_means.iloc[-1]:+.3f} points")
-print("Almost zero! The aggregate effect was entirely driven by WHO gets rest.")
+print(f"\nWithin-player, extended rest effect: {within_means.loc['Extended (4+d)']:+.3f} points")
+print("Less than a point! Most of the aggregate effect was driven by WHO gets rest.")
 ```
 
 The side-by-side visualization below makes the paradox vivid: the left panel shows the misleading aggregate comparison, and the right panel shows the within-player story with 95% confidence intervals.
@@ -485,7 +485,7 @@ Both halves of this chapter share a theme: statistical results can be deeply mis
 **Multiple testing:**
 
 1. **Multiple testing inflates false positives.** If you test $m$ hypotheses at level $\alpha$,
-   you expect $m \alpha$ false positives. Testing 431 players guarantees ~22 "significant" results
+   you expect $m \alpha$ false positives. Testing about 280 players guarantees ~14 "significant" results
    even when rest has zero effect.
 
 2. **Always correct for multiple comparisons.** Bonferroni ($\alpha/m$) controls the family-wise

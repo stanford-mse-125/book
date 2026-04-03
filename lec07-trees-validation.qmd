@@ -36,9 +36,9 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-## When more features = worse predictions
+## Adding features: diminishing returns
 
-Adding features always improves training $R^2$. But does it improve predictions on *new* data?
+Adding features always improves training $R^2$. But does it improve predictions on *new* data — and if so, by how much?
 
 Let's find out. We'll build feature matrices at six different complexity levels — from minimal (just bedrooms and bathrooms) to kitchen-sink (all pairwise interactions) — and track performance on both the training and test sets.
 
@@ -161,7 +161,7 @@ results_df = pd.DataFrame({
 print(results_df.to_string(index=False))
 ```
 
-Training $R^2$ increases monotonically, as guaranteed. The test $R^2$ tells a different story.
+Training $R^2$ increases monotonically, as guaranteed. What about test $R^2$?
 
 ```{python}
 fig, ax = plt.subplots(figsize=(10, 5))
@@ -175,23 +175,23 @@ ax.set_xticklabels([f'{n}\n({nf} feat)' for n, nf in zip(
     ['bed+bath', '+room', '+boro', '+interact', '+poly', 'all pairs'],
     n_features_list)], fontsize=10)
 ax.set_ylabel('R²')
-ax.set_title('Training R² keeps going up, but test R² can go DOWN')
+ax.set_title('Both train and test R² improve, but gains diminish')
 ax.legend(fontsize=12)
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 ```
 
-Look at the gap between the blue line (train) and the red line (test). The training $R^2$ keeps climbing — more features always give the model more flexibility to fit the training data. But the test $R^2$ peaks and then degrades. The most complex model has the **worst** test performance. It has memorized the training data, including all its noise and quirks, and none of that memorization helps on new data.
+Look at the gap between the blue line (train) and the red line (test). Both keep climbing — each new batch of features captures real signal. But notice the **diminishing returns**: the jump from Level 1 to Level 3 is enormous, while Levels 4 through 6 add only marginal improvement. The train-test gap also widens slightly as we add more features, hinting that the model is beginning to fit noise alongside signal. With enough data (we have over 20,000 listings here), that noise-fitting doesn't dominate — all six feature sets genuinely help. But what happens with a smaller dataset or far more features? That's where overfitting becomes dramatic.
 
 :::{.callout-tip}
 ## Think About It
 Why does the training $R^2$ always go up? Adding a feature can only help the model fit the training data better — in the worst case, the model sets that feature's coefficient to zero.
 :::
 
-### A dramatic demonstration
+### When more features = worse predictions
 
-Let's drive the point home with a more extreme example. We'll use a smaller sample (500 listings) and increase the polynomial degree from 1 to 7. With a small sample and many features, the overfitting is dramatic.
+The six-level experiment didn't overfit because we had plenty of data relative to the number of features (36 features for over 20,000 listings). Let's see what happens when that ratio flips. We'll use a smaller sample (500 listings) and increase the polynomial degree from 1 to 7, creating thousands of features from only 300 training observations. With far more features than data points, the overfitting is dramatic.
 
 ```{python}
 np.random.seed(42)
@@ -229,7 +229,7 @@ for deg in degrees:
           f"Train R² = {train_scores_poly[-1]:.3f} | Test R² = {test_r2:.3f}")
 ```
 
-By degree 7, the model has over 3,000 features for only 300 training observations. The result is catastrophic overfitting.
+By degree 7, the model has over 6,000 features for only 300 training observations. The result is catastrophic overfitting.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -264,7 +264,7 @@ Wait — can $R^2$ be negative? Yes, on test data. On training data, $R^2$ is al
 
 ## The bias-variance tradeoff
 
-Why does test error first decrease and then increase as models get more complex? The answer is one of the most important ideas in all of applied statistics: the **bias-variance tradeoff**.
+The polynomial experiment showed a striking pattern: test error first decreased and then increased as models got more complex. Why? The answer is one of the most important ideas in all of applied statistics: the **bias-variance tradeoff**.
 
 :::{.callout-important}
 ## Definition: Bias and Variance
@@ -366,7 +366,7 @@ ax.set_xticks(range(len(cv_df)))
 ax.set_xticklabels([f'{r["model"]}\n({r["features"]} feat)' for _, r in cv_df.iterrows()],
                    fontsize=9)
 ax.set_ylabel('Cross-validated R²')
-ax.set_title('Cross-validation picks the right model complexity')
+ax.set_title('Cross-validation scores across complexity levels')
 plt.tight_layout()
 plt.show()
 
@@ -374,7 +374,7 @@ best = cv_df.loc[cv_df['cv_mean'].idxmax()]
 print(f"\nBest model by CV: {best['model']} (CV R² = {best['cv_mean']:.4f})")
 ```
 
-Cross-validation correctly identifies the sweet spot: enough features to capture real patterns, but not so many that we overfit. Notice that the error bars (standard deviations across folds) give us a sense of how much variability there is — if two models have overlapping error bars, they're essentially tied.
+Cross-validation confirms what the train/test split showed: all six feature sets genuinely help, and the most complex model (Level 6) has the best CV score. With plenty of data relative to the number of features, there's no overfitting to penalize here. Notice that the error bars (standard deviations across folds) give us a sense of how much variability there is — Levels 4 through 6 have overlapping error bars, so the gains from interactions and polynomials are modest. The polynomial experiment above is where CV would earn its keep: it would flag the point where additional polynomial terms start hurting.
 
 :::{.callout-warning}
 ## CV Assumes Exchangeable Data
@@ -452,7 +452,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-OLS uses all features and overfits badly — its test $R^2$ may be negative. Lasso aggressively zeros out the noise, keeping only the features that genuinely help prediction. It resolves the overfitting problem automatically: instead of manually choosing how many features to include, let the regularization penalty figure it out.
+OLS uses all features and overfits more than Lasso — its test $R^2$ (~0.34) is notably worse than Lasso's (~0.48). Lasso aggressively zeros out the noise, keeping only the features that genuinely help prediction. It resolves the overfitting problem automatically: instead of manually choosing how many features to include, let the regularization penalty figure it out.
 
 :::{.callout-tip}
 ## Think About It
@@ -620,7 +620,7 @@ In practice, tree-based models (especially gradient-boosted trees like XGBoost) 
 
 - **Always evaluate on held-out data.** Training $R^2$ is a measure of memory, not understanding. A model that memorizes the training set perfectly can fail catastrophically on new data.
 
-- **Cross-validation for stable model comparison.** A single train/test split is noisy. CV rotates which fold is held out and averages the results, picking the sweet spot between under- and overfitting.
+- **Cross-validation for stable model comparison.** A single train/test split is noisy. CV rotates which fold is held out and averages the results, giving a reliable estimate of out-of-sample performance.
 
 - **Bias-variance tradeoff: the classical U-shape.** Too simple (high bias, underfitting) is bad. Too complex (high variance, overfitting) is bad. Expected test error = bias$^2$ + variance + $\sigma^2$, where $\sigma^2$ is irreducible noise. The goal is to minimize the first two terms.
 
@@ -638,7 +638,7 @@ In practice, tree-based models (especially gradient-boosted trees like XGBoost) 
 - **Train/test split** — holding out part of the data to evaluate model performance on unseen data.
 - **Validation set** — data used to choose model complexity (distinct from the final test set).
 - **Cross-validation (k-fold)** — rotating which of $k$ folds is held out, averaging test scores for a more stable estimate of out-of-sample performance.
-- **Overfitting** — the model memorizes training data (including noise) and performs poorly on new data. Training $R^2$ always improves with more features; test $R^2$ eventually degrades — the gap is overfitting.
+- **Overfitting** — the model memorizes training data (including noise) and performs poorly on new data. Training $R^2$ always improves with more features; when features outnumber effective data points, test $R^2$ can degrade dramatically — the gap between train and test performance is overfitting.
 - **Underfitting** — the model is too simple to capture the real pattern in the data.
 - **Bias-variance tradeoff** — the tension between underfitting (high bias) and overfitting (high variance). For MSE: expected test error = bias$^2$ + variance + $\sigma^2$ (irreducible noise). The goal is to minimize the first two terms; $\sigma^2$ sets the floor.
 - **Lasso (L1 regularization)** — adds a penalty $\alpha \sum |\beta_j|$ that shrinks some coefficients to exactly zero, performing automatic feature selection.

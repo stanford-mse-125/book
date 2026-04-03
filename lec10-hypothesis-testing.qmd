@@ -23,7 +23,7 @@ DATA_DIR = 'data'
 np.random.seed(42)
 ```
 
-The average cost to bring a drug to market exceeds \$1.3 billion. A clinical trial just produced a p-value of 0.0000000000000000028. Time to approve the drug? Not so fast.
+The average cost to bring a drug to market exceeds \$1.3 billion. A clinical trial just produced a p-value of 0.00000000000000000028. Time to approve the drug? Not so fast.
 
 In [Chapter 9](lec09-permutation-tests.qmd), we used permutation to simulate what the treatment effect would look like if the drug did nothing — that gave us a p-value. Today we formalize that machinery and discover its limitations.
 
@@ -252,7 +252,7 @@ The p-value is a random variable too — a key insight we return to throughout t
 
 ## Power: Can We Detect a Real Effect?
 
-Our trial found an effect of ~71 CD4 cells — very large, very detectable. But what if the true effect were smaller? Would we still catch it?
+Our trial found an effect of ~50 CD4 cells — very large, very detectable. But what if the true effect were smaller? Would we still catch it?
 
 **Power** is the probability of correctly rejecting $H_0$ when $H_1$ is true. It depends on:
 
@@ -288,7 +288,7 @@ Now let's see how power varies across different effect sizes and sample sizes.
 # Power vs sample size for different effect sizes
 # This cell takes ~15 seconds to run
 sample_sizes = [25, 50, 100, 200, 500, 1000]
-effect_sizes = [10, 30, 71]
+effect_sizes = [10, 30, 50]
 
 fig, ax = plt.subplots(figsize=(10, 6))
 for effect in effect_sizes:
@@ -307,7 +307,7 @@ plt.show()
 
 Key observations:
 
-- A large effect (71 CD4 cells) is detectable even with small samples.
+- A large effect (50 CD4 cells) is detectable even with small samples.
 - A small effect (10 CD4 cells) needs hundreds of patients per group.
 - The conventional target is 80% power. Below that, you're more likely to miss a real effect than to find it.
 
@@ -437,28 +437,34 @@ With ACTG175's large sample size, even tiny, clinically meaningless effects woul
 ::: {.callout-tip}
 ## Think About It
 
-If we subsample to n = 50 per group, will the treatment still be significant? What about n = 25? Predict what happens before running the cell.
+If we subsample to n = 15 per group, will the treatment still be significant? What about n = 25 or n = 50? Predict what happens before running the cell.
 :::
 
 ```{python}
-# Subsample the data and test at each sample size
-np.random.seed(42)  # for reproducibility
-subsample_sizes = [50, 100, 200, 500, 1000, len(control)]
+# How often does a t-test detect the real effect at each sample size?
+# For each n, we draw 500 random subsamples and count the fraction
+# of t-tests that come back significant — this is the empirical power.
+np.random.seed(42)
+subsample_sizes = [15, 25, 50, 100, 200, 500]
+n_simulations = 500
 
-print(f"{'n per group':>12}  {'Effect':>8}  {'p-value':>12}  {'Significant?':>14}")
-print("-" * 55)
+print(f"{'n per group':>12}  {'Fraction significant':>22}  {'Detected?':>16}")
+print("-" * 56)
 
 for n in subsample_sizes:
-    n_use = min(n, len(control), len(treatment))
-    sub_ctrl = control.sample(n_use, replace=False, random_state=42)
-    sub_trt = treatment.sample(n_use, replace=False, random_state=42)
-    effect = sub_trt.mean() - sub_ctrl.mean()
-    _, p = stats.ttest_ind(sub_trt, sub_ctrl, equal_var=False)
-    sig = "Yes" if p < 0.05 else "No"
-    print(f"{n_use:>12}  {effect:>8.1f}  {p:>12.4f}  {sig:>14}")
+    sig_count = 0
+    for _ in range(n_simulations):
+        sub_ctrl = control.sample(n, replace=False)
+        sub_trt = treatment.sample(n, replace=False)
+        _, p = stats.ttest_ind(sub_trt, sub_ctrl, equal_var=False)
+        if p < 0.05:
+            sig_count += 1
+    power = sig_count / n_simulations
+    detected = "Almost always" if power > 0.8 else "Sometimes" if power > 0.5 else "Rarely"
+    print(f"{n:>12}  {power:>21.0%}  {detected:>16}")
 ```
 
-The same underlying effect can be "significant" or "not significant" depending on sample size. The p-value is a function of **both** the effect size and the sample size.
+The real effect is always there, but small samples often miss it. With n = 15 per group, a t-test detects the effect less than half the time. The ability to detect a real effect is called **power**, and it depends on **both** the effect size and the sample size.
 
 ```{python}
 # p-value as a function of sample size (fixed effect)

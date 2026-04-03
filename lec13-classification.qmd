@@ -43,7 +43,7 @@ DATA_DIR = 'data'
 The Framingham Heart Study has tracked cardiovascular disease risk factors since 1948, following three generations of participants in Framingham, Massachusetts. It transformed our understanding of risk factors like cholesterol and blood pressure.
 :::
 
-Our dataset has 4,240 patients with 15 features — and a binary outcome: did they develop coronary heart disease (CHD) within 10 years?
+Our dataset has 4,240 patients with 16 columns (15 predictors plus the outcome): did they develop coronary heart disease (CHD) within 10 years?
 
 Let's look at the data and the class balance.
 
@@ -291,7 +291,7 @@ for _, row in coef_df.iterrows():
     print(f"  {row['Feature']:>12s}: odds x {row['Odds Ratio']:.2f} per 1-SD increase")
 ```
 
-A concrete example: if a patient's predicted CHD probability is 0.20 (odds = 0.25), a one-SD increase in age multiplies those odds by about 1.5x, giving new odds of 0.375 — corresponding to a probability of about 27%.
+A concrete example: if a patient's predicted CHD probability is 0.20 (odds = 0.25), a one-SD increase in age multiplies those odds by about 1.7x, giving new odds of 0.424 — corresponding to a probability of about 30%.
 
 The model says: age, systolic blood pressure, glucose, and male sex are the strongest risk factors. This ranking matches medical knowledge — but notice that the model treats each feature independently. It doesn't know that high blood pressure and high BMI often go together, or that young smokers face different risks than old smokers (for that, we'd need interaction terms — recall Chapter 6). We'll come back to this.
 
@@ -494,7 +494,7 @@ plt.show()
 
 ## Who does the model fail for?
 
-The overall AUC is ~0.73. Not amazing, but not terrible. But *overall* performance can hide dramatic failures in subgroups.
+The overall AUC is ~0.75. Not amazing, but not terrible. But *overall* performance can hide dramatic failures in subgroups.
 
 :::{.callout-tip}
 ## Think About It
@@ -551,7 +551,7 @@ plt.show()
 
 For older patients, the model separates CHD from non-CHD reasonably well (the distributions don't overlap as much). For younger patients, the predicted probabilities are all bunched near zero — the model thinks *nobody* young is at risk.
 
-**Why this matters:** An AI assistant would report the overall AUC of 0.73, declare the model "moderately good," and move on. It wouldn't check subgroup performance. But in practice, a model that fails for young patients is dangerous — it creates a false sense of security for exactly the people who most need screening.
+**Why this matters:** An AI assistant would report the overall AUC of 0.75, declare the model "moderately good," and move on. It wouldn't check subgroup performance. But in practice, a model that fails for young patients is dangerous — it creates a false sense of security for exactly the people who most need screening.
 
 What could we do about it? Options include training separate models for different age groups, adding interaction terms (recall Chapter 6), or collecting more data on young CHD patients. There's no easy fix — but the first step is always checking.
 
@@ -575,7 +575,7 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 
 - **Precision vs Recall** captures the fundamental tradeoff: catching more positives (recall) means more false alarms (lower precision). The right balance depends on the cost of each type of mistake — a consequential decision.
 
-- **Always check subgroup performance.** An overall AUC of 0.73 can hide the fact that the model is *useless* for certain patient groups. Models that work "on average" can fail exactly where it matters most.
+- **Always check subgroup performance.** An overall AUC of 0.75 can hide the fact that the model is *useless* for certain patient groups. Models that work "on average" can fail exactly where it matters most.
 
 ## Metrics cheat sheet
 

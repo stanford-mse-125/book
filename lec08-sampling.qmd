@@ -21,9 +21,9 @@ DATA_DIR = 'data'
 np.random.seed(42)
 ```
 
-We estimated the treatment effect as 71 CD4 cells. How precise is that? We'll resample to find out — and discover that the answer looks surprisingly normal.
+We estimated the treatment effect as about 50 CD4 cells. How precise is that? We'll resample to find out — and discover that the answer looks surprisingly normal.
 
-Act 2 opens with a new question: **can we trust the numbers our models produce?** A model says the treatment effect is 71 CD4 cells, or that an extra bedroom adds \$85 to rent. How much would those numbers change with different data?
+Act 2 opens with a new question: **can we trust the numbers our models produce?** A model says the treatment effect is about 50 CD4 cells, or that an extra bedroom adds \$85 to rent. How much would those numbers change with different data?
 
 :::{.callout-note}
 ## Bradley Efron's radical idea
@@ -79,7 +79,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The treatment group improved by about 71 more CD4 cells. But look at the spread — there's enormous patient-to-patient variation. If we enrolled a *different* set of patients, would we still see a 71-cell advantage?
+The treatment group improved by about 50 more CD4 cells. But look at the spread — there's enormous patient-to-patient variation. If we enrolled a *different* set of patients, would we still see a ~50-cell advantage?
 
 That question motivates three vocabulary terms that we'll use throughout Act 2:
 
@@ -88,7 +88,7 @@ That question motivates three vocabulary terms that we'll use throughout Act 2:
 
 - **Estimand:** the quantity you want to know — here, the difference in mean CD4 change if we could test *everyone* who might take these drugs. We treat it as a fixed (but unknown) number; whether this is literally true depends on the dataset (more on this below).
 - **Estimator:** the procedure we use to approximate the estimand — here, "compute the difference in sample means."
-- **Estimate:** the specific number our estimator produces from this particular dataset — 71 CD4 cells.
+- **Estimate:** the specific number our estimator produces from this particular dataset — about 50 CD4 cells.
 :::
 
 The key insight: **the estimate changes every time you draw a new sample, but the estimand stays fixed.**
@@ -528,7 +528,7 @@ At $n = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clear
 
 ### Key ideas
 
-- **Estimand** — the quantity you want to know (e.g., the true treatment effect). **Estimator** — the procedure you use to approximate it (e.g., difference in sample means). **Estimate** — the specific number you get from one sample (e.g., 71 CD4 cells).
+- **Estimand** — the quantity you want to know (e.g., the true treatment effect). **Estimator** — the procedure you use to approximate it (e.g., difference in sample means). **Estimate** — the specific number you get from one sample (e.g., ~50 CD4 cells).
 - **Bootstrap** — resample with replacement from the observed data to approximate the sampling distribution.
 - **Confidence interval** — an interval that captures the middle 95% of the bootstrap distribution (percentile method: 2.5th and 97.5th percentiles). A 95% CI means roughly 95% of such intervals would contain the true parameter.
 - **Central Limit Theorem (CLT)** — for large $n$, the sample mean is approximately Normal$(\mu, \sigma/\sqrt{n})$.

@@ -105,11 +105,11 @@ for i in range(5):
 print(f"\nObserved effect:                    {observed_effect:+.1f} CD4 cells")
 ```
 
-The fake effects bounce around zero — small positive, small negative. Our observed effect of ~71 looks very different.
+The fake effects bounce around zero — small positive, small negative. Our observed effect of ~50 looks very different.
 
 :::{.callout-tip}
 ## Think About It
-If the drug really works, where will our observed effect of 71 fall relative to the null distribution? Will it be in the middle or out in the tail?
+If the drug really works, where will our observed effect of ~50 fall relative to the null distribution? Will it be in the middle or out in the tail?
 :::
 
 ## Building the Null Distribution
@@ -148,7 +148,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The observed effect of ~71 CD4 cells is **way out in the tail** — not even close to what random shuffling produces. Under the null, effects cluster tightly around zero with a standard deviation of about 12–15 cells. Our observed effect is several standard deviations away.
+The observed effect of ~50 CD4 cells is **way out in the tail** — not even close to what random shuffling produces. Under the null, effects cluster tightly around zero with a standard deviation of about 6 cells. Our observed effect is several standard deviations away.
 
 ## The p-Value
 

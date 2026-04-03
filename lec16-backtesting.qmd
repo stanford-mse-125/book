@@ -5,9 +5,9 @@ execute:
 jupyter: python3
 ---
 
-You build a model to predict tomorrow's air quality. It scores R² = 0.85 on your test set. You deploy it. It's terrible. *What happened?*
+You build a model to predict tomorrow's air quality. It scores R² = 0.66 on your test set — not bad. But when you deploy it, the model can't even beat the simplest baseline: predicting "same as yesterday." *What happened?*
 
-The problem isn't your model — it's how you evaluated it. When data has a **temporal structure**, the standard random train/test split silently lies to you. This chapter shows exactly how, quantifies the damage, and demonstrates the right way to validate time series models.
+The problem isn't just your model — it's how you evaluated it. When data has a **temporal structure**, the standard random train/test split can silently mislead you, and metrics like R² can hide the fact that your model adds no value over a trivial baseline. This chapter shows exactly how, and demonstrates the right way to validate time series models.
 
 ```{python}
 import numpy as np
@@ -142,7 +142,7 @@ print()
 print("Looks great! Ship it?")
 ```
 
-R² around 0.85 and a low MAE — the model looks strong. But a hidden problem lurks in the evaluation itself.
+R² about 0.66 — not bad for a first attempt. But a hidden problem lurks in the evaluation itself.
 
 :::{.callout-tip}
 ## Think About It
@@ -225,11 +225,18 @@ print(f"{'Temporal split (RIGHT)':<25} {r2_temporal:>8.3f} {mae_temporal:>8.1f}"
 print("=" * 50)
 print(f"{'Leakage gap':<25} {r2_std - r2_temporal:>8.3f} {mae_temporal - mae_std:>8.1f}")
 print()
-print("The R-squared gap is the leakage you avoided.")
-print("The standard split was lying to you -- the model isn't that good.")
+gap = r2_std - r2_temporal
+if gap > 0.01:
+    print(f"The random split inflated R-squared by {gap:.3f} -- that's the leakage.")
+elif gap < -0.01:
+    print(f"Here the temporal split slightly outperforms (gap = {gap:.3f}).")
+    print("The leakage didn't help much -- but the correct evaluation is still the temporal one.")
+else:
+    print(f"The gap is small ({gap:.3f}), but the temporal split is the only honest evaluation.")
+    print("Even when the numbers are similar, the random split's validity is compromised.")
 ```
 
-The performance drop is substantial. The random split made the model look much better than it actually is. That's the **leakage** — by testing on days surrounded by training data, the model gets to cheat.
+In this dataset, the two R² values are close — the random split didn't dramatically inflate performance. But **the random split is still the wrong evaluation**. Its validity is compromised: test-set days have their neighbors in the training set, so the lag features get to "cheat." The fact that the numbers happen to be similar here doesn't justify the method. The temporal split is the only honest evaluation because it mimics how the model would actually be deployed.
 
 :::{.callout-important}
 ## Definition: Naive Baseline
@@ -295,6 +302,8 @@ else:
     print(f"MASE = {mase:.3f} >= 1: the model does NOT beat the naive baseline.")
 print("MAPE gives an intuitive percentage, but would blow up if AQI hit 0.")
 ```
+
+A MASE near 1 means our linear model barely matches the naive "same as yesterday" baseline. That's not a failure of the method — it's a genuine finding. AQI is highly autocorrelated, so yesterday's value is a strong predictor that's hard to improve on with a simple linear model. More sophisticated models (nonlinear, with weather covariates) might do better, but the naive baseline sets a high bar.
 
 ## Walk-forward validation
 
@@ -401,11 +410,11 @@ print("Yesterday's AQI dominates -- AQI is highly autocorrelated.")
 print("The seasonal feature (day_of_year) adds a small boost.")
 ```
 
-## Same lesson, different domain: NBA performance prediction
+## A second example: NBA performance prediction
 
-You might be thinking: "This example is an air quality problem. My field is tech/finance/sports." But the temporal leakage trap appears anywhere data has a time dimension. Let's see if the same pattern holds in a completely different domain.
+You might be thinking: "This example is an air quality problem. My field is tech/finance/sports." The temporal leakage trap can appear anywhere data has a time dimension. Let's see what happens in a completely different domain.
 
-If you could reliably predict how many points an NBA player will score tonight, you could make a fortune betting. Let's try — predicting a player's performance from their last 5 games. Can we randomly split games? No — that would let the model peek at future games.
+If you could reliably predict how many points an NBA player will score tonight, you could make a fortune betting. Let's try — predicting a player's performance from their last 5 games. The temporal split is still the right evaluation: you'd train on past seasons and predict the current one.
 
 ```{python}
 # Load NBA data
@@ -469,10 +478,20 @@ print(f"  Random split R-squared:   {r2_r:.3f}")
 print(f"  Temporal split R-squared: {r2_t:.3f}")
 print(f"  Gap:                      {r2_r - r2_t:.3f}")
 print()
-print("Same story -- the random split is optimistically biased.")
+gap_nba = r2_r - r2_t
+if gap_nba > 0.01:
+    print(f"Same pattern as AQI -- the random split is optimistically biased (gap = {gap_nba:.3f}).")
+elif gap_nba < -0.01:
+    print(f"Interesting: the temporal split slightly outperforms (gap = {gap_nba:.3f}).")
+    print("The model generalizes well across seasons -- no leakage bias here.")
+else:
+    print(f"The two splits give similar results (gap = {gap_nba:.3f}).")
+    print("The model generalizes well across seasons, but the temporal split is still the valid evaluation.")
 ```
 
-Even a model with decent R-squared doesn't necessarily translate to profit in a betting market — the market already incorporates the information your model uses. This gap between statistical performance and economic value is a recurring theme in applied statistics.
+Unlike the AQI example, the NBA model generalizes well across seasons — the temporal split performs comparably to the random split. Player scoring patterns are more stable across years than air quality is across seasons. When temporal structure doesn't create strong distribution shift, the random split may not inflate performance. But the temporal split is still the correct evaluation: it's the only one that mirrors how you'd actually deploy the model (train on past seasons, predict the current one).
+
+Even a model with decent R-squared doesn't necessarily translate to profit in a betting market — the market already incorporates the information your model uses. The gap between statistical performance and economic value is a recurring theme in applied statistics.
 
 ## When the future doesn't look like the past
 

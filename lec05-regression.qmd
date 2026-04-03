@@ -291,13 +291,13 @@ for feat, coef in zip(features, model_multi.coef_):
 
 **Coefficient interpretation:**
 
-- Each additional bedroom is associated with about \$21 more per night, **holding other features constant**.
-- Each additional bathroom is associated with about \$41 more per night.
-- A private room costs roughly \$68 *less* than an entire home/apt, all else equal.
+- Each additional bedroom is associated with about \$33 more per night, **holding other features constant**.
+- Each additional bathroom is associated with about \$22 more per night.
+- A private room costs roughly \$90 *less* than an entire home/apt, all else equal.
 
-Now we can answer the opening question: our host should charge about \$41 more for that second bathroom, holding bedrooms and room type fixed.
+Now we can answer the opening question: our host should charge about \$22 more for that second bathroom, holding bedrooms and room type fixed.
 
-The "holding constant" part is crucial — multiple regression provides something simple regression cannot. The coefficient on bedrooms means that if we compare two listings with the same number of bathrooms, the same room type, and the same everything else — but one has one more bedroom — the model predicts the extra bedroom is worth about \$21/night.
+The "holding constant" part is crucial — multiple regression provides something simple regression cannot. The coefficient on bedrooms means that if we compare two listings with the same number of bathrooms, the same room type, and the same everything else — but one has one more bedroom — the model predicts the extra bedroom is worth about \$33/night.
 
 These coefficients are **point estimates** — we'll quantify their uncertainty with confidence intervals in Chapter 12.
 
@@ -353,7 +353,7 @@ print(f"R² = SS_model / SS_total = {ss_model/ss_total:.4f}")
 print(f"R² = 1 - SS_resid/SS_total = {1 - ss_resid/ss_total:.4f}")
 ```
 
-An $R^2$ around 0.15 means our model explains about 15% of the variation in prices. The remaining 85% comes from factors we didn't include — neighborhood, amenities, photos, host reputation. Such modest $R^2$ values are typical for real data.
+An $R^2$ around 0.45 means our model explains about 45% of the variation in prices. The remaining 55% comes from factors we didn't include — neighborhood, amenities, photos, host reputation.
 
 :::{.callout-tip}
 ## Think About It
@@ -440,7 +440,7 @@ print("Cheaper listings get booked more → more reviews.")
 print("We'll revisit this when we study causal inference.")
 ```
 
-**Training** $R^2$ went up when we added `number_of_reviews`. The column space got bigger, so the projection got closer to $y$. **Training $R^2$ can NEVER decrease when you add a feature** — that's a mathematical fact about projections (a bigger column space means a closer projection). But this doesn't mean the model is better at predicting *new* data. We'll see this distinction clearly in Chapter 7.
+**Training** $R^2$ remained essentially unchanged when we added `number_of_reviews` — it barely moved the projection closer to $y$. **Training $R^2$ can NEVER decrease when you add a feature** — that's a mathematical fact about projections (a bigger column space means a closer projection). But this doesn't mean the model is better at predicting *new* data. We'll see this distinction clearly in Chapter 7.
 
 :::{.callout-warning}
 ## Correlation is not causation

@@ -401,9 +401,9 @@ print(f"\nCorrelation between bedrooms and beds: {df['bedrooms'].corr(df['beds']
 print(f"Correlation between bedrooms and bathrooms: {df['bedrooms'].corr(df['bathrooms']):.3f}")
 ```
 
-Bedrooms and beds are *very* highly correlated. In linear algebra terms, the `beds` vector is nearly a scalar multiple of the `bedrooms` vector:
+Bedrooms and beds are positively correlated (r ≈ 0.65). In linear algebra terms, the `beds` vector is nearly a scalar multiple of the `bedrooms` vector:
 
-$$\text{beds} \approx 1.2 \cdot \text{bedrooms}$$
+$$\text{beds} \approx \text{bedrooms}$$
 
 The span barely grows when you add `beds` as a feature. Two vectors pointing in nearly the same direction span almost a **line**, not a **plane**.
 
@@ -424,7 +424,7 @@ cos_bath = np.dot(bedrooms_centered, bathrooms_centered) / (
 angle_beds = np.degrees(np.arccos(np.clip(cos_beds, -1, 1)))
 angle_bath = np.degrees(np.arccos(np.clip(cos_bath, -1, 1)))
 
-print(f"Angle between bedrooms and beds:      {angle_beds:.1f}° (nearly parallel!)")
+print(f"Angle between bedrooms and beds:      {angle_beds:.1f}° (moderate angle)")
 print(f"Angle between bedrooms and bathrooms:  {angle_bath:.1f}° (more independent)")
 print()
 print("When vectors are nearly parallel, adding the second one")
@@ -435,7 +435,7 @@ How much independent information does each feature contribute beyond bedrooms? W
 
 ```{python}
 # What's left after removing the bedrooms component?
-# beds ≈ 1.2 * bedrooms + something_else
+# beds ≈ 1.0 * bedrooms + something_else
 # The "something_else" is the part that bedrooms can't explain.
 # If it's tiny, beds is mostly redundant.
 

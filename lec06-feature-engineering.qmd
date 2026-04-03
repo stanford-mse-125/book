@@ -141,7 +141,7 @@ for degree in [1, 2, 3, 4]:
     print(f"Degree {degree}: R² = {r2:.4f}  ({X_poly.shape[1]} features)")
 ```
 
-The R-squared improvements are modest. The more serious problem with polynomials is not diminishing returns — it is **overfitting and wild extrapolation**. A degree-4 polynomial, fit on a range where most listings have 1--3 bedrooms, can produce absurd predictions outside that range.
+The R-squared improvements are modest. The more serious problem with polynomials is not diminishing returns — it is **overfitting and wild extrapolation**. A degree-4 polynomial, fit on a range where most listings have 1--2 bedrooms, can produce absurd predictions outside that range.
 
 ```{python}
 # Extrapolate polynomial fits beyond the training range
@@ -373,7 +373,7 @@ print(f"\nLinear model with interactions:")
 print(f"  Train R² = {lm_train_r2:.3f}  |  Test R² = {lm_test_r2:.3f}")
 ```
 
-The tree's test performance is comparable to (or slightly worse than) the linear model with hand-engineered interactions. Let's visualize what the tree learned using `plot_tree`.
+The tree's test performance slightly outperforms the linear model with hand-engineered interactions. Let's visualize what the tree learned using `plot_tree`.
 
 ```{python}
 # Visualize the tree (using max_depth=3 for readability)
@@ -479,7 +479,8 @@ Return a JSON object with exactly these fields:
   Count items like WiFi, AC, washer, gym, pool, doorman, etc.
 - sentiment_score (float, 0 to 1): Overall tone of the description.
   0 = negative/apologetic, 0.5 = neutral/factual, 1 = enthusiastic/glowing.
-- neighborhood_vibe (string, one of: "quiet", "lively", "central", "residential", "other"):
+- neighborhood_vibe (string, one of: "artsy", "trendy", "bustling_urban", "quiet_residential",
+  "family_friendly", "upscale", "unknown"):
   The dominant character of the neighborhood as described.
 - cleanliness_mentioned (bool): Does the description explicitly mention cleanliness,
   sanitization, or hygiene?
@@ -527,8 +528,9 @@ df_llm = df.merge(llm_features, on='id', how='inner')
 print(f"Listings with LLM features: {len(df_llm):,} (of {len(df):,} total)")
 
 # Show the distribution of LLM-extracted features
+# Note: .describe() shows only numeric columns by default; boolean and string columns are omitted
 llm_cols = [c for c in llm_features.columns if c != 'id']
-print(f"\nLLM feature summary:")
+print(f"\nLLM feature summary (numeric columns only):")
 print(df_llm[llm_cols].describe().round(2))
 ```
 
