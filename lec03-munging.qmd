@@ -375,14 +375,16 @@ Joins can create duplicate rows (the Cartesian product trap). But duplicates als
 
 Consider voter registration files. Every U.S. state maintains a list of registered voters, and political campaigns merge these files across states to build a national voter database. The problem: people move, change names, and register in new states without canceling old registrations.
 
-When I worked on the 2008 Obama campaign, several staff members looked ourselves up in the merged voter file and discovered we had active registrations in multiple states. Not because anyone voted twice — we had simply moved and registered in a new state without canceling the old one. But the states can't automatically deduplicate these records, because a registration in California and a registration in Illinois for "John A. Smith, DOB 04/04/1985" really might be two different people. The records might differ in:
+When I worked on the 2012 Obama campaign, several staff members looked ourselves up in the merged voter file and discovered we had active registrations in multiple states. Not because anyone voted twice — we had simply moved and registered in a new state without canceling the old one. But the states can't automatically deduplicate these records, because a registration in California and a registration in Illinois for "John A. Smith, DOB 04/04/1985" really might be two different people. The records might differ in:
 
 - **Name spelling**: "José Rodriguez" vs. "Jose Rodriguez" vs. "J. Rodriguez"
 - **Address**: a new ZIP code after a move
 - **Date of birth**: transposed digits, different date formats
 - **Middle name**: present in one record, absent in another
 
-No single field is reliable. The decision to merge or not merge two records is a **value judgment** — and a consequential one. Merge too aggressively and you remove legitimate distinct voters from the rolls. Merge too conservatively and you count the same person twice, inflating registration numbers and misdirecting campaign outreach.
+No single field is reliable. A 2020 study quantified the problem at national scale: matching 100 million voter records on first name, last name, and date of birth produced roughly 800,000 apparent duplicates — seeming evidence of massive double voting.^[Goel, Meredith, Morse, Rothschild & Shirani-Mehr, ["One Person, One Vote: Estimating the Prevalence of Double Voting in U.S. Presidential Elections,"](https://doi.org/10.1017/S0003055420000039) *American Political Science Review*, 2020.] But the birthday paradox explains almost all of them. Among the 141 ballots cast by a "John Smith" born in 1970, how many pairs would share a birthday by chance? The answer: $\binom{141}{2} \times \frac{1}{365} \approx 27$ — and the actual number of flagged pairs was exactly 27. After applying this correction across all name groups, the 800,000 matches shrank to roughly 20,000, and after accounting for data entry errors, the estimate fell to approximately zero.
+
+The decision to merge or not merge two records is a **value judgment** — and a consequential one. Merge too aggressively and you remove legitimate distinct voters from the rolls. Merge too conservatively and you count the same person twice, inflating registration numbers and misdirecting campaign outreach.
 
 ### Branch campuses: one school or many?
 
