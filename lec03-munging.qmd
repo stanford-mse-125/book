@@ -539,7 +539,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The missing earnings data is unevenly distributed across school types. Dropping rows with missing earnings changes the mix of schools in the analysis — a phenomenon called **informative missingness**, where the absence of data itself carries a signal about the institution.
+The missing earnings data is unevenly distributed across school types. Dropping rows with missing earnings changes the mix of schools in the analysis. The pattern is MNAR: for-profit schools are more likely to have small cohorts, which triggers privacy suppression, which makes their earnings data disappear. In [Chapter 6](lec06-feature-engineering.qmd), we'll see how to turn missingness patterns like these into features that a model can use.
 
 :::{.callout-warning}
 ## `groupby` drops NaN groups by default

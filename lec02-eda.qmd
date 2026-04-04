@@ -267,15 +267,9 @@ On the linear scale, expensive listings in the \$500–\$999 range make it hard 
 
 :::{.callout-tip}
 ## Think About It: Reading a log-scale plot
-A straight line on a semilog plot (log y-axis, linear x-axis) means: each unit increase in x **multiplies** y by a fixed factor. On a linear plot, a straight line means each unit increase in x **adds** a fixed amount to y. The distinction matters:
+A straight line on a semilog plot (log y-axis, linear x-axis) means each unit increase in x **multiplies** y by a fixed factor. That's exactly what we see here: each additional guest corresponds to roughly a multiplicative increase in price. On a linear plot, by contrast, a straight line means each unit increase in x **adds** a fixed amount to y.
 
-| Plot axes | Straight line means | Example |
-|-----------|-------------------|---------|
-| linear y vs. linear x | each guest **adds** a fixed dollar amount | \$50/guest |
-| log y vs. linear x | each guest **multiplies** the price by a fixed factor | 1.3× per guest |
-| log y vs. log x | a 1% increase in x → a fixed % increase in y (elasticity) | 10% more sqft → 5% higher price |
-
-When we fit regression models in Chapter 5, the choice of whether to log-transform the outcome, the features, or both will determine which of these interpretations applies.
+We'll formalize this interpretation — and cover the other log-transform cases — when we fit regression models in Chapter 5.
 :::
 
 We'll use this idea extensively when we build regression models.

@@ -301,6 +301,43 @@ The "holding constant" part is crucial — multiple regression provides somethin
 
 These coefficients are **point estimates** — we'll quantify their uncertainty with confidence intervals in Chapter 12.
 
+### Log transforms change what coefficients mean
+
+The coefficients above have a clean interpretation: each bedroom **adds** about \$33 to the predicted price. But in Chapter 2, we saw that Airbnb prices are heavily right-skewed, and a semilog scatter plot revealed a multiplicative relationship — each additional guest *multiplied* the price by a roughly fixed factor. When you log-transform the outcome or the features, the coefficient interpretation changes.
+
+:::{.callout-important}
+## Interpreting coefficients with log transforms
+
+| Model | Coefficient $\beta_1$ means | Example |
+|-------|---------------------------|---------|
+| $y \sim x$ | 1-unit increase in $x$ → $\beta_1$ change in $y$ | each bedroom adds \$50 |
+| $\log(y) \sim x$ | 1-unit increase in $x$ → multiply $y$ by $e^{\beta_1}$ | each bedroom multiplies price by 1.08 (8% increase) |
+| $y \sim \log(x)$ | 1% increase in $x$ → $\beta_1 / 100$ change in $y$ | 10% more sqft → \$5 higher price |
+| $\log(y) \sim \log(x)$ | 1% increase in $x$ → $\beta_1$% change in $y$ (elasticity) | 10% more sqft → 5% higher price |
+
+: {.striped .hover}
+:::
+
+The first row is the model we just fit. The second row explains what happens when you regress $\log(\text{price})$ on bedrooms: the coefficient lives on the log scale, so exponentiating converts it to a multiplicative factor. Let's see this concretely.
+
+```{python}
+# Fit log(price) ~ bedrooms and interpret the coefficient
+df_model['log_price'] = np.log(df_model['price_clean'])
+
+model_log = LinearRegression()
+model_log.fit(df_model[['bedrooms']], df_model['log_price'])
+
+beta1 = model_log.coef_[0]
+multiplier = np.exp(beta1)
+pct_change = (multiplier - 1) * 100
+
+print(f"log(price) ~ bedrooms:  β₁ = {beta1:.4f}")
+print(f"Each bedroom multiplies price by e^{beta1:.4f} = {multiplier:.3f}")
+print(f"That's a {pct_change:.1f}% increase per bedroom.")
+```
+
+This is why the semilog scatter plot in Chapter 2 showed a roughly straight line: the relationship between accommodates and price is approximately multiplicative, which is exactly what a $\log(y) \sim x$ model captures.
+
 We can go even further: adding polynomial features, interactions, or other transformations expands the column space without leaving the linear regression framework. We'll explore this expansion in Chapter 6.
 
 ```{python}
@@ -505,6 +542,7 @@ Next: can we make this model more powerful? With the right features — dummies,
 - **Normal equations** — $X^TX\beta = X^Ty$, the algebraic form of the orthogonality condition.
 - **$R^2$** — fraction of variance explained; $R^2 = 1 - \|e\|^2 / \|y - \bar{y}\|^2$. It always increases with more features (on training data).
 - **Coefficient interpretation** — "holding other features constant," the predicted change in $y$ per unit change in one feature. A regression coefficient measures association, not causation.
+- **Log-transform interpretation** — log-transforming $y$, $x$, or both changes what a coefficient means: additive effect, multiplicative effect, or elasticity. See the interpretation table in this chapter.
 - **$R^2 = r^2$ in simple regression** — the correlation coefficient $r$ measures linear association ($-1$ to $+1$); $R^2$ measures variance explained ($0$ to $1$). For one predictor, $R^2$ is just $r$ squared. With multiple predictors, only $R^2$ applies.
 - **Regression to the mean** — extreme observations tend to be followed by less extreme ones whenever correlation is imperfect ($|r| < 1$). A statistical phenomenon, not a causal one.
 
@@ -523,5 +561,6 @@ Next: can we make this model more powerful? With the right features — dummies,
 
 - Be able to write the normal equations and explain what they mean geometrically.
 - Given a regression output, interpret a coefficient in context ("holding other features constant...").
+- Interpret a coefficient from a log-transformed regression (e.g., if $\beta_1 = 0.08$ in $\log(y) \sim x$, what does that mean in original units?).
 - Explain why training $R^2$ can never decrease when you add a feature.
 - Distinguish association from causation in a regression example.

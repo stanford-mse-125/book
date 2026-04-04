@@ -76,7 +76,7 @@ Look back at the ten questions in the table above. Pick three from different dom
 
 MS&E graduates will make exactly these kinds of decisions. 
 This course is designed to teach you the tools — building models, quantifying uncertainty, reasoning about causation — to make these decisions with data.
-By the end of the quarter, you'll have a toolkit to approach any data-driven decision with rigor and confidence.
+By the end of this course, you will know when *not* to trust a model's output — when the data is insufficient, when the assumptions are violated, when the metric is misleading, and when a confident prediction should be met with skepticism. The rest you can learn online.
 
 ## What is applied statistics?
 

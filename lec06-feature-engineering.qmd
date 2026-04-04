@@ -109,10 +109,18 @@ How to read this: the coefficient on `borough_Manhattan` tells you how much more
 ## Think About It: Cancer staging encoded as a number
 Cancer is staged I through IV, with higher stages indicating more advanced disease. Suppose you encode these as integers (Stage I = 1, Stage II = 2, Stage III = 3, Stage IV = 4) and fit a linear regression predicting years survived. If Stage I patients average 4 years and Stage II patients average 2 years, least squares gives $\hat{y} = 6 - 2x$. Now predict Stage IV: $6 - 2(4) = -2$ years. The model predicts *negative* survival time.
 
-The problem: encoding stages as 1--4 assumes the outcome changes by the same amount per stage *and* that the spacing between stages is uniform. Neither is true. One-hot encoding (a separate dummy for each stage) lets each stage have its own effect, free from these assumptions. Alternatively, **boolean threshold encoding** creates features like "Stage II or higher" and "Stage III or higher," which respect the ordering without forcing a linear relationship.
+The problem: encoding stages as 1--4 assumes the outcome changes by the same amount per stage *and* that the spacing between stages is uniform. Neither is true. One-hot encoding (a separate dummy for each stage) lets each stage have its own effect, free from these assumptions.
 
 (Source: Udell, *Feature Engineering*, Cornell ORIE 4741, 2022.)
 :::
+
+### Boolean threshold encoding for ordinals
+
+One-hot encoding solves the cancer staging problem, but it discards the ordering: the model doesn't know that Stage III is "between" Stage II and Stage IV. **Boolean threshold encoding** preserves the ordering without forcing a linear relationship. For an ordinal variable with levels $1, 2, \ldots, K$, create $K-1$ binary features:
+
+$$\varphi(x) = \bigl[\mathbb{1}(x \ge 2),\; \mathbb{1}(x \ge 3),\; \ldots,\; \mathbb{1}(x \ge K)\bigr]$$
+
+For cancer staging: $\varphi(x) = [\mathbb{1}(x \ge \text{II}),\; \mathbb{1}(x \ge \text{III}),\; \mathbb{1}(x \ge \text{IV})]$. A Stage III patient gets the vector $[1, 1, 0]$. Each coefficient captures the *incremental* effect of crossing that threshold — the jump from Stage I to II can differ from the jump from II to III. The encoding uses the same number of features as one-hot ($K-1$), but the coefficients are cumulative rather than independent, which can improve predictions when the ordering is meaningful and training data is limited.
 
 ```{python}
 # Bar chart of coefficients
@@ -345,9 +353,19 @@ print(result)
 
 The imputed value lets the model use the column normally. The indicator lets the model learn whether missingness itself predicts the outcome — for example, listings without a bedroom count might systematically differ in price.
 
+### When does a missingness indicator help?
+
+Not all missing data carries signal. Whether a missingness indicator improves your model depends on *why* the data is missing — the MCAR/MAR/MNAR distinction from [Chapter 3](lec03-munging.qmd).
+
+**Informative missingness (MAR or MNAR):** In ambulance data, a missing heart rate often means the EMTs were too busy saving the patient's life to record vitals. The patients with missing heart rates have systematically worse outcomes — the missingness *is* the signal. Creating a binary feature `heart_rate_missing` gives the model access to that information, and it turns out to be one of the strongest predictors of mortality.
+
+**Uninformative missingness (MCAR):** A weather station's battery dies at random, causing missing temperature readings for a few hours. The battery failure has nothing to do with the temperature outside — a hot day is no more likely to cause a dead battery than a cold one. Creating a `temp_missing` indicator adds a column of noise: it's uncorrelated with the outcome and wastes a degree of freedom.
+
+The rule of thumb: when missingness is **informative** (MAR or MNAR), a binary indicator for "is this value missing?" can improve your model. When missingness is **MCAR** — purely random — the indicator adds noise, not signal. In practice, the test set tells you: if adding the indicator improves test-set performance, the missingness was informative.
+
 :::{.callout-warning}
 ## Don't impute blindly
-Imputation replaces missing values with plausible substitutes (median, mean, or a model-based prediction). Without a missingness indicator, the model can't distinguish real values from imputed ones. Always pair imputation with an indicator column when missingness might be informative (MNAR or MAR — see Chapter 2).
+Imputation replaces missing values with plausible substitutes (median, mean, or a model-based prediction). Without a missingness indicator, the model can't distinguish real values from imputed ones. Always pair imputation with an indicator column when missingness might be informative (MNAR or MAR — see [Chapter 3](lec03-munging.qmd)).
 :::
 
 ## A different approach — decision trees
@@ -631,7 +649,8 @@ LLM featurization replaces an entire natural language processing pipeline with a
 - **Adjusted R^2** penalizes model complexity, preventing R^2 from rewarding useless features. Use it to compare models with different numbers of predictors.
 - **Decision trees** recursively split the feature space into regions, predicting the mean (regression) or majority class (classification) in each region — no manual feature engineering needed.
 - **Random forests** average many decision trees trained on random subsets of data and features, reducing overfitting. More trees never hurts.
-- **Missing values as features** — missing values can be turned into features. For categoricals, treat "missing" as its own category. For numerics, pair an imputed value with a binary missingness indicator so the model can learn whether missingness itself predicts the outcome.
+- **Missing values as features** — missing values can be turned into features. For categoricals, treat "missing" as its own category. For numerics, pair an imputed value with a binary missingness indicator so the model can learn whether missingness itself predicts the outcome. A missingness indicator helps when missingness is **informative** (MAR or MNAR) and adds noise when it's MCAR.
+- **Boolean threshold encoding** — for ordinal variables with $K$ levels, create $K-1$ binary features $[\mathbb{1}(x \ge 2), \ldots, \mathbb{1}(x \ge K)]$. Preserves ordering without forcing a linear relationship or discarding order like one-hot encoding.
 - **Weak supervision** — using noisy, programmatic labels (e.g., from an LLM) instead of expensive hand labels. LLM featurization converts unstructured text into structured features via a well-specified prompt. Good prompts define each field precisely, request a structured output format, and target features that complement (rather than duplicate) existing columns.
 
 ### Computational tools
@@ -649,3 +668,5 @@ LLM featurization replaces an entire natural language processing pipeline with a
 - Be able to write the formula for a model with polynomial or interaction features and explain why it's still "linear regression."
 - Understand at a high level how a decision tree makes predictions (recursive splits, predict mean in each leaf).
 - Be able to explain what LLM featurization does, why it's called weak supervision, and what makes a good extraction prompt.
+- Know when a missingness indicator helps (informative/MNAR) vs. adds noise (MCAR).
+- Be able to write the boolean threshold encoding for an ordinal variable and explain how it differs from one-hot encoding.

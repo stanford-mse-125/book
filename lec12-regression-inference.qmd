@@ -765,6 +765,54 @@ airbnb_model = smf.ols(
 print(airbnb_model.summary().tables[1])
 ```
 
+### Reading a regression output table
+
+The table above is a standard OLS coefficient table from `statsmodels`. Every regression output you encounter — in Python, R, Stata, or a journal article — contains the same elements. Let's walk through each column.
+
+```{python}
+# Print the full model summary for reference
+print(airbnb_model.summary())
+```
+
+Here is what each section of the output means:
+
+1. **`coef` (Coefficients)**: The estimated $\hat{\beta}_j$ for each predictor. Each coefficient answers: "holding everything else constant, how much does the predicted price change for a one-unit increase in this variable?" For example, the `bathrooms` coefficient means each additional bathroom is associated with roughly \$62 more per night, after controlling for bedrooms and borough.
+
+2. **`std err` (Standard Error)**: The estimated standard deviation of $\hat{\beta}_j$ across hypothetical repeated samples. A smaller standard error means the estimate is more precise. The standard error for `bathrooms` is about \$1.86 — small relative to the coefficient, so the estimate is fairly precise.
+
+3. **`t` (t-statistic)**: The ratio $\hat{\beta}_j / \text{SE}(\hat{\beta}_j)$. A large absolute value (typically $|t| > 2$) suggests the coefficient is distinguishable from zero. Values near zero mean the predictor may not contribute to the model.
+
+4. **`P>|t|` (p-value)**: The probability of observing a t-statistic this extreme if $\beta_j = 0$. Small p-values (typically $< 0.05$) lead us to reject the null that the coefficient is zero. But remember: a small p-value does not guarantee a large or important effect.
+
+5. **`[0.025, 0.975]` (95% Confidence Interval)**: The range of plausible values for $\beta_j$. If this interval does not contain zero, the coefficient is statistically significant at the 5% level. The width of the interval tells you how precisely the effect is estimated.
+
+6. **`R-squared`** (top of the output): The fraction of variance in the response explained by the model. An $R^2$ of 0.40 means the predictors explain 40% of the variation in price; the remaining 60% is unexplained. **Adj. R-squared** penalizes for the number of predictors — useful when comparing models of different sizes.
+
+7. **`F-statistic`** (top of the output): Tests whether the model as a whole explains more variance than a model with no predictors (intercept only). A large F-statistic with a small p-value (Prob (F-statistic)) means at least one predictor is useful. Think of it as an "overall significance" test for the entire regression.
+
+8. **`Cond. No.` (Condition Number)**: A measure of multicollinearity among predictors. Values above 30 suggest moderate multicollinearity; values above 1,000 signal that some predictors are nearly linearly dependent, which inflates standard errors and makes individual coefficients hard to interpret.
+
+```{python}
+# Summarize the key numbers for quick reference
+print("Quick summary of model diagnostics:")
+print(f"  R-squared:        {airbnb_model.rsquared:.3f}")
+print(f"  Adj. R-squared:   {airbnb_model.rsquared_adj:.3f}")
+print(f"  F-statistic:      {airbnb_model.fvalue:.1f}  (p = {format_pvalue(airbnb_model.f_pvalue)})")
+print(f"  Condition number: {airbnb_model.condition_number:.0f}")
+print()
+if airbnb_model.condition_number > 1000:
+    print("  ⚠ High condition number — check for multicollinearity.")
+elif airbnb_model.condition_number > 30:
+    print("  Moderate condition number — some correlation among predictors, but manageable.")
+else:
+    print("  Condition number is low — no multicollinearity concern.")
+```
+
+:::{.callout-tip}
+## Think About It
+The coefficient on `bedrooms` is about \$34 per night. Does that mean adding a bedroom to your listing would increase your nightly rate by that amount? What other factors might change when you add a bedroom — and how would that affect the interpretation?
+:::
+
 Let's isolate the bathrooms coefficient and build a confidence interval for it.
 
 ```{python}
@@ -946,7 +994,7 @@ inference ideas to categorical outcomes.
 
 ### For the quiz
 
-- Be able to interpret a coefficient table: read off coefficients, SEs, t-statistics, and p-values.
+- Be able to interpret a full regression output table: read off coefficients, standard errors, t-statistics, p-values, R-squared, F-statistic, and condition number.
 - Know what "controlling for" means in a regression context and how adding a predictor can change other coefficients.
 - Distinguish statistical significance (small p-value) from practical importance (large effect size).
 - Know the formula $t = \hat{\beta}_j / \text{SE}(\hat{\beta}_j)$ and what it tests.

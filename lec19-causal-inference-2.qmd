@@ -452,6 +452,188 @@ Sometimes the confounder is entirely unobserved. An **instrumental variable (IV)
 
 **Regression discontinuity (RD)** exploits sharp cutoffs in treatment assignment. When a scholarship is awarded to everyone scoring above 90 on an exam, students scoring 89 and 91 are nearly identical --- yet one receives the scholarship and the other does not. The jump in outcomes at the cutoff identifies a causal effect, functioning as a local randomized experiment. RD sits alongside DiD and IV as a major tool in the quasi-experimental toolkit.
 
+## Propensity Score Matching
+
+:::{.callout-note}
+This section is optional in the context of the Stanford MSE 125 course.
+:::
+
+The methods above --- DiD, IV, RD --- all exploit features of the study design to isolate causal effects. But sometimes you have a large observational dataset, no clean natural experiment, and a treatment that was assigned based on observable characteristics. **Propensity score matching** addresses this setting: estimate each unit's probability of receiving treatment, then compare treated and control units who had similar probabilities.
+
+### The Bail Vignette
+
+Consider pretrial bail decisions. A judge decides whether to set bail for each defendant. Naive comparison of outcomes is misleading: defendants assigned bail tend to be higher-risk (more serious charges, longer prior records), so any comparison of failure-to-appear (FTA) rates confounds the effect of bail with the characteristics that led judges to assign it.
+
+Jung et al. (2020) studied roughly 150,000 pretrial cases in a large US jurisdiction. The naive numbers told a surprising story: defendants released on bail had a 9% FTA rate, while defendants released without bail had a 15% FTA rate. Bail appeared to *reduce* flight risk. But is that causal, or are judges assigning bail to defendants who would have shown up anyway?
+
+### The Idea: Match Apples to Apples
+
+The **propensity score** is the probability of receiving treatment given observed covariates:
+
+$$e(x) = P(\text{Treatment} = 1 \mid X = x)$$
+
+The key theoretical result (Rosenbaum and Rubin, 1983): conditioning on the propensity score $e(x)$ balances *all* observed covariates simultaneously. Two defendants with the same propensity score --- the same estimated probability of being assigned bail --- have, on average, the same distribution of observed characteristics, even if those characteristics are high-dimensional.
+
+The method has three steps:
+
+1. **Estimate the propensity score.** Fit a logistic regression (or other classifier) predicting treatment from observed covariates.
+2. **Match.** For each treated unit, find one or more control units with a similar propensity score.
+3. **Compare.** Estimate the treatment effect by comparing outcomes within matched pairs.
+
+### A Simulated Example
+
+We simulate the bail setting: 5,000 defendants with varying risk levels. Judges assign bail more often to higher-risk defendants (a realistic confounder). Bail has a true causal effect of reducing FTA by 5 percentage points.
+
+```{python}
+# Simulate pretrial bail data
+np.random.seed(42)
+n = 5000
+
+# Observed covariates: prior record (0-10), charge severity (1-5)
+prior_record = np.random.poisson(2, n)
+charge_severity = np.random.randint(1, 6, n)
+
+# Propensity: judges assign bail more often to higher-risk defendants
+log_odds_bail = -1.0 + 0.3 * prior_record + 0.2 * charge_severity
+true_propensity = 1 / (1 + np.exp(-log_odds_bail))
+bail_assigned = np.random.binomial(1, true_propensity, n)
+
+# Outcome: FTA rate depends on risk AND bail (true causal effect = -0.05)
+base_fta_rate = 0.05 + 0.03 * prior_record + 0.02 * charge_severity
+true_effect = -0.05
+fta_prob = np.clip(base_fta_rate + true_effect * bail_assigned, 0, 1)
+fta = np.random.binomial(1, fta_prob, n)
+
+bail_df = pd.DataFrame({
+    'prior_record': prior_record,
+    'charge_severity': charge_severity,
+    'bail_assigned': bail_assigned,
+    'fta': fta
+})
+
+print(f"Defendants: {n:,}")
+print(f"Assigned bail: {bail_assigned.sum():,} ({bail_assigned.mean():.1%})")
+print(f"\nNaive comparison (ignoring confounders):")
+print(f"  FTA rate with bail:    {bail_df[bail_df['bail_assigned']==1]['fta'].mean():.3f}")
+print(f"  FTA rate without bail: {bail_df[bail_df['bail_assigned']==0]['fta'].mean():.3f}")
+naive_diff = (bail_df[bail_df['bail_assigned']==1]['fta'].mean()
+              - bail_df[bail_df['bail_assigned']==0]['fta'].mean())
+print(f"  Naive difference:      {naive_diff:+.3f}")
+print(f"\nTrue causal effect:      {true_effect:+.3f}")
+print(f"\nThe naive estimate is biased because bail is assigned to higher-risk defendants.")
+```
+
+The naive comparison underestimates the benefit of bail (or may even reverse the sign) because it compares fundamentally different populations.
+
+### Step 1: Estimate the Propensity Score
+
+We fit a logistic regression predicting bail assignment from the observed covariates.
+
+```{python}
+from sklearn.linear_model import LogisticRegression
+
+# Fit propensity score model
+X_ps = bail_df[['prior_record', 'charge_severity']]
+ps_model = LogisticRegression(random_state=42)
+ps_model.fit(X_ps, bail_df['bail_assigned'])
+
+bail_df['propensity_score'] = ps_model.predict_proba(X_ps)[:, 1]
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.hist(bail_df[bail_df['bail_assigned']==1]['propensity_score'],
+        bins=30, alpha=0.6, label='Bail assigned', color='#1f77b4', density=True)
+ax.hist(bail_df[bail_df['bail_assigned']==0]['propensity_score'],
+        bins=30, alpha=0.6, label='No bail', color='#ff7f0e', density=True)
+ax.set_xlabel('Estimated Propensity Score')
+ax.set_ylabel('Density')
+ax.set_title('Propensity Score Distributions by Treatment Group', fontsize=14)
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+print("The overlap region is where matching is possible.")
+print("Defendants with extreme propensity scores have no good match in the other group.")
+```
+
+The overlap between the two distributions is where matching works well. In the tails --- defendants whom judges almost always or almost never assign bail --- there are no comparable units in the other group.
+
+### Step 2: Match on the Propensity Score
+
+For each bailed defendant, we find the closest non-bailed defendant by propensity score. This is nearest-neighbor matching.
+
+```{python}
+from scipy.spatial import KDTree
+
+treated = bail_df[bail_df['bail_assigned'] == 1].copy()
+control = bail_df[bail_df['bail_assigned'] == 0].copy()
+
+# Nearest-neighbor matching on propensity score
+tree = KDTree(control[['propensity_score']].values)
+distances, indices = tree.query(treated[['propensity_score']].values, k=1)
+
+matched_control = control.iloc[indices.flatten()].copy()
+matched_control.index = treated.index  # Align indices for comparison
+```
+
+```{python}
+# Check covariate balance before and after matching
+print("Covariate balance — before matching:")
+print(f"  Mean prior record:    Bail={treated['prior_record'].mean():.2f}  "
+      f"No bail={control['prior_record'].mean():.2f}  "
+      f"Diff={treated['prior_record'].mean() - control['prior_record'].mean():+.2f}")
+print(f"  Mean charge severity: Bail={treated['charge_severity'].mean():.2f}  "
+      f"No bail={control['charge_severity'].mean():.2f}  "
+      f"Diff={treated['charge_severity'].mean() - control['charge_severity'].mean():+.2f}")
+
+print("\nCovariate balance — after matching:")
+print(f"  Mean prior record:    Bail={treated['prior_record'].mean():.2f}  "
+      f"Matched={matched_control['prior_record'].mean():.2f}  "
+      f"Diff={treated['prior_record'].mean() - matched_control['prior_record'].mean():+.2f}")
+print(f"  Mean charge severity: Bail={treated['charge_severity'].mean():.2f}  "
+      f"Matched={matched_control['charge_severity'].mean():.2f}  "
+      f"Diff={treated['charge_severity'].mean() - matched_control['charge_severity'].mean():+.2f}")
+```
+
+After matching, the treated and control groups have nearly identical distributions of observed covariates. The propensity score has done the work of balancing multiple covariates simultaneously.
+
+### Step 3: Estimate the Treatment Effect
+
+```{python}
+# Average treatment effect on the treated (ATT)
+att = treated['fta'].values - matched_control['fta'].values
+att_estimate = att.mean()
+att_se = att.std() / np.sqrt(len(att))
+
+print("Propensity score matching estimate (ATT):")
+print(f"  Effect of bail on FTA: {att_estimate:+.3f}")
+print(f"  95% CI: [{att_estimate - 1.96*att_se:+.3f}, {att_estimate + 1.96*att_se:+.3f}]")
+print(f"  True causal effect:    {true_effect:+.3f}")
+print(f"\nMatching recovers the causal effect by comparing defendants")
+print(f"with similar risk profiles across treatment groups.")
+```
+
+### Back to the Bail Study
+
+In the actual study by Jung et al. (2020), propensity score matching revealed that the counterfactual FTA rate for bailed defendants --- their predicted FTA rate *without* bail --- would have been 18%, not the 15% observed in the no-bail group. Bail reduced FTA from 18% to 9%, a substantial effect. At the same time, the analysis showed that 35% of detained defendants could have been released without increasing flight risk, informing pretrial reform debates about who really needs to be held.
+
+### Limitations
+
+:::{.callout-warning}
+## Hidden Bias
+Propensity score matching only controls for *observed* confounders. If judges use information not captured in the data --- demeanor, the defendant's answers to questions, gut instinct --- the matched comparison is still biased. No matching method can substitute for randomization.
+:::
+
+Propensity score matching does not solve the fundamental problem of causal inference. It balances observed covariates, but any unmeasured confounder that affects both treatment assignment and the outcome will still bias the estimate. In the bail context, if judges rely on factors not in the administrative data (like a defendant's courtroom behavior), matching on propensity scores will not remove that confounding.
+
+The method is most credible when the dataset is rich enough that the observable covariates plausibly capture the key drivers of treatment assignment --- and when the analyst is transparent about what might be missing.
+
+:::{.callout-tip}
+## Think About It
+A hospital compares survival rates for patients who received an experimental surgery vs. standard care, using propensity score matching on age, diagnosis, and lab values. A skeptic argues the comparison is invalid because surgeons selected patients based partly on "clinical judgment" not captured in the data. Is the skeptic right? What would you need to address this concern?
+:::
+
 ## An NBA Natural Experiment
 
 Let's look for a natural experiment in our NBA data. The NBA introduced the "play-in tournament" starting with the 2020-21 season. Teams seeded 7-10 now must compete in a mini-tournament to earn a playoff spot, changing incentives for teams near the cutoff. Did this affect how teams manage their star players' minutes?
@@ -549,9 +731,11 @@ We began this course asking how to predict --- building models from data, measur
 
 - **A/B tests require discipline.** Don't peek at results. Be wary of network effects and novelty effects.
 
+- **Propensity score matching** estimates each unit's probability of treatment, then matches treated and control units with similar scores. It balances all *observed* covariates simultaneously but cannot control for unmeasured confounders.
+
 - **When you read a causal claim**, ask: what's the source of variation? Is it plausibly exogenous? What could confound this?
 
-**Further reading:** For more on DiD, event studies, and natural experiments, see Huntington-Klein, *The Effect*, Chapters 16-20.
+**Further reading:** For more on DiD, event studies, and natural experiments, see Huntington-Klein, *The Effect*, Chapters 16-20. For propensity score methods, see Rosenbaum and Rubin, "The Central Role of the Propensity Score in Observational Studies for Causal Effects" (1983).
 
 ## Study guide
 
@@ -566,18 +750,23 @@ We began this course asking how to predict --- building models from data, measur
 - **Treatment effect**: The causal impact of the treatment on the outcome.
 - **Instrumental variable (IV)**: A variable that affects treatment assignment but has no direct effect on the outcome except through treatment.
 - **Regression discontinuity (RD)**: A design that exploits sharp cutoffs in treatment assignment to create a local natural experiment.
+- **Propensity score**: The probability of receiving treatment given observed covariates, $e(x) = P(\text{Treatment}=1 \mid X=x)$. Conditioning on it balances all observed covariates.
+- **Propensity score matching**: Estimate propensity scores, match treated and control units with similar scores, compare outcomes within matched pairs.
 - **SUTVA**: The assumption that one unit's treatment does not affect another unit's outcome. Violated by network effects.
 - DiD removes confounding from shared time trends by differencing twice: within groups across time, then across groups.
 - Randomization closes all backdoor paths in the DAG, eliminating the need for confounder adjustment.
 - Pre-treatment parallel trends are suggestive evidence for the parallel trends assumption, but cannot prove it.
 - Peeking at A/B test results inflates false positive rates far beyond the nominal 5%.
 - Snow's water company comparison is the most famous natural experiment — same streets, different water, 8.5x death rate difference.
+- Propensity score matching balances observed covariates but cannot address unmeasured confounders — it is no substitute for randomization.
 
 ### Computational tools
 
 - `statsmodels.OLS` for DiD regression with standard errors and confidence intervals
 - Two-proportion z-test for comparing rates (A/B tests, Snow data)
 - Event study plots for assessing parallel trends visually
+- `LogisticRegression` for estimating propensity scores
+- `scipy.spatial.KDTree` for nearest-neighbor matching on propensity scores
 
 ### For the quiz
 
@@ -589,3 +778,5 @@ You should be able to:
 - Identify whether a study is an RCT, natural experiment, or observational comparison
 - Explain the parallel trends assumption and what an event study plot checks
 - Describe why peeking inflates false positives in A/B tests
+- Explain the three steps of propensity score matching (estimate, match, compare)
+- Articulate why propensity score matching cannot control for unobserved confounders
