@@ -67,6 +67,8 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Key vocabulary:**
 - Exploratory Data Analysis (EDA)
+- Data types: continuous, discrete, nominal/categorical, ordinal, text, identifier
+- Semantic type vs. storage type (dtype)
 - Missing Not At Random (MNAR)
 - Distribution, histogram, box plot, scatter plot
 - Outlier

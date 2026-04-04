@@ -549,6 +549,8 @@ By default, `df.groupby('col')` excludes all rows where the grouping column is N
 
 ## Part 5: Data types gone wrong
 
+Chapter 2 introduced six semantic data types — continuous, discrete, nominal, ordinal, text, and identifier. Here we see what goes wrong when the stored type doesn't match the semantic type.
+
 Missing data is one kind of data quality problem. Even present data can deceive when the *type* is wrong. Numbers stored as strings, categories encoded as integers — each creates a silent trap.
 
 ### Strings masquerading as numbers
