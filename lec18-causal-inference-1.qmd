@@ -266,6 +266,39 @@ The DAG tells the story:
 
 Simpson's Paradox is a confounding problem. The aggregate data tells the opposite story from the disaggregated data: high-volume hospitals look *better* overall but *worse* within each severity group. Which one is "right"? The one that blocks the backdoor path by controlling for the confounder.
 
+### Simpson's Paradox in Policing: NYPD Stop-and-Frisk
+
+Simpson's Paradox doesn't just show up in hospitals. It appears whenever a confounding variable has different distributions across groups — and the policy consequences can be enormous.
+
+From 2008 to 2012, the NYPD conducted roughly 760,000 stops under its Concealed Weapons Possession (CPW) program. For each stop, officers recorded whether a weapon was found — the **hit rate**. A higher hit rate means officers are stopping people on stronger evidence; a lower hit rate suggests weaker justification for the stop.
+
+```{python}
+# NYPD stop-and-frisk hit rates (Goel, Rao, Shroff 2016; Grossman 2023 MSE 125 Lecture 1)
+print("NYPD Stop-and-Frisk Hit Rates (2008-2012)")
+print("=" * 55)
+print(f"  City-wide hit rate, Black individuals:  2.5%")
+print(f"  City-wide hit rate, White individuals:  13%")
+print(f"  City-wide ratio: 13 / 2.5 = {13/2.5:.1f}x")
+print(f"\n  Within-precinct ratio (controlling for location): 2.2x")
+print(f"\n  The ratio drops from {13/2.5:.1f}x to 2.2x after controlling for precinct.")
+```
+
+The city-wide numbers paint a stark picture: the hit rate for white individuals is `{python} f'{13/2.5:.1f}'`x higher than for Black individuals, suggesting officers stop Black individuals on far weaker evidence. But the city-wide comparison is **confounded by precinct**. Different precincts have different stop rates *and* different racial compositions.
+
+The DAG:
+
+```
+  Precinct ──→ Race of person stopped
+      │
+      └──────→ Hit rate
+```
+
+**Precinct** is a confounder: it influences both who gets stopped (racial composition varies by neighborhood) and the hit rate (policing intensity and weapon prevalence vary by location). When we compare hit rates *within* precincts — blocking the backdoor path — the ratio drops from 5.1x to 2.2x.
+
+The within-precinct ratio is still evidence of disparate treatment: officers appear to stop Black individuals on weaker evidence even within the same precinct. But the *magnitude* of the disparity changes dramatically once we control for location. Getting the confounding structure right is essential for accurate policy analysis.
+
+After the Stanford Open Policing Project published similar within-group analyses for the LAPD, the department changed its Metro Division operations (*Los Angeles Times*, October 2019). The statistical question — aggregate or disaggregated? — had real consequences for how a major city policed its residents.
+
 ## John Snow and the Birth of Epidemiology
 
 :::{.callout-note}

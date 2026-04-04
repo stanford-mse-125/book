@@ -295,6 +295,17 @@ A concrete example: if a patient's predicted CHD probability is 0.20 (odds = 0.2
 
 The model says: age, systolic blood pressure, glucose, and male sex are the strongest risk factors. This ranking matches medical knowledge — but notice that the model treats each feature independently. It doesn't know that high blood pressure and high BMI often go together, or that young smokers face different risks than old smokers (for that, we'd need interaction terms — recall Chapter 6). We'll come back to this.
 
+:::{.callout-tip}
+## The Divide-by-4 Rule
+Odds ratios are hard to feel. A quicker way to interpret logistic regression coefficients on the probability scale: **divide the coefficient by 4**. The result is the *maximum* possible change in $\Pr(Y=1)$ per one-unit increase in $x$.
+
+Why does this work? The logistic curve is steepest at $p = 0.5$, where $dp/dx = p(1-p)\cdot\beta = 0.25\cdot\beta = \beta/4$. When $p$ is far from 0.5 the curve is flatter, so $\beta/4$ is an upper bound on the actual change.
+
+**Example.** If the coefficient on "years of education" is 0.6, then each additional year of education increases the probability of the outcome by *at most* $0.6/4 = 0.15$ (15 percentage points). The true change is smaller when the baseline probability is near 0 or 1.
+
+Source: Gelman & Hill, *Data Analysis Using Regression and Multilevel/Hierarchical Models* (2007).
+:::
+
 ## What does the model predict for individual patients?
 
 Before we evaluate overall performance, let's look at specific patients. This step makes the predicted probabilities concrete.

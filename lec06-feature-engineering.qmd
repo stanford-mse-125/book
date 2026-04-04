@@ -105,6 +105,15 @@ print(f"\nIntercept (baseline = Bronx, Entire home/apt): {model_base.intercept_:
 
 How to read this: the coefficient on `borough_Manhattan` tells you how much more (or less) a Manhattan listing costs compared to the baseline category (Bronx), holding all else equal. Shared rooms are cheaper; Manhattan is pricier.
 
+:::{.callout-tip}
+## Think About It: Cancer staging encoded as a number
+Cancer is staged I through IV, with higher stages indicating more advanced disease. Suppose you encode these as integers (Stage I = 1, Stage II = 2, Stage III = 3, Stage IV = 4) and fit a linear regression predicting years survived. If Stage I patients average 4 years and Stage II patients average 2 years, least squares gives $\hat{y} = 6 - 2x$. Now predict Stage IV: $6 - 2(4) = -2$ years. The model predicts *negative* survival time.
+
+The problem: encoding stages as 1--4 assumes the outcome changes by the same amount per stage *and* that the spacing between stages is uniform. Neither is true. One-hot encoding (a separate dummy for each stage) lets each stage have its own effect, free from these assumptions. Alternatively, **boolean threshold encoding** creates features like "Stage II or higher" and "Stage III or higher," which respect the ordering without forcing a linear relationship.
+
+(Source: Udell, *Feature Engineering*, Cornell ORIE 4741, 2022.)
+:::
+
 ```{python}
 # Bar chart of coefficients
 fig, ax = plt.subplots(figsize=(10, 5))
@@ -195,6 +204,8 @@ plt.show()
 ```
 
 The degree-3 and degree-4 models predict **negative prices** for listings with 9 or more bedrooms. This result is not a quirk of one dataset. Polynomial extrapolation is governed by the highest-order term, which eventually dominates and sends predictions to $\pm\infty$. The linear model, while less flexible, at least gives sensible predictions outside the training range.
+
+This failure mode is not hypothetical. In May 2020, the Institute for Health Metrics and Evaluation (IHME) at the University of Washington published influential COVID-19 death forecasts built on a cubic polynomial fit. The *Washington Post* [reported](https://www.washingtonpost.com/health/2020/04/06/americas-most-influential-coronavirus-model-just-revised-its-estimates-downward-not-everyone-is-convinced/) that the model projected deaths would fall to near zero by summer — a prediction driven by the polynomial's downward curve, not by epidemiology. The forecast was wildly wrong: by summer, US deaths were still climbing. The cubic eventually turns downward regardless of the data, just as our degree-4 bedroom model turns negative. Polynomial features fit training data well but extrapolate according to their algebraic shape, not the real world.
 
 The secondary issue is diminishing returns: polynomials on bedrooms alone barely improve R-squared. The real gains come from incorporating other features.
 

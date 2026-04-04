@@ -510,6 +510,75 @@ print("The tails deviate — more extreme game scores occur than a normal")
 print("distribution would predict. This pattern is common in sports data.")
 ```
 
+### Reading a Q-Q plot: a visual gallery
+
+The NBA Q-Q plot above shows heavy tails — but what do other departures from normality look like? The gallery below shows five common patterns alongside the ideal (normal) case. Each panel uses simulated data so the pattern is unmistakable.
+
+```{python}
+#| label: fig-qq-gallery
+#| fig-cap: "Q-Q plot gallery: six patterns and what they reveal about the residual distribution."
+
+from scipy.stats import probplot, skewnorm, t as t_dist, uniform
+
+np.random.seed(42)
+n_sim = 500
+
+# Simulate six residual distributions
+sim_data = {
+    'Normal\n(assumptions met)': np.random.normal(0, 1, n_sim),
+    'Left-skewed\n(concave / bows down)': skewnorm.rvs(-8, size=n_sim),
+    'Right-skewed\n(convex / bows up)': skewnorm.rvs(8, size=n_sim),
+    'Heavy-tailed\n(S-shaped)': t_dist.rvs(df=3, size=n_sim),
+    'Light-tailed\n(reverse-S)': uniform.rvs(loc=-1, scale=2, size=n_sim),
+    'Bimodal\n(two clusters)': np.concatenate([
+        np.random.normal(-2, 0.5, n_sim // 2),
+        np.random.normal(2, 0.5, n_sim // 2)
+    ]),
+}
+
+fig, axes = plt.subplots(2, 3, figsize=(14, 9))
+for ax, (label, data) in zip(axes.flat, sim_data.items()):
+    (tq, sq), (slope, intercept, _) = probplot(data, dist='norm')
+    ax.scatter(tq, sq, s=10, alpha=0.5, color='steelblue')
+    ref_x = np.array([tq.min(), tq.max()])
+    ax.plot(ref_x, intercept + slope * ref_x, 'r-', linewidth=1.5)
+    ax.set_title(label, fontsize=11)
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+
+# Shared axis labels
+fig.supxlabel('Theoretical Quantiles (Normal)', fontsize=12)
+fig.supylabel('Sample Quantiles', fontsize=12)
+plt.tight_layout()
+plt.show()
+```
+
+:::{.callout-note}
+## How to read the gallery
+
+| Q-Q shape | What it means | Example cause |
+|:--|:--|:--|
+| Straight line | Normal residuals — assumptions satisfied | Well-specified model |
+| Concave (bows down) | Left-skewed residuals | Floor effect or bounded response |
+| Convex (bows up) | Right-skewed residuals | Untransformed prices or counts |
+| S-shaped | Heavy tails — more extreme values than normal | Outlier-prone measurements |
+| Reverse-S | Light tails — fewer extreme values than normal | Bounded or truncated data |
+| Staircase or gap | Multimodal residuals — distinct subgroups | Missing categorical predictor |
+
+The key diagnostic reflex: when the Q-Q plot bows or bends, ask *why* the residuals deviate from normality. The shape often points directly to a modeling fix (a log transform, a missing predictor, or an outlier filter).
+:::
+
+### Why residuals reveal what raw data hides
+
+Looking at residuals instead of the raw response variable is not just a formality. Other predictors add scatter to the raw data that can mask violations of the model's assumptions. Residuals remove the explained variation, leaving only the unexplained part — and that is where patterns become visible.
+
+For example, a plot of price vs. bedrooms for Airbnb listings shows enormous scatter because neighborhood, room type, and amenities all vary across listings. But the residuals from a model that controls for those variables are much cleaner. A nonlinear pattern — say, diminishing returns from extra bedrooms — that was invisible in the raw scatter may jump out in the residual plot.
+
+:::{.callout-tip}
+## Think About It
+Residuals reveal nonlinearity that raw data hides. Why? Because residuals strip away the variation explained by *other* predictors, making any remaining pattern easier to see.
+:::
+
 :::{.callout-warning}
 ## When diagnostics reveal problems
 If residuals show strong non-normality or heteroscedasticity, the formula-based

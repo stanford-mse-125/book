@@ -430,6 +430,36 @@ print(f"But for borderline cases (p ~ 0.05), it could flip the decision.")
 print(f"Rule of thumb: use two-sided unless you have a strong prior reason.")
 ```
 
+## A One-Sample Test with Real Stakes: *Swain v. Alabama*
+
+Not every hypothesis test compares two groups. Sometimes the question is whether a single sample matches a known population value. One landmark example comes from the U.S. Supreme Court.
+
+In *Swain v. Alabama* (1965), Robert Swain, a Black man, was sentenced to death by an all-white jury in Talladega County, Alabama. His attorneys challenged the jury selection process: 26% of eligible jurors in the county were Black, yet only 8 out of 100 grand jury panelists were Black. Was this disparity evidence of racial discrimination, or could it have arisen by chance?
+
+This is a **one-sample proportion test**. Under the null hypothesis of fair (race-blind) selection, each panelist is drawn independently with a 26% probability of being Black. We can test this directly:
+
+```{python}
+# Swain v. Alabama: one-sample proportion test
+n_panelists = 100
+observed_black = 8
+expected_proportion = 0.26
+
+# Exact binomial test: P(X <= 8) under Binomial(100, 0.26)
+from scipy.stats import binomtest
+result = binomtest(observed_black, n_panelists, expected_proportion, alternative='less')
+print(f"Observed: {observed_black} Black panelists out of {n_panelists}")
+print(f"Expected under fair selection: {expected_proportion * n_panelists:.0f}")
+print(f"p-value (one-sided): {result.pvalue:.2e}")
+```
+
+The p-value is vanishingly small: under fair selection, seeing 8 or fewer Black panelists out of 100 is astronomically unlikely. Yet the Supreme Court ruled that "the overall percentage disparity has been small" and upheld the conviction. The Court reached this conclusion without performing a statistical test — a cautionary tale about relying on intuition instead of quantitative reasoning.
+
+::: {.callout-tip}
+## Think About It
+
+The expected count under fair selection is 26. The observed count is 8. Would you call that disparity "small"? What would a p-value of this magnitude mean in a clinical trial?
+:::
+
 ## Statistical Significance Is Not the Same as Importance
 
 With ACTG175's large sample size, even tiny, clinically meaningless effects would be "statistically significant." Let's see this in action.
@@ -497,6 +527,14 @@ The plot confirms: for a fixed real effect, the p-value shrinks as we add data. 
 ## Always report effect sizes
 
 The lesson: always report effect sizes and confidence intervals alongside p-values. A small p-value tells you the effect is unlikely to be zero — it does not tell you the effect is large or important.
+:::
+
+::: {.callout-tip}
+## Think About It: the blood pressure drug
+
+A clinical trial with 10,000 participants tests a new blood pressure drug and finds a statistically significant reduction (p = 0.013). Impressive? The actual effect is a 2 mmHg decrease in systolic blood pressure. For context, drinking a cup of coffee temporarily raises blood pressure by about 5 mmHg (Mesas et al., *Journal of Hypertension*, 2011). The drug's effect is real — it's not zero — but it is smaller than your morning coffee. Would you recommend this drug to patients, given the costs and potential side effects?
+
+Statistical significance told us the effect is *not zero*. It said nothing about whether the effect is *worth acting on*. That judgment requires domain knowledge: what reduction is clinically meaningful, what are the side effects, and what alternatives exist.
 :::
 
 ## Key Takeaways
