@@ -145,7 +145,7 @@ print(f"The intern's 'discovery' is probably noise.")
 
 :::{.callout-tip}
 ## Think About It
-If the null is true for every player, what should the histogram of p-values look like?
+Your p-value histogram is perfectly flat — except for one value at 0.003. Your manager says "we found one! That player is definitely streaky." Do you agree? Under the null, what distribution should p-values follow — and if you test 50 players, how many p-values below 0.01 would you *expect* by chance alone?
 :::
 
 Under the null hypothesis (no effect for any player), p-values should follow a **Uniform(0, 1)** distribution.

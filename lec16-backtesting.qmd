@@ -146,7 +146,7 @@ R² about 0.66 — not bad for a first attempt. But a hidden problem lurks in th
 
 :::{.callout-tip}
 ## Think About It
-With a random split, your test set includes days *from the middle* of the time series. A test-set day from June 2022 has its neighbors (June 1, June 3, ...) in the training set. The lag features — "yesterday's AQI" — are computed from data that's *right next to* training points.
+Your team built an AQI forecasting model with R²=0.95 using a random train/test split. Before deploying it for public health alerts, would you trust that number? With a random split, the test set includes days *from the middle* of the time series — a test-set day from June 2022 has its neighbors (June 1, June 3, ...) in the training set, and the lag features are computed from data *right next to* training points. What split strategy would you insist on, and why?
 :::
 
 :::{.callout-important}

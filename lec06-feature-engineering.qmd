@@ -219,7 +219,7 @@ The secondary issue is diminishing returns: polynomials on bedrooms alone barely
 
 :::{.callout-tip}
 ## Think About It
-Why do polynomial features on bedrooms alone give such small improvements? What other sources of variation in price are we ignoring? And why is extrapolation especially dangerous when the training data is concentrated in a narrow range (most listings have 1--2 bedrooms)?
+A real estate startup asks you to predict prices for 5-bedroom listings using this model. Your training data is almost entirely 1--2 bedrooms. Would you ship the model for that use case? What would you do instead?
 :::
 
 ## Interaction terms

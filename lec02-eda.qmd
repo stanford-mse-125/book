@@ -192,7 +192,7 @@ A statistic is **robust** if extreme values barely affect it. The **median** and
 
 :::{.callout-tip}
 ## Think About It
-Is the standard deviation a robust statistic? If you suspect outliers in your data, what would you use instead to measure spread?
+You're reporting Airbnb price spread to a city council considering rent regulation. The standard deviation is \$85, but the IQR is \$45. Which number do you present, and how does your choice affect the policy conversation?
 :::
 
 > **Key principle**: When a distribution has a heavy tail, the mean doesn't represent a typical value. Always plot the distribution before relying on any single number.

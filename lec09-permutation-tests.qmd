@@ -109,7 +109,7 @@ The fake effects bounce around zero — small positive, small negative. Our obse
 
 :::{.callout-tip}
 ## Think About It
-If the drug really works, where will our observed effect of ~50 fall relative to the null distribution? Will it be in the middle or out in the tail?
+You're on the FDA advisory panel. The observed treatment effect is ~50 CD4 cells. Before seeing the null distribution, what threshold would you set for "convincing evidence"? How far into the tail does the effect need to be for you to vote to approve?
 :::
 
 ## Building the Null Distribution
@@ -192,9 +192,7 @@ The p-value is one of the most misinterpreted quantities in statistics. Before w
 
 2. **The p-value is NOT the probability that the result will replicate.** A small p-value doesn't guarantee that a new experiment will find the same thing.
 
-3. **A small p-value does NOT mean the effect is large.** With enough data, you can get a tiny p-value for a tiny effect. Statistical significance and practical significance are different things.
-
-4. **p = 0.049 and p = 0.051 are not meaningfully different.** The conventional threshold of 0.05 is arbitrary. Treat the p-value as a continuous measure of evidence, not a binary verdict.
+3. **p = 0.049 and p = 0.051 are not meaningfully different.** The conventional threshold of 0.05 is arbitrary. Treat the p-value as a continuous measure of evidence, not a binary verdict.
 :::
 
 We'll formalize hypothesis testing in [Chapter 10](lec10-hypothesis-testing.qmd). For now, think of the p-value as measuring how *surprising* the data are under the null.
@@ -272,12 +270,6 @@ plt.show()
 ```
 
 Manhattan listings are significantly more expensive than Brooklyn listings — the observed difference falls far into the tail of the null distribution. The permutation test confirms what you probably already suspected, but now we have a rigorous number to back it up.
-
-:::{.callout-warning}
-## Observational data cannot establish causation
-
-The Airbnb data are observational — no one randomly assigned listings to boroughs. The permutation test shows the price difference is unlikely due to chance alone, but it does not rule out confounding. Manhattan and Brooklyn differ in location, amenities, building age, and host demographics. Any of these factors could drive the price gap. A significant p-value here establishes an association, not a causal effect.
-:::
 
 ## Bootstrap vs Permutation: When to Use Which
 
@@ -367,7 +359,6 @@ The t-test is faster (no simulation needed) but assumes normality. The permutati
 - Permutation tests work for comparing groups **without distributional assumptions** — they only require exchangeability (e.g., random assignment).
 - **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). Use both.
 - The **two-sample t-test** is the normal approximation analog of the permutation test, just as the CLT-based CI is the analog of the bootstrap CI.
-- In a **randomized experiment** (like ACTG 175), a significant permutation test supports a **causal** conclusion: the treatment caused the difference. Without randomization (like the Airbnb example), the test shows an **association** but cannot rule out confounding.
 - **Next**: [Chapter 10](lec10-hypothesis-testing.qmd) formalizes hypothesis testing — $H_0$, $H_1$, $\alpha$, Type I/II errors, and power.
 
 ## Study guide
@@ -384,7 +375,6 @@ The t-test is faster (no simulation needed) but assumes normality. The permutati
 - **Bootstrap vs. permutation**: Bootstrap resamples **within each group** (with replacement) to measure precision. Permutation shuffles labels **across groups** (without replacement) to test significance.
 - **CI/test duality**: A 95% confidence interval excluding zero is equivalent to rejecting $H_0$ at $\alpha = 0.05$. The equivalence is exact for parametric methods and approximate for simulation-based methods.
 - The two-sample t-test is the parametric (normal approximation) analog of the permutation test.
-- In a randomized experiment, a significant permutation test supports a **causal** conclusion. In observational data, the test establishes association but cannot rule out confounding.
 
 ### Computational tools
 
