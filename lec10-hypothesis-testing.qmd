@@ -537,6 +537,18 @@ A clinical trial with 10,000 participants tests a new blood pressure drug and fi
 Statistical significance told us the effect is *not zero*. It said nothing about whether the effect is *worth acting on*. That judgment requires domain knowledge: what reduction is clinically meaningful, what are the side effects, and what alternatives exist.
 :::
 
+:::{.callout-note}
+## Goodhart's Law
+
+"When a measure becomes a target, it ceases to be a good measure" (attributed to Charles Goodhart, 1975; popularized by Marilyn Strathern). Whenever people are rewarded for optimizing a metric, they find ways to hit the target without achieving the goal the metric was supposed to measure.
+
+- **Hospital readmission penalties.** The US Centers for Medicare and Medicaid Services (CMS) penalize hospitals with high readmission rates. The metric was supposed to measure care quality. Instead, some hospitals avoided admitting the sickest patients in the first place — keeping readmission rates low by selecting healthier patients, not by providing better care.
+- **School test scores.** When teacher evaluations depend on standardized test scores, the incentive shifts from teaching understanding to teaching the test. Scores rise, but learning does not.
+- **P-values.** The $p < 0.05$ threshold was supposed to measure evidence strength. When careers and publications depend on clearing that bar, researchers (often unconsciously) run analyses until they find significance. The result is p-hacking — a topic we'll examine in detail in [Chapter 11](lec11-multiple-testing.qmd).
+:::
+
+The pattern is the same in every case: a metric designed to *measure* performance becomes a target to *optimize*, and optimization pressure corrupts the metric. Whenever you use a number to make decisions, ask: could the people being measured change their behavior to hit the target without achieving the underlying goal?
+
 ## Key Takeaways
 
 - A **p-value** answers: "how surprising is this result if the null hypothesis were true?" It does NOT tell you the probability that the null is true, or that the result is important.

@@ -169,6 +169,19 @@ A statistical estimate is **biased** when it systematically deviates from the tr
 If you drop all the PrivacySuppressed rows, what kind of schools remain in your dataset? What conclusions about "average college earnings" might change?
 :::
 
+:::{.callout-note}
+## Survivorship bias: the WWII bomber problem
+
+During World War II, the US military examined returning bombers to decide where to add armor. The planes had bullet holes concentrated on the fuselage and wings. The natural conclusion: reinforce those areas. The statistician Abraham Wald saw the flaw. The holes showed where a plane could take damage *and survive the flight home*. The planes hit in the engines never came back — they were the missing data. Wald recommended armoring the engines instead (Mangel and Samaniego, "Abraham Wald's Work on Aircraft Survivability," *Journal of the American Statistical Association*, 1984).
+
+Survivorship bias is MNAR in disguise: the observations you *don't* see are systematically different from the ones you do. Mutual fund performance reports include only funds that still exist — the ones that performed so poorly they were shut down have vanished from the dataset. Startup advice comes disproportionately from founders who succeeded — the thousands who did the same things and failed aren't writing blog posts. Whenever your dataset contains only the survivors, ask what happened to the rest.
+:::
+
+:::{.callout-tip}
+## Think About It
+What other datasets might suffer from survivorship bias? Consider: (1) a study of building longevity that only examines structures still standing, (2) a dataset of songs on a "greatest hits of the 1960s" playlist, or (3) career advice from Fortune 500 CEOs. In each case, what is missing, and how does the missing data distort your conclusions?
+:::
+
 ## Part 2: Joining datasets
 
 The College Scorecard comes in two files:

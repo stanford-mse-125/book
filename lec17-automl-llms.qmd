@@ -538,6 +538,39 @@ You've probably used AI tools for homework this quarter. Think of a time the AI 
 The goal of this course was never to make you compute faster than a machine. It was to make you *think* better than one.
 :::
 
+## The critical evaluation checklist
+
+You've now spent 17 chapters building statistical intuition. Here's how to use it. When someone hands you an analysis — a colleague, a vendor, a consultant, or an AI — run through these 15 questions before you trust the conclusions.
+
+:::{.callout-note}
+## 15 Questions to Ask Before You Trust an Analysis
+
+1. **Check the data source.** Where did the data come from? Is there a data dictionary? Who collected it, and why? (Ch 2--3)
+2. **Check who's missing.** What population does this data represent? Who was excluded, and could that change the conclusion? (Ch 3: MNAR, survivorship bias)
+3. **Check the types.** Are numeric columns truly numeric? Are identifiers being treated as numbers? (Ch 2--3)
+4. **Check the metric.** Is it the right metric for the decision? Would a different metric give a different answer? (Ch 7: MAE vs RMSE)
+5. **Check the base rate.** Is "99% accuracy" impressive or trivial? What's the prevalence of the thing being detected? (Ch 13)
+6. **Check the split.** Was the model evaluated on truly held-out data? Could there be temporal leakage? (Ch 7, 16)
+7. **Check for leakage.** Does any input feature encode the outcome by construction? (Ch 3, 16)
+8. **Check for confounding.** Does correlation imply causation here? What's the DAG? (Ch 11, 18)
+9. **Check for multiple testing.** Was this the only hypothesis tested, or the only one reported? (Ch 11)
+10. **Check the uncertainty.** Is there a confidence interval? How wide is it? (Ch 8, 10, 12)
+11. **Check for practical significance.** Is the effect large enough to matter for the decision? (Ch 10)
+12. **Check for distribution shift.** Was the model trained on the same population it's being applied to? (Ch 7)
+13. **Check for Goodhart's Law.** Could optimizing this metric cause people to game it? (Ch 10)
+14. **Check for feedback loops.** Could the model's predictions change the outcome it measures? (Ch 18)
+15. **Check who paid for it.** Does the analyst or vendor have an incentive to show a particular result? (common sense)
+:::
+
+Chapter 1 promised that by the end of this course, you would know when *not* to trust a model's output. The checklist above is that promise delivered. Each item maps to a specific concept you've learned — missingness, confounding, multiple testing, distribution shift — but together they form something more than the sum of their parts: a habit of disciplined skepticism.
+
+You won't always have the data or the time to check all 15. But the questions themselves are portable. They work on a vendor's sales pitch, a teammate's Jupyter notebook, an LLM's confident summary, or a published paper. The goal was never to make you compute faster than a machine. It was to make you the person in the room who knows which questions to ask.
+
+:::{.callout-tip}
+## Think About It
+Pick any analysis you've seen in the news this week. Run through the checklist. Which items can you check from the article? Which would require access to the data or code?
+:::
+
 ## Study guide
 
 ### Key ideas

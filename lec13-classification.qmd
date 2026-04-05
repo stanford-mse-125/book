@@ -503,6 +503,47 @@ plt.tight_layout()
 plt.show()
 ```
 
+## Base rate neglect: why "99% accuracy" can be meaningless
+
+Precision depends on the base rate. A test with high sensitivity and high specificity can still have low precision when the condition is rare. This is one of the most common ways people are misled by machine learning claims.
+
+:::{.callout-tip}
+## Think About It
+A vendor pitches a cancer screening test with "99% accuracy" — it correctly classifies 99% of patients. Cancer prevalence in the screened population is 0.5%. A patient tests positive. What is the probability they actually have cancer?
+:::
+
+Work it out with a concrete population of 10,000 patients.
+
+```{python}
+# Base rate neglect: "99% accuracy" with a rare condition
+n = 10_000
+prevalence = 0.005       # 0.5% have cancer
+accuracy = 0.99          # 99% correctly classified
+
+n_cancer = n * prevalence              # 50 have cancer
+n_healthy = n * (1 - prevalence)       # 9,950 don't
+
+true_positives = n_cancer * accuracy   # 49.5 correctly detected
+false_positives = n_healthy * (1 - accuracy)  # 99.5 false alarms
+total_positive = true_positives + false_positives
+
+ppv = true_positives / total_positive  # precision = P(cancer | positive test)
+
+print(f"Population:       {n:,}")
+print(f"Cancer cases:     {n_cancer:.0f} ({prevalence*100:.1f}%)")
+print(f"True positives:   {true_positives:.1f}")
+print(f"False positives:  {false_positives:.1f}")
+print(f"Total positive:   {total_positive:.1f}")
+print(f"")
+print(f"P(cancer | positive test) = {true_positives:.1f} / {total_positive:.1f} = {ppv:.1%}")
+print(f"")
+print(f"Two-thirds of positive results are wrong.")
+```
+
+A "99% accurate" test, and two-thirds of positive results are wrong. The false positives swamp the true positives because the condition is so rare.
+
+This is why mass screening programs are controversial — and why a vendor claiming "99% accuracy" should immediately prompt the question: *what is the base rate?* Without knowing how common the condition is, accuracy tells you almost nothing about the chance that a positive result is real.
+
 ## Who does the model fail for?
 
 The overall AUC is ~0.75. Not amazing, but not terrible. But *overall* performance can hide dramatic failures in subgroups.
