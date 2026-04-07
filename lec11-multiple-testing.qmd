@@ -141,6 +141,13 @@ print(f"\nGetting {n_sig} is only ~{(n_sig - expected_false_positives)/sd_under_
 print(f"The intern's 'discovery' is probably noise.")
 ```
 
+:::{.callout-important}
+## The intern's conclusion is likely false
+Multiple testing drove up the count of apparent discoveries. Among the players the intern flagged, most are probably false positives — we'd expect nearly that many just by chance, even if rest has zero effect on every player.
+:::
+
+Multiple testing dramatically inflates false positives: with hundreds of players tested, we'd expect roughly 5% to appear significant by chance alone, even if rest helps nobody. The p-value histogram makes this pattern visible.
+
 ## The p-value histogram: a powerful diagnostic
 
 :::{.callout-tip}
@@ -149,6 +156,7 @@ Your p-value histogram is perfectly flat — except for one value at 0.003. Your
 :::
 
 Under the null hypothesis (no effect for any player), p-values should follow a **Uniform(0, 1)** distribution.
+Why uniform? A p-value is defined as the probability of seeing a result at least as extreme as the observed one, assuming the null is true. If the null *is* true, there's exactly a 5% chance the p-value falls below 0.05, a 10% chance it falls below 0.10, and so on — by definition, the p-value is equally likely to land anywhere between 0 and 1. (Formally, the **probability integral transform** guarantees that applying a continuous CDF to its own random variable produces a Uniform(0, 1) draw.) As a consequence, each equal-width bin in a histogram of null p-values gets an equal share.
 That means the **p-value histogram** should be flat.
 
 If there are real effects, we'll see a spike near 0 — those are the genuine discoveries hiding
@@ -275,6 +283,96 @@ plt.tight_layout()
 plt.show()
 ```
 
+### When does BH outperform Bonferroni?
+
+In the NBA rest data, both corrections gave the same answer: no discoveries. The p-value histogram was flat — the data contained no real signal to find. But that coincidence obscures *why* BH exists. The two methods diverge when some effects are genuine and some are null. To see the difference, we'll simulate a scenario calibrated to the NBA setting.
+
+Imagine 200 players, each with 60 back-to-back games and 60 rested games. For 180 players, rest has zero effect (null). For 20 players, rest genuinely boosts scoring by 3 points on average — a realistic effect for a star who benefits from load management.
+
+```{python}
+# Simulate a mix of real and null effects
+np.random.seed(42)
+m_sim = 200       # players tested
+n_real = 20       # players with a real rest benefit
+n_games = 60      # games per condition
+effect_pts = 3.0  # points gained from rest (real-effect players only)
+
+sim_results = []
+for i in range(m_sim):
+    btb = np.random.normal(15, 5, n_games)
+    if i < n_real:
+        rested = np.random.normal(15 + effect_pts, 5, n_games)
+        truth = 'real effect'
+    else:
+        rested = np.random.normal(15, 5, n_games)
+        truth = 'null'
+    _, p = stats.ttest_ind(rested, btb)
+    sim_results.append({'player': i + 1, 'p_value': p, 'truth': truth})
+
+sim_df = pd.DataFrame(sim_results).sort_values('p_value').reset_index(drop=True)
+```
+
+Now apply both corrections to the simulated p-values.
+
+```{python}
+# Bonferroni
+bonf_sim = alpha / m_sim
+sim_df['reject_bonf'] = sim_df['p_value'] < bonf_sim
+
+# BH
+sim_df['rank'] = range(1, m_sim + 1)
+sim_df['bh_thresh'] = sim_df['rank'] / m_sim * alpha
+bh_mask = sim_df['p_value'] <= sim_df['bh_thresh']
+if bh_mask.any():
+    bh_k = sim_df.loc[bh_mask, 'rank'].max()
+    sim_df['reject_bh'] = sim_df['rank'] <= bh_k
+else:
+    sim_df['reject_bh'] = False
+
+n_bonf_sim = sim_df['reject_bonf'].sum()
+n_bh_sim = sim_df['reject_bh'].sum()
+
+# Break down by truth
+bonf_tp = (sim_df['reject_bonf'] & (sim_df['truth'] == 'real effect')).sum()
+bonf_fp = (sim_df['reject_bonf'] & (sim_df['truth'] == 'null')).sum()
+bh_tp = (sim_df['reject_bh'] & (sim_df['truth'] == 'real effect')).sum()
+bh_fp = (sim_df['reject_bh'] & (sim_df['truth'] == 'null')).sum()
+
+print(f"{'Method':<14} {'Discoveries':>12} {'True positives':>16} {'False positives':>17}")
+print(f"{'─'*14} {'─'*12} {'─'*16} {'─'*17}")
+print(f"{'Uncorrected':<14} {(sim_df['p_value'] < 0.05).sum():>12} {'—':>16} {'—':>17}")
+print(f"{'Bonferroni':<14} {n_bonf_sim:>12} {bonf_tp:>16} {bonf_fp:>17}")
+print(f"{'BH (FDR)':<14} {n_bh_sim:>12} {bh_tp:>16} {bh_fp:>17}")
+print(f"\nBH finds {n_bh_sim - n_bonf_sim} additional true effects that Bonferroni missed.")
+```
+
+The visualization below shows why. BH's threshold line rises with rank, giving borderline p-values a chance — exactly the ones from real effects that aren't extreme enough for Bonferroni's flat, stringent cutoff.
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+top_n_sim = 40
+sub = sim_df.head(top_n_sim)
+
+colors = ['#e74c3c' if t == 'real effect' else 'steelblue' for t in sub['truth']]
+ax.scatter(sub['rank'], sub['p_value'], c=colors, s=40, zorder=3,
+           label='_nolegend_')
+ax.plot(sub['rank'], sub['bh_thresh'], 'r--', linewidth=2, label='BH threshold (i/m × α)')
+ax.axhline(y=bonf_sim, color='orange', linestyle=':', linewidth=2, label=f'Bonferroni threshold ({bonf_sim:.4f})')
+
+# Legend entries for point colors
+ax.scatter([], [], c='#e74c3c', s=40, label='Real effect')
+ax.scatter([], [], c='steelblue', s=40, label='Null (no effect)')
+
+ax.set_xlabel('Rank (sorted by p-value)')
+ax.set_ylabel('p-value')
+ax.set_title('BH recovers real effects that Bonferroni misses')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+When the data contains genuine signal, BH discovers more real effects while keeping the false discovery proportion controlled. Bonferroni's stronger guarantee — no false positives at all — comes at the cost of missing real findings.
+
 This same problem arises whenever you run many tests: a genomics lab testing 20,000 genes for association with a disease, a tech company running hundreds of A/B tests per week, or a pharmaceutical trial measuring many endpoints. Any time you run many tests, you need **multiple testing correction**.
 
 ## The reproducibility crisis
@@ -286,6 +384,8 @@ Multiple testing corrections fix the problem when you *know* how many tests you 
 In 2011, the psychologist Daryl Bem published a paper in a top journal claiming to find evidence for *precognition* — that people could sense future events before they happened. The paper used standard methods and passed peer review. The embarrassment lay not in the result being wrong (it almost certainly was), but in the fact that standard methods *allowed* it.
 
 This embarrassment helped spark the **Reproducibility Project** (Open Science Collaboration, 2015), which attempted to replicate 100 published psychology studies. The results were sobering: only about **36%** of the studies replicated with a statistically significant result, and effect sizes were roughly half the originals. Social psychology was hit hardest. The crisis wasn't limited to psychology — similar problems surfaced in cancer biology, economics, and other fields — but psychology became the most visible case.
+
+A decade later, the picture solidified. The **SCORE project** (Collaborative Assessment for Trustworthy Science, [*Nature* 2026](https://www.nature.com/articles/s41586-025-10078-y)) attempted to replicate 274 claims from 164 papers published between 2009 and 2018 across 54 social- and behavioral-science journals, with over 850 researchers contributing. Replications showed statistically significant effects in the original direction for **55%** of claims, and about half of the papers (49%) had at least one claim replicate. The variation across disciplines was modest (43–63%). Companion studies found that only **54%** of papers were precisely computationally reproducible, and that independent analysts given the same data and hypothesis agreed with the original result only **34%** of the time — rising to 57% with a broader tolerance for effect size. Economics and political science fared better: over 85% computationally reproducible, and 72% of significant estimates survived reanalysis. The lesson: the crisis is real, broad, and not limited to a few bad actors — it reflects structural features of how research is done.
 :::
 
 How did so many false findings get published? The answer connects directly to what we just learned about multiple testing.

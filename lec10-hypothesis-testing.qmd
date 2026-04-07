@@ -150,7 +150,7 @@ Which mistake is worse — approving a useless drug, or rejecting a drug that ac
 
 Think of it like a courtroom trial. The null hypothesis is "innocent until proven guilty."
 
-- **Type I error** = convicting an innocent person. We rejected $H_0$ when it was actually true. In our clinical trial: we recommend a useless drug to patients.
+- **Type I error** = convicting an innocent person. We rejected $H_0$ when it was actually true. In our clinical trial: we approve a useless drug for patients.
 - **Type II error** = letting a guilty person go free. We failed to reject $H_0$ when $H_1$ was actually true. In our trial: we reject a drug that actually saves lives.
 
 Now here's the formal summary:
@@ -176,21 +176,24 @@ Notice we say "fail to reject $H_0$," not "accept $H_0$." A non-significant resu
 As Einstein (reportedly) put it: *"No amount of experimentation can ever prove me right; a single experiment can prove me wrong."*
 :::
 
-Let's visualize the tradeoff. Under the null, the test statistic is centered at zero. Under the alternative, it's shifted. The overlap is where errors happen. (The plot shows only the right tail of a two-sided test; the left tail is symmetric.)
+Let's visualize the tradeoff. Under the null, the test statistic is centered at zero. Under the alternative, it's shifted. The overlap is where errors happen. We use a smaller illustrative effect here so both error regions are visible; for the actual trial, the effect was large enough that Type II error was negligible. (The plot shows only the right tail of a two-sided test; the left tail is symmetric.)
 
 ```{python}
 sigma = control.std()
 n_per = len(control)
 se = sigma * np.sqrt(2 / n_per)
 
-x = np.linspace(-4*se, observed_effect + 4*se, 500)
+# Use a small illustrative effect so both alpha and beta regions are visible
+illustrative_effect = 1.0 * se
+
+x = np.linspace(-4*se, illustrative_effect + 4*se, 500)
 null_dist = norm.pdf(x, 0, se)
-alt_dist = norm.pdf(x, observed_effect, se)
+alt_dist = norm.pdf(x, illustrative_effect, se)
 cutoff = norm.ppf(1 - 0.025, 0, se)  # two-sided alpha=0.05
 
 fig, ax = plt.subplots(figsize=(10, 5))
 ax.plot(x, null_dist, 'b-', lw=2, label='Null ($H_0$: no effect)')
-ax.plot(x, alt_dist, 'r-', lw=2, label=f'Alternative ($H_1$: effect = {observed_effect:.0f})')
+ax.plot(x, alt_dist, 'r-', lw=2, label=f'Alternative ($H_1$: effect = {illustrative_effect:.0f})')
 ax.fill_between(x[x >= cutoff], null_dist[x >= cutoff], alpha=0.3, color='blue', label='Type I error ($\\alpha$)')
 ax.fill_between(x[x <= cutoff], alt_dist[x <= cutoff], alpha=0.3, color='red', label='Type II error ($\\beta$)')
 ax.axvline(cutoff, color='gray', ls='--', lw=1.5, label=f'Rejection threshold')
@@ -254,7 +257,7 @@ The p-value is a random variable too — a key insight we return to throughout t
 
 Our trial found an effect of ~50 CD4 cells — very large, very detectable. But what if the true effect were smaller? Would we still catch it?
 
-**Power** is the probability of correctly rejecting $H_0$ when $H_1$ is true. It depends on:
+**Power** is the probability of correctly rejecting $H_0$ when $H_1$ is true. Formally, power = $1 - \beta$, where $\beta$ is the Type II error rate. It depends on:
 
 1. The true effect size
 2. The sample size
@@ -281,6 +284,8 @@ print(f"True effect = 30 CD4 cells, n = 100 per group")
 print(f"Power = {power_example:.2f}")
 print(f"{'Good enough (>= 0.80)' if power_example >= 0.8 else 'Not enough power (< 0.80) — need more patients!'}")
 ```
+
+This fraction — the share of simulated experiments that correctly reject $H_0$ — is exactly $1 - \beta$.
 
 Now let's see how power varies across different effect sizes and sample sizes.
 
@@ -320,6 +325,12 @@ You're designing the next clinical trial. Before running a \$2M study, you shoul
 :::
 
 In practice, you'd use a **power analysis** tool rather than writing simulations from scratch. Here's the standard tool:
+
+::: {.callout-note}
+## Power analysis requires distributional assumptions
+
+Power analysis requires specifying a model for the data. The `TTestIndPower` tool below assumes both groups are normally distributed with the same standard deviation. The required sample size is sensitive to these assumptions — if the true distribution is heavier-tailed or the variances differ substantially, the actual power may be lower than predicted.
+:::
 
 ```{python}
 from statsmodels.stats.power import TTestIndPower

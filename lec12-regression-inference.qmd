@@ -342,7 +342,7 @@ The test statistic is:
 
 $$t = \frac{\hat{\beta}_j}{\text{SE}(\hat{\beta}_j)}$$
 
-Under $H_0$, this statistic follows a $t$-distribution with $n - p - 1$ degrees of freedom.
+Under $H_0$, this statistic follows a $t$-distribution with $n - p - 1$ degrees of freedom, where $n$ is the number of observations and $p$ is the number of predictors. The "$-p-1$" accounts for the parameters we have already estimated: one coefficient per predictor, plus the intercept.
 :::
 
 (This derivation assumes approximately normal errors -- reasonable here given our large
@@ -371,7 +371,7 @@ A 95% **confidence interval** for $\beta_j$:
 
 $$\hat{\beta}_j \pm t^* \times \text{SE}(\hat{\beta}_j)$$
 
-where $t^*$ is the critical value from the $t$-distribution.
+Here $t^*$ is the **critical value** from the $t$-distribution with $n - p - 1$ degrees of freedom at the desired confidence level. For a 95% CI, $t^*$ is the 97.5th percentile of that distribution (so that 95% of the distribution lies between $-t^*$ and $t^*$). When $n$ is large, $t^* \approx 1.96$, the familiar normal critical value.
 
 ```{python}
 # 95% CI for REST_DAYS coefficient
@@ -444,10 +444,10 @@ Each LINE condition has a characteristic diagnostic signature. As a homework exe
 
 :::{.callout-important}
 ## Definition: Residual Plot
-A **residual plot** shows residuals (observed $-$ predicted) vs. fitted values. We want
-to see a random scatter with no pattern. If the spread of residuals changes with the
-fitted value, that is **heteroscedasticity** -- the model's uncertainty is not uniform.
+A **residual plot** shows residuals (observed $-$ predicted) vs. **fitted values** (the model's predicted values, $\hat{y}_i$). We want to see a random scatter with no pattern. If the spread of residuals changes with the fitted value, that is **heteroscedasticity** -- the model's uncertainty is not uniform.
 :::
+
+The x-axis of the residual plot shows the **fitted values** -- the model's predicted response for each observation, $\hat{y}_i$. The orange curve is a **LOWESS smooth** (locally weighted scatterplot smoothing): a flexible local average that highlights any systematic trend in the residuals. A flat LOWESS line near zero suggests the model's assumptions are met; a bend or funnel shape signals a problem.
 
 ```{python}
 # Residual plot for the NBA model
@@ -459,7 +459,7 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 # Residuals vs fitted
 axes[0].scatter(fitted_vals, residuals, alpha=0.02, s=5, color='steelblue')
 axes[0].axhline(y=0, color='red', linestyle='--', linewidth=1)
-axes[0].set_xlabel('Fitted Values')
+axes[0].set_xlabel('Fitted Values (ŷ)')
 axes[0].set_ylabel('Residuals')
 axes[0].set_title('Residuals vs Fitted Values')
 
@@ -537,6 +537,17 @@ sim_data = {
 }
 
 fig, axes = plt.subplots(2, 3, figsize=(14, 9))
+
+# Annotations to overlay on each panel — help students connect Q-Q shape to distribution shape
+annotations = {
+    'Normal\n(assumptions met)': None,
+    'Left-skewed\n(concave / bows down)': {'text': 'left tail too\nspread out', 'xy_frac': (0.15, 0.10), 'arrow_frac': (0.12, 0.22)},
+    'Right-skewed\n(convex / bows up)': {'text': 'right tail too\nspread out', 'xy_frac': (0.65, 0.85), 'arrow_frac': (0.88, 0.82)},
+    'Heavy-tailed\n(S-shaped)': {'text': 'both tails\nheavier than normal', 'xy_frac': (0.55, 0.15), 'arrow_frac': (0.88, 0.08)},
+    'Light-tailed\n(reverse-S)': {'text': 'both tails\nlighter than normal', 'xy_frac': (0.15, 0.75), 'arrow_frac': (0.12, 0.88)},
+    'Bimodal\n(two clusters)': {'text': 'gap = two\nsubgroups', 'xy_frac': (0.35, 0.55), 'arrow_frac': (0.50, 0.50)},
+}
+
 for ax, (label, data) in zip(axes.flat, sim_data.items()):
     (tq, sq), (slope, intercept, _) = probplot(data, dist='norm')
     ax.scatter(tq, sq, s=10, alpha=0.5, color='steelblue')
@@ -545,6 +556,19 @@ for ax, (label, data) in zip(axes.flat, sim_data.items()):
     ax.set_title(label, fontsize=11)
     ax.set_xlabel('')
     ax.set_ylabel('')
+
+    # Add annotation arrow if defined for this panel
+    ann = annotations.get(label)
+    if ann is not None:
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        xy = (xlim[0] + ann['arrow_frac'][0] * (xlim[1] - xlim[0]),
+              ylim[0] + ann['arrow_frac'][1] * (ylim[1] - ylim[0]))
+        xytext = (xlim[0] + ann['xy_frac'][0] * (xlim[1] - xlim[0]),
+                  ylim[0] + ann['xy_frac'][1] * (ylim[1] - ylim[0]))
+        ax.annotate(ann['text'], xy=xy, xytext=xytext, fontsize=8,
+                    color='#e74c3c', fontweight='bold',
+                    arrowprops=dict(arrowstyle='->', color='#e74c3c', lw=1.5),
+                    ha='center', va='center')
 
 # Shared axis labels
 fig.supxlabel('Theoretical Quantiles (Normal)', fontsize=12)
@@ -564,6 +588,8 @@ plt.show()
 | S-shaped | Heavy tails — more extreme values than normal | Outlier-prone measurements |
 | Reverse-S | Light tails — fewer extreme values than normal | Bounded or truncated data |
 | Staircase or gap | Multimodal residuals — distinct subgroups | Missing categorical predictor |
+
+Each Q-Q pattern maps to a specific distribution shape. A concave curve (bowing down) means the left tail is more spread out than a normal -- the distribution is left-skewed. A convex curve (bowing up) means the right tail is stretched -- right-skewed. An S-shape means both tails extend further than normal -- heavy-tailed. A reverse-S means the data are more concentrated than normal -- light-tailed. Gaps or staircases indicate distinct subgroups.
 
 The key diagnostic reflex: when the Q-Q plot bows or bends, ask *why* the residuals deviate from normality. The shape often points directly to a modeling fix (a log transform, a missing predictor, or an outlier filter).
 :::
@@ -586,8 +612,7 @@ standard errors and p-values may be unreliable. Options include:
 
 - **Bootstrap confidence intervals** (Chapter 8) do not assume normality -- they let
   the data speak for itself.
-- **Robust standard errors** adjust for heteroscedasticity without changing the
-  coefficient estimates.
+- **Robust standard errors** (standard errors adjusted to remain valid even when the residual variance is not constant across observations) protect your inference against heteroscedasticity without changing the coefficient estimates.
 - **Transform the response** (e.g., log price) to stabilize variance.
 :::
 
