@@ -312,7 +312,7 @@ In the plot above, can you reach *every* point in $\mathbb{R}^2$ using linear co
 
 The "Think About It" above hinted at a key question: what's the set of ALL points you can reach by choosing different weights? For the two vectors in the plot, you can reach every point in the plane — but only because $v_1$ and $v_2$ point in different directions. If they were parallel, you'd be stuck on a line.
 
-For a linear model, this set is the set of all possible predictions. It tells you what your model **can** and **cannot** predict, before you fit anything. Let's visualize it in 3D, where the geometry is easier to see.
+For a linear model, this set is the set of all possible predictions. It tells you what your model **can** and **cannot** predict, before you fit anything. Let's visualize it in 3D, where the geometry is easier to see. We use `np.column_stack` to assemble the feature columns into a matrix, and `np.linalg.lstsq` to find the closest point in the span to a target vector.
 
 ```{python}
 from mpl_toolkits.mplot3d import Axes3D
@@ -490,6 +490,8 @@ If you have 3 features but one is an exact linear combination of the other two, 
 
 The column space tells us what a linear model *can* predict. Let's fit one on real data and see.
 
+We load the NYC Airbnb dataset with `pd.read_csv`, drop rows with missing values using `.dropna()`, and filter to reasonable prices.
+
 ```{python}
 # Load and clean Airbnb data
 airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
@@ -510,7 +512,7 @@ df.head()
 
 ### Simple regression: price ~ bedrooms
 
-Let's start simple. How does price change with the number of bedrooms?
+Let's start simple. How does price change with the number of bedrooms? We create a `LinearRegression()` object from scikit-learn, call `.fit()` to find the best weights, and then `.predict()` to generate predictions. The fitted model stores the slope in `.coef_` and the intercept in `.intercept_`.
 
 ```{python}
 # Scatter plot + regression line
@@ -554,7 +556,7 @@ How good is this fit? $R^2$ measures how much of the target vector $y$ lives in 
 
 Before adding more features, let's connect the simple regression we just ran to a quantity you've seen in introductory statistics: the **correlation coefficient** $r$.
 
-The correlation coefficient $r$ measures the strength and direction of the linear association between two variables. It ranges from $-1$ (perfect negative linear relationship) to $+1$ (perfect positive). In the Data 8 formulation, the regression line can be written as $\hat{y} = r \cdot \frac{SD_y}{SD_x}(x - \bar{x}) + \bar{y}$, which makes $r$ the slope in standardized units.
+The correlation coefficient $r$ measures the strength and direction of the linear association between two variables. We compute it with `.corr()`. It ranges from $-1$ (perfect negative linear relationship) to $+1$ (perfect positive). The regression line can be written as $\hat{y} = r \cdot \frac{SD_y}{SD_x}(x - \bar{x}) + \bar{y}$, which makes $r$ the slope in standardized units.
 
 ```{python}
 # Compute the correlation coefficient between price and bedrooms
@@ -870,7 +872,7 @@ Can R-squared ever *decrease* when you add a feature? Why or why not? (We'll ans
 
 ## Checking the residuals
 
-The normal equations guarantee $X^Te = 0$ — that's a mathematical fact. But a good model should also have residuals that look like random noise. The orthogonality is guaranteed; the randomness is not. Let's check.
+The normal equations guarantee $X^Te = 0$ — that's a mathematical fact. But a good model should also have residuals that look like random noise. The orthogonality is guaranteed; the randomness is not. We check with a scatter plot of residuals vs. predicted values and a histogram (`.hist()`) of the residual distribution.
 
 ```{python}
 # Residual plot
