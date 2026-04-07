@@ -122,20 +122,66 @@ plt.tight_layout()
 plt.show()
 ```
 
-How similar are two listings? One natural measure: multiply corresponding entries and add them up.
+How different are two listings? Subtract their feature vectors entry-by-entry to get a **difference vector**.
 
 ```{python}
-# How similar are listings 1 and 3?
+# How different are listings 1 and 3?
 listing_1 = np.array([bedrooms[0], bathrooms[0]])  # (1, 1)
 listing_3 = np.array([bedrooms[2], bathrooms[2]])  # (3, 2)
 
+diff = listing_3 - listing_1
+print(f"Listing 1: {listing_1}")
+print(f"Listing 3: {listing_3}")
+print(f"Difference: {listing_3} - {listing_1} = {diff}")
+print(f"\nListing 3 has {diff[0]} more bedrooms and {diff[1]} more bathroom.")
+```
+
+The difference tells us *how* the listings differ — but it's still two numbers. To collapse it into one number that measures "how far apart," we need the length of the difference vector. The **norm** generalizes the Pythagorean theorem to measure the length of any vector.
+
+```{python}
+# The norm measures length — a generalization of the Pythagorean theorem
+for i, name in [(0, 'Listing 1'), (2, 'Listing 3')]:
+    vec = np.array([bedrooms[i], bathrooms[i]])
+    length = np.sqrt(vec[0]**2 + vec[1]**2)
+    print(f"{name}: {vec}, length = sqrt({vec[0]}^2 + {vec[1]}^2) = {length:.2f}")
+```
+
+:::{.callout-important}
+## Definition: Norm
+The **norm** (or **length**) of a vector $v$ is
+$$\|v\| = \sqrt{v \cdot v} = \sqrt{\sum_{i=1}^n v_i^2}$$
+The norm measures **magnitude** — how large the vector is. In code: `np.linalg.norm(v)`.
+:::
+
+Now we can scalarize the difference. The **distance** between two listings is the norm of their difference vector.
+
+```{python}
+# Distance = norm of the difference vector
+dist = np.linalg.norm(diff)
+print(f"Difference vector: {listing_3} - {listing_1} = {diff}")
+print(f"Distance = norm of difference = {dist:.2f}")
+```
+
+:::{.callout-important}
+## Definition: Distance
+The **distance** between two vectors $u$ and $v$ is the norm of their difference:
+$$d(u, v) = \|u - v\|$$
+Smaller distance means more similar. Larger distance means more different.
+:::
+
+Distance tells us how far apart two listings are. But sometimes we want a different question: do two listings have similar *proportions* of features, regardless of scale? An apartment with 4 bedrooms and 2 bathrooms has the same 2:1 ratio as one with 2 bedrooms and 1 bathroom — but they're far apart. To measure this kind of directional similarity, we need a new tool.
+
+The **inner product** multiplies corresponding entries and adds them up.
+
+```{python}
+# Inner product: a measure of similarity
 similarity = listing_1[0] * listing_3[0] + listing_1[1] * listing_3[1]
 print(f"Listing 1: {listing_1}")
 print(f"Listing 3: {listing_3}")
 print(f"Entry-by-entry product sum: {listing_1[0]}*{listing_3[0]} + {listing_1[1]}*{listing_3[1]} = {similarity}")
 ```
 
-The inner product is positive here because both listings have positive feature values. To see negative and zero inner products, center the vectors by subtracting the mean — this reveals which listings deviate in the *same* direction vs. *opposite* directions.
+The inner product is positive here because both listings have positive feature values. To see negative and zero inner products, center the vectors by subtracting the mean — this reveals which listings deviate in the *same* direction vs. *opposite* directions from the average.
 
 ```{python}
 # Center the listing vectors: how does each deviate from the average listing?
@@ -163,18 +209,16 @@ $$u \cdot v = u^T v = \sum_{i=1}^n u_i v_i$$
 A positive inner product indicates the vectors tend to point in the same direction; a negative value indicates opposite directions; zero indicates perpendicularity.
 :::
 
-A word of caution: the raw inner product depends on both direction *and* magnitude. A listing with 10 bedrooms and 10 bathrooms would have a large inner product with almost any other listing, simply from its scale. To isolate directional similarity, divide by the lengths of both vectors:
+The raw inner product depends on both direction *and* magnitude. A listing with 10 bedrooms and 10 bathrooms would have a large inner product with almost any other listing, simply from its scale. To isolate directional similarity, divide by the norms of both vectors. (Since we already defined norms above, this formula should look natural.)
 
 ```{python}
-# Cosine similarity: inner product divided by both lengths
+# Cosine similarity: inner product divided by both norms
 cos_sim = similarity / (np.linalg.norm(listing_1) * np.linalg.norm(listing_3))
 print(f"Inner product: {similarity}")
-print(f"Lengths: {np.linalg.norm(listing_1):.2f} and {np.linalg.norm(listing_3):.2f}")
+print(f"Norms: {np.linalg.norm(listing_1):.2f} and {np.linalg.norm(listing_3):.2f}")
 print(f"Cosine similarity: {similarity} / ({np.linalg.norm(listing_1):.2f} * {np.linalg.norm(listing_3):.2f}) = {cos_sim:.3f}")
 print(f"\nA value near 1 means these listings have similar proportions of bedrooms to bathrooms.")
 ```
-
-This quantity has a name:
 
 :::{.callout-important}
 ## Definition: Cosine Similarity
@@ -183,40 +227,6 @@ The **cosine similarity** between two vectors $\mathbf{a}$ and $\mathbf{b}$ meas
 $$\text{cosine similarity} = \frac{\mathbf{a} \cdot \mathbf{b}}{\|\mathbf{a}\| \, \|\mathbf{b}\|}$$
 
 Values range from $-1$ (opposite directions) to $+1$ (same direction). A value of $0$ means the vectors are perpendicular (orthogonal). Cosine similarity measures *direction*, ignoring *magnitude* — two vectors that point the same way have cosine similarity 1 regardless of their lengths.
-:::
-
-How large *is* a feature vector? The length generalizes the Pythagorean theorem.
-
-```{python}
-# How "big" is each listing's feature vector?
-for i, name in [(0, 'Listing 1'), (2, 'Listing 3')]:
-    vec = np.array([bedrooms[i], bathrooms[i]])
-    length = np.sqrt(vec[0]**2 + vec[1]**2)
-    print(f"{name}: {vec}, length = sqrt({vec[0]}^2 + {vec[1]}^2) = {length:.2f}")
-```
-
-:::{.callout-important}
-## Definition: Norm
-The **norm** (or **length**) of a vector $v$ is
-$$\|v\| = \sqrt{v \cdot v} = \sqrt{\sum_{i=1}^n v_i^2}$$
-The norm measures **magnitude** — how large the vector is. In code: `np.linalg.norm(v)`.
-:::
-
-With norms in hand, we can measure how far apart two listings are.
-
-```{python}
-# How different are listings 1 and 3?
-diff = listing_3 - listing_1
-dist = np.linalg.norm(diff)
-print(f"Difference vector: {listing_3} - {listing_1} = {diff}")
-print(f"Distance = norm of difference = {dist:.2f}")
-```
-
-:::{.callout-important}
-## Definition: Distance
-The **distance** between two vectors $u$ and $v$ is the norm of their difference:
-$$d(u, v) = \|u - v\|$$
-Smaller distance means more similar. Larger distance means more different.
 :::
 
 ## Linear functions and linear combinations
@@ -244,10 +254,10 @@ Scaling by a weight and adding — that's all a linear model does. This operatio
 
 :::{.callout-important}
 ## Definition: Linear Combination
-A **linear combination** of vectors $v_1, v_2$ is any expression $a \cdot v_1 + b \cdot v_2$ where $a, b$ are **scalars** (plain numbers).
+A **linear combination** of vectors $v_1, v_2$ is any expression $\beta_1 v_1 + \beta_2 v_2$ where $\beta_1, \beta_2$ are **scalars** (plain numbers).
 :::
 
-A linear model $\hat{y} = \beta_1 \cdot x_1 + \beta_2 \cdot x_2$ says: "the prediction is a linear combination of the feature columns."
+A linear model $\hat{y} = \beta_1 x_1 + \beta_2 x_2$ says: "the prediction is a linear combination of the feature columns."
 
 Why do linear combinations matter? Because they behave predictably: doubling a weight doubles its contribution. There are no interaction surprises, no thresholds, no sudden jumps. This predictability has a formal name:
 
@@ -260,7 +270,7 @@ for all vectors $x, y$ and all scalars $a, b$. Equivalently: scaling the input s
 
 Familiar examples of linear functions: multiplying by a constant ($f(x) = 3x$), matrix multiplication ($f(x) = Ax$), and the inner product with a fixed vector ($f(x) = w \cdot x$). Non-examples: squaring ($f(x) = x^2$, since $(2x)^2 \neq 2x^2$) and adding a constant ($f(x) = x + 1$, since $f(0) \neq 0$).
 
-Different weights produce different prediction vectors. The plot below shows several linear combinations of two vectors $v_1$ and $v_2$ in $\mathbb{R}^2$. Each black dot is one choice of weights, and the dashed arrows show the construction: follow $a \cdot v_1$ from the origin, then $b \cdot v_2$ to reach the result. The background grid shows all integer-weight combinations -- notice how they tile the plane.
+Different weights produce different prediction vectors. The plot below shows several linear combinations of two vectors $v_1$ and $v_2$ in $\mathbb{R}^2$. Each black dot is one choice of weights, and the dashed arrows show the construction: follow $\beta_1 v_1$ from the origin, then $\beta_2 v_2$ to reach the result. The background grid shows all integer-weight combinations -- notice how they tile the plane.
 
 ```{python}
 #| code-fold: true
@@ -291,8 +301,8 @@ ax.axvline(0, color='#999999', lw=0.6, zorder=1)
 arrow_kw = dict(arrowstyle='->', mutation_scale=18)
 ax.annotate('', xy=v1, xytext=(0, 0), arrowprops=dict(**arrow_kw, color=c1, lw=3), zorder=10)
 ax.annotate('', xy=v2, xytext=(0, 0), arrowprops=dict(**arrow_kw, color=c2, lw=3), zorder=10)
-ax.text(v1[0]+0.15, v1[1]-0.35, r'$\mathbf{v}_1$', fontsize=15, color=c1, fontweight='bold', zorder=11)
-ax.text(v2[0]-0.65, v2[1]+0.15, r'$\mathbf{v}_2$', fontsize=15, color=c2, fontweight='bold', zorder=11)
+ax.text(v1[0]+0.15, v1[1]-0.35, r'$\mathbf{v}_1$ (bedrooms)', fontsize=13, color=c1, fontweight='bold', zorder=11)
+ax.text(v2[0]-0.65, v2[1]+0.15, r'$\mathbf{v}_2$ (bathrooms)', fontsize=13, color=c2, fontweight='bold', zorder=11)
 def fmt_label(a, b):
     def coeff(x, var):
         if x == 1: return var
@@ -315,8 +325,8 @@ for a, b, text_off, ha in examples:
 ax.set_xlim(-2.5, 7)
 ax.set_ylim(-2, 6.5)
 ax.set_aspect('equal')
-ax.set_xlabel('$x_1$', fontsize=12)
-ax.set_ylabel('$x_2$', fontsize=12)
+ax.set_xlabel('listing 1', fontsize=12)
+ax.set_ylabel('listing 2', fontsize=12)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 ax.spines['left'].set_color('#cccccc')
@@ -458,14 +468,14 @@ Two vectors in $\mathbb{R}^3$ span a *plane*, not all of 3D space. That means so
 :::{.callout-important}
 ## Definition: Span
 The **span** of a set of vectors is the set of ALL their linear combinations:
-$$\text{span}(v_1, v_2) = \{a \cdot v_1 + b \cdot v_2 : a, b \in \mathbb{R}\}$$
+$$\text{span}(v_1, v_2) = \{\beta_1 v_1 + \beta_2 v_2 : \beta_1, \beta_2 \in \mathbb{R}\}$$
 :::
 
 The dashed line in the plot above is the **residual**: the gap between the target and the closest reachable point. Later in this chapter, we'll see that regression finds exactly this closest point — the **projection** of $y$ onto the column space. The residual is what's left over.
 
 ## Column space: from features to matrices
 
-In practice, we stack our feature columns side by side into a matrix $X$. The matrix-vector product `X @ beta` computes the linear combination for all listings at once.
+A DataFrame is already organized as columns of features. To do linear algebra, we stack those columns into a **matrix** $X$ — each column is a feature, each row is an observation. The function `np.column_stack` does this from arrays; with pandas, it's just selecting columns. Once we have $X$, the matrix-vector product `X @ beta` computes the linear combination for all listings at once.
 
 ```{python}
 # Build the design matrix from our tiny example
@@ -484,7 +494,11 @@ print(f"With beta = {beta}:")
 print(f"Prediction y_hat = X @ beta = {y_hat}")
 ```
 
-Every prediction $\hat{y} = X\beta$ is a linear combination of the columns of $X$. The set of all such predictions — for every possible $\beta$ — is the span of the columns:
+Let's unpack the notation $\hat{y} = X\beta$. For a single listing $i$, the prediction is a weighted sum of its features:
+
+$$(X\beta)_i = \sum_{j=1}^{p} X_{ij}\,\beta_j = \beta_1 \, \text{bedrooms}_i + \beta_2 \, \text{bathrooms}_i$$
+
+The matrix product computes this for *every* listing simultaneously. Equivalently, $X\beta = \beta_1 x_1 + \beta_2 x_2$, where $x_1$ and $x_2$ are the columns of $X$. Every prediction is a linear combination of the columns of $X$. The set of all such predictions — for every possible $\beta$ — is the span of the columns:
 
 $$X = \begin{bmatrix} | & | \\ x_1 & x_2 \\ | & | \end{bmatrix}$$
 
@@ -583,17 +597,63 @@ Galton's method for quantifying this trend — fitting a line through the data �
 
 That's the regression line. But *why* this line? There are infinitely many lines we could draw through this cloud. Regression picks the one that minimizes the total squared distance from the data to the line. Why squared distances, not absolute distances or something else?
 
-:::{.callout-tip}
-## Think About It
+### Why squared error? It estimates the conditional mean.
 
-Why minimize *squared* errors? Two reasons: (1) squared error leads to a linear algebra problem — the projection — with a clean closed-form solution; (2) it estimates the conditional mean. We could choose a different loss function (and we will, in Chapter 13 for classification). For now, squared error gives us the most elegant geometry.
+Squared error leads to a linear algebra problem — the projection — with a clean closed-form solution. But there's a deeper reason: it estimates the **conditional mean** $\mathbb{E}[Y \mid X]$.
+
+To see why, consider a simpler question: what constant $c$ minimizes $\mathbb{E}[(Y - c)^2]$? Taking the derivative and setting it to zero:
+
+$$\frac{d}{dc} \mathbb{E}[(Y-c)^2] = -2\,\mathbb{E}[Y-c] = 0 \quad \Longrightarrow \quad c = \mathbb{E}[Y]$$
+
+The constant that minimizes mean squared error is the **mean** of $Y$. The same argument applies conditional on $X$: minimizing $\mathbb{E}[(Y - f(X))^2]$ over all functions $f$ gives $f(X) = \mathbb{E}[Y \mid X]$. Regression restricts $f$ to be linear, so the regression line is the best *linear* approximation to the conditional mean.
+
+Other loss functions estimate other summaries: absolute error gives the conditional **median**, and quantile loss gives conditional quantiles. We could choose a different loss — and we will, in Chapter 13 for classification. For now, squared error gives us the most elegant geometry.
+
+We can verify this visually: if regression estimates the conditional mean, the regression line should pass through the average price at each value of bedrooms.
+
+```{python}
+# Conditional means: average price for each number of bedrooms
+cond_means = df.groupby('bedrooms')['price_clean'].mean()
+cond_means = cond_means[cond_means.index <= 6]
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.scatter(df['bedrooms'], df['price_clean'], alpha=0.03, s=10, color='#cccccc')
+ax.scatter(cond_means.index, cond_means.values, s=150, color='#c44e52',
+           edgecolors='white', lw=2, zorder=10,
+           label=r'conditional mean $\mathbb{E}[\mathrm{price} \mid \mathrm{bedrooms}]$')
+x_line = np.linspace(0, 6, 100)
+y_line = model_simple.predict(x_line.reshape(-1, 1))
+ax.plot(x_line, y_line, '-', color='#2d6a9f', lw=2.5, label='regression line')
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Price ($/night)')
+ax.legend(fontsize=11, loc='upper left')
+plt.tight_layout()
+plt.show()
+```
+
+The red dots (conditional means) sit close to the regression line, confirming that least squares approximates $\mathbb{E}[\text{price} \mid \text{bedrooms}]$. The fit isn't exact because the regression line is constrained to be linear — the true conditional mean function may be nonlinear.
+
+## How good is the fit? Defining $R^2$
+
+How much of the variation in prices does the model explain? We quantify this with $R^2$.
+
+The prediction $\hat{y}$ splits the target into two pieces: what the model captures ($\hat{y}$) and what it misses (the residual $e = y - \hat{y}$). The total variation in $y$ (measured from its mean $\bar{y}$) decomposes as:
+
+$$R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2} = 1 - \frac{\text{residual variance}}{\text{total variance}}$$
+
+An $R^2$ of 0 means the model does no better than predicting the mean for every listing. An $R^2$ of 1 means the model explains all the variation — every prediction matches exactly.
+
+:::{.callout-important}
+## Definition: $R^2$ (coefficient of determination)
+
+$$R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2}$$
+
+$R^2$ measures the fraction of variance in $y$ "explained" by the model. It ranges from 0 (the model explains nothing beyond the mean) to 1 (perfect fit). We'll see a geometric interpretation — $R^2$ as a projection ratio — later in this chapter.
 :::
 
-## From correlation to $R^2$
+### $R^2 = r^2$ in simple regression
 
-How good is this fit? $R^2$ measures how much of the target vector $y$ lives in the column space — the fraction of variance explained by the model.
-
-Before adding more features, let's connect the simple regression we just ran to a quantity you've seen in introductory statistics: the **correlation coefficient** $r$.
+Before adding more features, let's connect $R^2$ to a quantity you've seen in introductory statistics: the **correlation coefficient** $r$.
 
 The correlation coefficient $r$ measures the strength and direction of the linear association between two variables. We compute it with `.corr()`. It ranges from $-1$ (perfect negative linear relationship) to $+1$ (perfect positive). The regression line can be written as $\hat{y} = r \cdot \frac{SD_y}{SD_x}(x - \bar{x}) + \bar{y}$, which makes $r$ the slope in standardized units.
 
@@ -613,11 +673,7 @@ print(f"R² from simple regression: {r2_simple_model:.4f}")
 print(f"They match: r² = R² in simple regression.")
 ```
 
-:::{.callout-important}
-## $R^2 = r^2$ in simple regression
-
-For a model with **one** predictor, $R^2$ is literally the square of the correlation coefficient $r$. The distinction matters: $r$ and $R^2$ are different quantities that happen to be related by squaring in the simple case. With multiple predictors, $R^2$ still measures the fraction of variance explained, but there's no single $r$ to square.
-:::
+For a model with **one** predictor, $R^2$ is literally the square of the correlation coefficient $r$. Why? The simple regression prediction is $\hat{y}_i = \bar{y} + r \cdot \frac{SD_y}{SD_x}(x_i - \bar{x})$, so the explained variance is $r^2$ times the total variance. With multiple predictors, $R^2$ still measures the fraction of variance explained, but there's no single $r$ to square.
 
 The connection between $r$ and $R^2$ also explains Galton's original observation. For real data, $|r| < 1$, so the predicted value $\hat{y}$ is always *closer to the mean* than $x$ is (in standardized units). Fathers who are 2 SDs above average height have sons whose predicted height is only $r \times 2$ SDs above average — less extreme, pulled back toward the mean.
 
@@ -793,15 +849,19 @@ The **residual** $e = y - \hat{y}$ is **orthogonal** to the column space. Orthog
 
 Why orthogonal? The perpendicular from a point to a subspace gives the closest point — just as dropping a perpendicular from a point to a line gives the nearest point on the line.
 
-### Normal equations: orthogonality in algebra
+### Why orthogonality gives us the answer
 
-We're about to derive a formula for the regression coefficients that explains WHY sklearn gives the answer it does. The key insight: requiring the residual to be orthogonal to $X$ gives us exactly one equation to solve.
+We're about to derive a formula for the regression coefficients that explains WHY sklearn gives the answer it does. The argument has three steps: name the error, see why orthogonality is the optimality condition, and write it as an equation.
 
-"The residual is orthogonal to the column space" translates to:
+**Step 1: Name the error.** Call the **residual** $e = y - X\beta$ — the gap between the true prices and what the model predicts. Different $\beta$ produce different residuals; we want the $\beta$ that makes $e$ as small as possible.
+
+**Step 2: The improvement argument.** Suppose the residual $e$ is *not* orthogonal to some feature column $x_j$ — that is, $x_j \cdot e \neq 0$. Then the errors still have a systematic pattern aligned with $x_j$. We could reduce the error by nudging $\beta_j$ in the direction of $x_j \cdot e$, absorbing that pattern into the prediction. So the best $\beta$ cannot leave any such pattern behind: it must satisfy $x_j \cdot e = 0$ for *every* feature $j$.
+
+**Step 3: Write it as one equation.** Stacking the conditions $x_j \cdot e = 0$ for all features into a single matrix equation:
 
 $$X^T(y - X\beta) = 0$$
 
-The condition states that the residual $e = y - X\beta$ has zero dot product with every column of $X$. Rearranging:
+Each row of this equation says "the residual has zero dot product with one column of $X$." Rearranging:
 
 $$X^T X \beta = X^T y \qquad \Longrightarrow \qquad \beta = (X^T X)^{-1} X^T y$$
 
@@ -853,19 +913,105 @@ print("The errors have no pattern left that could be captured by the features.")
 
 ## $R^2$ as a projection ratio
 
-After centering $y$ (subtracting the mean), we can decompose:
+We defined $R^2$ above as a ratio of sums of squares. Now that we've seen the geometry of projection, we can understand $R^2$ as an angle.
+
+After centering $y$ (subtracting the mean), the Pythagorean theorem gives an exact decomposition:
 
 $$\|y - \bar{y}\|^2 = \|\hat{y} - \bar{y}\|^2 + \|e\|^2$$
 
-The right-hand side is a Pythagorean decomposition — $\hat{y} - \bar{y}$ and $e$ are orthogonal. The equality holds when the model includes an intercept (which ours does); the intercept ensures residuals sum to zero via the normal equation $\mathbf{1}^T e = 0$.
+The two terms on the right are orthogonal — $\hat{y} - \bar{y}$ lives in the column space, and $e$ is perpendicular to it. This equality holds when the model includes an intercept (which ours does); the intercept ensures residuals sum to zero via the normal equation $\mathbf{1}^T e = 0$.
 
-$$R^2 = \frac{\|\hat{y} - \bar{y}\|^2}{\|y - \bar{y}\|^2} = 1 - \frac{\|e\|^2}{\|y - \bar{y}\|^2}$$
+Dividing both sides by $\|y - \bar{y}\|^2$:
 
-:::{.callout-important}
-## Definition: $R^2$
+$$1 = \frac{\|\hat{y} - \bar{y}\|^2}{\|y - \bar{y}\|^2} + \frac{\|e\|^2}{\|y - \bar{y}\|^2} = R^2 + (1 - R^2)$$
 
-$R^2$ is the fraction of variance "explained" — geometrically, it's the squared cosine of the angle $\theta$ between the centered response $y - \bar{y}$ and the centered predictions $\hat{y} - \bar{y}$. The Pythagorean decomposition above is precisely $1 = \cos^2\theta + \sin^2\theta$, so $R^2 = \cos^2\theta$.
-:::
+This is precisely $1 = \cos^2\theta + \sin^2\theta$, where $\theta$ is the angle between the centered response $y - \bar{y}$ and the centered predictions $\hat{y} - \bar{y}$. So $R^2 = \cos^2\theta$: it measures how close $y$ is to the column space, as an angle.
+
+```{python}
+#| code-fold: true
+# R² as a projection ratio: the Pythagorean picture
+fig, ax = plt.subplots(figsize=(6, 6))
+
+# Choose vectors so the right angle is visually obvious.
+# A steeper column-space direction makes the triangle less flat.
+origin = np.array([0.0, 0.0])
+col_dir = np.array([2.0, 1.0])        # direction of column space
+y_vec = np.array([1.8, 2.8])          # y - ȳ (centered response)
+# Compute ŷ as the true orthogonal projection onto the column space direction.
+yhat_vec = col_dir * (np.dot(y_vec, col_dir) / np.dot(col_dir, col_dir))
+e_vec = y_vec - yhat_vec               # residual (orthogonal by construction)
+
+# Column space line
+slope = col_dir[1] / col_dir[0]
+t = np.linspace(-0.3, 3.5, 100)
+ax.plot(t, slope * t, color='#2d8a4e', lw=2.5, alpha=0.25)
+ax.text(3.1, slope * 3.1 + 0.12, 'col($X$)', fontsize=11,
+        color='#2d8a4e', alpha=0.7, style='italic')
+
+# ŷ - ȳ vector (projection, along column space)
+ax.annotate('', xy=yhat_vec, xytext=origin,
+            arrowprops=dict(arrowstyle='->', color='#2d6a9f', lw=2.8))
+ax.text(yhat_vec[0] + 0.08, yhat_vec[1] - 0.25,
+        '$\\hat{y} - \\bar{y}$', fontsize=14, color='#2d6a9f', fontweight='bold')
+
+# y - ȳ vector (hypotenuse)
+ax.annotate('', xy=y_vec, xytext=origin,
+            arrowprops=dict(arrowstyle='->', color='#c0392b', lw=2.8))
+ax.text(y_vec[0] - 0.55, y_vec[1] + 0.12, '$y - \\bar{y}$',
+        fontsize=14, color='#c0392b', fontweight='bold')
+
+# Residual e (orthogonal to column space)
+ax.annotate('', xy=y_vec, xytext=yhat_vec,
+            arrowprops=dict(arrowstyle='->', color='#555555', lw=2.2, ls='--'))
+mid_e = (y_vec + yhat_vec) / 2
+ax.text(mid_e[0] + 0.15, mid_e[1] + 0.05, '$e$',
+        fontsize=15, color='#555555', style='italic')
+
+# Right angle marker (large enough to be clearly visible)
+sz = 0.2
+p_dir = col_dir / np.linalg.norm(col_dir)   # unit vector along column space
+r_dir = e_vec / np.linalg.norm(e_vec)        # unit vector along residual
+sq = np.array([yhat_vec + sz * p_dir,
+               yhat_vec + sz * p_dir + sz * r_dir,
+               yhat_vec + sz * r_dir])
+ax.plot(sq[:, 0], sq[:, 1], 'k-', lw=1.2)
+
+# Angle arc for theta at the origin
+angle_y = np.arctan2(y_vec[1], y_vec[0])
+angle_yhat = np.arctan2(yhat_vec[1], yhat_vec[0])
+arc_r = 0.7
+theta_range = np.linspace(angle_yhat, angle_y, 40)
+ax.plot(arc_r * np.cos(theta_range), arc_r * np.sin(theta_range),
+        color='#8e44ad', lw=2)
+mid_angle = (angle_y + angle_yhat) / 2
+ax.text(arc_r * np.cos(mid_angle) + 0.08,
+        arc_r * np.sin(mid_angle) + 0.05,
+        '$\\theta$', fontsize=15, color='#8e44ad')
+
+# Formula box (top-right, away from the vectors)
+ax.text(2.4, 3.15,
+        '$R^2 = \\cos^2\\theta'
+        ' = \\dfrac{\\|\\hat{y} - \\bar{y}\\|^2}{\\|y - \\bar{y}\\|^2}$',
+        fontsize=13, color='#333333',
+        bbox=dict(boxstyle='round,pad=0.4', facecolor='#f0f0f0',
+                  edgecolor='#cccccc'))
+
+# Origin label
+ax.plot(0, 0, 'ko', ms=5, zorder=5)
+ax.text(-0.18, -0.18, '$\\bar{y}$', fontsize=12, color='gray')
+
+ax.set_xlim(-0.6, 3.8)
+ax.set_ylim(-0.5, 3.6)
+ax.set_aspect('equal')
+for spine in ax.spines.values():
+    spine.set_visible(False)
+ax.set_xticks([])
+ax.set_yticks([])
+ax.set_title('$R^2$ measures how close $y$ is to the column space',
+             fontsize=12, pad=10)
+plt.tight_layout()
+plt.show()
+```
 
 ```{python}
 # Compare simple vs multiple regression
@@ -913,7 +1059,9 @@ Can R-squared ever *decrease* when you add a feature? No. Adding a feature expan
 
 ## Checking the residuals
 
-The normal equations guarantee $X^Te = 0$ — that's a mathematical fact. But a good model should also have residuals that look like random noise. The orthogonality is guaranteed; the randomness is not. We check with a scatter plot of residuals vs. predicted values and a histogram (`.hist()`) of the residual distribution.
+The normal equations guarantee $X^Te = 0$ — that's a mathematical fact. But a good model should also have residuals that look like random noise. Why? If you can see a pattern in the residuals — a trend, a curve, a fan shape — then the residuals are *predictable*. And if you can predict the residual, you can add that prediction to $\hat{y}$ and get a better model. Residuals that look like noise mean there's nothing left to extract.
+
+The orthogonality condition only guarantees no *linear* pattern with the included features. It says nothing about nonlinear patterns or features you left out. We check with a scatter plot of residuals vs. predicted values and a histogram (`.hist()`) of the residual distribution.
 
 ```{python}
 # Residual plot
@@ -971,7 +1119,7 @@ For a deeper formal treatment: **VMLS** (Boyd & Vandenberghe), Chapters 1 (Vecto
 - **Cosine similarity**: $\cos\theta = \frac{u \cdot v}{\|u\|\|v\|}$ — directional similarity, independent of magnitude. Equals correlation for centered vectors.
 - **Norm**: $\|v\| = \sqrt{v \cdot v}$ — the length/magnitude of a vector.
 - **Distance**: $d(u,v) = \|u - v\|$ — measures dissimilarity between vectors.
-- **Linear combination**: $a \cdot v_1 + b \cdot v_2$ — a weighted sum of vectors. A **scalar** is a single number used as a weight.
+- **Linear combination**: $\beta_1 v_1 + \beta_2 v_2$ — a weighted sum of vectors. A **scalar** is a single number used as a weight.
 - **Span**: the set of all linear combinations of a set of vectors.
 - **Column space**: the span of the columns of a matrix $X$ — equivalently, the set of all possible predictions $X\beta$.
 - **Orthogonal**: vectors with zero inner product; for centered data, orthogonality means zero correlation (uncorrelated).
