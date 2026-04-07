@@ -13,12 +13,12 @@ book:
         - lec01-intro.qmd
         - lec02-eda.qmd
         - lec03-munging.qmd
-        - lec04-linear-algebra.qmd
-        - lec05-regression.qmd
-        - lec06-feature-engineering.qmd
-        - lec07-trees-validation.qmd
+        - lec04-regression.qmd
+        - lec05-feature-engineering.qmd
+        - lec06-trees.qmd
     - part: "Act 2: Trust Models"
       chapters:
+        - lec07-validation.qmd
         - lec08-sampling.qmd
         - lec09-permutation-tests.qmd
         - lec10-hypothesis-testing.qmd
@@ -36,6 +36,7 @@ book:
     - part: "Appendices"
       chapters:
         - appendix-probability.qmd
+        - appendix-tools.qmd
 
 filters:
   - _notebook-links.lua

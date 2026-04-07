@@ -60,7 +60,7 @@ print(scorecard.dtypes.value_counts())
 The file has 122 columns. Most are `float64` or `int64`, but several are `str` — pandas' type for string columns. In a column that should hold numeric data, a `str` dtype is the first sign of trouble.
 
 ```{python}
-# Median earnings 10 years after enrollment — should be numeric
+# Median earnings of students working and not enrolled, 10 years after entry
 print("MD_EARN_WNE_P10 dtype:", scorecard['MD_EARN_WNE_P10'].dtype)
 print()
 
@@ -395,7 +395,11 @@ When I worked on the 2012 Obama campaign, several staff members looked ourselves
 - **Date of birth**: transposed digits, different date formats
 - **Middle name**: present in one record, absent in another
 
-No single field is reliable. A 2020 study quantified the problem at national scale: matching 100 million voter records on first name, last name, and date of birth produced roughly 800,000 apparent duplicates — seeming evidence of massive double voting.^[Goel, Meredith, Morse, Rothschild & Shirani-Mehr, ["One Person, One Vote: Estimating the Prevalence of Double Voting in U.S. Presidential Elections,"](https://doi.org/10.1017/S0003055420000039) *American Political Science Review*, 2020.] But the birthday paradox explains almost all of them. Among the 141 ballots cast by a "John Smith" born in 1970, how many pairs would share a birthday by chance? The answer: $\binom{141}{2} \times \frac{1}{365} \approx 27$ — and the actual number of flagged pairs was exactly 27. After applying this correction across all name groups, the 800,000 matches shrank to roughly 20,000, and after accounting for data entry errors, the estimate fell to approximately zero.
+No single field is reliable. A 2020 study quantified the problem at national scale: matching 104 million voter records from the 2012 election on first name, last name, and date of birth produced 761,875 apparent duplicates — seeming evidence of massive double voting.^[Goel, Meredith, Morse, Rothschild & Shirani-Mehr, ["One Person, One Vote: Estimating the Prevalence of Double Voting in U.S. Presidential Elections,"](https://doi.org/10.1017/S0003055420000039) *American Political Science Review*, 2020.] But the birthday paradox explains almost all of them. To see why, consider a stylized example: if 141 voters named "John Smith" were born in 1970, the expected number of pairs sharing a birthday by chance is $\binom{141}{2} \times \frac{1}{365} \approx 27$. That's 27 "double voters" from one common name in one birth year — and no fraud at all.
+
+The paper's actual method is more sophisticated: they model the birthday distribution for each name (accounting for day-of-week patterns, seasonal effects, and name-specific correlations like "June" clustering in June), compute expected coincidental matches across all name groups, and subtract. The result: **97% of the 762K matches were two distinct people who happened to share a name and birthday.** The estimated number of actual double votes was roughly 21,000 before accounting for measurement error — and a clerical error rate of just 1.3% in poll books would explain all of them.
+
+The policy implications are stark. In states that participated in the Interstate Crosscheck Program, SSN verification revealed that fewer than 10 out of 26,000 confirmed duplicate registrations involved both records being used to vote. Canceling registrations based on name-and-birthday matches alone would disenfranchise over 300 legitimate voters for every double vote prevented.
 
 The decision to merge or not merge two records is a **value judgment** — and a consequential one. Merge too aggressively and you remove legitimate distinct voters from the rolls. Merge too conservatively and you count the same person twice, inflating registration numbers and misdirecting campaign outreach.
 
@@ -509,7 +513,7 @@ mean3 = scorecard['earnings'].mean()
 std3 = scorecard['earnings'].std()
 n3 = scorecard['earnings'].notna().sum()
 
-print("Average median earnings 10 years after enrollment:")
+print("Average median earnings 10 years after entry:")
 print(f"  Approach 1 (drop rows):       ${mean1:,.0f}  (std = ${std1:,.0f}, n = {n1:,})")
 print(f"  Approach 2 (fill with mean):  ${mean2:,.0f}  (std = ${std2:,.0f}, n = {n2:,})")
 print(f"  Approach 3 (ignore NaN):      ${mean3:,.0f}  (std = ${std3:,.0f}, n = {n3:,})")
@@ -552,7 +556,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The missing earnings data is unevenly distributed across school types. Dropping rows with missing earnings changes the mix of schools in the analysis. The pattern is MNAR: for-profit schools are more likely to have small cohorts, which triggers privacy suppression, which makes their earnings data disappear. In [Chapter 6](lec06-feature-engineering.qmd), we'll see how to turn missingness patterns like these into features that a model can use.
+The missing earnings data is unevenly distributed across school types. Dropping rows with missing earnings changes the mix of schools in the analysis. The pattern is MNAR: for-profit schools are more likely to have small cohorts, which triggers privacy suppression, which makes their earnings data disappear. In [Chapter 5](lec05-feature-engineering.qmd), we'll see how to turn missingness patterns like these into features that a model can use.
 
 :::{.callout-warning}
 ## `groupby` drops NaN groups by default
@@ -671,7 +675,7 @@ The difference is fundamental. When you ask an AI to *analyze* data directly, it
 
 ### One question, four answers
 
-Consider a simple question: **"What is the average median earnings 10 years after enrollment?"** Let's compute the answer four different ways — each reflecting a different, defensible cleaning path.
+Consider a simple question: **"What is the average median earnings 10 years after entry?"** Let's compute the answer four different ways — each reflecting a different, defensible cleaning path.
 
 ```{python}
 # Reload clean copy
@@ -701,7 +705,7 @@ earn4 = pd.to_numeric(sc_nonan['MD_EARN_WNE_P10'], errors='coerce') if len(sc_no
 answer4 = earn4.mean() if len(earn4) > 0 else float('nan')
 n4 = earn4.notna().sum() if len(earn4) > 0 else 0
 
-print("'What is the average median earnings 10 years after enrollment?'")
+print("'What is the average median earnings 10 years after entry?'")
 print()
 print(f"  Path 1 — all available data:       ${answer1:,.0f}  (n = {n1:,})")
 print(f"  Path 2 — bachelor's schools only:  ${answer2:,.0f}  (n = {n2:,})")
@@ -777,7 +781,7 @@ stanford_prog['earn_4yr'] = pd.to_numeric(stanford_prog['EARN_MDN_4YR'], errors=
 stanford_valid = stanford_prog.dropna(subset=['earn_4yr'])
 
 print("Stanford University:")
-print(f"  Scorecard website headline:  $136,000  (median earnings, 4 years after graduation)")
+print(f"  Scorecard website headline:  $136,000  (median earnings, 4 years after completing)")
 print(f"  Program-level median:        ${stanford_valid['earn_4yr'].median():,.0f}  (across {len(stanford_valid)} programs)")
 print(f"  Program-level mean:          ${stanford_valid['earn_4yr'].mean():,.0f}")
 print(f"  Range:                       ${stanford_valid['earn_4yr'].min():,.0f} – ${stanford_valid['earn_4yr'].max():,.0f}")
@@ -785,7 +789,9 @@ print(f"  SAT average:                 {stanford_inst['SAT_AVG'].iloc[0]:.0f}")
 print(f"  Total programs:              {len(stanford_prog)}")
 ```
 
-The College Scorecard website reports Stanford median earnings as \$136,000 four years after graduation.^[[College Scorecard: Stanford University,](https://collegescorecard.ed.gov/school/?243744-Stanford-University) U.S. Department of Education.] That headline figure pools all programs into a single number — likely weighted by enrollment. The program-level data tells a richer story: Stanford's 27 programs with reported four-year earnings range from roughly \$46K (Ethnic Studies, BA) to \$262K (MBA). CS bachelor's graduates earn a median of \$215K at four years, while English literature graduates earn \$82K. The institution-level number sits between the program-level median and mean, hiding a threefold spread.
+The College Scorecard website reports Stanford median earnings as \$136,000 four years after completing.^[[College Scorecard: Stanford University,](https://collegescorecard.ed.gov/school/?243744-Stanford-University) U.S. Department of Education.] Notice that this uses a different variable than `MD_EARN_WNE_P10`: the `_4YR` suffix means "4 years after *completing*" and counts only graduates, while `_P10` means "10 years after *entry*" and includes everyone who enrolled — including students who never finished. The two measure different populations on different timelines. (In 2017, the DOE discovered that the cohort mapping for its 6- and 8-year earnings variables was off by a year — the data documented as "6 years after entry" was actually measuring 7 years after entry. The correction appears in the data dictionary changelog. If even the agency that produces the data gets the documentation wrong, checking variable definitions is not optional.)
+
+That headline figure pools all programs into a single number — likely weighted by enrollment. The program-level data tells a richer story: Stanford's 27 programs with reported four-year earnings range from roughly \$46K (Ethnic Studies, BA) to \$262K (MBA). CS bachelor's graduates earn a median of \$215K at four years, while English literature graduates earn \$82K. The institution-level number sits between the program-level median and mean, hiding a threefold spread.
 
 And if you're an MS&E student wondering about your own department? Only 10 of Stanford's 51 bachelor's programs report four-year earnings at all — the other 41 simply have no data, likely because too few graduates in each program received Title IV aid to meet the reporting threshold. The closest CIP code for MS&E is 5213, "Management Sciences and Quantitative Methods," but no bachelor's degree is listed there. MS&E undergrads are most likely classified under "Engineering, Other" (CIP 1499, which reports \$115K at four years) or "Engineering-Related Fields" (CIP 1515, which has no four-year data for bachelor's degrees). There's no way to be sure without access to the underlying classification decisions. The opaque mapping from department names to CIP codes is itself a data quality problem — and one that no amount of cleaning can fix.
 
@@ -793,7 +799,7 @@ One more caveat: the Scorecard tracks only students who received federal financi
 
 Even setting the aggregation aside, Stanford admits students with roughly 1,465 average SAT scores. The high earnings may partly reflect student ability, not school quality. Ranking by raw earnings without adjusting for selectivity confuses the treatment (attending the school) with the confounder (student ability). We'll revisit the confounding concept formally in later chapters.
 
-An AI will confidently rank by whichever column name sounds most relevant, without asking whether the metric is confounded or aggregated.
+Ranking by whichever column name sounds most relevant, without asking whether the metric is confounded or aggregated, is a common mistake — and one that's easy to make when you skip the data dictionary.
 
 :::{.callout-warning}
 ## Don't rank before you adjust
@@ -804,7 +810,7 @@ The "best" schools by raw earnings might just be the ones admitting the stronges
 
 :::{.callout-tip}
 ## Think About It
-Look at these Scorecard columns: `SAT_AVG` (average SAT score), `UGDS` (undergraduate enrollment), `PCTPELL` (fraction of students receiving Pell grants, a measure of low-income enrollment), `MD_EARN_WNE_P10` (median earnings 10 years after enrollment), and `GT_25K_P6` (fraction of graduates earning above \$25K six years after enrollment). If you wanted to predict earnings, which columns would be dangerous to include as inputs?
+Look at these Scorecard columns: `SAT_AVG` (average SAT score), `UGDS` (undergraduate enrollment), `PCTPELL` (fraction of students receiving Pell grants, a measure of low-income enrollment), `MD_EARN_WNE_P10` (median earnings 10 years after entry), and `GT_25K_P6` (fraction of students earning above \$25K six years after entry). If you wanted to predict earnings, which columns would be dangerous to include as inputs?
 :::
 
 Suppose the AI builds a model to predict earnings. It naturally includes all numeric columns as features — including `GT_25K_P6`, the fraction of graduates earning above \$25K at six years. But `GT_25K_P6` is *derived from earnings data*. Including it as a feature to predict earnings is circular.

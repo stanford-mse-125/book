@@ -118,59 +118,29 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 ---
 
-## Lecture 4: Linear Algebra — Vectors, Span, and Column Space
+## Lecture 4: Linear Models — From Data to Geometry
 
-**Objectives addressed:** 4 (vectors, linear combinations, span)
+**Objectives addressed:** 4 (vectors, linear combinations, span), 5 (regression as projection)
 
 **Key concepts:**
 - Two views of vectors in data: rows as points in R^d, columns as vectors in R^n
 - Linear combinations: mixing feature columns with different weights
 - Span = set of all possible predictions from a linear model
 - Column space of a feature matrix = what the model can predict
-- Linear dependence = redundant features (adding them doesn't expand what the model can do)
-- Near-collinearity: when features are nearly parallel, the span barely grows
-
-**Key vocabulary:**
-- Vector, scalar
-- Linear combination
-- Span
-- Column space
-- Linearly dependent / independent
-- Collinearity
-- Inner product, dot product
-- Norm, distance
-- Orthogonal
-- Rank, multicollinearity
-- Linear function
-- Cosine similarity
-
-**Prerequisites:** MS&E 120 (vectors as random variables); some students have EE103/CME103 (VMLS)
-
-**Connections:**
-- Forward: Lec 5 (regression as projection onto column space), Lec 14 (PCA as finding optimal column space)
-- VMLS: Ch 1 (vectors), Ch 5 (linear independence)
-- ORIE 4741: linear.tex uses column space framing for least squares
-
-**Surprise moment:** Bedrooms and beds are nearly collinear in Airbnb data — adding both barely expands the column space
-
----
-
-## Lecture 5: Linear Regression as Projection
-
-**Objectives addressed:** 5 (regression as projection), 11 (train/test/validate)
-
-**Key concepts:**
-- Regression finds the closest point in the column space to the response vector
+- Regression finds the closest point in the column space to the response vector (projection)
 - Residual vector is orthogonal to the column space
 - The normal equations: X^T X β = X^T y
 - R-squared as fraction of variance explained
 - Multiple regression: adding features expands the column space
-- Interpreting coefficients: "holding other features constant"
 
 **Key vocabulary:**
-- Projection
-- Residual
-- Orthogonality (residual ⊥ column space)
+- Vector, scalar, linear combination
+- Span, column space
+- Inner product, dot product, cosine similarity
+- Norm, distance
+- Orthogonal
+- Linear function
+- Projection, residual
 - R-squared (R²)
 - Normal equations
 - Coefficient interpretation
@@ -182,91 +152,118 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - X^T e = 0 (orthogonality condition)
 - R² = 1 − ||e||²/||y − ȳ||²
 
-**Prerequisites:** Lec 4 (column space, span)
+**Prerequisites:** MS&E 120 (vectors as random variables); some students have EE103/CME103 (VMLS)
 
 **Connections:**
-- Backward: Lec 4 (column space = possible predictions)
-- Forward: Lec 6 (diagnostics), Lec 7 (feature engineering), Lec 12 (inference on coefficients), Lec 14 (PCA as regression onto optimal covariates)
-- VMLS Ch 13 (least squares)
-- ORIE 4741: linear.tex (optimization-flavored derivation via gradient descent — we use geometric projection instead)
-
-**Aphorism:** "All models are wrong, but some are useful" (Box) — yes the line doesn't fit perfectly, that's the point
+- Forward: Lec 5 (feature engineering, diagnostics), Lec 14 (PCA as finding optimal column space)
+- VMLS: Ch 1 (vectors), Ch 5 (linear independence), Ch 13 (least squares)
+- ORIE 4741: linear.tex uses column space framing for least squares
 
 **Surprise moment:** Adding number_of_reviews increases R² but has a negative coefficient — more reviews correlates with *lower* price (confounding preview)
 
 ---
 
-## Lecture 6: Feature Engineering
+## Lecture 5: Feature Engineering and Regression Diagnostics
 
 **Objectives addressed:** 12 (feature engineering)
 
 **Key concepts:**
-- One-hot encoding: converting categorical variables to 0/1 columns for regression
+- Log transforms change coefficient interpretation (multiplicative vs additive)
+- One-hot encoding: converting categorical variables to 0/1 columns
 - "Linear in parameters, not features": polynomials and interactions make linear models powerful
 - Polynomial features: capturing nonlinear relationships ($x, x^2, x^3$)
 - Interaction terms: when one feature's effect depends on another (bedrooms × borough)
-- Decision trees: recursive splitting finds patterns without manual feature engineering
-- Random forests: average many trees for stable predictions (practical intro — how they work in Lec 17)
-- RF classifier: majority vote for classification (project tool — formalized in Lec 13)
-- LLM-based featurization / weak supervision: use an LLM to extract structured features from text
+- Adjusted R²: penalizing complexity (R² always goes up; adjusted R² doesn't)
+- LLM-based featurization / weak supervision
+- Multicollinearity: nearly parallel features don't expand the column space
+- Rank: how many truly independent features you have
+- Residual diagnostics: heteroscedasticity, missing structure
 
 **Key vocabulary:**
-- Feature engineering
-- One-hot encoding
-- Polynomial features
-- Interaction term
-- Decision tree
-- Random forest
-- Weak supervision
-- LLM featurization
+- Feature engineering, one-hot encoding
+- Polynomial features, interaction term
+- Log transform
+- Adjusted R-squared
+- Multicollinearity, rank
+- Singular values
+- Heteroscedasticity
+- LLM featurization, weak supervision
 
-**Prerequisites:** Lec 5 (regression); Lec 4 (column space — one-hot encoding adds dimensions)
+**Prerequisites:** Lec 4 (regression, column space, span)
 
 **Connections:**
-- Backward: Lec 5 (regression)
-- Forward: Lec 7 (validation — are these features overfitting?), Lec 12 (which features are statistically significant?), Lec 17 (trees and ensembles deep dive)
+- Backward: Lec 4 (regression, column space)
+- Forward: Lec 6 (trees as automatic feature engineering), Lec 7 (validation — are these features overfitting?), Lec 12 (which features are statistically significant?)
 
-**Aphorism:** "All models are wrong, but some are useful" (Box) — feature engineering is choosing the right approximation
-
-**Surprise moment:** LLM-extracted features from listing descriptions improve R² — AI as a feature engineering tool, not a replacement for judgment
+**Surprise moment:** Bedrooms and beds are nearly collinear — adding both barely expands the column space. LLM-extracted features from listing descriptions improve R².
 
 ---
 
-## Lecture 7: Trees, Validation, and Bias-Variance
+## Lecture 6: Decision Trees and Random Forests
+
+**Objectives addressed:** 12 (feature engineering — automatic)
+
+**Key concepts:**
+- Decision trees: recursive splitting finds patterns without manual feature engineering
+- Trees handle categories and missing data natively
+- A single deep tree overfits: perfect training score, poor test score
+- Random forests: average many overfit trees for stable predictions
+- Bagging + feature subsampling
+- More trees never hurts (unlike more polynomial features)
+- Feature importance: which variables does the forest rely on?
+
+**Key vocabulary:**
+- Decision tree, recursive splitting
+- Overfitting (single tree)
+- Random forest, bagging
+- Feature subsampling
+- Feature importance (MDI)
+
+**Prerequisites:** Lec 5 (feature engineering, regression)
+
+**Connections:**
+- Backward: Lec 5 (manual feature engineering — trees automate this)
+- Forward: Lec 7 (validation, bias-variance tradeoff), Lec 13 (classification trees)
+- ORIE 4741: trees material
+
+**Surprise moment:** A single deep tree gets perfect training R² but terrible test R². Average 100 of them and test R² beats everything.
+
+---
+
+## Lecture 7: Validation and the Bias-Variance Tradeoff
 
 **Objectives addressed:** 11 (train/test/validate model selection)
 
 **Key concepts:**
+- Distribution shift: training data ≠ deployment data
 - Train/test split: evaluate on data the model hasn't seen
 - Cross-validation (k-fold): rotate the held-out fold for stable estimates
 - Overfitting: training performance improves but test performance degrades
 - Bias-variance tradeoff:
   - **Classical (primary):** More complexity → eventually overfitting. The U-shaped test error curve.
-  - **Modern (trees/bagging):** Averaging many overfit trees reduces variance. More trees never hurts. Demo: individual trees are wiggly and different; their average is smooth.
-  - **Connection to LLMs:** "This same principle — overparameterize, then regularize implicitly — is part of why large language models work."
+  - **Modern (trees/bagging):** Averaging many overfit trees reduces variance. More trees never hurts.
   - **Punchline:** "Regularize and cross-validate" is more right than ever.
 - Lasso (L1 regularization): automatic feature selection by shrinking coefficients to zero
-- Random forests as benchmark: compare test error against linear models
 
 **Key vocabulary:**
+- Distribution shift
 - Train/test split, validation set
 - Cross-validation (k-fold)
 - Overfitting, underfitting
 - Bias-variance tradeoff
 - Lasso, regularization
-- Bagging (bootstrap aggregation)
 
-**Prerequisites:** Lec 6 (feature engineering, trees)
+**Prerequisites:** Lec 6 (trees, random forests)
 
 **Connections:**
-- Backward: Lec 6 (features, trees)
-- Forward: Lec 8 (can we trust our estimates?), Lec 12 (regression inference), Lec 16 (temporal validation breaks random splitting), Lec 17 (trees/ensembles deep dive — why bagging works)
+- Backward: Lec 6 (trees — overfitting a single tree)
+- Forward: Lec 8 (can we trust our estimates?), Lec 12 (regression inference), Lec 16 (temporal validation breaks random splitting)
 
 **Aphorisms:** "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk" (von Neumann); "All models are wrong, but some are useful" (Box)
 
 **Surprise moment:** The most complex polynomial model performs worst on test data. But averaging 100 overfit trees beats everything — the classical U-shape doesn't apply to ensembles.
 
-**Study guide scope:** Students are responsible for classical bias-variance (the U-shape), overfitting concept, train/test split, cross-validation, Lasso concept. They should understand *that* averaging overfit trees works but are NOT responsible for the mathematical details of why until Lecture 17.
+**Study guide scope:** Students are responsible for classical bias-variance (the U-shape), overfitting concept, train/test split, cross-validation, Lasso concept. They should understand *that* averaging overfit trees works but are NOT responsible for the mathematical details of why.
 
 ---
 
@@ -775,15 +772,15 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 | 1 | Explore/visualize, outliers, missing data | **Lec 2** | Lec 1 |
 | 2 | Clean/transform/join | **Lec 3** | |
 | 3 | Evaluate AI analyses | **Lec 3, 17** | Lec 1 |
-| 4 | Vectors, linear combinations, span | **Lec 4** | |
-| 5 | Regression as projection | **Lec 5** | |
+| 4 | Vectors, linear combinations, span, regression | **Lec 4** | |
+| 5 | Feature engineering, regression diagnostics | **Lec 5** | |
 | 6 | Sampling distributions, CLT | **Lec 8** | |
 | 7 | Bootstrap CIs | **Lec 8** | Lec 12 |
 | 8 | Hypotheses, p-values, simulation | **Lec 9, 10** | |
 | 9 | Multiple testing (Bonferroni, FDR) | **Lec 11** | |
 | 10 | Regression coefficient inference (t-tests) | **Lec 12** | |
 | 11 | Train/test/validate model selection | **Lec 7** | Lec 12, 16 |
-| 12 | Feature engineering | **Lec 6** | Lec 7, 16 |
+| 12 | Feature engineering, trees | **Lec 5, 6** | Lec 7, 16 |
 | 13 | Logistic regression, classification metrics | **Lec 13** | |
 | 14 | PCA, interpret PCs | **Lec 14** | |
 | 15 | K-means, cluster quality | **Lec 15** | |
@@ -815,7 +812,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - ✅ **Lasso** → Lec 7, alongside bias-variance tradeoff and model complexity control
 - ✅ **VIF** → Lec 7 "further reading" only (too technical for lecture)
 - ✅ **Random forests as black-box benchmark** → Lec 7 (now with practical tree intro); how trees work → Lec 17
-- ✅ **Trees handle missing values** → forward-referenced from Lec 3 to Lec 7 and Lec 17
+- ✅ **Trees handle missing values** → forward-referenced from Lec 3 to Lec 6
 - ✅ **Power analysis** → Lec 10 (conceptual + computational via simulation/statsmodels, not formula derivation); HW problem candidate
 - ✅ **Statistical aphorisms** → distributed across lectures (see aphorisms table)
 - ✅ **Study guide sections** → structural requirement for every lecture .qmd
