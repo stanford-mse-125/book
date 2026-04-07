@@ -31,7 +31,9 @@ Regression gives the answer — and linear algebra tells us *why* it works. This
 
 ## Vectors are everywhere in data
 
-There are two natural ways to see **vectors** in a dataset:
+To answer the pricing question, we need to represent listings as mathematical objects we can compute with. The right abstraction: **vectors**.
+
+There are two natural ways to see vectors in a dataset:
 
 1. **Each row is a vector.** A single Airbnb listing with (bedrooms, bathrooms, price) is a point in $\mathbb{R}^3$. ($\mathbb{R}^3$ just means a list of 3 real numbers — so (2, 1, 150) is a point in $\mathbb{R}^3$.)
 2. **Each column is a vector.** The "bedrooms" column across all $n$ listings is a vector in $\mathbb{R}^n$ (one entry per listing).
@@ -105,7 +107,7 @@ ax.annotate(f'({hx}, {hy})', (hx, hy), fontsize=9.5, color='#666666',
 
 ax.set_xlabel('Bedrooms', fontsize=12, labelpad=8)
 ax.set_ylabel('Bathrooms', fontsize=12, labelpad=8)
-ax.set_title('Each listing is a point in $\\mathbb{R}^2$', fontsize=14, pad=12)
+ax.set_title('Nearby listings have similar features', fontsize=14, pad=12)
 ax.set_xlim(-0.2, 4.2)
 ax.set_ylim(-0.2, 3.2)
 ax.set_xticks([0, 1, 2, 3, 4])
@@ -131,6 +133,27 @@ similarity = listing_1[0] * listing_3[0] + listing_1[1] * listing_3[1]
 print(f"Listing 1: {listing_1}")
 print(f"Listing 3: {listing_3}")
 print(f"Entry-by-entry product sum: {listing_1[0]}*{listing_3[0]} + {listing_1[1]}*{listing_3[1]} = {similarity}")
+```
+
+The inner product is positive here because both listings have positive feature values. To see negative and zero inner products, center the vectors by subtracting the mean — this reveals which listings deviate in the *same* direction vs. *opposite* directions.
+
+```{python}
+# Center the listing vectors: how does each deviate from the average listing?
+mean_vec = np.array([bedrooms.mean(), bathrooms.mean()])
+centered_1 = listing_1 - mean_vec  # below average in both
+centered_3 = listing_3 - mean_vec  # above average in both
+centered_2 = np.array([bedrooms[1], bathrooms[1]]) - mean_vec  # avg bedrooms, below avg baths
+
+print(f"Mean listing: ({mean_vec[0]:.1f}, {mean_vec[1]:.1f})")
+print(f"Listing 1 centered: ({centered_1[0]:.1f}, {centered_1[1]:.1f})  — below average in both")
+print(f"Listing 3 centered: ({centered_3[0]:.1f}, {centered_3[1]:.1f})  — above average in both")
+print(f"Listing 2 centered: ({centered_2[0]:.1f}, {centered_2[1]:.1f})")
+print()
+
+dot_neg = np.dot(centered_1, centered_3)
+dot_zero = np.dot(centered_1, centered_2)
+print(f"Centered dot product (1 vs 3): {dot_neg:.2f}  — NEGATIVE (opposite directions from mean)")
+print(f"Centered dot product (1 vs 2): {dot_zero:.2f}  — ZERO (perpendicular deviations)")
 ```
 
 :::{.callout-important}
@@ -310,13 +333,11 @@ In the plot above, can you reach *every* point in $\mathbb{R}^2$ using linear co
 
 ## Span: the set of all possible predictions
 
-The "Think About It" above hinted at a key question: what's the set of ALL points you can reach by choosing different weights? For the two vectors in the plot, you can reach every point in the plane — but only because $v_1$ and $v_2$ point in different directions. If they were parallel, you'd be stuck on a line.
+What's the set of ALL points you can reach by choosing different weights? For the two vectors in the plot, you can reach every point in the plane — but only because $v_1$ and $v_2$ point in different directions. If they were parallel, you'd be stuck on a line.
 
 For a linear model, this set is the set of all possible predictions. It tells you what your model **can** and **cannot** predict, before you fit anything. Let's visualize it in 3D, where the geometry is easier to see. We use `np.column_stack` to assemble the feature columns into a matrix, and `np.linalg.lstsq` to find the closest point in the span to a target vector.
 
 ```{python}
-from mpl_toolkits.mplot3d import Axes3D
-
 v1_3d = np.array([2, 1, 0])
 v2_3d = np.array([0, 1, 2])
 target = np.array([1, 3, 1])
@@ -504,7 +525,9 @@ airbnb['price_clean'] = pd.to_numeric(
 # Working subset
 cols = ['bedrooms', 'bathrooms', 'beds', 'price_clean',
         'accommodates', 'number_of_reviews', 'room_type']
-df = airbnb[cols].dropna()  # drops rows with missing bedrooms, bathrooms, etc.
+n_before = len(airbnb)
+df = airbnb[cols].dropna()
+print(f"Dropped {n_before - len(df):,} rows with missing values in {cols}")
 df = df[(df['price_clean'] > 0) & (df['price_clean'] <= 500)]
 print(f"{len(df):,} listings, price range: ${df['price_clean'].min():.0f} – ${df['price_clean'].max():.0f}")
 df.head()
@@ -528,18 +551,34 @@ ax.plot(x_line, y_line, 'r-', lw=2.5, label=f'ŷ = {model_simple.intercept_:.0f}
 
 ax.set_xlabel('Bedrooms')
 ax.set_ylabel('Price ($/night)')
-ax.set_title('Simple regression: price ~ bedrooms')
+ax.set_title('Each bedroom adds ~$40/night')
 ax.legend(fontsize=12)
 plt.tight_layout()
 plt.show()
 
 print(f"Each additional bedroom is associated with ${model_simple.coef_[0]:.0f} more per night.")
+print(f"A 0-bedroom listing (studio) is predicted at ${model_simple.intercept_:.0f}/night — the intercept.")
+```
+
+The intercept captures the **base price** of a listing, independent of its size. Without it, the regression line would be forced through the origin — predicting \$0 for a studio. Geometrically, including an intercept adds a constant vector $\mathbf{1} = (1, 1, \ldots, 1)$ to the column space. `LinearRegression()` includes an intercept by default; to omit it, pass `fit_intercept=False`.
+
+```{python}
+# What happens without an intercept?
+model_no_intercept = LinearRegression(fit_intercept=False)
+model_no_intercept.fit(df[['bedrooms']], df['price_clean'])
+
+print(f"With intercept:    ŷ = {model_simple.intercept_:.0f} + {model_simple.coef_[0]:.0f} × bedrooms  (R² = {model_simple.score(df[['bedrooms']], df['price_clean']):.3f})")
+print(f"Without intercept: ŷ = {model_no_intercept.coef_[0]:.0f} × bedrooms               (R² = {model_no_intercept.score(df[['bedrooms']], df['price_clean']):.3f})")
+print()
+print("Forcing the line through the origin loses predictive power and misrepresents studios.")
 ```
 
 :::{.callout-note}
 ## Why is it called "regression"?
 
-The name comes from Francis Galton, who in the 1880s studied the heights of fathers and sons. Unusually tall fathers tended to have sons who were tall — but *less* tall than their fathers. Unusually short fathers had sons who were short — but *less* short. Heights "regressed toward the mean." Galton's method for quantifying this trend — fitting a line through the data — became "regression," and the name stuck even though we now use it for problems that have nothing to do with reverting to averages. We will formalize **regression to the mean** shortly, once we connect $r$ to $R^2$. (For the full story, see Salsburg, *The Lady Tasting Tea*, Ch. 4.)
+The name comes from Francis Galton, who in the 1880s studied the heights of fathers and sons. Unusually tall fathers tended to have sons who were tall — but *less* tall than their fathers. Unusually short fathers had sons who were short — but *less* short. Heights "regressed toward the mean."
+
+Galton's method for quantifying this trend — fitting a line through the data — became "regression," and the name stuck even though we now use it for problems that have nothing to do with reverting to averages. We formalize **regression to the mean** below, once we connect $r$ to $R^2$. (For the full story, see Salsburg, *The Lady Tasting Tea*, Ch. 4.)
 :::
 
 That's the regression line. But *why* this line? There are infinitely many lines we could draw through this cloud. Regression picks the one that minimizes the total squared distance from the data to the line. Why squared distances, not absolute distances or something else?
@@ -886,12 +925,12 @@ axes[0].scatter(y_hat_multi, residuals_multi, alpha=0.05, s=10)
 axes[0].axhline(0, color='red', lw=1.5)
 axes[0].set_xlabel('Predicted price ($)')
 axes[0].set_ylabel('Residual ($)')
-axes[0].set_title('Residuals vs predicted values')
+axes[0].set_title('Residual spread increases with predicted price')
 
 axes[1].hist(residuals_multi, bins=60, edgecolor='white', alpha=0.7)
 axes[1].set_xlabel('Residual ($)')
 axes[1].set_ylabel('Count')
-axes[1].set_title('Distribution of residuals')
+axes[1].set_title('Residuals are roughly symmetric but heavy-tailed')
 
 plt.tight_layout()
 plt.show()
