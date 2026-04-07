@@ -440,7 +440,7 @@ The **span** of a set of vectors is the set of ALL their linear combinations:
 $$\text{span}(v_1, v_2) = \{a \cdot v_1 + b \cdot v_2 : a, b \in \mathbb{R}\}$$
 :::
 
-The dashed line in the plot above is the **residual**: the gap between the target and the closest reachable point. In Chapter 5, we'll see that regression finds exactly this closest point — the **projection** of $y$ onto the column space. The residual is what's left over.
+The dashed line in the plot above is the **residual**: the gap between the target and the closest reachable point. Later in this chapter, we'll see that regression finds exactly this closest point — the **projection** of $y$ onto the column space. The residual is what's left over.
 
 ## Column space: from features to matrices
 
@@ -474,7 +474,7 @@ $$\text{col}(X) = \text{span}(x_1, x_2) = \{X\beta : \beta \in \mathbb{R}^2\}$$
 This set is exactly the collection of all possible predictions $\hat{y} = X\beta$ for a linear model. Different $\beta$ = different predictions, but they all live in the column space.
 :::
 
-**Key insight:** The column space of $X$ determines what your model can predict. More features (more columns) = larger column space = more possible predictions. But there's a catch...
+The column space of $X$ determines what your model can predict. More features (more columns) = larger column space = more possible predictions. But there's a catch...
 
 :::{.callout-warning}
 ## Linear models can predict impossible values
@@ -496,10 +496,10 @@ We load the NYC Airbnb dataset with `pd.read_csv`, drop rows with missing values
 # Load and clean Airbnb data
 airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 
-# Parse price (handles both "$1,200.00" strings and numeric formats)
-airbnb['price_clean'] = (airbnb['price'].astype(str)
-                          .str.replace('[$,]', '', regex=True)
-                          .astype(float))
+# Price column — convert to numeric (strip any formatting characters)
+airbnb['price_clean'] = pd.to_numeric(
+    airbnb['price'].astype(str).str.replace('[$,]', '', regex=True),
+    errors='coerce')
 
 # Working subset
 cols = ['bedrooms', 'bathrooms', 'beds', 'price_clean',
@@ -596,7 +596,7 @@ Our model says each bedroom adds some amount per night. But bigger apartments al
 
 Each new (independent) feature expands the column space, giving us a richer set of possible predictions.
 
-Think of regression as having two choices: (1) the column space — which features to include, determining what predictions the model can make — and (2) the loss function — squared error, which gives us the projection. Change the features and you change what the model can express. Change the loss and you change what "best" means. We'll explore both directions in later lectures.
+To include a categorical variable like `room_type`, we use `pd.get_dummies()` to create binary (0/1) columns — one per category. We drop one category (the reference level) to avoid redundancy; `drop_first=True` handles this. In [Chapter 5](lec05-feature-engineering.qmd), we'll explore this technique and many others in detail.
 
 ```{python}
 # Multiple regression: price ~ bedrooms + bathrooms + room_type
@@ -843,6 +843,8 @@ print()
 print("More independent features → larger column space → better projection → higher R²")
 ```
 
+The Pythagorean theorem gives us an exact decomposition: total variance = explained variance + residual variance.
+
 ```{python}
 # Verify the Pythagorean decomposition
 y_vals = y_multi.values
@@ -867,7 +869,7 @@ An $R^2$ around 0.45 means our model explains about 45% of the variation in pric
 :::{.callout-tip}
 ## Think About It
 
-Can R-squared ever *decrease* when you add a feature? Why or why not? (We'll answer this in a moment.)
+Can R-squared ever *decrease* when you add a feature? No. Adding a feature expands the column space — the projection onto a larger subspace can only get closer to $y$, never farther. So training R² can only increase (or stay the same). But as we'll see in [Chapter 7](lec07-validation.qmd), *test* R² can absolutely decrease.
 :::
 
 ## Checking the residuals
