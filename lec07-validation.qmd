@@ -63,11 +63,13 @@ cols = ['price', 'bedrooms', 'bathrooms', 'room_type', 'neighbourhood_group_clea
 df = listings[cols].dropna().copy()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
-# Clean price column
-df['price'] = df['price'].astype(str).str.replace('[$,]', '', regex=True).astype(float)
+# Convert price to numeric
+df['price'] = pd.to_numeric(df['price'].astype(str).str.replace('[$,]', '', regex=True), errors='coerce')
 
-# Filter to reasonable prices
+# Filter to reasonable prices (drops ~15% of listings at the extremes)
+n_before = len(df)
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
+print(f"Filtered from {n_before:,} to {len(df):,} listings (${10}–${500} range)")
 y = df['price']
 
 print(f"{len(df):,} listings")
@@ -261,7 +263,7 @@ if best_test_idx < len(degrees) - 1:
 ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
 ax.set_xlabel('Polynomial degree')
 ax.set_ylabel('R²')
-ax.set_title('Training R² approaches 1. Test R² goes NEGATIVE.\nMore features ≠ better predictions.')
+ax.set_title('Training R² approaches 1 while test R² goes negative')
 ax.legend(fontsize=11)
 ax.set_xticks(degrees)
 ax.set_xticklabels([f'Degree {d}\n({n} feat)' for d, n in zip(degrees, n_feat_poly)],
@@ -308,7 +310,7 @@ In the polynomial experiment above, which degrees had high bias? Which had high 
 
 :::{.callout-note}
 ## Preview: regularization as bias-variance control
-Another approach to controlling overfitting adds a **penalty** directly to the loss function. **Ridge regression** (L2 penalty) shrinks coefficients toward zero; **lasso** (L1 penalty) can shrink them exactly to zero, performing feature selection automatically. The bias-variance tradeoff governs the penalty strength: too little penalty and the model overfits (high variance); too much and it underfits (high bias). We introduce lasso later in this chapter and develop regularization more fully in a later course.
+Another approach to controlling overfitting adds a **penalty** directly to the loss function. **Ridge regression** (L2 penalty) shrinks coefficients toward zero; **lasso** (L1 penalty) can shrink them exactly to zero, performing feature selection automatically. The bias-variance tradeoff governs the penalty strength: too little penalty and the model overfits (high variance); too much and it underfits (high bias). We introduce lasso later in this chapter.
 :::
 
 
@@ -393,7 +395,7 @@ Cross-validation confirms what the train/test split showed: all six feature sets
 
 :::{.callout-warning}
 ## CV Assumes Exchangeable Data
-CV relies on the assumption that we can shuffle the data randomly — each fold is representative of the whole. The assumption breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Lecture 16](lec16-backtesting.qmd).
+CV relies on the assumption that we can shuffle the data randomly — each fold is representative of the whole. The assumption breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Chapter 16](lec16-backtesting.qmd).
 :::
 
 ## Lasso (regularization)
@@ -516,9 +518,9 @@ The U-shaped CV curve confirms the bias-variance tradeoff in action. Too small a
 
 ## The modern view: when more complexity helps
 
-The classical bias-variance tradeoff says: more complexity eventually hurts. But in [Chapter 6](lec06-trees.qmd), we saw that random forests — averages of many overfit trees — improve with more trees, not fewer. This is a departure from the U-shaped curve above.
+The classical bias-variance tradeoff says: more complexity eventually hurts. But in [Chapter 6](lec06-trees.qmd), we saw that random forests — averages of many overfit trees — improve with more trees, not fewer. That pattern departs from the U-shaped curve above.
 
-The resolution: averaging independent overfit models (bagging) reduces variance without increasing bias. Each individual tree is high-variance, but their average is stable. This insight — that ensembles can escape the classical tradeoff — motivates much of modern machine learning.
+The resolution: averaging independent overfit models (bagging) reduces variance without increasing bias. Each individual tree is high-variance, but their average is stable. The ensemble principle — that averaging independent overfit models can escape the classical tradeoff — motivates much of modern machine learning. (We demonstrated the effect in [Chapter 6](lec06-trees.qmd): adding more trees to a random forest reduced test error monotonically, with no U-shape.)
 
 
 ## Key takeaways
@@ -537,7 +539,7 @@ The resolution: averaging independent overfit models (bagging) reduces variance 
 
 - **Distribution shift: training data $\neq$ deployment data is the root cause of many failures.** Before trusting a model, ask: training data from when, from where, from whom?
 
-- **Forward references:** [Lecture 8](lec08-sampling.qmd) (bootstrap), [Lecture 12](lec12-regression-inference.qmd) (regression inference), [Lecture 16](lec16-backtesting.qmd) (temporal validation), [Lecture 17](lec17-automl-llms.qmd) (ensembles deep dive).
+- **Forward references:** [Chapter 8](lec08-sampling.qmd) (bootstrap), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 16](lec16-backtesting.qmd) (temporal validation), [Chapter 17](lec17-automl-llms.qmd) (ensembles deep dive).
 
 
 ## Study guide

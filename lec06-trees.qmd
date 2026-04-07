@@ -5,9 +5,9 @@ execute:
 jupyter: python3
 ---
 
-In [Chapter 5](lec05-feature-engineering.qmd), we hand-crafted features to capture nonlinear patterns: polynomials, interactions, one-hot encoding. Each required a modeling decision — which polynomial degree? which interactions? what about categories with dozens of levels?
+You're building a pricing tool for Airbnb hosts. In [Chapter 5](lec05-feature-engineering.qmd), feature engineering got you to a reasonable R² — but you had to choose which interactions to include, which polynomial degree, and how to encode dozens of neighborhoods. Every choice required judgment.
 
-Decision trees take a different approach: they find the splits automatically. No encoding, no polynomial terms, no missing-value imputation. The model looks at the data and decides where to cut.
+What if the model could figure out where to split on its own? Decision trees do exactly that: they find the splits automatically. No encoding, no polynomial terms, no missing-value imputation. The model looks at the data and decides where to cut.
 
 ```{python}
 import numpy as np
@@ -38,8 +38,8 @@ cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'room_typ
 df = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
-# Clean price column: strip "$" and commas, convert to float
-df['price'] = df['price'].astype(str).str.replace('[$,]', '', regex=True).astype(float)
+# Convert price to numeric
+df['price'] = pd.to_numeric(df['price'].astype(str).str.replace('[$,]', '', regex=True), errors='coerce')
 
 # Focus on reasonable prices (filter out near-free and luxury outliers)
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
@@ -49,7 +49,7 @@ print(f"Working with {len(df):,} listings")
 df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 ```
 
-We prepare the same feature matrix used in [Chapter 5](lec05-feature-engineering.qmd): numeric features plus one-hot encoded categoricals.
+We prepare the same feature matrix used in [Chapter 5](lec05-feature-engineering.qmd): numeric features plus one-hot encoded categoricals via `pd.get_dummies()`.
 
 ```{python}
 # One-hot encode categorical features
@@ -243,7 +243,7 @@ A random forest combines two ideas:
 
 The ensemble prediction is the average of all individual tree predictions (for regression) or majority vote (for classification).
 
-Why does averaging work? Each individual tree is overfit — it has memorized the noise in its particular bootstrap sample. But the noise is different for each tree. When we average many such trees, the noise cancels out, and what remains is the genuine signal.
+Each individual tree is overfit — it has memorized the noise in its particular bootstrap sample. Averaging works because different trees memorize *different* noise.
 
 
 ### More trees never hurts
@@ -278,7 +278,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-No U-shape! The test R² increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial story in [Chapter 5](lec05-feature-engineering.qmd), where higher polynomial degrees eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in Chapter 17, adding too many trees *can* overfit.)
+No U-shape! The test R² increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial story in [Chapter 5](lec05-feature-engineering.qmd), where higher polynomial degrees eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in [Chapter 17](lec17-automl-llms.qmd), adding too many trees *can* overfit.)
 
 
 ### Individual trees are overfit; their average is smooth
@@ -396,7 +396,7 @@ Mean decrease in impurity is biased toward features with many possible split poi
 
 Unlike linear regression, which requires complete data for every row, decision trees can handle missing values directly. Different implementations use different strategies:
 
-**Surrogate splits.** When a tree encounters a missing value at a split node, it looks for an alternative feature that produces a similar partition. If the best split is on `bedrooms` and a row has a missing bedroom count, the tree might split on `accommodates` instead (a correlated feature). CART and scikit-learn's `DecisionTreeClassifier` use this approach.
+**Surrogate splits.** When a tree encounters a missing value at a split node, it looks for an alternative feature that produces a similar partition. If the best split is on `bedrooms` and a row has a missing bedroom count, the tree might split on `accommodates` instead (a correlated feature). The original CART algorithm uses this approach. (Note: scikit-learn's `DecisionTreeClassifier` does *not* implement surrogate splits — it requires complete data. Use `HistGradientBoostingClassifier` for native missing-value support.)
 
 **Native missing-value handling.** XGBoost and LightGBM go further: during training, they learn which branch (left or right) missing values should follow at each split, choosing whichever direction reduces the loss more. No imputation needed — the algorithm treats "missing" as just another value to route.
 
@@ -413,7 +413,7 @@ In practice, tree-based models (especially gradient-boosted trees like XGBoost) 
 ::::{.callout-note}
 ## Preview: classification
 
-Everything above predicts a continuous number (price). **Classification** predicts a discrete category instead — "expensive or not," "spam or not." The same tree-based machinery applies: a classification tree predicts the majority class in each leaf, and a random forest classifier uses majority vote across trees. We develop classification properly with logistic regression in Chapter 13; for projects before then, `RandomForestClassifier` from scikit-learn works out of the box with the same `fit`/`score` interface.
+Everything above predicts a continuous number (price). **Classification** predicts a discrete category instead — "expensive or not," "spam or not." The same tree-based machinery applies: a classification tree predicts the majority class in each leaf, and a random forest classifier uses majority vote across trees. We develop classification properly with logistic regression in [Chapter 13](lec13-classification.qmd); for projects before then, `RandomForestClassifier` from scikit-learn works out of the box with the same `fit`/`score` interface.
 ::::
 
 

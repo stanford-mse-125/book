@@ -35,13 +35,13 @@ Regression takes numbers. Real data has categories, text, and nonlinear relation
 ```{python}
 listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 
-cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'room_type',
+cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'beds', 'room_type',
         'neighbourhood_group_cleansed', 'accommodates', 'number_of_reviews']
 df = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
-# Clean price column: strip "$" and commas, convert to float
-df['price'] = df['price'].astype(str).str.replace('[$,]', '', regex=True).astype(float)
+# Convert price to numeric
+df['price'] = pd.to_numeric(df['price'].astype(str).str.replace('[$,]', '', regex=True), errors='coerce')
 
 # Focus on reasonable prices (filter out near-free and luxury outliers)
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
@@ -53,9 +53,9 @@ df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 
 # Turning data into numbers
 
-### Log transforms change what coefficients mean
+## Log transforms change what coefficients mean
 
-The coefficients from [Chapter 4](lec04-regression.qmd) have a clean interpretation: each bedroom **adds** about \$33 to the predicted price. But in Chapter 2, we saw that Airbnb prices are heavily right-skewed, and a semilog scatter plot revealed a multiplicative relationship — each additional guest *multiplied* the price by a roughly fixed factor. When you log-transform the outcome or the features, the coefficient interpretation changes.
+The coefficients from [Chapter 4](lec04-regression.qmd) have a clean interpretation: each bedroom **adds** about \$33 to the predicted price. But in [Chapter 2](lec02-eda.qmd), we saw that Airbnb prices are heavily right-skewed, and a semilog scatter plot revealed a multiplicative relationship — each additional guest *multiplied* the price by a roughly fixed factor. When you log-transform the outcome or the features, the coefficient interpretation changes.
 
 :::{.callout-important}
 ## Interpreting coefficients with log transforms
@@ -88,7 +88,7 @@ print(f"Each bedroom multiplies price by e^{beta1:.4f} = {multiplier:.3f}")
 print(f"That's a {pct_change:.1f}% increase per bedroom.")
 ```
 
-This is why the semilog scatter plot in Chapter 2 showed a roughly straight line: the relationship between accommodates and price is approximately multiplicative, which is exactly what a $\log(y) \sim x$ model captures.
+The multiplicative structure explains why the semilog scatter plot in [Chapter 2](lec02-eda.qmd) showed a roughly straight line: the relationship between accommodates and price is approximately multiplicative, which is exactly what a $\log(y) \sim x$ model captures.
 
 ## One-hot encoding
 
@@ -103,7 +103,7 @@ We can't feed "Manhattan" or "Private room" into a regression equation. The solu
 
 :::{.callout-important}
 ## Definition: Reference level
-We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't in any of the other boroughs, it *must* be in the dropped category (the **reference level**). Including all dummies would make the columns sum to the intercept column — a linearly dependent column space (recall the column space from [Chapter 3](lec03-linear-algebra.qmd)). The dropped category becomes the baseline that all other coefficients are measured against.
+We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't in any of the other boroughs, it *must* be in the dropped category (the **reference level**). Including all dummies would make the columns sum to the intercept column — a linearly dependent column space (recall the column space from [Chapter 4](lec04-regression.qmd)). The dropped category becomes the baseline that all other coefficients are measured against.
 :::
 
 :::{.callout-tip}
@@ -448,7 +448,7 @@ For our Airbnb data, we extracted five features from each listing description:
 
 ### The prompt
 
-The extraction prompt must be specific, include the expected output format, and define each field precisely. Here is the prompt that generated our features (see `data/airbnb/generate_llm_features.py` for the full script):
+The extraction prompt must be specific, include the expected output format, and define each field precisely. Here is the prompt that generated our features (the full extraction script is in the course code repository):
 
 ```{python}
 # The extraction prompt used to generate LLM features:
@@ -591,31 +591,13 @@ R² gets better as we add features. But does the model get better? Adding redund
 
 ## Multicollinearity
 
-```{python}
-# Prepare columns for multicollinearity analysis
-# The df already has bedrooms, bathrooms from the ch6-style loading above.
-# We also need beds, price_clean, accommodates, number_of_reviews.
-# Create price_clean as an alias (our df uses 'price' for the cleaned column).
-df['price_clean'] = df['price']
-
-# Subset for multicollinearity analysis — drop rows with missing beds
-df_mc = df.dropna(subset=['bedrooms', 'bathrooms']).copy()
-# beds column may have NaNs from the original listings load
-df_mc = df_mc[df_mc['bedrooms'].notna() & df_mc['bathrooms'].notna()].copy()
-```
-
-What if two of your features are nearly the same? Let's compare `bedrooms` and `beds`.
+What if two of your features are nearly the same? Let's compare `bedrooms` and `beds`. We create a subset `df_mc` with the columns we need for this analysis, dropping rows where `beds` is missing.
 
 ```{python}
-# Reload with beds column available (beds may have been dropped earlier)
-airbnb_full = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
-airbnb_full['price_clean'] = (
-    airbnb_full['price'].astype(str).str.replace('[$,]', '', regex=True).astype(float)
-)
-cols_mc = ['bedrooms', 'bathrooms', 'beds', 'price_clean',
-           'accommodates', 'number_of_reviews']
-df_mc = airbnb_full[cols_mc].dropna()
-df_mc = df_mc[(df_mc['price_clean'] > 0) & (df_mc['price_clean'] <= 500)]
+# Subset for multicollinearity analysis
+df['price_clean'] = df['price']  # alias for consistency with ch4 code
+df_mc = df[['bedrooms', 'bathrooms', 'beds', 'price_clean',
+            'accommodates', 'number_of_reviews']].dropna()
 print(f"Working with {len(df_mc):,} listings for multicollinearity analysis")
 df_mc.head(10)
 ```
@@ -629,6 +611,8 @@ print()
 for col in ['bedrooms', 'bathrooms', 'beds']:
     print(f"  {col}: first 8 values = {df_mc[col].values[:8]}")
 ```
+
+Bedrooms and beds look similar — most listings have roughly one bed per bedroom. The 2D histogram on the left confirms this: most listings cluster along the diagonal. The correlation heatmap on the right quantifies how tightly each pair of features tracks.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.8),
