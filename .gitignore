@@ -25,5 +25,15 @@ __MACOSX/
 *.swo
 *~
 
+# Large data files — hosted on GitHub Release (data-v1)
+# Run scripts/download-data.sh to fetch them locally
+data/airbnb/listings.csv
+data/epa-air-quality/daily_aqi_by_county_*.csv
+data/nba/NBA_2004_2025_Shots.csv
+data/nba/nba_game_logs_2022_2024.csv
+data/nba/nba_load_management.csv
+data/nba/nba_shots_2017_18.csv
+data/nba/nba_shots.zip
+
 /.quarto/
 **/*.quarto_ipynb

@@ -19,8 +19,20 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
-        with:
-          lfs: true
+
+      - name: Download large data files from release
+        run: |
+          mkdir -p data/airbnb data/epa-air-quality data/nba
+          gh release download data-v1 --dir /tmp/data-assets --pattern '*.csv' --repo ${{ github.repository }}
+          mv /tmp/data-assets/listings.csv data/airbnb/
+          mv /tmp/data-assets/daily_aqi_by_county_*.csv data/epa-air-quality/
+          mv /tmp/data-assets/nba_load_management.csv data/nba/
+          mv /tmp/data-assets/nba_game_logs_2022_2024.csv data/nba/
+          rm -rf /tmp/data-assets
+          echo "Downloaded data files:"
+          ls -lh data/airbnb/listings.csv data/epa-air-quality/*.csv data/nba/nba_*.csv
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
