@@ -1,0 +1,232 @@
+---
+title: "Appendix: Computational Tools"
+execute:
+  enabled: false
+jupyter: python3
+---
+
+This appendix introduces the software tools used throughout this book and collects the Python functions you'll encounter most often. If you've never written code before, start here. If you have programming experience, skim the first few sections and use the function reference at the end as a cheat sheet.
+
+## The toolkit
+
+Four tools form the backbone of the computational work in this course:
+
+| Tool | What it is | Role in this course |
+|------|-----------|-------------------|
+| **Python** | A general-purpose programming language | Write and run data analysis code |
+| **Jupyter notebooks** | An interactive environment that mixes code, text, and plots | Where you do your homework and projects |
+| **Google Colab** | A free, cloud-based Jupyter environment from Google | Run notebooks without installing anything |
+| **AI assistants** | Tools like ChatGPT, Claude, and Gemini | Help you write code, debug, and learn |
+
+You don't need to master any of these tools before starting the course. You'll pick them up as you go.
+
+## Python
+
+Python is the most widely used language for data science. The code in this book uses Python along with a handful of libraries:
+
+- **pandas** --- load, clean, and transform data
+- **numpy** --- numerical operations and linear algebra
+- **matplotlib** and **seaborn** --- visualization
+- **scipy** --- statistical distributions and hypothesis tests
+- **scikit-learn** --- machine learning models
+
+You don't need to memorize these. Each chapter introduces the functions it uses, and the reference tables at the end of this appendix collect them in one place.
+
+## Jupyter notebooks
+
+A Jupyter notebook is a document made of *cells*. Each cell is either **code** (Python that you can run) or **text** (explanations, formatted with Markdown). You run cells one at a time, and each code cell prints its output directly below it --- a table, a plot, a number.
+
+This format is ideal for data analysis because you can see each step and its result before moving on. Every chapter of this book is also available as a Jupyter notebook.
+
+## Running code: local vs. cloud
+
+There are two ways to run a Jupyter notebook.
+
+**Cloud (Google Colab).** Open `colab.research.google.com`, upload a notebook (or click the "Open in Colab" badge on any chapter), and start running cells. Google provides a free virtual machine with Python and the major libraries pre-installed. Your code runs on Google's servers. You need nothing on your own computer except a web browser.
+
+**Local.** Install Python (we recommend the [Anaconda distribution](https://www.anaconda.com/download)), then launch Jupyter from a terminal with `jupyter notebook` or `jupyter lab`. Your code runs on your own machine. You have full control over installed packages and file access, but you're responsible for setup and troubleshooting.
+
+**Which should you use?** For this course, Colab is the path of least resistance. It works on any laptop, requires no installation, and is free for the workloads in this course. If you already have a local Python setup you're comfortable with, use that.
+
+| | Google Colab | Local (Anaconda) |
+|---|---|---|
+| **Setup** | None --- open a browser | Install Anaconda, configure environment |
+| **Hardware** | Google's servers (free GPU available) | Your laptop's CPU and RAM |
+| **File access** | Upload files or mount Google Drive | Direct access to local files |
+| **Packages** | Most pre-installed; `!pip install` for others | You manage your own environment |
+| **Persistence** | Notebooks saved to Google Drive; runtime resets after ~12 hours of inactivity | Everything stays on your machine |
+| **Best for** | Homework, quick exploration, collaboration | Large projects, custom environments |
+
+## AI tools
+
+AI assistants are useful at every stage of a data analysis --- writing code, debugging errors, and understanding concepts. Here's how to think about the options.
+
+### Built-in AI in Colab
+
+Google Colab has AI features built directly into the notebook:
+
+- **Code completion.** Write a comment describing what you want (e.g., `# plot a histogram of prices`), press Tab, and Colab suggests code. Review the suggestion before accepting it.
+- **Ask a question.** Highlight code or an error message, right-click, and choose "Ask Gemini." Colab explains what the code does or what went wrong.
+- **Generate cells.** Click the "+ Code" button with the sparkle icon, type a natural-language prompt, and Colab generates a code cell.
+
+These features are fast and convenient for small, well-defined tasks: "make a scatter plot," "compute the mean by group," "why am I getting a KeyError?"
+
+### Advanced AI assistants
+
+For larger or more open-ended tasks, use a full AI assistant: [ChatGPT](https://chat.openai.com), [Claude](https://claude.ai), or [Gemini](https://gemini.google.com). These are better when you need to:
+
+- **Understand a concept.** "Explain what a p-value means in the context of A/B testing."
+- **Debug a tricky error.** Paste your code and the full traceback. The assistant can trace through the logic in a way that Colab's inline help cannot.
+- **Plan an analysis.** "I have a dataset of Airbnb listings with price, neighborhood, and number of reviews. What's a good way to explore whether neighborhood predicts price?"
+- **Review your work.** Paste your homework solution and ask: "Is my interpretation of this coefficient correct?"
+
+**Tip:** Upload course materials (lecture notes, homework prompts, the textbook chapter) to give the assistant context about what you're learning and the notation we use. A question like "explain regularization" gets a generic answer; a question like "explain regularization the way it's covered in Chapter 6 of this textbook" gets one tailored to your course.
+
+### The boundary
+
+AI can write code and generate analyses, but it cannot replace your understanding. In this course, you'll be asked to defend your work in person --- in review sessions, quizzes, and the project presentation. The test is not whether the code runs, but whether you can explain *why* it's the right analysis and *what* the results mean.
+
+Use AI to **write code**, not to **replace understanding**. Use it to get unstuck faster, not to skip the thinking.
+
+## Python function reference
+
+The tables below collect the most important functions used in this book, organized by library. Each function links to the chapter where it first appears. This is a reference, not a reading assignment --- come back to it when you need a reminder.
+
+### pandas: loading and inspecting data
+
+| Function | What it does |
+|----------|-------------|
+| `pd.read_csv(path)` | Load a CSV file into a DataFrame |
+| `df.head()`, `df.tail()` | Preview the first or last rows |
+| `df.shape` | Number of rows and columns |
+| `df.info()` | Column names, types, and missing-value counts |
+| `df.dtypes` | Data type of each column |
+| `df.describe()` | Summary statistics for numeric columns |
+| `df.columns` | List of column names |
+
+### pandas: selecting and filtering
+
+| Function | What it does |
+|----------|-------------|
+| `df['col']` | Select a single column (returns a Series) |
+| `df[['col1', 'col2']]` | Select multiple columns (returns a DataFrame) |
+| `df[df['col'] > value]` | Filter rows by a condition |
+| `df.loc[rows, cols]` | Select by label |
+| `df.iloc[rows, cols]` | Select by position |
+
+### pandas: cleaning
+
+| Function | What it does |
+|----------|-------------|
+| `df.dropna()` | Remove rows with missing values |
+| `df.fillna(value)` | Replace missing values |
+| `df.isna()` | Boolean mask of missing values |
+| `df.duplicated()` | Boolean mask of duplicate rows |
+| `df.drop_duplicates()` | Remove duplicate rows |
+| `df.astype(dtype)` | Convert column types |
+| `df.str.lower()`, `.strip()`, `.replace()` | String cleaning methods |
+
+### pandas: grouping and aggregation
+
+| Function | What it does |
+|----------|-------------|
+| `df.groupby('col')` | Group rows by a column |
+| `.mean()`, `.sum()`, `.std()`, `.median()` | Aggregate a group |
+| `.agg({'col': 'mean'})` | Aggregate with specific functions per column |
+| `df['col'].value_counts()` | Count occurrences of each value |
+| `df['col'].unique()` | Array of unique values |
+| `pd.crosstab(df['a'], df['b'])` | Contingency table |
+| `pd.pivot_table(df, values, index, columns)` | Pivot table with aggregation |
+
+### pandas: combining DataFrames
+
+| Function | What it does |
+|----------|-------------|
+| `pd.merge(left, right, on='key')` | Join two DataFrames on a shared column |
+| `pd.concat([df1, df2])` | Stack DataFrames vertically or horizontally |
+
+### pandas: reshaping and encoding
+
+| Function | What it does |
+|----------|-------------|
+| `pd.get_dummies(df['col'])` | One-hot encode a categorical column |
+| `pd.cut(series, bins)` | Bin a continuous variable into intervals |
+| `df.unstack()` | Pivot from long to wide format |
+
+### numpy
+
+| Function | What it does |
+|----------|-------------|
+| `np.array(list)` | Create an array |
+| `np.zeros(n)`, `np.ones(n)` | Arrays of zeros or ones |
+| `np.arange(start, stop, step)` | Evenly spaced values (integers) |
+| `np.linspace(start, stop, n)` | Evenly spaced values (floats) |
+| `np.mean(x)`, `np.std(x)`, `np.median(x)` | Summary statistics |
+| `np.sqrt(x)`, `np.exp(x)`, `np.log(x)` | Element-wise math |
+| `np.dot(a, b)` | Dot product |
+| `np.linalg.solve(A, b)` | Solve $Ax = b$ |
+| `np.where(cond, x, y)` | Element-wise conditional selection |
+| `np.random.normal(mu, sigma, n)` | Sample from a normal distribution |
+| `np.random.permutation(x)` | Randomly shuffle an array |
+
+### matplotlib
+
+| Function | What it does |
+|----------|-------------|
+| `fig, ax = plt.subplots()` | Create a figure and axes |
+| `ax.plot(x, y)` | Line plot |
+| `ax.scatter(x, y)` | Scatter plot |
+| `ax.hist(x, bins=...)` | Histogram |
+| `ax.bar(x, height)` | Bar chart |
+| `ax.set_xlabel()`, `ax.set_ylabel()`, `ax.set_title()` | Axis labels and title |
+| `ax.axhline(y)`, `ax.axvline(x)` | Horizontal or vertical reference line |
+| `ax.legend()` | Add a legend |
+| `plt.tight_layout()` | Auto-adjust spacing |
+
+### seaborn
+
+| Function | What it does |
+|----------|-------------|
+| `sns.histplot(data, x=...)` | Histogram with optional density curve |
+| `sns.scatterplot(data, x=..., y=..., hue=...)` | Scatter plot with grouping |
+| `sns.boxplot(data, x=..., y=...)` | Box plot by category |
+| `sns.violinplot(data, x=..., y=...)` | Distribution shape by category |
+| `sns.heatmap(matrix, annot=True)` | Annotated heatmap |
+| `sns.regplot(data, x=..., y=...)` | Scatter plot with regression line |
+| `sns.set_style('whitegrid')` | Set plot theme |
+
+### scipy.stats
+
+| Function | What it does |
+|----------|-------------|
+| `norm.pdf(x, mu, sigma)` | Normal density at $x$ |
+| `norm.cdf(x, mu, sigma)` | Normal CDF (probability $\leq x$) |
+| `norm.ppf(q, mu, sigma)` | Inverse CDF (quantile function) |
+| `binom.pmf(k, n, p)` | Binomial probability of exactly $k$ successes |
+| `stats.ttest_ind(a, b)` | Two-sample t-test (Welch's) |
+| `stats.ttest_1samp(a, mu)` | One-sample t-test |
+| `stats.pearsonr(x, y)` | Pearson correlation and p-value |
+
+### scikit-learn
+
+| Function | What it does |
+|----------|-------------|
+| `train_test_split(X, y, test_size=...)` | Split data into training and test sets |
+| `cross_val_score(model, X, y, cv=...)` | Cross-validation scores |
+| `StandardScaler()` | Standardize features to mean 0, std 1 |
+| `PolynomialFeatures(degree=...)` | Generate polynomial features |
+| `LinearRegression()` | Ordinary least squares |
+| `Lasso(alpha=...)` | L1-regularized regression |
+| `Ridge(alpha=...)` | L2-regularized regression |
+| `DecisionTreeRegressor()` | Decision tree for regression |
+| `RandomForestRegressor()` | Random forest for regression |
+| `LogisticRegression()` | Logistic regression for classification |
+| `PCA(n_components=...)` | Principal component analysis |
+| `KMeans(n_clusters=...)` | K-means clustering |
+| `model.fit(X, y)` | Train a model |
+| `model.predict(X)` | Generate predictions |
+| `model.score(X, y)` | R$^2$ (regression) or accuracy (classification) |
+| `r2_score(y_true, y_pred)` | Coefficient of determination |
+| `mean_squared_error(y_true, y_pred)` | Mean squared error |
+| `confusion_matrix(y_true, y_pred)` | Classification confusion matrix |
+| `roc_curve(y_true, y_score)` | ROC curve arrays |
