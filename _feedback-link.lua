@@ -2,11 +2,16 @@ function Pandoc(doc)
   local input = quarto.doc.input_file
   if not input then return doc end
   local base = input:match("([^/]+)%.qmd$")
-  if not base or not base:match("^lec%d") then return doc end
+  if not base or not (base:match("^lec%d") or base:match("^appendix%-")) then return doc end
 
   -- Extract chapter number from filename (e.g., "lec03-data-munging" -> "3")
+  -- For appendix files, use the appendix name (e.g., "appendix-probability" -> "appendix-probability")
   local num = base:match("^lec(%d+)")
-  if num then num = tostring(tonumber(num)) end  -- strip leading zero
+  if num then
+    num = tostring(tonumber(num))  -- strip leading zero
+  elseif base:match("^appendix%-") then
+    num = base
+  end
 
   local form_url = "https://docs.google.com/forms/d/e/1FAIpQLScokCu2Rsz7zZw7XTOzsE_OBODr6iHjB1ErOw0zizorHD0zXg/viewform"
     .. "?usp=pp_url"

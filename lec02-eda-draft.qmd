@@ -71,21 +71,6 @@ airbnb.info()
 
 Scan the `Dtype` column. Most columns are what you'd expect: `int64` for counts, `float64` for ratings, `object` for text. But check the non-null counts: several columns have fewer values than the 29,000+ rows. Those gaps are **missing values** — encoded as `NaN` (Not a Number) in pandas.
 
-The `Dtype` column reports how pandas *stores* each column — but storage type and semantic type are different things. Before going further, let's name the six data types you'll encounter throughout this course.
-
-:::{.callout-important}
-## Definition: Data Types
-
-- **Continuous**: values on a number line (price, rating score, temperature). Pandas dtype: `float64`.
-- **Discrete**: countable values (number of bedrooms, number of reviews). Pandas dtype: `int64`.
-- **Nominal / categorical**: unordered categories (neighbourhood, room type, borough). Pandas dtype: `pd.Categorical` with `ordered=False`.
-- **Ordinal**: ordered categories with a meaningful rank but no fixed spacing (rarely/sometimes/often, star ratings, education level). Pandas dtype: `pd.Categorical` with `ordered=True`.
-- **Text**: free-form strings (listing name, review text, doctor's notes). Pandas dtype: `object` or `str`.
-- **Identifier**: codes that look numeric but aren't (ZIP code, hospital ID, phone number). Should be stored as `str`, but pandas often misreads them as `int64`.
-:::
-
-Notice that pandas maps these six semantic types to a smaller set of storage types. By default, pandas loads both nominal and text columns as `object` — it can't tell `neighbourhood_cleansed` from `name`. Converting nominal and ordinal columns to `pd.Categorical` (with `ordered=False` or `ordered=True`) makes the semantic type explicit and enables pandas to enforce it. An identifier stored as `int64` looks numeric, but arithmetic on it is meaningless (what is ZIP code 10003 + 1?). Keeping the distinction between semantic type and storage type in mind will save you from subtle errors — Chapter 3 explores what goes wrong when the two don't match.
-
 The `.describe()` method summarizes numeric columns: count, mean, standard deviation, min, quartiles, and max.
 
 ```{python}
@@ -192,7 +177,7 @@ A statistic is **robust** if extreme values barely affect it. The **median** and
 
 :::{.callout-tip}
 ## Think About It
-You're reporting Airbnb price spread to a city council considering rent regulation. The standard deviation is \$85, but the IQR is \$45. Which number do you present, and how does your choice affect the policy conversation?
+Is the standard deviation a robust statistic? If you suspect outliers in your data, what would you use instead to measure spread?
 :::
 
 > **Key principle**: When a distribution has a heavy tail, the mean doesn't represent a typical value. Always plot the distribution before relying on any single number.
@@ -263,16 +248,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-On the linear scale, expensive listings in the \$500–\$999 range make it hard to see any pattern among the majority. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a **multiplicative** increase in price. Notice the y-axis still shows dollar amounts — the log axis just spreads them out.
-
-:::{.callout-tip}
-## Think About It: Reading a log-scale plot
-A straight line on a semilog plot (log y-axis, linear x-axis) means each unit increase in x **multiplies** y by a fixed factor. That's exactly what we see here: each additional guest corresponds to roughly a multiplicative increase in price. On a linear plot, by contrast, a straight line means each unit increase in x **adds** a fixed amount to y.
-
-We'll formalize this interpretation — and cover the other log-transform cases — when we fit regression models in Chapter 5.
-:::
-
-We'll use this idea extensively when we build regression models.
+On the linear scale, expensive listings in the \$500–\$999 range make it hard to see any pattern among the majority. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a multiplicative increase in price. Notice the y-axis still shows dollar amounts — the log axis just spreads them out. We'll use this idea extensively when we build regression models in Chapter 5.
 
 ### When scatter plots fail: 2D histograms
 

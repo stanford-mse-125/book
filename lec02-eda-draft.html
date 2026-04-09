@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Exploratory Data Analysis &amp; Visualization</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="lec02-eda-draft_files/libs/clipboard/clipboard.min.js"></script>
+<script src="lec02-eda-draft_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="lec02-eda-draft_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="lec02-eda-draft_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="lec02-eda-draft_files/libs/quarto-html/popper.min.js"></script>
+<script src="lec02-eda-draft_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="lec02-eda-draft_files/libs/quarto-html/anchor.min.js"></script>
+<link href="lec02-eda-draft_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="lec02-eda-draft_files/libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="lec02-eda-draft_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="lec02-eda-draft_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="lec02-eda-draft_files/libs/bootstrap/bootstrap-d6a003b94517c951b2d65075d42fb01b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Exploratory Data Analysis &amp; Visualization</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="how-should-you-price-an-airbnb-listing" class="level2">
+<h2 class="anchored" data-anchor-id="how-should-you-price-an-airbnb-listing">How should you price an Airbnb listing?</h2>
+<p>You’ve just rented an apartment in New York City, and you want to list a spare room on Airbnb. How much should you charge per night? Too high and the listing sits empty; too low and you leave money on the table. You could ask an AI assistant — but how would you know if its answer makes sense?</p>
+<p>Before you model, predict, or optimize, you need to <em>see</em> your data. <strong>Exploratory Data Analysis (EDA)</strong> is the practice of examining a dataset’s structure, distributions, and quirks before fitting any model. EDA is the most important step in any analysis.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Definition: Exploratory Data Analysis (EDA)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Exploratory Data Analysis (EDA)</strong> is the practice of examining a dataset’s structure, distributions, and quirks before fitting any model. The goal is to build understanding: what variables do you have, what do they look like, and what relationships exist between them?</p>
+</div>
+</div>
+<p>In Chapter 1, we introduced four modes of reasoning with data: summary, prediction, inference, and causation. This chapter focuses on the first: <strong>summary</strong>. We’ll explore 29,000+ Airbnb listings in New York City, learning to visualize distributions, compare groups, and spot patterns that summary statistics alone would miss. We’ll also return to the hospital readmissions data to see how a naive analysis can get the answer dangerously wrong.</p>
+<div id="2eb3a61f" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(<span class="st">'ignore'</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>sns.set_style(<span class="st">'whitegrid'</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">'figure.figsize'</span>] <span class="op">=</span> (<span class="dv">8</span>, <span class="dv">5</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">'font.size'</span>] <span class="op">=</span> <span class="dv">12</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Load data</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>DATA_DIR <span class="op">=</span> <span class="st">'data'</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="part-1-first-look-at-the-data" class="level2">
+<h2 class="anchored" data-anchor-id="part-1-first-look-at-the-data">Part 1: First look at the data</h2>
+<p>The EDA checklist:</p>
+<ul>
+<li><strong>Shape</strong> — how many rows and columns?</li>
+<li><strong>Types</strong> — what are the column types? Any surprises?</li>
+<li><strong>Distributions</strong> — what does each variable look like?</li>
+<li><strong>Missing data</strong> — how much, and where?</li>
+<li><strong>Relationships</strong> — how do variables relate to each other?</li>
+</ul>
+<p>We’ll work through each step on the NYC Airbnb dataset from Inside Airbnb.</p>
+<div id="b68c6b63" class="cell" data-execution_count="2">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load Airbnb data</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># low_memory=False prevents mixed-type warnings for large files</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>airbnb <span class="op">=</span> pd.read_csv(<span class="ss">f'</span><span class="sc">{</span>DATA_DIR<span class="sc">}</span><span class="ss">/airbnb/listings.csv'</span>, low_memory<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Shape: </span><span class="sc">{</span>airbnb<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Select key columns for exploration</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>cols <span class="op">=</span> [<span class="st">'name'</span>, <span class="st">'neighbourhood_group_cleansed'</span>, <span class="st">'neighbourhood_cleansed'</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">'room_type'</span>, <span class="st">'price'</span>, <span class="st">'bedrooms'</span>, <span class="st">'beds'</span>, <span class="st">'security_deposit'</span>,</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">'number_of_reviews'</span>, <span class="st">'review_scores_rating'</span>, <span class="st">'accommodates'</span>]</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>airbnb <span class="op">=</span> airbnb[cols].copy()</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>airbnb.head()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Shape: (29142, 96)</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="2">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">name</th>
+<th data-quarto-table-cell-role="th">neighbourhood_group_cleansed</th>
+<th data-quarto-table-cell-role="th">neighbourhood_cleansed</th>
+<th data-quarto-table-cell-role="th">room_type</th>
+<th data-quarto-table-cell-role="th">price</th>
+<th data-quarto-table-cell-role="th">bedrooms</th>
+<th data-quarto-table-cell-role="th">beds</th>
+<th data-quarto-table-cell-role="th">security_deposit</th>
+<th data-quarto-table-cell-role="th">number_of_reviews</th>
+<th data-quarto-table-cell-role="th">review_scores_rating</th>
+<th data-quarto-table-cell-role="th">accommodates</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">0</th>
+<td>Cozy Stay in Queens, Easy Access to Manhattan</td>
+<td>Queens</td>
+<td>East Elmhurst</td>
+<td>Private room</td>
+<td>45</td>
+<td>1</td>
+<td>1.0</td>
+<td>NaN</td>
+<td>3</td>
+<td>90</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">1</th>
+<td>Spacious room in comfortable apt.</td>
+<td>Manhattan</td>
+<td>East Harlem</td>
+<td>Private room</td>
+<td>95</td>
+<td>1</td>
+<td>1.0</td>
+<td>NaN</td>
+<td>101</td>
+<td>93</td>
+<td>2</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">2</th>
+<td>Fresh Clean &amp; Modern: Williamsburg at its Best</td>
+<td>Brooklyn</td>
+<td>Williamsburg</td>
+<td>Entire home/apt</td>
+<td>60</td>
+<td>1</td>
+<td>1.0</td>
+<td>NaN</td>
+<td>19</td>
+<td>100</td>
+<td>2</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">3</th>
+<td>Cozy Room In Perfect Location!</td>
+<td>Manhattan</td>
+<td>Washington Heights</td>
+<td>Private room</td>
+<td>70</td>
+<td>1</td>
+<td>1.0</td>
+<td>NaN</td>
+<td>8</td>
+<td>89</td>
+<td>2</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">4</th>
+<td>Charming Central Park Studio</td>
+<td>Manhattan</td>
+<td>Upper East Side</td>
+<td>Entire home/apt</td>
+<td>104</td>
+<td>1</td>
+<td>1.0</td>
+<td>NaN</td>
+<td>4</td>
+<td>87</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<section id="shape-types-and-first-impressions" class="level3">
+<h3 class="anchored" data-anchor-id="shape-types-and-first-impressions">Shape, types, and first impressions</h3>
+<p>The <code>.info()</code> method shows each column’s type and how many non-null values it has — a fast way to spot problems.</p>
+<div id="4518ab70" class="cell" data-execution_count="3">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>airbnb.info()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>&lt;class 'pandas.DataFrame'&gt;
+RangeIndex: 29142 entries, 0 to 29141
+Data columns (total 11 columns):
+ #   Column                        Non-Null Count  Dtype  
+---  ------                        --------------  -----  
+ 0   name                          29137 non-null  str    
+ 1   neighbourhood_group_cleansed  29142 non-null  str    
+ 2   neighbourhood_cleansed        29142 non-null  str    
+ 3   room_type                     29142 non-null  str    
+ 4   price                         29142 non-null  int64  
+ 5   bedrooms                      29142 non-null  int64  
+ 6   beds                          29125 non-null  float64
+ 7   security_deposit              17315 non-null  float64
+ 8   number_of_reviews             29142 non-null  int64  
+ 9   review_scores_rating          29142 non-null  int64  
+ 10  accommodates                  29142 non-null  int64  
+dtypes: float64(2), int64(5), str(4)
+memory usage: 2.4 MB</code></pre>
+</div>
+</div>
+<p>Scan the <code>Dtype</code> column. Most columns are what you’d expect: <code>int64</code> for counts, <code>float64</code> for ratings, <code>object</code> for text. But check the non-null counts: several columns have fewer values than the 29,000+ rows. Those gaps are <strong>missing values</strong> — encoded as <code>NaN</code> (Not a Number) in pandas.</p>
+<p>The <code>.describe()</code> method summarizes numeric columns: count, mean, standard deviation, min, quartiles, and max.</p>
+<div id="0b056b1b" class="cell" data-execution_count="4">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>airbnb.describe()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="4">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">price</th>
+<th data-quarto-table-cell-role="th">bedrooms</th>
+<th data-quarto-table-cell-role="th">beds</th>
+<th data-quarto-table-cell-role="th">security_deposit</th>
+<th data-quarto-table-cell-role="th">number_of_reviews</th>
+<th data-quarto-table-cell-role="th">review_scores_rating</th>
+<th data-quarto-table-cell-role="th">accommodates</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">count</th>
+<td>29142.000000</td>
+<td>29142.000000</td>
+<td>29125.000000</td>
+<td>17315.000000</td>
+<td>29142.000000</td>
+<td>29142.000000</td>
+<td>29142.000000</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">mean</th>
+<td>132.978142</td>
+<td>1.158225</td>
+<td>1.588429</td>
+<td>189.882876</td>
+<td>24.451548</td>
+<td>93.594331</td>
+<td>2.897056</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">std</th>
+<td>103.588851</td>
+<td>0.716578</td>
+<td>1.074826</td>
+<td>183.470197</td>
+<td>38.430129</td>
+<td>8.356817</td>
+<td>1.855113</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">min</th>
+<td>0.000000</td>
+<td>0.000000</td>
+<td>1.000000</td>
+<td>0.000000</td>
+<td>1.000000</td>
+<td>20.000000</td>
+<td>1.000000</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">25%</th>
+<td>67.000000</td>
+<td>1.000000</td>
+<td>1.000000</td>
+<td>0.000000</td>
+<td>3.000000</td>
+<td>91.000000</td>
+<td>2.000000</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">50%</th>
+<td>100.000000</td>
+<td>1.000000</td>
+<td>1.000000</td>
+<td>150.000000</td>
+<td>9.000000</td>
+<td>96.000000</td>
+<td>2.000000</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">75%</th>
+<td>165.000000</td>
+<td>1.000000</td>
+<td>2.000000</td>
+<td>300.000000</td>
+<td>29.000000</td>
+<td>100.000000</td>
+<td>4.000000</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">max</th>
+<td>999.000000</td>
+<td>11.000000</td>
+<td>21.000000</td>
+<td>999.000000</td>
+<td>521.000000</td>
+<td>100.000000</td>
+<td>16.000000</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>Already some surprises. The minimum price is $0 — are those real listings? The max accommodates 16 guests. And <code>bedrooms</code> has fewer entries than other columns, suggesting missing values.</p>
+</section>
+</section>
+<section id="part-2-distributions-what-does-typical-look-like" class="level2">
+<h2 class="anchored" data-anchor-id="part-2-distributions-what-does-typical-look-like">Part 2: Distributions — what does “typical” look like?</h2>
+<section id="the-price-distribution-beware-the-right-tail" class="level3">
+<h3 class="anchored" data-anchor-id="the-price-distribution-beware-the-right-tail">The price distribution: beware the right tail</h3>
+<p>Let’s look at the distribution of nightly prices.</p>
+<div id="49b56088" class="cell" data-execution_count="5">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">11</span>, <span class="dv">4</span>))</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Raw distribution</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>sns.histplot(airbnb[<span class="st">'price'</span>], bins<span class="op">=</span><span class="dv">100</span>, ax<span class="op">=</span>axes[<span class="dv">0</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_xlabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'All prices'</span>)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Zoomed in</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>sns.histplot(airbnb[airbnb[<span class="st">'price'</span>].between(<span class="dv">1</span>, <span class="dv">500</span>)][<span class="st">'price'</span>], bins<span class="op">=</span><span class="dv">50</span>, ax<span class="op">=</span>axes[<span class="dv">1</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'Prices $1–$500 (zoomed in)'</span>)</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-6-output-1.png" width="1040" height="366" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The left plot wastes space — the distribution is so skewed that most data piles up on the left. A long tail of expensive listings dominates the scale.</p>
+<p>The zoomed-in version on the right is more informative. Most listings fall between $50 and $200/night, with a peak around $100.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Think About It
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Before looking at the numbers below: how large do you think the gap between mean and median price is? $5? $20? $100? What does the size of that gap tell you about the distribution?</p>
+</div>
+</div>
+<div id="72ef55f7" class="cell" data-execution_count="6">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Mean price:   $</span><span class="sc">{</span>airbnb[<span class="st">'price'</span>]<span class="sc">.</span>mean()<span class="sc">:.0f}</span><span class="ss">/night"</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Median price: $</span><span class="sc">{</span>airbnb[<span class="st">'price'</span>]<span class="sc">.</span>median()<span class="sc">:.0f}</span><span class="ss">/night"</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Listings at $0: </span><span class="sc">{</span>(airbnb[<span class="st">'price'</span>] <span class="op">==</span> <span class="dv">0</span>)<span class="sc">.</span><span class="bu">sum</span>()<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Max price: $</span><span class="sc">{</span>airbnb[<span class="st">'price'</span>]<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:,.0f}</span><span class="ss">"</span>)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Listings over $500: </span><span class="sc">{</span>(airbnb[<span class="st">'price'</span>] <span class="op">&gt;</span> <span class="dv">500</span>)<span class="sc">.</span><span class="bu">sum</span>()<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Mean price:   $133/night
+Median price: $100/night
+Listings at $0: 25
+Max price: $999
+Listings over $500: 339</code></pre>
+</div>
+</div>
+<p>The mean is noticeably higher than the median. A few hundred expensive listings pull the average up. If you’re an Airbnb host pricing a typical apartment, the mean is misleading — the median better represents a typical listing.</p>
+</section>
+<section id="center-and-spread" class="level3">
+<h3 class="anchored" data-anchor-id="center-and-spread">Center and spread</h3>
+<p>We just saw that the mean and median can disagree. Let’s define the key summaries precisely.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Definitions: Center and Spread
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Mean</strong> (<span class="math inline">\(\bar{x}\)</span>): the arithmetic average, <span class="math inline">\(\bar{x} = \frac{1}{n}\sum_{i=1}^n x_i\)</span>. Sensitive to extreme values.</li>
+<li><strong>Median</strong>: the middle value when observations are sorted. Half the data falls below it, half above. Robust to outliers.</li>
+<li><strong>Quartiles</strong>: sort the data and split into four equal parts. <strong>Q1</strong> (25th percentile) is the median of the lower half, <strong>Q2</strong> is the median itself (50th percentile), and <strong>Q3</strong> (75th percentile) is the median of the upper half.</li>
+<li><strong>Interquartile Range (IQR)</strong>: <span class="math inline">\(\text{IQR} = Q3 - Q1\)</span>. The width of the middle 50% of the data. Robust to outliers.</li>
+</ul>
+</div>
+</div>
+<p>Let’s see these on the Airbnb price distribution.</p>
+<div id="56c54a19" class="cell" data-execution_count="7">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>prices <span class="op">=</span> airbnb[<span class="st">'price'</span>].dropna()</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>q1 <span class="op">=</span> prices.quantile(<span class="fl">0.25</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>median <span class="op">=</span> prices.median()</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>q3 <span class="op">=</span> prices.quantile(<span class="fl">0.75</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> prices.mean()</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="dv">5</span>))</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>sns.histplot(prices[prices <span class="op">&lt;=</span> <span class="dv">500</span>], bins<span class="op">=</span><span class="dv">60</span>, ax<span class="op">=</span>ax, color<span class="op">=</span><span class="st">'steelblue'</span>, edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Vertical lines for mean, median, Q1, Q3</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>ax.axvline(mean, color<span class="op">=</span><span class="st">'red'</span>, linestyle<span class="op">=</span><span class="st">'--'</span>, linewidth<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="ss">f'Mean = $</span><span class="sc">{</span>mean<span class="sc">:.0f}</span><span class="ss">'</span>)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>ax.axvline(median, color<span class="op">=</span><span class="st">'orange'</span>, linestyle<span class="op">=</span><span class="st">'-'</span>, linewidth<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="ss">f'Median (Q2) = $</span><span class="sc">{</span>median<span class="sc">:.0f}</span><span class="ss">'</span>)</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>ax.axvline(q1, color<span class="op">=</span><span class="st">'green'</span>, linestyle<span class="op">=</span><span class="st">':'</span>, linewidth<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="ss">f'Q1 = $</span><span class="sc">{</span>q1<span class="sc">:.0f}</span><span class="ss">'</span>)</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>ax.axvline(q3, color<span class="op">=</span><span class="st">'green'</span>, linestyle<span class="op">=</span><span class="st">':'</span>, linewidth<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="ss">f'Q3 = $</span><span class="sc">{</span>q3<span class="sc">:.0f}</span><span class="ss">'</span>)</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Shaded IQR band</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>ax.axvspan(q1, q3, alpha<span class="op">=</span><span class="fl">0.15</span>, color<span class="op">=</span><span class="st">'green'</span>, label<span class="op">=</span><span class="ss">f'IQR = $</span><span class="sc">{</span>q3 <span class="op">-</span> q1<span class="sc">:.0f}</span><span class="ss">'</span>)</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">'Airbnb prices with center and spread markers'</span>)</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>ax.set_xlim(<span class="dv">0</span>, <span class="dv">500</span>)</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>ax.legend(fontsize<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-8-output-1.png" width="752" height="463" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The mean (red dashed line) is pulled to the right of the median (orange solid line) by the long tail of expensive listings. The shaded green band shows the IQR — the middle 50% of prices. Most listings fall in a fairly narrow range, but the tail extends far to the right.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Definition: Robust Statistics
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A statistic is <strong>robust</strong> if extreme values barely affect it. The <strong>median</strong> and <strong>interquartile range (IQR)</strong> are robust: moving one observation to $100,000 hardly changes either one. The <strong>mean</strong> and <strong>standard deviation</strong> are not robust: a single extreme value can shift them dramatically. When a distribution has heavy tails or outliers, robust summaries give a more reliable picture of the typical value and spread.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Think About It
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Is the standard deviation a robust statistic? If you suspect outliers in your data, what would you use instead to measure spread?</p>
+</div>
+</div>
+<blockquote class="blockquote">
+<p><strong>Key principle</strong>: When a distribution has a heavy tail, the mean doesn’t represent a typical value. Always plot the distribution before relying on any single number.</p>
+</blockquote>
+</section>
+<section id="log-scales-for-skewed-data" class="level3">
+<h3 class="anchored" data-anchor-id="log-scales-for-skewed-data">Log scales for skewed data</h3>
+<p>When data is heavily right-skewed, the first tool to reach for is a <strong>log axis</strong>. A log scale compresses the long right tail and stretches out the bunched-up left side — without changing the data itself.</p>
+<div id="e960dd04" class="cell" data-execution_count="8">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter out $0 listings</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>airbnb_pos <span class="op">=</span> airbnb[airbnb[<span class="st">'price'</span>] <span class="op">&gt;</span> <span class="dv">0</span>].copy()</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">3</span>, figsize<span class="op">=</span>(<span class="dv">15</span>, <span class="dv">4</span>))</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Panel 1: Linear scale — heavily skewed</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>sns.histplot(airbnb_pos[<span class="st">'price'</span>], bins<span class="op">=</span><span class="dv">100</span>, ax<span class="op">=</span>axes[<span class="dv">0</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_xlabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'Linear scale (raw prices)'</span>)</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Panel 2: Log axis with log-spaced bins (equal visual area = equal count)</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>log_bins <span class="op">=</span> np.logspace(np.log10(airbnb_pos[<span class="st">'price'</span>].<span class="bu">min</span>()),</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>                       np.log10(airbnb_pos[<span class="st">'price'</span>].<span class="bu">max</span>()), <span class="dv">50</span>)</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].hist(airbnb_pos[<span class="st">'price'</span>], bins<span class="op">=</span>log_bins, edgecolor<span class="op">=</span><span class="st">'white'</span>, color<span class="op">=</span><span class="st">'seagreen'</span>)</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xscale(<span class="st">'log'</span>)</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlabel(<span class="st">'Price ($, log scale)'</span>)</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'Log axis with log-spaced bins'</span>)</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Panel 3: Log-transformed data — for modeling</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>airbnb_pos[<span class="st">'log_price'</span>] <span class="op">=</span> np.log10(airbnb_pos[<span class="st">'price'</span>])</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>sns.histplot(airbnb_pos[<span class="st">'log_price'</span>], bins<span class="op">=</span><span class="dv">50</span>, ax<span class="op">=</span>axes[<span class="dv">2</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>, color<span class="op">=</span><span class="st">'mediumpurple'</span>)</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].set_xlabel(<span class="st">'log10(Price)'</span>)</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].set_title(<span class="st">'Log-transformed data (for modeling)'</span>)</span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-9-output-1.png" width="1424" height="365" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The linear histogram (left) is nearly useless — everything piles up on the left. The log-axis histogram (center) uses logarithmically-spaced bins so that each bar covers an equal range on the log scale — bar <em>areas</em> stay proportional to counts, avoiding the visual distortion that equal-width bins create on a log axis. (We use <code>axes[1].hist()</code> from matplotlib here instead of <code>sns.histplot()</code>, since custom bin edges require direct access to the matplotlib API.) The log-transformed histogram (right) plots <span class="math inline">\(\log_{10}(\text{price})\)</span> directly — useful when you need to feed the data into a model.</p>
+<blockquote class="blockquote">
+<p><strong>Use a log <em>axis</em> when you want to <em>look</em> at skewed data. Use a log <em>transform</em> when you need to <em>model</em> it (e.g., in a regression).</strong></p>
+</blockquote>
+</section>
+</section>
+<section id="part-3-relationships-between-variables" class="level2">
+<h2 class="anchored" data-anchor-id="part-3-relationships-between-variables">Part 3: Relationships between variables</h2>
+<section id="scatter-plots-and-their-limits" class="level3">
+<h3 class="anchored" data-anchor-id="scatter-plots-and-their-limits">Scatter plots and their limits</h3>
+<p>Do larger listings cost more? Let’s plot price against the number of guests a listing accommodates.</p>
+<div id="1f84517f" class="cell" data-execution_count="9">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">11</span>, <span class="dv">4</span>))</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>sample <span class="op">=</span> airbnb_pos.dropna(subset<span class="op">=</span>[<span class="st">'accommodates'</span>]).sample(<span class="dv">3000</span>, random_state<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].scatter(sample[<span class="st">'accommodates'</span>], sample[<span class="st">'price'</span>], alpha<span class="op">=</span><span class="fl">0.3</span>, s<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_xlabel(<span class="st">'Accommodates (guests)'</span>)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'Linear scale: outliers dominate'</span>)</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].scatter(sample[<span class="st">'accommodates'</span>], sample[<span class="st">'price'</span>], alpha<span class="op">=</span><span class="fl">0.3</span>, s<span class="op">=</span><span class="dv">10</span>, color<span class="op">=</span><span class="st">'seagreen'</span>)</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_yscale(<span class="st">'log'</span>)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlabel(<span class="st">'Accommodates (guests)'</span>)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'Log scale: trend is clearer'</span>)</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-10-output-1.png" width="1040" height="367" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>On the linear scale, expensive listings in the $500–$999 range make it hard to see any pattern among the majority. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a multiplicative increase in price. Notice the y-axis still shows dollar amounts — the log axis just spreads them out. We’ll use this idea extensively when we build regression models in Chapter 5.</p>
+</section>
+<section id="when-scatter-plots-fail-2d-histograms" class="level3">
+<h3 class="anchored" data-anchor-id="when-scatter-plots-fail-2d-histograms">When scatter plots fail: 2D histograms</h3>
+<p>With thousands of points, scatter plots become <strong>overplotted</strong> — every point lands on top of the others and you can’t see where the data is concentrated. A <strong>2D histogram</strong> bins the data in both directions and uses color to show density. We use matplotlib’s <code>.hist2d()</code> to create one below.</p>
+<div id="65262b45" class="cell" data-execution_count="10">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="fl">4.5</span>))</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>prices_pos <span class="op">=</span> airbnb[airbnb[<span class="st">'price'</span>] <span class="op">&gt;</span> <span class="dv">0</span>]</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Scatter — overplotted</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].scatter(prices_pos[<span class="st">'accommodates'</span>], prices_pos[<span class="st">'price'</span>],</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>                alpha<span class="op">=</span><span class="fl">0.1</span>, s<span class="op">=</span><span class="dv">5</span>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_xlabel(<span class="st">'Accommodates (guests)'</span>)</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'Scatter plot (overplotted)'</span>)</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylim(<span class="dv">0</span>, <span class="dv">700</span>)</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="co"># 2D histogram with log color scale to reveal structure in dense regions</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.colors <span class="im">import</span> LogNorm</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> prices_pos[<span class="st">'price'</span>] <span class="op">&lt;=</span> <span class="dv">700</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>x_bins <span class="op">=</span> np.arange(<span class="fl">0.5</span>, prices_pos[<span class="st">'accommodates'</span>].<span class="bu">max</span>() <span class="op">+</span> <span class="fl">1.5</span>, <span class="dv">1</span>)  <span class="co"># center bins on integers</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>y_bins <span class="op">=</span> np.linspace(<span class="dv">0</span>, <span class="dv">700</span>, <span class="dv">30</span>)</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>h <span class="op">=</span> axes[<span class="dv">1</span>].hist2d(prices_pos[<span class="st">'accommodates'</span>][mask],</span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>                   prices_pos[<span class="st">'price'</span>][mask],</span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>                   bins<span class="op">=</span>[x_bins, y_bins], cmap<span class="op">=</span><span class="st">'viridis'</span>, norm<span class="op">=</span>LogNorm())</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>plt.colorbar(h[<span class="dv">3</span>], ax<span class="op">=</span>axes[<span class="dv">1</span>], label<span class="op">=</span><span class="st">'Count (log scale)'</span>)</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlabel(<span class="st">'Accommodates (guests)'</span>)</span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'2D histogram (reveals density)'</span>)</span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xticks(<span class="bu">range</span>(<span class="dv">1</span>, <span class="dv">17</span>, <span class="dv">2</span>))</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-11-output-1.png" width="1122" height="415" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The 2D histogram reveals that the overwhelming majority of listings accommodate 1–4 guests at $50–$200/night — a pattern invisible in the overplotted scatter.</p>
+</section>
+</section>
+<section id="part-4-categorical-variables-and-group-comparisons" class="level2">
+<h2 class="anchored" data-anchor-id="part-4-categorical-variables-and-group-comparisons">Part 4: Categorical variables and group comparisons</h2>
+<p>Not all data is numeric. The Airbnb dataset includes categorical variables like <code>room_type</code> (Entire home, Private room, Shared room) and <code>neighbourhood_group_cleansed</code> (borough). Different variable types call for different plots — the study guide at the end of this chapter includes a reference table.</p>
+<section id="bar-charts-beat-pie-charts" class="level3">
+<h3 class="anchored" data-anchor-id="bar-charts-beat-pie-charts">Bar charts beat pie charts</h3>
+<div id="9a53e4ed" class="cell" data-execution_count="11">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">11</span>, <span class="dv">4</span>))</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Room type</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>room_counts <span class="op">=</span> airbnb[<span class="st">'room_type'</span>].value_counts()</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>room_counts.plot.bar(ax<span class="op">=</span>axes[<span class="dv">0</span>], color<span class="op">=</span>sns.color_palette()[:<span class="bu">len</span>(room_counts)], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'Listings by Room Type'</span>)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].tick_params(axis<span class="op">=</span><span class="st">'x'</span>, rotation<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Borough</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>borough_counts <span class="op">=</span> airbnb[<span class="st">'neighbourhood_group_cleansed'</span>].value_counts()</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>borough_counts.plot.bar(ax<span class="op">=</span>axes[<span class="dv">1</span>], color<span class="op">=</span>sns.color_palette()[<span class="dv">3</span>:<span class="dv">8</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'Listings by Borough'</span>)</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].tick_params(axis<span class="op">=</span><span class="st">'x'</span>, rotation<span class="op">=</span><span class="dv">45</span>)</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-12-output-1.png" width="1039" height="367" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Compare the same borough data in two formats:</p>
+<div id="92fe9fe0" class="cell" data-execution_count="12">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">4</span>))</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Top 10 neighborhoods by listing count</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>hood_counts <span class="op">=</span> airbnb[<span class="st">'neighbourhood_cleansed'</span>].value_counts().head(<span class="dv">10</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Pie chart — too many similarly-sized slices</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].pie(hood_counts, labels<span class="op">=</span>hood_counts.index, autopct<span class="op">=</span><span class="st">'%1.0f</span><span class="sc">%%</span><span class="st">'</span>,</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>            startangle<span class="op">=</span><span class="dv">90</span>, textprops<span class="op">=</span>{<span class="st">'fontsize'</span>: <span class="dv">8</span>})</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'Pie chart (10 neighborhoods)'</span>)</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Bar chart — differences are obvious</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>hood_counts.plot.barh(ax<span class="op">=</span>axes[<span class="dv">1</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'Bar chart (10 neighborhoods)'</span>)</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlabel(<span class="st">'Count'</span>)</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-13-output-1.png" width="1106" height="367" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Which neighborhood has the most listings? In the pie chart, the slices blur together — Williamsburg, Bedford-Stuyvesant, and Harlem look nearly the same size. In the bar chart, the ranking and relative sizes are immediately clear. Pie charts fail badly once you have more than 3–4 categories with similar proportions. Bar charts are almost always better.</p>
+</section>
+<section id="comparing-composition-across-groups" class="level3">
+<h3 class="anchored" data-anchor-id="comparing-composition-across-groups">Comparing composition across groups</h3>
+<p>When you want to compare how a categorical variable is distributed across groups, there are three useful views: <strong>dodged</strong>, <strong>stacked</strong>, and <strong>standardized</strong> bar charts.</p>
+<div id="c6ec21b7" class="cell" data-execution_count="13">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>ct_room <span class="op">=</span> pd.crosstab(airbnb[<span class="st">'neighbourhood_group_cleansed'</span>], airbnb[<span class="st">'room_type'</span>])</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">3</span>, figsize<span class="op">=</span>(<span class="dv">15</span>, <span class="dv">5</span>))</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Dodged</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>ct_room.plot.bar(ax<span class="op">=</span>axes[<span class="dv">0</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'Dodged (raw counts)'</span>)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_xlabel(<span class="st">''</span>)</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].tick_params(axis<span class="op">=</span><span class="st">'x'</span>, rotation<span class="op">=</span><span class="dv">45</span>)</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].legend(fontsize<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Stacked</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>ct_room.plot.bar(stacked<span class="op">=</span><span class="va">True</span>, ax<span class="op">=</span>axes[<span class="dv">1</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'Stacked (totals)'</span>)</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_ylabel(<span class="st">'Count'</span>)</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlabel(<span class="st">''</span>)</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].tick_params(axis<span class="op">=</span><span class="st">'x'</span>, rotation<span class="op">=</span><span class="dv">45</span>)</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].legend(fontsize<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Standardized (proportions)</span></span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>ct_room_pct <span class="op">=</span> ct_room.div(ct_room.<span class="bu">sum</span>(axis<span class="op">=</span><span class="dv">1</span>), axis<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>ct_room_pct.plot.bar(stacked<span class="op">=</span><span class="va">True</span>, ax<span class="op">=</span>axes[<span class="dv">2</span>], edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].set_title(<span class="st">'Standardized (proportions)'</span>)</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].set_ylabel(<span class="st">'Proportion'</span>)</span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].set_xlabel(<span class="st">''</span>)</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].tick_params(axis<span class="op">=</span><span class="st">'x'</span>, rotation<span class="op">=</span><span class="dv">45</span>)</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">2</span>].legend(fontsize<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-14-output-1.png" width="1419" height="464" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Each format answers a different question: - The dodged chart (left) lets you compare counts across room types within each borough. - The stacked chart (center) reveals that Manhattan has the most listings overall. - The standardized chart (right) shows Manhattan has a higher <em>proportion</em> of entire homes than Brooklyn does.</p>
+</section>
+<section id="comparing-distributions-box-plots-and-violin-plots" class="level3">
+<h3 class="anchored" data-anchor-id="comparing-distributions-box-plots-and-violin-plots">Comparing distributions: box plots and violin plots</h3>
+<p>How does price vary across room types and boroughs? Two tools compare distributions across groups:</p>
+<ul>
+<li>A <strong>box plot</strong> summarizes each group with five numbers: min, Q1, median, Q3, max. Good for comparing medians and spotting outliers at a glance.</li>
+<li>A <strong>violin plot</strong> shows the full distribution shape — revealing patterns (bimodality, tight clustering) that the five-number summary hides.</li>
+</ul>
+<p>Let’s see both, side by side, for the same data.</p>
+<div id="8f734117" class="cell" data-execution_count="14">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>filtered <span class="op">=</span> airbnb[airbnb[<span class="st">'price'</span>].between(<span class="dv">1</span>, <span class="dv">500</span>)]</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">2</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">8</span>))</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Top row: by room type</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>sns.boxplot(data<span class="op">=</span>filtered, x<span class="op">=</span><span class="st">'room_type'</span>, y<span class="op">=</span><span class="st">'price'</span>, ax<span class="op">=</span>axes[<span class="dv">0</span>, <span class="dv">0</span>])</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">0</span>].set_title(<span class="st">'Price by Room Type (box)'</span>)</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">0</span>].set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">0</span>].set_xlabel(<span class="st">''</span>)</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>sns.violinplot(data<span class="op">=</span>filtered, x<span class="op">=</span><span class="st">'room_type'</span>, y<span class="op">=</span><span class="st">'price'</span>, ax<span class="op">=</span>axes[<span class="dv">0</span>, <span class="dv">1</span>], inner<span class="op">=</span><span class="st">'quartile'</span>)</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">1</span>].set_title(<span class="st">'Price by Room Type (violin)'</span>)</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">1</span>].set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>, <span class="dv">1</span>].set_xlabel(<span class="st">''</span>)</span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Bottom row: by borough</span></span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>sns.boxplot(data<span class="op">=</span>filtered, x<span class="op">=</span><span class="st">'neighbourhood_group_cleansed'</span>, y<span class="op">=</span><span class="st">'price'</span>, ax<span class="op">=</span>axes[<span class="dv">1</span>, <span class="dv">0</span>])</span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">0</span>].set_title(<span class="st">'Price by Borough (box)'</span>)</span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">0</span>].set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">0</span>].tick_params(axis<span class="op">=</span><span class="st">'x'</span>, rotation<span class="op">=</span><span class="dv">45</span>)</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>sns.violinplot(data<span class="op">=</span>filtered, x<span class="op">=</span><span class="st">'neighbourhood_group_cleansed'</span>, y<span class="op">=</span><span class="st">'price'</span>,</span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>               ax<span class="op">=</span>axes[<span class="dv">1</span>, <span class="dv">1</span>], inner<span class="op">=</span><span class="st">'quartile'</span>)</span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">1</span>].set_title(<span class="st">'Price by Borough (violin)'</span>)</span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">1</span>].set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>, <span class="dv">1</span>].tick_params(axis<span class="op">=</span><span class="st">'x'</span>, rotation<span class="op">=</span><span class="dv">45</span>)</span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-15-output-1.png" width="1136" height="751" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The box plots (left column) show that entire homes cost roughly 2x more than private rooms, and that Manhattan is the most expensive borough. But the violin plots (right column) add detail the boxes miss: private room prices cluster tightly around $60, while entire home prices spread broadly from $100 to $300. Manhattan’s violin has a wider body than Brooklyn’s, reflecting more price dispersion — not just a higher median.</p>
+<p><strong>When to use which:</strong> Box plots are better for quick comparisons across many groups (the medians and quartiles are easy to scan). Violin plots are better when the <em>shape</em> of the distribution tells part of the story — bimodality, tight clustering, or heavy tails.</p>
+</section>
+<section id="faceted-histograms-for-aligned-comparisons" class="level3">
+<h3 class="anchored" data-anchor-id="faceted-histograms-for-aligned-comparisons">Faceted histograms for aligned comparisons</h3>
+<p>When overlapping histograms get crowded, <strong>faceting</strong> splits the data into separate panels that share the same x-axis. We use <code>sns.displot()</code> to create faceted histograms:</p>
+<div id="58f85ab2" class="cell" data-execution_count="15">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>prices_filt <span class="op">=</span> airbnb[(airbnb[<span class="st">'price'</span>] <span class="op">&gt;</span> <span class="dv">0</span>) <span class="op">&amp;</span> (airbnb[<span class="st">'price'</span>] <span class="op">&lt;=</span> <span class="dv">500</span>)]</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> sns.displot(data<span class="op">=</span>prices_filt, x<span class="op">=</span><span class="st">'price'</span>, col<span class="op">=</span><span class="st">'room_type'</span>,</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                col_wrap<span class="op">=</span><span class="dv">1</span>, bins<span class="op">=</span><span class="dv">40</span>, height<span class="op">=</span><span class="dv">3</span>, aspect<span class="op">=</span><span class="fl">1.5</span>)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>g.set_titles(<span class="st">'</span><span class="sc">{col_name}</span><span class="st">'</span>)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>g.set_xlabels(<span class="st">'Price ($)'</span>)</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-16-output-1.png" width="416" height="847" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Faceting splits the data into separate panels that share the same axis. Comparing distributions — here, prices across room types — is much easier when the axes are aligned.</p>
+<p>Box plots also clarify the relationship between two numeric variables when you discretize one of them. The scatter plot of accommodates vs.&nbsp;price was hard to read; treating accommodates as a categorical variable produces a much clearer box plot:</p>
+<div id="4d18f504" class="cell" data-execution_count="16">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="fl">4.5</span>))</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>box_data <span class="op">=</span> airbnb[(airbnb[<span class="st">'price'</span>] <span class="op">&gt;</span> <span class="dv">0</span>) <span class="op">&amp;</span> (airbnb[<span class="st">'price'</span>] <span class="op">&lt;=</span> <span class="dv">500</span>) <span class="op">&amp;</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>                  (airbnb[<span class="st">'accommodates'</span>] <span class="op">&lt;=</span> <span class="dv">10</span>)]</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>sns.boxplot(data<span class="op">=</span>box_data, x<span class="op">=</span><span class="st">'accommodates'</span>, y<span class="op">=</span><span class="st">'price'</span>, ax<span class="op">=</span>ax)</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">'Accommodates (guests)'</span>)</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">'Price by number of guests'</span>)</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-17-output-1.png" width="848" height="415" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>The median price roughly doubles from 1-guest to 6-guest listings. The boxes also show that spread increases with group size — larger listings have more price variability.</p>
+</section>
+</section>
+<section id="part-5-missing-data-whats-absent-and-why" class="level2">
+<h2 class="anchored" data-anchor-id="part-5-missing-data-whats-absent-and-why">Part 5: Missing data — what’s absent and why?</h2>
+<p>Missing values are data too. Before handling them, you need to see them. In the Airbnb dataset, missing values are encoded as <code>NaN</code> — pandas’ standard marker for absent data. Let’s count them.</p>
+<div id="691dc2d6" class="cell" data-execution_count="17">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>missing <span class="op">=</span> airbnb.isnull().<span class="bu">sum</span>()</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>missing_pct <span class="op">=</span> (missing <span class="op">/</span> <span class="bu">len</span>(airbnb) <span class="op">*</span> <span class="dv">100</span>).<span class="bu">round</span>(<span class="dv">1</span>)</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>pd.DataFrame({<span class="st">'Missing'</span>: missing, <span class="st">'% Missing'</span>: missing_pct}).query(<span class="st">'Missing &gt; 0'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="17">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Missing</th>
+<th data-quarto-table-cell-role="th">% Missing</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">name</th>
+<td>5</td>
+<td>0.0</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">beds</th>
+<td>17</td>
+<td>0.1</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">security_deposit</th>
+<td>11827</td>
+<td>40.6</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>About 40% of listings have no security deposit recorded. Is that meaningful, or just a nuisance?</p>
+<div id="6eb10f34" class="cell" data-execution_count="18">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Do listings with missing deposits have different prices?</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>airbnb[<span class="st">'deposit_missing'</span>] <span class="op">=</span> airbnb[<span class="st">'security_deposit'</span>].isna()</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="dv">4</span>))</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> label, group <span class="kw">in</span> airbnb[airbnb[<span class="st">'price'</span>] <span class="op">&gt;</span> <span class="dv">0</span>].groupby(<span class="st">'deposit_missing'</span>):</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    tag <span class="op">=</span> <span class="st">'No deposit listed'</span> <span class="cf">if</span> label <span class="cf">else</span> <span class="st">'Deposit listed'</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    sns.histplot(group[<span class="st">'price'</span>][group[<span class="st">'price'</span>] <span class="op">&lt;=</span> <span class="dv">500</span>], bins<span class="op">=</span><span class="dv">40</span>, ax<span class="op">=</span>ax,</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>                 label<span class="op">=</span>tag, alpha<span class="op">=</span><span class="fl">0.5</span>, stat<span class="op">=</span><span class="st">'density'</span>)</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">'Price ($)'</span>)</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">'Density'</span>)</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">'Price distribution: missing vs. present security deposit'</span>)</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec02-eda-draft_files/figure-html/cell-19-output-1.png" width="752" height="367" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>If the distributions differ, the missingness may be informative — a signal, not just a gap to fill. Making missingness visible is the first step; Chapter 3 will develop a full framework for understanding <em>why</em> data is missing and what to do about it.</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Silent NA dropping
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Functions like <code>sns.histplot()</code>, <code>sns.boxplot()</code>, and <code>.describe()</code> all drop <code>NaN</code> values silently — they won’t warn you that rows were excluded. Before plotting or summarizing, always check how much data is missing:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>df[<span class="st">'col'</span>].isna().<span class="bu">sum</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>If a large fraction is missing, your histogram may not represent the full dataset.</p>
+</div>
+</div>
+<blockquote class="blockquote">
+<p><strong>Key principle</strong>: Before you handle missing data, you must understand <em>why</em> it’s missing. The “why” determines the “how.”</p>
+</blockquote>
+</section>
+<section id="part-6-confounding-when-associations-mislead" class="level2">
+<h2 class="anchored" data-anchor-id="part-6-confounding-when-associations-mislead">Part 6: Confounding — when associations mislead</h2>
+<p>Manhattan is more expensive than Brooklyn. But Manhattan also has more entire homes. Is the borough difference real, or is it explained by the mix of room types?</p>
+<div id="f4c80f7f" class="cell" data-execution_count="19">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Overall median price by borough</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>borough_median <span class="op">=</span> (airbnb[airbnb[<span class="st">'price'</span>] <span class="op">&gt;</span> <span class="dv">0</span>]</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>                  .groupby(<span class="st">'neighbourhood_group_cleansed'</span>)[<span class="st">'price'</span>].median()</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>                  .sort_values(ascending<span class="op">=</span><span class="va">False</span>))</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Median price by borough:"</span>)</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(borough_median.to_string())</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Manhattan − Brooklyn overall gap: $</span><span class="sc">{</span>borough_median[<span class="st">'Manhattan'</span>] <span class="op">-</span> borough_median[<span class="st">'Brooklyn'</span>]<span class="sc">:.0f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Median price by borough:
+neighbourhood_group_cleansed
+Manhattan        135.0
+Brooklyn          90.0
+Staten Island     72.0
+Queens            70.0
+Bronx             60.0
+
+Manhattan − Brooklyn overall gap: $45</code></pre>
+</div>
+</div>
+<p>Manhattan looks substantially more expensive. But what happens when we control for room type?</p>
+<p>The chained expression below computes the median price for every borough-room type combination. <code>.groupby()</code> splits the data into groups; <code>.median()</code> summarizes each group; <code>.unstack()</code> pivots the room type index level into columns, producing a <strong>contingency table</strong> — a table where each cell summarizes a combination of two categorical variables.</p>
+<div id="4d61d73a" class="cell" data-execution_count="20">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Median price by borough AND room type</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>borough_room <span class="op">=</span> (airbnb[airbnb[<span class="st">'price'</span>] <span class="op">&gt;</span> <span class="dv">0</span>]</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>                .groupby([<span class="st">'neighbourhood_group_cleansed'</span>, <span class="st">'room_type'</span>])[<span class="st">'price'</span>]</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>                .median().unstack())</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>borough_room</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="20">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th">room_type</th>
+<th data-quarto-table-cell-role="th">Entire home/apt</th>
+<th data-quarto-table-cell-role="th">Private room</th>
+<th data-quarto-table-cell-role="th">Shared room</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">neighbourhood_group_cleansed</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">Bronx</th>
+<td>99.0</td>
+<td>50.0</td>
+<td>35.0</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Brooklyn</th>
+<td>140.0</td>
+<td>62.0</td>
+<td>35.0</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">Manhattan</th>
+<td>180.0</td>
+<td>85.0</td>
+<td>60.0</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">Queens</th>
+<td>111.0</td>
+<td>57.0</td>
+<td>34.5</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">Staten Island</th>
+<td>100.0</td>
+<td>51.0</td>
+<td>40.0</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<div id="1b709f98" class="cell" data-execution_count="21">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute the Manhattan-Brooklyn gap within each room type</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>gap_by_type <span class="op">=</span> borough_room.loc[<span class="st">'Manhattan'</span>] <span class="op">-</span> borough_room.loc[<span class="st">'Brooklyn'</span>]</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Manhattan − Brooklyn gap by room type:"</span>)</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(gap_by_type.to_string())</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Overall gap: $</span><span class="sc">{</span>borough_median[<span class="st">'Manhattan'</span>] <span class="op">-</span> borough_median[<span class="st">'Brooklyn'</span>]<span class="sc">:.0f}</span><span class="ss">"</span>)</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Gaps by room type: $</span><span class="sc">{</span>gap_by_type<span class="sc">.</span><span class="bu">min</span>()<span class="sc">:.0f}</span><span class="ss">–$</span><span class="sc">{</span>gap_by_type<span class="sc">.</span><span class="bu">max</span>()<span class="sc">:.0f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Manhattan − Brooklyn gap by room type:
+room_type
+Entire home/apt    40.0
+Private room       23.0
+Shared room        25.0
+
+Overall gap: $45
+Gaps by room type: $23–$40</code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Think About It
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The overall Manhattan-Brooklyn gap is <em>larger</em> than the gap within any individual room type. How is that possible? (Hint: what fraction of Manhattan listings are entire homes vs.&nbsp;Brooklyn?)</p>
+</div>
+</div>
+<p>The overall gap exceeds every room-type-specific gap. Part of what looked like a “Manhattan premium” was actually a <strong>composition effect</strong>: Manhattan has a higher proportion of entire homes (the most expensive room type), which pulls up its overall median. When we compare like with like — entire homes to entire homes, private rooms to private rooms — the borough difference shrinks.</p>
+<p>This pattern, where an overall comparison overstates a difference that shrinks or reverses within subgroups, is related to <strong>Simpson’s paradox</strong> (which we’ll study formally in Chapter 11). The driver is <strong>confounding</strong>.</p>
+<p>In the Airbnb example, the <strong>treatment</strong> (the variable whose effect we want to isolate) is borough. The <strong>outcome</strong> is price. Room type is a <strong>confounder</strong>: it affects both where a listing is located (Manhattan has more entire homes) <em>and</em> the price (entire homes cost more). The raw borough comparison mixes the effect of location with the effect of room type.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Definition: Confounding
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A <strong>confounder</strong> is a variable that affects both the treatment (or exposure) and the outcome, creating an association between them that does not reflect a direct causal effect of the treatment on the outcome. The association between the treatment and outcome is real — but it doesn’t mean the treatment causes the outcome. Confounding is inherently a <em>causal</em> concept: it only arises when you interpret an association as evidence for or against a causal claim.</p>
+</div>
+</div>
+<p>Here’s a second example. Suppose you survey Stanford undergrads and find that students who attend office hours get higher grades. The treatment is attending office hours; the outcome is your grade. But <strong>student motivation</strong> is a confounder: it drives both office hours attendance <em>and</em> study habits. Some of the grade benefit attributed to office hours actually reflects motivation.</p>
+<p>We’ll develop formal tools for reasoning about confounders — including directed acyclic graphs (DAGs) and the potential outcomes framework — in Chapters 18–19. For now, the key habit: when you see an association, ask <em>what else could be driving both variables?</em></p>
+<p>In Chapter 3, we’ll see a higher-stakes version of confounding in the hospital data, where naive rankings penalize hospitals that treat the sickest patients. And we’ll return to hospitals one final time in Chapter 18 to ask a causal question: does the penalty actually reduce readmissions, or does it just punish hospitals that serve vulnerable populations?</p>
+</section>
+<section id="key-takeaways" class="level2">
+<h2 class="anchored" data-anchor-id="key-takeaways">Key Takeaways</h2>
+<ul>
+<li><strong>EDA comes first</strong> — understand your data before modeling it.</li>
+<li><strong>Distributions reveal what summaries hide.</strong> The mean can be misleading when distributions are skewed. Always plot a histogram. Use a log axis for heavy-tailed data.</li>
+<li><strong>Missing data tells a story.</strong> Visualize missingness before handling it. In this chapter, missing values appeared as <code>NaN</code> — but real datasets encode absence in many other ways.</li>
+<li><strong>An association can be real without being causal.</strong> A confounder drives both the treatment and the outcome, creating an association that doesn’t reflect a causal effect. Manhattan looks expensive partly because it has more entire homes.</li>
+</ul>
+</section>
+<section id="study-guide" class="level2">
+<h2 class="anchored" data-anchor-id="study-guide">Study guide</h2>
+<section id="key-ideas" class="level3">
+<h3 class="anchored" data-anchor-id="key-ideas">Key ideas</h3>
+<ul>
+<li><strong>Exploratory Data Analysis (EDA)</strong>: examining a dataset’s structure, distributions, and quirks before fitting any model.</li>
+<li><strong>Mean, median, quartiles, IQR</strong>: The mean is the arithmetic average (sensitive to outliers). The median is the middle value (robust). Quartiles divide data into four parts. IQR = Q3 − Q1 measures spread of the middle 50%.</li>
+<li><strong>Robust statistics</strong>: The median and IQR are robust — barely affected by extreme values. The mean and standard deviation are not.</li>
+<li><strong>Outlier</strong>: An observation far from the bulk of the data. Can be a genuine extreme or a data error. Outliers can dominate non-robust summaries like the mean.</li>
+<li><strong>Log axis vs.&nbsp;log transform</strong>: Use a log axis to <em>visualize</em> skewed data (keeps original units on the axis). Use a log transform to <em>model</em> skewed data (creates a new variable for regression).</li>
+<li><strong>Confounding</strong>: A confounder is a variable that affects both the <strong>treatment</strong> (the variable whose effect you want to isolate) and the <strong>outcome</strong> (the variable you measure), creating an association that does not reflect a causal effect. The overall Manhattan-Brooklyn price gap overstates the effect of borough because room type confounds the comparison.</li>
+<li>Plotting functions (<code>sns.histplot</code>, <code>sns.boxplot</code>, <code>.describe()</code>) drop NAs silently. Always check <code>df['col'].isna().sum()</code> first.</li>
+<li>Pie charts fail badly with more than 3–4 similar-sized categories. Bar charts are almost always better.</li>
+</ul>
+</section>
+<section id="plot-type-reference" class="level3">
+<h3 class="anchored" data-anchor-id="plot-type-reference">Plot type reference</h3>
+<table class="table-striped table-hover caption-top table">
+<colgroup>
+<col style="width: 45%">
+<col style="width: 17%">
+<col style="width: 37%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variable types</th>
+<th>Plot</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>One numeric</td>
+<td>Histogram</td>
+<td>Shape, center, spread</td>
+</tr>
+<tr class="even">
+<td>One numeric (skewed)</td>
+<td>Histogram with log axis</td>
+<td>Reveal structure in heavy-tailed data</td>
+</tr>
+<tr class="odd">
+<td>One categorical</td>
+<td>Bar chart</td>
+<td>Counts/proportions per category</td>
+</tr>
+<tr class="even">
+<td>One categorical</td>
+<td>Pie chart</td>
+<td>Almost never — use bar chart instead</td>
+</tr>
+<tr class="odd">
+<td>Two numeric</td>
+<td>Scatter plot</td>
+<td>Relationships (small-moderate n)</td>
+</tr>
+<tr class="even">
+<td>Two numeric (dense)</td>
+<td>2D histogram / heatmap</td>
+<td>Relationships (large n)</td>
+</tr>
+<tr class="odd">
+<td>Numeric x categorical</td>
+<td>Box plot</td>
+<td>Compare distributions across groups</td>
+</tr>
+<tr class="even">
+<td>Numeric x categorical</td>
+<td>Violin plot</td>
+<td>Compare full distribution shapes</td>
+</tr>
+<tr class="odd">
+<td>Numeric x categorical</td>
+<td>Faceted histogram</td>
+<td>Compare with aligned axes</td>
+</tr>
+<tr class="even">
+<td>Two categorical</td>
+<td>Stacked/dodged/standardized bar</td>
+<td>Compare composition across groups</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="computational-tools" class="level3">
+<h3 class="anchored" data-anchor-id="computational-tools">Computational tools</h3>
+<ul>
+<li><code>df.shape</code>, <code>df.head()</code>, <code>df.info()</code>, <code>df.describe()</code> — first moves in any EDA</li>
+<li><code>df['col'].isna().sum()</code> — count missing values</li>
+<li><code>df['col'].value_counts()</code> — frequency table for categorical data</li>
+<li><code>sns.histplot()</code> — histogram of one numeric variable</li>
+<li><code>sns.boxplot(data=df, x='cat', y='num')</code> — compare distributions across groups</li>
+<li><code>sns.violinplot(data=df, x='cat', y='num')</code> — compare full distribution shapes across groups</li>
+<li><code>sns.displot(col='group')</code> — faceted histograms for comparing distributions</li>
+<li><code>df.groupby([col1, col2])[val].median().unstack()</code> — contingency table of summaries</li>
+<li><code>pd.crosstab()</code> — contingency table of counts for two categorical variables</li>
+<li><code>ax.set_xscale('log')</code> — set axis to log scale</li>
+<li><code>df.plot.bar(stacked=True)</code> — stacked bar chart</li>
+</ul>
+</section>
+<section id="for-the-quiz" class="level3">
+<h3 class="anchored" data-anchor-id="for-the-quiz">For the quiz</h3>
+<p>You should be able to: (1) describe the EDA workflow and why each step matters, (2) explain why the mean is misleading for skewed data, (3) interpret a histogram, box plot, and scatter plot, (4) explain why adjusting for context matters when comparing groups (confounding), and (5) choose the right plot type for a given combination of variables.</p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

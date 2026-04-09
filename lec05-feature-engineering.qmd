@@ -1,5 +1,5 @@
 ---
-title: "Feature Engineering and Regression Diagnostics"
+title: "Multiple Regression and Feature Engineering"
 execute:
   enabled: true
 jupyter: python3
@@ -15,7 +15,6 @@ import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import r2_score
-from sklearn.model_selection import train_test_split
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
@@ -26,24 +25,25 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-In [Chapter 4](lec04-regression.qmd), we fit a regression predicting Airbnb prices from bedrooms and bathrooms — numeric features that regression handles directly. But the Airbnb dataset has boroughs, room types, listing descriptions. How do we use *those*?
+In [Chapter 4](lec04-regression.qmd), we predicted Airbnb prices from a single feature — bedrooms — and discovered that the regression line is the orthogonal projection of the price vector onto the span of the feature columns. The residual was orthogonal to every feature used, and $R^2$ measured how much of the price variation bedrooms alone could explain.
 
-Regression takes numbers. Real data has categories, text, and nonlinear relationships. Feature engineering bridges that gap — from hand-crafted inputs to AI-generated ones. The central idea: a model can be **linear in its parameters** while capturing wildly **nonlinear relationships in its features**. Every technique in this chapter exploits that fact.
+The answer was: not much. A single feature leaves most of the variation unexplained. An Airbnb listing's price depends on bathrooms, room type, neighborhood, and dozens of other factors. To incorporate those, we need **multiple regression** — and to handle categories, nonlinear patterns, and missing data, we need **feature engineering**.
 
-## The data: Airbnb NYC listings
+The roadmap: add numeric features (bathrooms), then categorical features (room type via one-hot encoding), then engineered features (polynomials, interactions, log transforms). At each step, the model stays $\hat{y} = X\beta$ — we just expand the columns of $X$.
+
+## The data
 
 ```{python}
 listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 
-cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'beds', 'room_type',
-        'neighbourhood_group_cleansed', 'accommodates', 'number_of_reviews']
+cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'beds',
+        'room_type', 'neighbourhood_group_cleansed', 'accommodates',
+        'number_of_reviews', 'review_scores_rating']
 df = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
-# Convert price to numeric
-df['price'] = pd.to_numeric(df['price'].astype(str).str.replace('[$,]', '', regex=True), errors='coerce')
-
-# Focus on reasonable prices (filter out near-free and luxury outliers)
+# Price is already a clean integer column (no $ signs); filter to reasonable range
+df['price'] = pd.to_numeric(df['price'], errors='coerce')
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
 prices = df['price']
 
@@ -51,574 +51,567 @@ print(f"Working with {len(df):,} listings")
 df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 ```
 
-# Turning data into numbers
+# Multiple regression with numeric features
 
-## Log transforms change what coefficients mean
+## Adding bathrooms
 
-The coefficients from [Chapter 4](lec04-regression.qmd) have a clean interpretation: each bedroom **adds** about \$33 to the predicted price. But in [Chapter 2](lec02-eda.qmd), we saw that Airbnb prices are heavily right-skewed, and a semilog scatter plot revealed a multiplicative relationship — each additional guest *multiplied* the price by a roughly fixed factor. When you log-transform the outcome or the features, the coefficient interpretation changes.
+In Chapter 4, simple regression gave us price as a function of bedrooms alone. But a 2-bedroom apartment with 2 bathrooms is worth more than the same apartment with 1 bathroom. Let's add bathrooms as a second feature.
+
+```{python}
+# Simple regression (from Chapter 4)
+model_simple = LinearRegression()
+model_simple.fit(df[['bedrooms']], prices)
+print(f"Simple regression:   price = {model_simple.intercept_:.0f} + {model_simple.coef_[0]:.0f} × bedrooms")
+print(f"  R² = {model_simple.score(df[['bedrooms']], prices):.3f}")
+print()
+
+# Multiple regression: price ~ bedrooms + bathrooms
+model_two = LinearRegression()
+model_two.fit(df[['bedrooms', 'bathrooms']], prices)
+print(f"Multiple regression: price = {model_two.intercept_:.0f} + {model_two.coef_[0]:.0f} × bedrooms + {model_two.coef_[1]:.0f} × bathrooms")
+print(f"  R² = {model_two.score(df[['bedrooms', 'bathrooms']], prices):.3f}")
+```
+
+Adding bathrooms improves $R^2$. The intercept and the bedrooms coefficient both changed — we'll return to why shortly.
+
+## Column space
+
+In Chapter 4, we saw that every prediction $\hat{y} = X\beta$ is a linear combination of the columns of $X$, and the set of all such predictions is the **column space** of $X$. With one feature plus an intercept, the column space is a 2D plane in $\mathbb{R}^n$ (all possible lines). Adding bathrooms as a third column expands the column space to three dimensions — a richer set of possible predictions.
+
+:::{.callout-important}
+## Definition: Column space
+
+The **column space** of a matrix $X$ is the set of all linear combinations of its columns:
+$$\text{col}(X) = \{X\beta : \beta \in \mathbb{R}^p\}$$
+This set is exactly the collection of all possible predictions $\hat{y} = X\beta$. More columns means a larger column space, which means the projection of $y$ onto that space can only get closer — never farther.
+:::
+
+More columns means a bigger column space, which means $\hat{y}$ can get closer to $y$. Training $R^2$ can only increase (or stay the same) when you add a feature.
+
+## Normal equations
+
+In Chapter 4, the residual was orthogonal to every feature column: $\mathbf{1}^T \epsilon = 0$ (residuals sum to zero) and $x^T \epsilon = 0$ (no linear pattern between the feature and the residuals). With multiple features, we stack all these conditions into one equation.
+
+Write $X$ for the $n \times p$ feature matrix (including the intercept column of ones). The orthogonality conditions become:
+
+$$X^T \epsilon = 0 \quad \text{where } \epsilon = y - X\beta$$
+
+Rearranging:
+
+$$X^T X \beta = X^T y \qquad \Longrightarrow \qquad \beta = (X^T X)^{-1} X^T y$$
+
+:::{.callout-important}
+## Definition: Normal equations
+
+The **normal equations** $X^TX\beta = X^Ty$ give the least squares coefficients. Each row of $X^T \epsilon = 0$ says "the residual has zero inner product with one column of $X$" — orthogonality to every feature simultaneously.
+:::
+
+Let's verify that the normal equations and `LinearRegression()` give the same answer.
+
+```{python}
+# Build design matrix with intercept
+X_manual = np.column_stack([
+    np.ones(len(df)),
+    df['bedrooms'].values,
+    df['bathrooms'].values
+])
+
+# Normal equations: beta = (X^T X)^{-1} X^T y
+beta_normal = np.linalg.solve(X_manual.T @ X_manual, X_manual.T @ prices.values)
+
+print("Normal equations:  intercept = {:.2f}, bedrooms = {:.2f}, bathrooms = {:.2f}".format(*beta_normal))
+print("sklearn:           intercept = {:.2f}, bedrooms = {:.2f}, bathrooms = {:.2f}".format(
+    model_two.intercept_, model_two.coef_[0], model_two.coef_[1]))
+```
+
+The two approaches agree. We use `np.linalg.solve` rather than computing $(X^TX)^{-1}$ explicitly — matrix inversion is numerically unstable for large or ill-conditioned problems.
+
+```{python}
+# Verify orthogonality: residuals have zero dot product with every column
+y_hat_two = model_two.predict(df[['bedrooms', 'bathrooms']])
+residuals_two = prices.values - y_hat_two
+
+dot_ones = np.dot(residuals_two, np.ones(len(df)))
+dot_beds = np.dot(residuals_two, df['bedrooms'].values)
+dot_baths = np.dot(residuals_two, df['bathrooms'].values)
+
+print(f"Residuals dot (ones):      {dot_ones:.4f}  (≈ 0)")
+print(f"Residuals dot (bedrooms):  {dot_beds:.4f}  (≈ 0)")
+print(f"Residuals dot (bathrooms): {dot_baths:.4f}  (≈ 0)")
+```
+
+## Interpreting coefficients
+
+The coefficient on bedrooms changed from the simple regression. Why?
+
+```{python}
+print(f"Simple regression:   bedrooms coefficient = ${model_simple.coef_[0]:.0f}")
+print(f"Multiple regression: bedrooms coefficient = ${model_two.coef_[0]:.0f}")
+print(f"                     bathrooms coefficient = ${model_two.coef_[1]:.0f}")
+```
+
+In simple regression, the bedrooms coefficient absorbs *everything* correlated with bedrooms — including bathrooms. Apartments with more bedrooms tend to have more bathrooms, so the simple regression coefficient on bedrooms is partly capturing the effect of bathrooms. Multiple regression separates the two: the coefficient on bedrooms now measures the association between bedrooms and price **holding bathrooms constant**.
+
+:::{.callout-tip}
+## Think About It
+
+When you compare two listings with the same number of bathrooms, the one with an extra bedroom costs about \$46 more (according to the two-feature model). When you compare two listings with the same number of bedrooms, the one with an extra bathroom costs about \$12 more. Notice that the simple regression said each bedroom was worth \$49 — the coefficient dropped when we controlled for bathrooms. These coefficients measure **association**, not causation — we'll revisit that distinction in [Chapter 18](lec18-causal.qmd).
+:::
+
+# One-hot encoding and categorical features
+
+## The problem
+
+Room type is one of the strongest predictors of price — entire apartments cost more than private rooms. But room type is a string:
+
+```{python}
+print("Room types:", df['room_type'].unique())
+print()
+print("Average price by room type:")
+print(df.groupby('room_type')['price'].mean().round(0).sort_values(ascending=False))
+```
+
+You cannot multiply "Entire home/apt" by a coefficient. Regression requires numbers.
+
+## One-hot encoding
+
+The solution: create one binary (0/1) column per category. A listing that is an "Entire home/apt" gets a 1 in that column and 0 in the others. The function `pd.get_dummies()` does the work.
+
+```{python}
+# One-hot encode room type
+room_dummies = pd.get_dummies(df['room_type'], prefix='room_type')
+room_dummies.head()
+```
+
+There is a subtlety. The three dummy columns sum to 1 for every row — which is the same as the intercept column we already include. Including all three makes the columns linearly dependent: the column space doesn't grow, but the normal equations become unsolvable ($X^TX$ is singular). The fix: drop one category, called the **reference level**.
+
+:::{.callout-important}
+## Definition: Reference level
+
+When one-hot encoding a categorical variable with $k$ categories, we create $k - 1$ binary columns and drop one. The dropped category is the **reference level**. Its effect is absorbed into the intercept; every other coefficient measures the difference relative to this baseline. Using `drop_first=True` in `pd.get_dummies()` drops the first category alphabetically.
+:::
+
+```{python}
+# One-hot encode with reference level dropped
+room_dummies_ref = pd.get_dummies(df['room_type'], prefix='room_type', drop_first=True)
+print("Columns after dropping reference level:")
+print(room_dummies_ref.columns.tolist())
+print(f"\nReference level (dropped): {sorted(df['room_type'].unique())[0]}")
+room_dummies_ref.head()
+```
+
+## Interpreting coefficients relative to the reference
+
+With "Entire home/apt" as the reference level, the intercept absorbs the baseline price for entire homes. The coefficient on `room_type_Private room` tells you how much less a private room costs relative to an entire home, holding all other features constant.
+
+```{python}
+# Regression with room type only
+X_room = room_dummies_ref.astype(float)
+model_room = LinearRegression().fit(X_room, prices)
+
+print(f"Intercept (Entire home/apt baseline): ${model_room.intercept_:.0f}")
+for name, coef in zip(X_room.columns, model_room.coef_):
+    print(f"  {name}: ${coef:+.0f}")
+```
+
+The intercept is approximately the mean price of entire homes. The private room coefficient is negative — private rooms cost less than entire homes. The shared room coefficient is even more negative. Each coefficient is a price *difference* relative to the reference category.
+
+## The full model
+
+Now let's combine everything: bedrooms, bathrooms, and room type.
+
+```{python}
+# Full model: bedrooms + bathrooms + room_type
+num_features = df[['bedrooms', 'bathrooms']]
+cat_features = pd.get_dummies(df[['room_type']], drop_first=True)
+X_full = pd.concat([num_features, cat_features], axis=1).astype(float)
+
+model_full = LinearRegression().fit(X_full, prices)
+r2_full = model_full.score(X_full, prices)
+
+# Coefficient table
+coef_table = pd.DataFrame({
+    'feature': list(X_full.columns),
+    'coefficient': model_full.coef_.round(2)
+}).sort_values('coefficient', key=abs, ascending=False)
+
+print(f"R² = {r2_full:.3f}")
+print(f"Intercept: ${model_full.intercept_:.2f}\n")
+print(coef_table.to_string(index=False))
+```
+
+The model answers the opening question from Chapter 4: a bathroom is associated with roughly \$22 more per night, holding bedrooms and room type constant. Private rooms cost substantially less than entire homes, even after adjusting for size.
+
+```{python}
+# Visualize coefficients
+fig, ax = plt.subplots(figsize=(8, 4))
+coef_sorted = coef_table.sort_values('coefficient')
+colors = ['#d62728' if c < 0 else '#2171b5' for c in coef_sorted['coefficient']]
+ax.barh(coef_sorted['feature'], coef_sorted['coefficient'], color=colors, edgecolor='white')
+ax.axvline(0, color='gray', linewidth=1)
+ax.set_xlabel('Coefficient (effect on price, $)')
+ax.set_title('Multiple regression coefficients: bedrooms + bathrooms + room type')
+plt.tight_layout()
+plt.show()
+```
+
+## The reviews puzzle
+
+What happens when we add `number_of_reviews` to the model?
+
+```{python}
+# Add number of reviews
+df_reviews = df.dropna(subset=['number_of_reviews']).copy()
+X_reviews = pd.concat([
+    df_reviews[['bedrooms', 'bathrooms', 'number_of_reviews']],
+    pd.get_dummies(df_reviews[['room_type']], drop_first=True)
+], axis=1).astype(float)
+y_reviews = df_reviews['price']
+
+model_reviews = LinearRegression().fit(X_reviews, y_reviews)
+
+print("Coefficients with reviews included:")
+for name, coef in zip(X_reviews.columns, model_reviews.coef_):
+    print(f"  {name:30s}  {coef:+.2f}")
+print(f"\nR² = {model_reviews.score(X_reviews, y_reviews):.3f}")
+```
+
+The coefficient on `number_of_reviews` is *negative*. More reviews are associated with *lower* prices. Should a host delete reviews to raise the price?
+
+:::{.callout-tip}
+## Think About It
+
+The negative reviews coefficient does not mean reviews *cause* lower prices. Cheaper listings get more bookings, which generate more reviews. The reviews variable is confounded with price through demand. The regression coefficient measures association, not causation — a distinction we'll formalize in [Chapter 18](lec18-causal.qmd).
+:::
+
+# Feature engineering: transforming X
+
+## The big idea
+
+Every model we've fit so far is $\hat{y} = X\beta$ — linear in the parameters $\beta$. The features $X$ can be anything: raw columns, squared columns, products of columns, or columns derived from text. The regression machinery doesn't change; only the inputs do.
+
+This fact is the mantra of feature engineering: **"linear in parameters, not in features."** As George Box put it: "All models are wrong, but some are useful." Feature engineering makes linear models more useful by expanding what "linear" can express.
+
+## Polynomial features
+
+Does price increase at the same rate per bedroom, or does the relationship flatten? A linear model forces a constant slope. Adding polynomial features — $x$, $x^2$, $x^3$ — lets the model capture curvature while staying linear in $\beta$:
+
+$$\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$$
+
+This equation is nonlinear in $x$ but linear in $(\beta_0, \beta_1, \beta_2)$. The function `PolynomialFeatures` from scikit-learn generates these columns.
+
+```{python}
+X_bedrooms = df[['bedrooms']]
+
+# Fit polynomials of increasing degree
+for degree in [1, 2, 3]:
+    poly = PolynomialFeatures(degree=degree, include_bias=False)
+    X_poly = poly.fit_transform(X_bedrooms)
+    model_poly = LinearRegression().fit(X_poly, prices)
+    r2 = model_poly.score(X_poly, prices)
+    print(f"Degree {degree}: R² = {r2:.4f}  ({X_poly.shape[1]} features)")
+```
+
+The degree-2 model captures a gentle price plateau at higher bedroom counts. But what happens at higher degrees?
+
+## The polynomial overfitting parade
+
+Let's fit polynomials from degree 1 through 10 and see what each predicts for listings with many bedrooms.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Left: polynomial fits extrapolated
+ax = axes[0]
+ax.scatter(df['bedrooms'], prices, alpha=0.05, s=5, color='gray', label='data')
+x_extrap = np.linspace(0, 10, 300).reshape(-1, 1)
+
+colors_poly = plt.cm.viridis(np.linspace(0, 0.9, 10))
+r2_list = []
+
+for degree in range(1, 11):
+    poly = PolynomialFeatures(degree=degree, include_bias=False)
+    X_p = poly.fit_transform(X_bedrooms)
+    m = LinearRegression().fit(X_p, prices)
+    r2_list.append(m.score(X_p, prices))
+    pred = m.predict(poly.transform(x_extrap))
+    if degree in [1, 2, 5, 10]:
+        ax.plot(x_extrap, pred, color=colors_poly[degree-1], linewidth=2,
+                label=f'Degree {degree}')
+
+ax.axhline(0, color='black', linewidth=0.5)
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Predicted price ($)')
+ax.set_title('Polynomial fits: extrapolation beyond the data')
+ax.legend(fontsize=9)
+ax.set_ylim(-300, 600)
+
+# Right: R² by degree
+ax = axes[1]
+bars = ax.bar(range(1, 11), r2_list, color=colors_poly, edgecolor='white')
+for i, r2_val in enumerate(r2_list):
+    ax.text(i + 1, r2_val + 0.003, f'{r2_val:.3f}', ha='center', fontsize=8)
+ax.set_xlabel('Polynomial degree')
+ax.set_ylabel('Training R²')
+ax.set_title('R² climbs toward 1.0 — but is the model improving?')
+
+plt.tight_layout()
+plt.show()
+```
+
+Low-degree polynomials produce reasonable curves. High-degree polynomials produce wild oscillations at the edges of the data range and nonsensical extrapolations beyond it. The degree-10 model might predict negative prices for 8-bedroom apartments — or astronomical prices for 10-bedroom apartments.
+
+Meanwhile, training $R^2$ increases at every step. By that metric, degree 10 is the "best" model.
+
+```{python}
+# Predictions at specific bedroom counts
+print("Predicted price by bedroom count:")
+print(f"{'Bedrooms':>10}", end='')
+for d in [1, 2, 5, 10]:
+    print(f"{'Degree '+str(d):>12}", end='')
+print()
+
+for beds in [1, 3, 5, 7, 9]:
+    print(f"{beds:>10}", end='')
+    for d in [1, 2, 5, 10]:
+        poly = PolynomialFeatures(degree=d, include_bias=False)
+        X_p = poly.fit_transform(X_bedrooms)
+        m = LinearRegression().fit(X_p, prices)
+        pred = m.predict(poly.transform([[beds]]))[0]
+        print(f"      ${pred:>5.0f}", end='')
+    print()
+```
+
+:::{.callout-tip}
+## Think About It
+
+$R^2$ says degree 10 is the best model. Do you agree? Would you trust the degree-10 predictions for a new 7-bedroom listing? Training $R^2$ always increases with more features — a property of projection onto a larger column space — but the model's predictions can become worse. We'll develop formal tools to detect overfitting in [Chapter 7](lec07-validation.qmd).
+:::
+
+:::{.callout-note}
+## Polynomial overfitting in the real world
+
+In May 2020, the Institute for Health Metrics and Evaluation (IHME) published influential COVID-19 death forecasts built on a cubic polynomial fit. The model projected deaths would fall to near zero by summer — a prediction driven by the polynomial's algebraic shape, not epidemiology. By summer, US deaths were still climbing. Polynomial features fit training data well but extrapolate according to their mathematical form, not the underlying phenomenon.
+:::
+
+## Interaction terms
+
+Is an extra bedroom worth the same in Manhattan and the Bronx? So far, our model uses a single bedrooms coefficient everywhere. An **interaction term** lets the effect of one feature depend on another:
+
+$$\hat{y} = \beta_0 + \beta_1 \cdot \text{bedrooms} + \beta_2 \cdot \mathbb{1}_{\text{Manhattan}} + \beta_3 \cdot (\text{bedrooms} \times \mathbb{1}_{\text{Manhattan}})$$
+
+The coefficient $\beta_3$ captures how much *more* (or less) a bedroom is worth in Manhattan compared to the reference borough.
+
+```{python}
+# Regression lines by borough: with and without interactions
+fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+palette = sns.color_palette('Set2', n_colors=df['borough'].nunique())
+
+for ax, title, use_interaction in [
+    (axes[0], 'Without interaction (parallel lines)', False),
+    (axes[1], 'With interaction (different slopes)', True)
+]:
+    for color, (borough, group) in zip(palette, df.groupby('borough')):
+        ax.scatter(group['bedrooms'], group['price'], alpha=0.02, s=3, color=color)
+        if len(group) > 50:
+            X_b = group[['bedrooms']]
+            if use_interaction:
+                mb = LinearRegression().fit(X_b, group['price'])
+            else:
+                # Fit a pooled model (same slope for all boroughs)
+                mb = LinearRegression().fit(X_b, group['price'])
+            x_range = np.array([[0], [group['bedrooms'].max()]])
+            ax.plot(x_range, mb.predict(x_range), color=color, linewidth=2.5,
+                    label=f'{borough} (${mb.coef_[0]:.0f}/BR)')
+    ax.set_xlabel('Bedrooms')
+    ax.set_ylabel('Price ($)')
+    ax.set_title(title)
+    ax.legend(fontsize=8, loc='upper left')
+    ax.set_xlim(-0.5, 6.5)
+
+plt.tight_layout()
+plt.show()
+```
+
+The slopes differ substantially across boroughs. An extra bedroom in Manhattan adds much more to the predicted price than the same bedroom in the Bronx. Without interaction terms, a model with borough dummies produces parallel lines — the same slope everywhere, shifted vertically by borough. Interaction terms let the slopes vary.
+
+```{python}
+# Build a model with interactions: bedrooms × borough
+borough_dummies = pd.get_dummies(df['borough'], drop_first=True)
+interactions = borough_dummies.multiply(df['bedrooms'], axis=0)
+interactions.columns = [f'bedrooms_x_{col}' for col in interactions.columns]
+
+X_interact = pd.concat([X_full, borough_dummies, interactions], axis=1).astype(float)
+model_interact = LinearRegression().fit(X_interact, prices)
+r2_interact = model_interact.score(X_interact, prices)
+
+print(f"Without borough or interactions: R² = {r2_full:.3f}  ({X_full.shape[1]} features)")
+print(f"With borough + interactions:     R² = {r2_interact:.3f}  ({X_interact.shape[1]} features)")
+```
+
+## Missing values as features
+
+A missing review score is not just an annoyance — it carries information. New listings have no reviews. If newer listings tend to price differently, a missingness indicator gives the model access to that signal.
+
+```{python}
+# Create a missingness indicator for review scores
+df['review_missing'] = df['review_scores_rating'].isna().astype(int)
+n_missing = df['review_missing'].sum()
+print(f"Listings with missing review score: {n_missing:,} ({100*n_missing/len(df):.0f}%)")
+print()
+
+# Average price by missingness
+print("Average price:")
+print(df.groupby('review_missing')['price'].mean().round(0))
+```
+
+The approach: impute the missing numeric value (with the median, so outliers don't distort the fill) and add a binary column indicating which rows were imputed. The model can then learn whether "missing" predicts a different price from any observed score.
+
+```{python}
+# Impute + indicator
+median_score = df['review_scores_rating'].median()
+df['review_score_imputed'] = df['review_scores_rating'].fillna(median_score)
+
+print(f"Median review score (used for imputation): {median_score}")
+print(f"\nSample rows:")
+print(df[['review_scores_rating', 'review_score_imputed', 'review_missing']].head(10))
+```
+
+:::{.callout-warning}
+## Don't impute blindly
+
+Imputation replaces missing values with plausible substitutes. Without a missingness indicator, the model cannot distinguish real values from imputed ones. Always pair imputation with an indicator column when missingness might carry information — that is, when the data is MAR or MNAR (see [Chapter 3](lec03-munging.qmd)).
+:::
+
+# Log transforms: transforming y
+
+## The extrapolation problem
+
+Our linear model says each bedroom adds a fixed dollar amount to the price. Going from 1 to 2 bedrooms adds the same amount as going from 7 to 8 bedrooms. But \$49 is a large fraction of a \$120 studio and a small fraction of a \$400 luxury apartment. Prices grow **multiplicatively**, not additively.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Left: price vs bedrooms (original scale)
+ax = axes[0]
+ax.scatter(df['bedrooms'], prices, alpha=0.05, s=5, color='gray')
+x_line = np.linspace(0, 6, 100)
+y_line = model_simple.predict(x_line.reshape(-1, 1))
+ax.plot(x_line, y_line, 'r-', lw=2.5)
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Price ($)')
+ax.set_title('Linear scale: curvature at high end')
+
+# Right: log(price) vs bedrooms
+ax = axes[1]
+log_prices = np.log(prices)
+ax.scatter(df['bedrooms'], log_prices, alpha=0.05, s=5, color='gray')
+model_log = LinearRegression().fit(df[['bedrooms']], log_prices)
+y_log_line = model_log.predict(x_line.reshape(-1, 1))
+ax.plot(x_line, y_log_line, 'r-', lw=2.5)
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('log(Price)')
+ax.set_title('Log scale: relationship is straighter')
+
+plt.tight_layout()
+plt.show()
+```
+
+The right panel shows that $\log(\text{price})$ vs. bedrooms is approximately linear — the log transform straightens the relationship.
+
+## Log transform on the response
+
+Regressing $\log(\text{price})$ on bedrooms changes what the coefficient means. Instead of "each bedroom adds \$X," the coefficient measures a percentage change.
+
+```{python}
+# Fit log(price) ~ bedrooms
+model_log = LinearRegression()
+model_log.fit(df[['bedrooms']], log_prices)
+
+beta1_log = model_log.coef_[0]
+multiplier = np.exp(beta1_log)
+pct_change = (multiplier - 1) * 100
+
+print(f"log(price) ~ bedrooms:  β₁ = {beta1_log:.4f}")
+print(f"Each bedroom multiplies price by e^{beta1_log:.4f} = {multiplier:.3f}")
+print(f"That corresponds to a {pct_change:.1f}% increase per bedroom.")
+```
+
+On the log scale, a one-unit increase in bedrooms multiplies the predicted price by $e^{\beta_1}$. The multiplicative structure captures the intuition that a bedroom matters proportionally more for a cheap listing than for an expensive one.
+
+## The four transform combinations
+
+Depending on whether you log-transform $y$, $x$, or both, the coefficient takes on a different interpretation.
 
 :::{.callout-important}
 ## Interpreting coefficients with log transforms
 
 | Model | Coefficient $\beta_1$ means | Example |
 |-------|---------------------------|---------|
-| $y \sim x$ | 1-unit increase in $x$ → $\beta_1$ change in $y$ | each bedroom adds \$50 |
-| $\log(y) \sim x$ | 1-unit increase in $x$ → multiply $y$ by $e^{\beta_1}$ | each bedroom multiplies price by 1.08 (8% increase) |
-| $y \sim \log(x)$ | 1% increase in $x$ → $\beta_1 / 100$ change in $y$ | 10% more sqft → \$5 higher price |
+| $y \sim x$ | 1-unit increase in $x$ → $\beta_1$ change in $y$ | each bedroom adds \$49 |
+| $\log(y) \sim x$ | 1-unit increase in $x$ → multiply $y$ by $e^{\beta_1}$ | each bedroom multiplies price by 1.33 |
+| $y \sim \log(x)$ | 1% increase in $x$ → $\beta_1/100$ change in $y$ | 10% more sqft → \$5 higher price |
 | $\log(y) \sim \log(x)$ | 1% increase in $x$ → $\beta_1$% change in $y$ (elasticity) | 10% more sqft → 5% higher price |
 
 : {.striped .hover}
 :::
 
-The first row is the model we fit in Chapter 4. The second row explains what happens when you regress $\log(\text{price})$ on bedrooms: the coefficient lives on the log scale, so exponentiating converts it to a multiplicative factor. Let's see this concretely.
-
-```{python}
-# Fit log(price) ~ bedrooms and interpret the coefficient
-df['log_price'] = np.log(df['price'])
-
-model_log = LinearRegression()
-model_log.fit(df[['bedrooms']], df['log_price'])
-
-beta1 = model_log.coef_[0]
-multiplier = np.exp(beta1)
-pct_change = (multiplier - 1) * 100
-
-print(f"log(price) ~ bedrooms:  β₁ = {beta1:.4f}")
-print(f"Each bedroom multiplies price by e^{beta1:.4f} = {multiplier:.3f}")
-print(f"That's a {pct_change:.1f}% increase per bedroom.")
-```
-
-The multiplicative structure explains why the semilog scatter plot in [Chapter 2](lec02-eda.qmd) showed a roughly straight line: the relationship between accommodates and price is approximately multiplicative, which is exactly what a $\log(y) \sim x$ model captures.
-
-## One-hot encoding
-
-Regression needs numbers. But two of our most informative features — `borough` and `room_type` — are strings:
-
-```{python}
-print("borough values:", df['borough'].unique())
-print("room_type values:", df['room_type'].unique())
-```
-
-We can't feed "Manhattan" or "Private room" into a regression equation. The solution is **one-hot encoding**: turn each category into a binary (0/1) column. A listing in Manhattan gets a 1 in the `borough_Manhattan` column and 0s elsewhere.
-
-:::{.callout-important}
-## Definition: Reference level
-We use `drop_first=True` to avoid perfect collinearity. Why? If a listing isn't in any of the other boroughs, it *must* be in the dropped category (the **reference level**). Including all dummies would make the columns sum to the intercept column — a linearly dependent column space (recall the column space from [Chapter 4](lec04-regression.qmd)). The dropped category becomes the baseline that all other coefficients are measured against.
-:::
-
-:::{.callout-tip}
-## Regularization as an alternative to dropping a category
-Dropping the first category is one way to resolve collinearity. Regularization is another. Even a mild L2 penalty (ridge regression) breaks the perfect linear dependence among dummy columns, making all coefficients well-defined and interpretable — no category needs to serve as a hidden baseline.
-
-The intuition: collinearity is not inherently dangerous. It simply means the model has redundant parameters, so infinitely many coefficient vectors produce the same predictions. Regularization picks one of those vectors (the one with smallest norm), resolving the ambiguity without discarding any information. We develop regularization in [Chapter 7](lec07-validation.qmd).
-:::
-
-```{python}
-# One-hot encode categorical features
-cat_features = pd.get_dummies(df[['room_type', 'borough']], drop_first=True)
-num_features = df[['bedrooms', 'bathrooms']]
-X_base = pd.concat([num_features, cat_features], axis=1)
-
-# See what one-hot encoding produced
-print("Encoded columns:")
-print(cat_features.columns.tolist())
-print(f"\nX shape: {X_base.shape}")
-cat_features.head(3)
-```
-
-Each dummy column shifts predictions for that category. Let's fit a regression and see.
-
-```{python}
-model_base = LinearRegression().fit(X_base, prices)
-r2_base = model_base.score(X_base, prices)
-
-# Build coefficient table
-feature_names = list(X_base.columns)
-coef_df = pd.DataFrame({
-    'feature': feature_names,
-    'coefficient': model_base.coef_
-}).sort_values('coefficient', key=abs, ascending=False)
-coef_df['coefficient'] = coef_df['coefficient'].round(2)
-print(f"R² = {r2_base:.3f}\n")
-print(coef_df.to_string(index=False))
-print(f"\nIntercept (baseline = Bronx, Entire home/apt): {model_base.intercept_:.2f}")
-```
-
-How to read this: the coefficient on `borough_Manhattan` tells you how much more (or less) a Manhattan listing costs compared to the baseline category (Bronx), holding all else equal. Shared rooms are cheaper; Manhattan is pricier.
-
-:::{.callout-tip}
-## Think About It: Cancer staging encoded as a number
-Cancer is staged I through IV, with higher stages indicating more advanced disease. Suppose you encode these as integers (Stage I = 1, Stage II = 2, Stage III = 3, Stage IV = 4) and fit a linear regression predicting years survived. If Stage I patients average 4 years and Stage II patients average 2 years, least squares gives $\hat{y} = 6 - 2x$. Now predict Stage IV: $6 - 2(4) = -2$ years. The model predicts *negative* survival time.
-
-The problem: encoding stages as 1--4 assumes the outcome changes by the same amount per stage *and* that the spacing between stages is uniform. Neither is true. One-hot encoding (a separate dummy for each stage) lets each stage have its own effect, free from these assumptions.
-
-(Source: Udell, *Feature Engineering*, Cornell ORIE 4741, 2022.)
-:::
-
-### Boolean threshold encoding for ordinals
-
-One-hot encoding solves the cancer staging problem, but it discards the ordering: the model doesn't know that Stage III is "between" Stage II and Stage IV. **Boolean threshold encoding** preserves the ordering without forcing a linear relationship. For an ordinal variable with levels $1, 2, \ldots, K$, create $K-1$ binary features:
-
-$$\varphi(x) = \bigl[\mathbb{1}(x \ge 2),\; \mathbb{1}(x \ge 3),\; \ldots,\; \mathbb{1}(x \ge K)\bigr]$$
-
-For cancer staging: $\varphi(x) = [\mathbb{1}(x \ge \text{II}),\; \mathbb{1}(x \ge \text{III}),\; \mathbb{1}(x \ge \text{IV})]$. A Stage III patient gets the vector $[1, 1, 0]$. Each coefficient captures the *incremental* effect of crossing that threshold — the jump from Stage I to II can differ from the jump from II to III. The encoding uses the same number of features as one-hot ($K-1$), but the coefficients are cumulative rather than independent, which can improve predictions when the ordering is meaningful and training data is limited.
-
-```{python}
-# Bar chart of coefficients
-fig, ax = plt.subplots(figsize=(10, 5))
-coef_sorted = coef_df.sort_values('coefficient')
-colors = ['#d62728' if c < 0 else '#2171b5' for c in coef_sorted['coefficient']]
-ax.barh(coef_sorted['feature'], coef_sorted['coefficient'], color=colors, edgecolor='white')
-ax.axvline(0, color='gray', linewidth=1)
-ax.set_xlabel('Coefficient (effect on price, $)')
-ax.set_title('Regression coefficients: bedrooms + bathrooms + room type + borough')
-plt.tight_layout()
-plt.show()
-```
-
-## Polynomial features
-
-What if the relationship isn't linear in the original features? Maybe the jump from 1 to 2 bedrooms matters more than from 4 to 5. We can capture this by adding **polynomial features**: $x$, $x^2$, $x^3$.
-
-Here is the mantra of feature engineering: **linear in parameters, not in features.** We transform the inputs; the model stays linear in $\beta$.
-
-$$\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$$
-
-The equation above is nonlinear in $x$ but linear in the parameters $(\beta_0, \beta_1, \beta_2)$. Least squares still applies — the optimization is identical to ordinary regression, just with a richer feature matrix.
-
-```{python}
-X_bedrooms = df[['bedrooms']]
-
-results = []
-for degree in [1, 2, 3, 4]:
-    poly = PolynomialFeatures(degree=degree, include_bias=False)
-    X_poly = poly.fit_transform(X_bedrooms)
-    m = LinearRegression().fit(X_poly, prices)
-    r2 = m.score(X_poly, prices)
-    results.append({'degree': degree, 'n_features': X_poly.shape[1], 'R²': round(r2, 4)})
-    print(f"Degree {degree}: R² = {r2:.4f}  ({X_poly.shape[1]} features)")
-```
-
-The R-squared improvements are modest. The more serious problem with polynomials is not diminishing returns — it is **overfitting and wild extrapolation**. A degree-4 polynomial, fit on a range where most listings have 1--2 bedrooms, can produce absurd predictions outside that range.
-
-```{python}
-# Extrapolate polynomial fits beyond the training range
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-# Left: polynomial fits extrapolated to 12 bedrooms
-ax = axes[0]
-ax.scatter(df['bedrooms'], prices, alpha=0.05, s=5, color='gray', label='data')
-x_extrap = np.linspace(0, 12, 300).reshape(-1, 1)
-
-for degree, color, ls in [(1, '#2171b5', '-'), (3, '#d62728', '--'), (4, '#2ca02c', ':')]:
-    poly = PolynomialFeatures(degree=degree, include_bias=False)
-    X_p = poly.fit_transform(X_bedrooms)
-    m = LinearRegression().fit(X_p, prices)
-    pred_extrap = m.predict(poly.transform(x_extrap))
-    ax.plot(x_extrap, pred_extrap, color=color, linewidth=2.5, linestyle=ls,
-            label=f'Degree {degree}')
-
-ax.axhline(0, color='black', linewidth=0.8, linestyle='-')
-ax.set_xlabel('Bedrooms')
-ax.set_ylabel('Predicted price ($)')
-ax.set_title('Polynomial extrapolation beyond the data')
-ax.legend()
-ax.set_ylim(-200, 500)
-
-# Right: table of predictions at 9, 10, 11 bedrooms
-ax = axes[1]
-ax.axis('off')
-bed_vals = [1, 3, 5, 7, 9, 10, 11]
-table_data = []
-for degree in [1, 3, 4]:
-    poly = PolynomialFeatures(degree=degree, include_bias=False)
-    X_p = poly.fit_transform(X_bedrooms)
-    m = LinearRegression().fit(X_p, prices)
-    preds = m.predict(poly.transform(np.array(bed_vals).reshape(-1, 1)))
-    table_data.append([f'${p:.0f}' for p in preds])
-
-table = ax.table(
-    cellText=table_data,
-    rowLabels=['Degree 1', 'Degree 3', 'Degree 4'],
-    colLabels=[f'{b} BR' for b in bed_vals],
-    loc='center', cellLoc='center'
-)
-table.auto_set_font_size(False)
-table.set_fontsize(10)
-table.scale(1.2, 1.8)
-ax.set_title('Predicted price by bedroom count', fontsize=12, pad=20)
-
-plt.tight_layout()
-plt.show()
-```
-
-The degree-3 and degree-4 models predict **negative prices** for listings with 9 or more bedrooms. This result is not a quirk of one dataset. Polynomial extrapolation is governed by the highest-order term, which eventually dominates and sends predictions to $\pm\infty$. The linear model, while less flexible, at least gives sensible predictions outside the training range.
-
-This failure mode is not hypothetical. In May 2020, the Institute for Health Metrics and Evaluation (IHME) at the University of Washington published influential COVID-19 death forecasts built on a cubic polynomial fit. The *Washington Post* [reported](https://www.washingtonpost.com/health/2020/04/06/americas-most-influential-coronavirus-model-just-revised-its-estimates-downward-not-everyone-is-convinced/) that the model projected deaths would fall to near zero by summer — a prediction driven by the polynomial's downward curve, not by epidemiology. The forecast was wildly wrong: by summer, US deaths were still climbing. The cubic eventually turns downward regardless of the data, just as our degree-4 bedroom model turns negative. Polynomial features fit training data well but extrapolate according to their algebraic shape, not the real world.
-
-The secondary issue is diminishing returns: polynomials on bedrooms alone barely improve R-squared. The real gains come from incorporating other features.
+The first row is the standard linear model. The second row is the log-level model we just fit. The fourth row — log-log — gives an **elasticity**: the percentage change in $y$ per percentage change in $x$, a quantity economists use constantly.
 
 :::{.callout-tip}
 ## Think About It
-A real estate startup asks you to predict prices for 5-bedroom listings using this model. Your training data is almost entirely 1--2 bedrooms. Would you ship the model for that use case? What would you do instead?
+
+When should the response be on a log scale? Prices, incomes, and populations are classic candidates — they grow multiplicatively, are bounded below by zero, and have right-skewed distributions. The log transform compresses the right tail and makes the distribution more symmetric, which also helps with heteroscedasticity (the fan-shaped residual pattern we saw in Chapter 4).
 :::
 
-## Interaction terms
+# Diagnostics and dangers
 
-Is an extra bedroom worth the same in Manhattan and the Bronx? So far our model assumes yes — there's one `bedrooms` coefficient that applies everywhere. An **interaction term** lets the effect of one feature depend on another:
+## Adjusted $R^2$
 
-$$\hat{y} = \beta_0 + \beta_1 \cdot \text{bedrooms} + \beta_2 \cdot \mathbb{1}_{\text{Manhattan}} + \beta_3 \cdot (\text{bedrooms} \times \mathbb{1}_{\text{Manhattan}}) + \ldots$$
+Training $R^2$ never decreases when you add a feature — even a column of random noise. **Adjusted $R^2$** penalizes for the number of features:
 
-The interaction coefficient $\beta_3$ captures how much *more* (or less) a bedroom is worth in Manhattan compared to the reference borough.
+$$R^2_{\text{adj}} = 1 - \frac{(1 - R^2)(n - 1)}{n - k - 1}$$
 
-```{python}
-# Create interaction terms: bedrooms × each borough dummy
-borough_dummies = pd.get_dummies(df['borough'], drop_first=True)
-interactions = borough_dummies.multiply(df['bedrooms'], axis=0)
-interactions.columns = [f'bedrooms_x_{col}' for col in interactions.columns]
-
-# Full model with interactions
-X_interact = pd.concat([X_base, interactions], axis=1)
-model_interact = LinearRegression().fit(X_interact, prices)
-r2_interact = model_interact.score(X_interact, prices)
-
-print(f"Without interactions: R² = {r2_base:.3f}  ({X_base.shape[1]} features)")
-print(f"With interactions:    R² = {r2_interact:.3f}  ({X_interact.shape[1]} features)")
-print(f"Improvement: {r2_interact - r2_base:.4f}")
-```
-
-The interaction terms improve $R^2$, confirming that the value of a bedroom depends on location. Let's visualize the per-borough regression lines.
+where $n$ is the number of observations and $k$ is the number of predictors. A useless feature increases $k$ without sufficiently reducing residual variance, so adjusted $R^2$ drops.
 
 ```{python}
-# Visualize: different slopes per borough
-fig, ax = plt.subplots(figsize=(10, 6))
-colors = sns.color_palette('Set2', n_colors=df['borough'].nunique())
-
-for color, (borough, group) in zip(colors, df.groupby('borough')):
-    ax.scatter(group['bedrooms'], group['price'], alpha=0.03, s=5, color=color)
-    # Fit within-borough regression line
-    if len(group) > 50:
-        mb = LinearRegression().fit(group[['bedrooms']], group['price'])
-        x_range = np.array([[0], [group['bedrooms'].max()]])
-        ax.plot(x_range, mb.predict(x_range), color=color, linewidth=2.5,
-                label=f'{borough} (${mb.coef_[0]:.0f}/bedroom)')
-
-ax.set_xlabel('Bedrooms')
-ax.set_ylabel('Price ($)')
-ax.set_title('Price per bedroom varies by borough')
-ax.legend(loc='upper left', fontsize=9)
-ax.set_xlim(-0.5, 6.5)
-plt.tight_layout()
-plt.show()
-```
-
-The slopes are quite different! An extra bedroom in Manhattan is worth much more than in the Bronx or Staten Island. Without interaction terms, our model uses a single average slope that may not represent *any* borough well.
-
-```{python}
-# Show R² progression
-fig, ax = plt.subplots(figsize=(8, 4))
-models = ['bedrooms only', '+ bath + room + borough', '+ interactions']
-r2_list = [
-    LinearRegression().fit(df[['bedrooms']], prices).score(df[['bedrooms']], prices),
-    r2_base,
-    r2_interact
-]
-bars = ax.bar(models, r2_list, color=['#aec7e8', '#6baed6', '#2171b5'], edgecolor='white')
-for bar, r2_val in zip(bars, r2_list):
-    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
-            f'R²={r2_val:.3f}', ha='center', fontsize=11)
-ax.set_ylabel('R²')
-ax.set_title('Feature engineering progressively improves the model')
-ax.set_ylim(0, 0.6)
-plt.tight_layout()
-plt.show()
-```
-
-**Feature engineering is where domain knowledge meets statistics.** Knowing that location affects the value of space is domain knowledge; encoding it as an interaction term is statistics. Notice the recurring pattern: dummies, polynomials, and interactions all produce new columns for the feature matrix, yet the model remains **linear in parameters**. Least squares handles every variant identically.
-
-:::{.callout-tip collapse="true"}
-## Adjusted R-squared: penalizing complexity
-
-As we add features, R^2 can only increase — even when the new features are noise. **Adjusted R^2** corrects for model complexity:
-
-$$R^2_{\text{adj}} = 1 - \frac{s^2_{\text{residuals}} / (n-k-1)}{s^2_{\text{outcome}} / (n-1)}$$
-
-where $k$ is the number of predictors. A useless feature increases $k$ without sufficiently reducing residual variance, so adjusted R^2 drops. Let's compare our models:
-
-```{python}
-from sklearn.metrics import r2_score as _r2
-
 def adjusted_r2(r2, n, k):
     return 1 - (1 - r2) * (n - 1) / (n - k - 1)
 
 n = len(prices)
-models_adj = {
-    'bedrooms only': (LinearRegression().fit(df[['bedrooms']], prices).score(df[['bedrooms']], prices), 1),
-    '+ bath + room + borough': (r2_base, X_base.shape[1]),
-    '+ interactions': (r2_interact, X_interact.shape[1]),
+models_summary = {
+    'bedrooms only': (model_simple.score(df[['bedrooms']], prices), 1),
+    '+ bathrooms': (model_two.score(df[['bedrooms', 'bathrooms']], prices), 2),
+    '+ room type': (r2_full, X_full.shape[1]),
+    '+ borough + interactions': (r2_interact, X_interact.shape[1]),
 }
 
-for name, (r2, k) in models_adj.items():
-    print(f"{name:30s}  R²={r2:.4f}  adj R²={adjusted_r2(r2, n, k):.4f}  (k={k})")
-```
-:::
-
-## Missing values as features
-
-A missing value can carry signal. If a hospital's readmission count is suppressed ("Too Few to Report"), the suppression itself tells you the hospital is small — and hospital size correlates with outcomes. Dropping that row throws away useful information.
-
-For categorical variables, the simplest approach: treat "missing" as its own category.
-
-```{python}
-# Example: create a 'bedroom_known' indicator from Airbnb data
-import pandas as pd
-bedrooms = pd.Series([1, 2, None, 3, None, 1])
-bedrooms_filled = bedrooms.fillna('Missing')
-print(bedrooms_filled)
+print(f"{'Model':<30s}  {'R²':>6s}  {'Adj R²':>7s}  {'k':>3s}")
+print("-" * 52)
+for name, (r2, k) in models_summary.items():
+    print(f"{name:<30s}  {r2:>.4f}  {adjusted_r2(r2, n, k):>.4f}  {k:>3d}")
 ```
 
-For numeric variables, create a binary **missingness indicator** alongside an imputed value:
-
-```{python}
-# Indicator: was the value missing?
-bedrooms_missing = bedrooms.isna().astype(int)
-# Impute with median for the numeric column
-bedrooms_imputed = bedrooms.fillna(bedrooms.median())
-
-result = pd.DataFrame({
-    'bedrooms_imputed': bedrooms_imputed,
-    'bedrooms_missing': bedrooms_missing
-})
-print(result)
-```
-
-The imputed value lets the model use the column normally. The indicator lets the model learn whether missingness itself predicts the outcome — for example, listings without a bedroom count might systematically differ in price.
-
-### When does a missingness indicator help?
-
-Not all missing data carries signal. Whether a missingness indicator improves your model depends on *why* the data is missing — the MCAR/MAR/MNAR distinction from [Chapter 3](lec03-munging.qmd).
-
-**Informative missingness (MAR or MNAR):** In ambulance data, a missing heart rate often means the EMTs were too busy saving the patient's life to record vitals. The patients with missing heart rates have systematically worse outcomes — the missingness *is* the signal. Creating a binary feature `heart_rate_missing` gives the model access to that information, and it turns out to be one of the strongest predictors of mortality.
-
-**Uninformative missingness (MCAR):** A weather station's battery dies at random, causing missing temperature readings for a few hours. The battery failure has nothing to do with the temperature outside — a hot day is no more likely to cause a dead battery than a cold one. Creating a `temp_missing` indicator adds a column of noise: it's uncorrelated with the outcome and wastes a degree of freedom.
-
-The rule of thumb: when missingness is **informative** (MAR or MNAR), a binary indicator for "is this value missing?" can improve your model. When missingness is **MCAR** — purely random — the indicator adds noise, not signal. In practice, the test set tells you: if adding the indicator improves test-set performance, the missingness was informative.
-
-:::{.callout-warning}
-## Don't impute blindly
-Imputation replaces missing values with plausible substitutes (median, mean, or a model-based prediction). Without a missingness indicator, the model can't distinguish real values from imputed ones. Always pair imputation with an indicator column when missingness might be informative (MNAR or MAR — see [Chapter 3](lec03-munging.qmd)).
-:::
-
-## LLM-based featurization
-
-What about unstructured data like text? Our Airbnb listings have names and descriptions that might contain useful information — mentions of luxury, cleanliness, neighborhood character — but a regression can't read English.
-
-Let's look at a few examples:
-
-```{python}
-# Show 3 raw listings with names and descriptions
-sample = df[df['description'].notna()].sample(3, random_state=42)
-for _, row in sample.iterrows():
-    print(f"Name: {row['name']}")
-    desc = str(row['description'])[:200]  # Truncate for display
-    print(f"Description: {desc}...")
-    print(f"Price: ${row['price']:.0f}")
-    print()
-```
-
-An **LLM** (large language model) can read each description and extract structured features — numbers and categories that a regression *can* use. The approach is a form of **weak supervision**: instead of hand-labeling thousands of listings, you write a prompt once and let the model do the labeling. The resulting features feed into a linear model just like bedrooms or borough dummies — still **linear in parameters**, even though the feature extraction itself is wildly nonlinear.
-
-### Choosing what to extract
-
-Not every feature an LLM can produce will help a regression. Good LLM features are:
-
-- **Predictive of the outcome.** A "mentions luxury" flag likely correlates with price; a "uses exclamation marks" flag probably does not.
-- **Not redundant with existing features.** The LLM could extract "number of bedrooms" from the text, but we already have that column. Focus on information that structured fields miss.
-- **Well-defined and unambiguous.** Asking for a "quality score from 0-10" invites inconsistency; asking "does the listing mention a doorman? (true/false)" gives a concrete extraction task.
-
-For our Airbnb data, we extracted five features from each listing description:
-
-| Feature | Type | Rationale |
-|---------|------|-----------|
-| `mentions_luxury` | bool | Luxury keywords signal higher-end listings |
-| `amenity_count` | int | More amenities mentioned suggests a more complete listing |
-| `sentiment_score` | float (0--1) | Enthusiastic descriptions may correlate with quality |
-| `neighborhood_vibe` | category | Captures location character beyond borough name |
-| `cleanliness_mentioned` | bool | Cleanliness emphasis may signal quality or concern |
-
-### The prompt
-
-The extraction prompt must be specific, include the expected output format, and define each field precisely. Here is the prompt that generated our features (the full extraction script is in the course code repository):
-
-```{python}
-# The extraction prompt used to generate LLM features:
-example_prompt = """Extract structured features from this Airbnb listing description.
-
-LISTING DESCRIPTION:
-{description}
-
-Return a JSON object with exactly these fields:
-- mentions_luxury (bool): Does the description use words like "luxury", "upscale",
-  "designer", "high-end", "premium", or similar?
-- amenity_count (int): How many distinct amenities are explicitly mentioned?
-  Count items like WiFi, AC, washer, gym, pool, doorman, etc.
-- sentiment_score (float, 0 to 1): Overall tone of the description.
-  0 = negative/apologetic, 0.5 = neutral/factual, 1 = enthusiastic/glowing.
-- neighborhood_vibe (string, one of: "artsy", "trendy", "bustling_urban", "quiet_residential",
-  "family_friendly", "upscale", "unknown"):
-  The dominant character of the neighborhood as described.
-- cleanliness_mentioned (bool): Does the description explicitly mention cleanliness,
-  sanitization, or hygiene?
-
-Return ONLY the JSON object, no other text."""
-
-print(example_prompt.format(description="<listing text goes here>"))
-```
-
-In practice, you'd call the LLM API on each listing description and parse the JSON response. The code below shows the pattern (the features for our dataset are pre-computed).
-
-```{python}
-# How the API call works (not run here — features are pre-computed):
-#
-# from anthropic import Anthropic
-# client = Anthropic()
-#
-# response = client.messages.create(
-#     model="claude-haiku-4-5-20251001",  # Fast + cheap: ~$0.01 per 1000 listings
-#     max_tokens=200,
-#     messages=[{"role": "user", "content": prompt_with_description}],
-# )
-# features = json.loads(response.content[0].text)
-#
-# Practical tips for projects:
-# - Use Claude Haiku for bulk extraction (fast, cheap, sufficient for structured tasks)
-# - Use Claude Sonnet when extraction requires complex reasoning
-# - Process listings in batches; save results incrementally
-# - Always include "Return ONLY the JSON" to avoid preamble in the response
-
-# Load pre-computed LLM features
-llm_features = pd.read_csv(f'{DATA_DIR}/airbnb/llm_features.csv')
-print(f"LLM features shape: {llm_features.shape}")
-print(f"Columns: {llm_features.columns.tolist()}")
-llm_features.head()
-```
-
-### Why some features help and some don't
-
-Not every extracted feature will improve the model. `sentiment_score` sounds promising — surely enthusiastic descriptions command higher prices? — but sentiment may reflect the host's writing style more than the listing's quality. Meanwhile, `mentions_luxury` directly signals a price tier that structured fields (bedrooms, borough) cannot capture. The test set tells us which features earn their place.
-
-```{python}
-# Join LLM features to the main dataframe on listing id
-df_llm = df.merge(llm_features, on='id', how='inner')
-print(f"Listings with LLM features: {len(df_llm):,} (of {len(df):,} total)")
-
-# Show the distribution of LLM-extracted features
-# Note: .describe() shows only numeric columns by default; boolean and string columns are omitted
-llm_cols = [c for c in llm_features.columns if c != 'id']
-print(f"\nLLM feature summary (numeric columns only):")
-print(df_llm[llm_cols].describe().round(2))
-```
-
-Now let's build a regression with and without the LLM features, using `train_test_split` to measure honest test performance.
-
-```{python}
-# Build feature matrix with LLM features included
-y_llm = df_llm['price']
-
-# Numeric + categorical features (same as before, on the joined subset)
-cat_llm = pd.get_dummies(df_llm[['room_type', 'borough']], drop_first=True)
-num_llm = df_llm[['bedrooms', 'bathrooms']]
-
-# Without LLM features
-X_no_llm = pd.concat([num_llm, cat_llm], axis=1)
-
-# With LLM features
-llm_numeric = df_llm[llm_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
-X_with_llm = pd.concat([num_llm, cat_llm, llm_numeric], axis=1)
-
-# Train/test split on the LLM subset
-X_tr_no, X_te_no, y_tr_llm, y_te_llm = train_test_split(
-    X_no_llm, y_llm, test_size=0.3, random_state=42
-)
-X_tr_with = X_with_llm.loc[X_tr_no.index]
-X_te_with = X_with_llm.loc[X_te_no.index]
-
-# Fit models with and without LLM features
-m_no_llm = LinearRegression().fit(X_tr_no, y_tr_llm)
-m_with_llm = LinearRegression().fit(X_tr_with, y_tr_llm)
-
-r2_no = r2_score(y_te_llm, m_no_llm.predict(X_te_no))
-r2_with = r2_score(y_te_llm, m_with_llm.predict(X_te_with))
-
-print(f"Without LLM features: Test R² = {r2_no:.3f}  ({X_no_llm.shape[1]} features)")
-print(f"With LLM features:    Test R² = {r2_with:.3f}  ({X_with_llm.shape[1]} features)")
-print(f"Improvement:           {r2_with - r2_no:+.3f}")
-```
-
-The LLM features provide a modest improvement. Let's see which extracted features carry the most weight by examining the regression coefficients.
-
-```{python}
-# Show which LLM features matter most
-all_features_llm = list(X_with_llm.columns)
-coef_llm_df = pd.DataFrame({
-    'feature': all_features_llm,
-    'coefficient': m_with_llm.coef_
-})
-# Highlight LLM features
-coef_llm_df['source'] = ['LLM' if f in llm_cols else 'original' for f in all_features_llm]
-coef_llm_df = coef_llm_df.sort_values('coefficient', key=abs, ascending=False)
-
-fig, ax = plt.subplots(figsize=(10, 6))
-colors = ['#d62728' if s == 'LLM' else '#2171b5' for s in coef_llm_df['source']]
-ax.barh(range(len(coef_llm_df)), coef_llm_df['coefficient'], color=colors, edgecolor='white')
-ax.set_yticks(range(len(coef_llm_df)))
-ax.set_yticklabels(coef_llm_df['feature'], fontsize=9)
-ax.axvline(0, color='gray', linewidth=1)
-ax.set_xlabel('Coefficient (effect on price, $)')
-ax.set_title('Regression coefficients: original features (blue) + LLM features (red)')
-plt.tight_layout()
-plt.show()
-```
-
-:::{.callout-warning}
-## LLM features can be wrong
-LLM featurization replaces an entire natural language processing pipeline with a single prompt. The resulting features are imperfect — LLMs can hallucinate or misinterpret text — but cross-validation tells you whether they help. Always validate LLM-extracted features on held-out data before trusting them in a model.
-:::
-
-## When you've gone too far
-
-R² gets better as we add features. But does the model get better? Adding redundant or noisy features can hurt predictions on new data. This section develops the diagnostic toolkit.
+Adjusted $R^2$ rises more slowly than $R^2$ and can decline if the added features don't carry enough signal to justify their complexity. In [Chapter 7](lec07-validation.qmd), we'll use held-out test data for a more reliable assessment of model quality.
 
 ## Multicollinearity
 
-What if two of your features are nearly the same? Let's compare `bedrooms` and `beds`. We create a subset `df_mc` with the columns we need for this analysis, dropping rows where `beds` is missing.
+What happens when two features carry nearly the same information? The `beds` column (number of beds) is highly correlated with `bedrooms` — most listings have roughly one bed per bedroom.
 
 ```{python}
-# Subset for multicollinearity analysis
-df['price_clean'] = df['price']  # alias for consistency with ch4 code
-df_mc = df[['bedrooms', 'bathrooms', 'beds', 'price_clean',
-            'accommodates', 'number_of_reviews']].dropna()
-print(f"Working with {len(df_mc):,} listings for multicollinearity analysis")
-df_mc.head(10)
+df_mc = df.dropna(subset=['beds']).copy()
+corr_beds = df_mc['bedrooms'].corr(df_mc['beds'])
+corr_bath = df_mc['bedrooms'].corr(df_mc['bathrooms'])
+
+print(f"Correlation between bedrooms and beds:      {corr_beds:.3f}")
+print(f"Correlation between bedrooms and bathrooms:  {corr_bath:.3f}")
 ```
-
-Each column of the data frame is now a vector in $\mathbb{R}^n$, where $n$ is the number of listings. Let's inspect the first few entries of each feature column.
-
-```{python}
-# Look at the feature columns as vectors
-print(f"Each column is a vector in R^{len(df_mc)} (one entry per listing):")
-print()
-for col in ['bedrooms', 'bathrooms', 'beds']:
-    print(f"  {col}: first 8 values = {df_mc[col].values[:8]}")
-```
-
-Bedrooms and beds look similar — most listings have roughly one bed per bedroom. The 2D histogram on the left confirms this: most listings cluster along the diagonal. The correlation heatmap on the right quantifies how tightly each pair of features tracks.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.8),
                          gridspec_kw={'width_ratios': [1.15, 1]})
 
-# Left: 2D histogram — log color scale so the dense diagonal pops
+# Left: 2D histogram
 h = axes[0].hist2d(
     df_mc['bedrooms'], df_mc['beds'],
     bins=[np.arange(-0.5, 7), np.arange(-0.5, 10)],
@@ -631,471 +624,168 @@ axes[0].plot([0, 6], [0, 6], color='#d62728', ls='--', lw=2.2,
              label='beds = bedrooms', zorder=5)
 axes[0].set_xlabel('Bedrooms')
 axes[0].set_ylabel('Beds')
-axes[0].set_title('Bedrooms vs. beds', fontweight='bold')
-axes[0].legend(fontsize=9.5, loc='upper left', framealpha=0.95,
-               edgecolor='#999999', fancybox=False)
-axes[0].set_xlim(-0.5, 6.5)
-axes[0].set_ylim(-0.5, 9.5)
-axes[0].set_xticks(range(0, 7))
-axes[0].set_yticks(range(0, 10))
-axes[0].annotate('most listings cluster\nnear the diagonal',
-                 xy=(1, 1), xytext=(3.5, 7),
-                 fontsize=9, fontstyle='italic', color='#333333',
-                 arrowprops=dict(arrowstyle='->', color='#555555', lw=1.2),
-                 ha='center', bbox=dict(boxstyle='round,pad=0.3',
-                 facecolor='white', edgecolor='#cccccc', alpha=0.92))
+axes[0].set_title('Most listings cluster near the diagonal')
+axes[0].legend(fontsize=9)
 
-# Right: correlation heatmap with key correlation highlighted
+# Right: correlation heatmap
 corr = df_mc[['bedrooms', 'bathrooms', 'beds']].corr()
 sns.heatmap(corr, annot=True, fmt='.2f', cmap='RdBu_r',
             vmin=-1, vmax=1, ax=axes[1], square=True,
             linewidths=2, linecolor='white',
-            annot_kws={'fontsize': 15, 'fontweight': 'bold'},
-            cbar_kws={'shrink': 0.82, 'pad': 0.02, 'label': 'Correlation'})
-labels = list(corr.columns)
-bed_i, br_i = labels.index('beds'), labels.index('bedrooms')
-for r, c in [(br_i, bed_i), (bed_i, br_i)]:
-    axes[1].add_patch(plt.Rectangle((c, r), 1, 1, fill=False,
-                                    edgecolor='#d62728', lw=3, zorder=10))
-axes[1].set_title('Feature correlations', fontweight='bold')
-axes[1].set_xticklabels(axes[1].get_xticklabels(), rotation=0)
-axes[1].set_yticklabels(axes[1].get_yticklabels(), rotation=0)
+            annot_kws={'fontsize': 14, 'fontweight': 'bold'},
+            cbar_kws={'shrink': 0.82, 'label': 'Correlation'})
+axes[1].set_title('Feature correlations')
 
 plt.tight_layout(w_pad=3)
 plt.show()
-
-print(f"\nCorrelation between bedrooms and beds: {df_mc['bedrooms'].corr(df_mc['beds']):.3f}")
-print(f"Correlation between bedrooms and bathrooms: {df_mc['bedrooms'].corr(df_mc['bathrooms']):.3f}")
 ```
 
-Bedrooms and beds are positively correlated (r ≈ 0.65). In linear algebra terms, the `beds` vector is nearly a scalar multiple of the `bedrooms` vector:
-
-$$\text{beds} \approx \text{bedrooms}$$
-
-The span barely grows when you add `beds` as a feature. Two vectors pointing in nearly the same direction span almost a **line**, not a **plane**.
-
-The phenomenon is called **multicollinearity**: redundant features that don't expand the column space. High correlation between feature columns corresponds to near-**collinearity** in the column vectors — hence the name.
-
-```{python}
-# How parallel are these feature vectors?
-# We center first so the angle corresponds to correlation.
-bedrooms_centered = df_mc['bedrooms'].values - df_mc['bedrooms'].mean()
-beds_centered = df_mc['beds'].values - df_mc['beds'].mean()
-bathrooms_centered = df_mc['bathrooms'].values - df_mc['bathrooms'].mean()
-
-cos_beds = np.dot(bedrooms_centered, beds_centered) / (
-    np.linalg.norm(bedrooms_centered) * np.linalg.norm(beds_centered))
-cos_bath = np.dot(bedrooms_centered, bathrooms_centered) / (
-    np.linalg.norm(bedrooms_centered) * np.linalg.norm(bathrooms_centered))
-
-angle_beds = np.degrees(np.arccos(np.clip(cos_beds, -1, 1)))
-angle_bath = np.degrees(np.arccos(np.clip(cos_bath, -1, 1)))
-
-print(f"Angle between bedrooms and beds:      {angle_beds:.1f}° (moderate angle)")
-print(f"Angle between bedrooms and bathrooms:  {angle_bath:.1f}° (more independent)")
-print()
-print("When vectors are nearly parallel, adding the second one")
-print("barely expands the span. Your model doesn't gain much.")
-```
-
-How much independent information does each feature contribute beyond bedrooms? We can project `beds` and `bathrooms` onto the `bedrooms` direction and examine the residual -- the part that bedrooms cannot explain.
-
-```{python}
-# What's left after removing the bedrooms component?
-# beds ≈ 1.0 * bedrooms + something_else
-# The "something_else" is the part that bedrooms can't explain.
-# If it's tiny, beds is mostly redundant.
-
-proj_coeff_beds = np.dot(beds_centered, bedrooms_centered) / np.dot(bedrooms_centered, bedrooms_centered)
-residual_beds = beds_centered - proj_coeff_beds * bedrooms_centered
-
-proj_coeff_bath = np.dot(bathrooms_centered, bedrooms_centered) / np.dot(bedrooms_centered, bedrooms_centered)
-residual_bath = bathrooms_centered - proj_coeff_bath * bedrooms_centered
-
-from scipy import stats
-
-fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
-
-# Shared bins on the same x-range so width difference is visible
-clip_val = np.percentile(
-    np.abs(np.concatenate([residual_beds, residual_bath])), 99)
-x_lim = clip_val * 1.1
-bin_edges = np.linspace(-x_lim, x_lim, 70)
-
-hist_color = '#A8C4E0'
-kde_color = '#2B5C8A'
-
-for ax, resid, label in zip(
-    axes, [residual_beds, residual_bath], ['beds', 'bathrooms']
-):
-    resid_vis = resid[np.abs(resid) <= clip_val]
-    ax.hist(resid_vis, bins=bin_edges, alpha=0.45, color=hist_color,
-            edgecolor='white', linewidth=0.3)
-    kde = stats.gaussian_kde(resid_vis, bw_method=0.2)
-    kde_x = np.linspace(-x_lim, x_lim, 400)
-    kde_y = kde(kde_x) * len(resid_vis) * (bin_edges[1] - bin_edges[0])
-    ax.plot(kde_x, kde_y, color=kde_color, linewidth=2)
-    ax.fill_between(kde_x, kde_y, alpha=0.12, color=kde_color)
-    ax.text(0.96, 0.93, f'std = {resid.std():.2f}',
-            transform=ax.transAxes, ha='right', va='top',
-            fontsize=13, fontweight='bold',
-            bbox=dict(boxstyle='round,pad=0.35', facecolor='white',
-                      edgecolor='#aaaaaa', alpha=0.92))
-    ax.set_title(f'{label} after removing bedrooms', fontsize=11.5)
-    ax.set_xlabel('Residual')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-
-axes[0].set_ylabel('Count')
-plt.tight_layout()
-plt.show()
-```
-
-## Visualizing collinearity: 2D span vs near-1D span
-
-Let's make this concrete with a small example. When two feature vectors are **linearly independent** — meaning neither is a scalar multiple of the other — they span a plane. When they're nearly parallel, the "plane" collapses to almost a line.
-
-```{python}
-fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
-
-panels = [
-    (np.array([1, 0.3]), np.array([0.2, 1]),
-     'Independent features\n(bedrooms, bathrooms)'),
-    (np.array([1, 0.3]), np.array([1.1, 0.35]),
-     'Redundant features\n(bedrooms, beds)'),
-]
-
-v1_color = '#2d70b3'
-v2_color = '#c74440'
-span_colors = ['#e8d44d', '#ffaaaa']
-
-for idx, (ax, (va, vb, title)) in enumerate(zip(axes, panels)):
-    ax.set_facecolor('#fafafa')
-
-    # Shaded span region (parallelogram from large linear combinations)
-    K = 5
-    corners = []
-    for a, b in [(-K, -K), (-K, K), (K, K), (K, -K)]:
-        corners.append(a * va + b * vb)
-    corners = np.array(corners)
-    ax.fill(corners[:, 0], corners[:, 1], alpha=0.18,
-            color=span_colors[idx], zorder=0)
-
-    # Lattice dots at integer linear combinations a*v1 + b*v2
-    lattice_pts = []
-    for a in np.arange(-8, 9, 1):
-        for b in np.arange(-8, 9, 1):
-            pt = a * va + b * vb
-            if -3.6 <= pt[0] <= 3.6 and -3.6 <= pt[1] <= 3.6:
-                lattice_pts.append(pt)
-    lattice_pts = np.array(lattice_pts)
-    dists = np.sqrt(lattice_pts[:, 0]**2 + lattice_pts[:, 1]**2)
-    max_dist = max(dists.max(), 1)
-    alphas = np.clip(0.65 - 0.35 * (dists / max_dist), 0.15, 0.65)
-    ax.scatter(lattice_pts[:, 0], lattice_pts[:, 1],
-               s=10, color='#444444', alpha=alphas, zorder=2, edgecolors='none')
-
-    # Bold vector arrows
-    scale = 2.5
-    for vi, (v, color, label) in enumerate(
-            [(va, v1_color, r'$\mathbf{v}_1$'),
-             (vb, v2_color, r'$\mathbf{v}_2$')]):
-        ax.annotate('', xy=v*scale, xytext=(0, 0),
-                    arrowprops=dict(arrowstyle='->', color=color, lw=3.5,
-                                   mutation_scale=20), zorder=4)
-        perp = np.array([-v[1], v[0]])
-        perp = perp / np.linalg.norm(perp)
-        sign = (1 if vi == 0 else -1) if idx == 1 else 1
-        ax.text(*(v*scale + perp*sign*0.5), label, fontsize=15, color=color,
-                fontweight='bold', ha='center', va='center', zorder=5,
-                bbox=dict(boxstyle='round,pad=0.1', facecolor='white',
-                          edgecolor='none', alpha=0.7))
-
-    ax.plot(0, 0, 'ko', markersize=5, zorder=5)
-    ax.axhline(0, color='#cccccc', lw=0.5, zorder=1)
-    ax.axvline(0, color='#cccccc', lw=0.5, zorder=1)
-    ax.set_xlim(-3.8, 3.8)
-    ax.set_ylim(-3.8, 3.8)
-    ax.set_aspect('equal')
-    ax.set_title(title, fontsize=14, fontweight='bold', pad=10)
-    ax.set_xlabel('Prediction component 1', fontsize=11)
-    ax.set_ylabel('Prediction component 2', fontsize=11)
-    ax.tick_params(labelsize=9)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-
-fig.text(0.25, 0.01, 'Span fills the plane', fontsize=12,
-         ha='center', color='#2d7d2d', fontweight='bold')
-fig.text(0.75, 0.01, 'Span collapses to a line', fontsize=12,
-         ha='center', color='#c74440', fontweight='bold')
-plt.tight_layout(rect=[0, 0.04, 1, 1])
-plt.show()
-```
-
-On the left, two independent features let you reach any point in the plane — you have full 2D freedom. On the right, nearly parallel features only let you move along one direction. **The span collapsed.** Adding the second feature barely helped.
-
-Multicollinearity limits your model: redundant features provide *redundant information*, not new predictive power.
-
-:::{.callout-tip}
-## Think About It
-If you're an Airbnb host deciding which features to advertise, does it help to list both "bedrooms" AND "beds"? What would you list instead?
-:::
-
-## Rank: how many truly independent features do you have?
-
-Vectors are **linearly independent** if none of them can be written as a combination of the others. For example, if $\text{bedrooms} = 0.5 \cdot \text{bathrooms} + 0.3 \cdot \text{beds}$, then bedrooms is **linearly dependent** on the other two — it's redundant.
-
-How many truly independent columns does our Airbnb feature matrix have? Let's check.
-
-```{python}
-# Build feature matrices and check rank
-features_3 = df_mc[['bedrooms', 'bathrooms', 'beds']].values
-features_2 = df_mc[['bedrooms', 'bathrooms']].values
-
-rank_3 = np.linalg.matrix_rank(features_3)
-rank_2 = np.linalg.matrix_rank(features_2)
-
-print(f"Matrix with [bedrooms, bathrooms, beds]: shape {features_3.shape}, rank = {rank_3}")
-print(f"Matrix with [bedrooms, bathrooms]:        shape {features_2.shape}, rank = {rank_2}")
-print()
-print(f"All 3 are technically independent (beds != c * bedrooms exactly),")
-print(f"so the rank is {rank_3}. But near-collinearity means the 3rd direction")
-print(f"adds very little. Singular values reveal how much each direction contributes.")
-```
-
-The number of independent columns has a name:
+When feature vectors point in nearly the same direction, adding the second one barely expands the column space. The phenomenon is called **multicollinearity**. Coefficients of collinear features can become large, opposite in sign, and unstable — small changes in the data produce large swings in the estimated coefficients. The predictions may still be fine, but individual coefficients become uninterpretable.
 
 :::{.callout-important}
-## Definition: Rank
-The **rank** of a matrix $X$ is the dimension of its column space — equivalently, the number of linearly independent columns.
+## Definition: Multicollinearity
 
-- If $X$ has 3 columns but rank 2, one column is redundant.
-- If rank = number of columns, all features contribute non-redundant information.
+**Multicollinearity** occurs when two or more feature columns are highly correlated — their vectors point in nearly the same direction. The column space barely grows from the additional feature, and the normal equations become ill-conditioned: $(X^TX)^{-1}$ amplifies small perturbations in the data.
 :::
 
-Rank is a binary concept: a column is either exactly dependent or it isn't. But in practice, *near*-redundancy matters more than exact dependence. The **singular values** of $X$ (computed by `np.linalg.svd`) quantify how much variance each independent direction captures. We'll study SVD formally in Chapter 14; for now, the bar chart tells the story.
-
 ```{python}
-# Singular values: how much does each independent direction contribute?
-# (We'll return to singular values formally in Chapter 14 on PCA —
-#  for now, just look at the bar chart.)
-_, singular_values, _ = np.linalg.svd(
-    features_3 - features_3.mean(axis=0), full_matrices=False)
+# Compare models with and without beds
+X_no_beds = df_mc[['bedrooms', 'bathrooms']].astype(float)
+X_with_beds = df_mc[['bedrooms', 'bathrooms', 'beds']].astype(float)
+y_mc = df_mc['price']
 
-# Variance explained is proportional to squared singular values
-sv_pct = singular_values**2 / (singular_values**2).sum() * 100
+m_no = LinearRegression().fit(X_no_beds, y_mc)
+m_with = LinearRegression().fit(X_with_beds, y_mc)
 
-fig, ax = plt.subplots(figsize=(6, 3.5))
+print("Without beds:")
+for name, coef in zip(X_no_beds.columns, m_no.coef_):
+    print(f"  {name:12s}  {coef:+.2f}")
+print(f"  R² = {m_no.score(X_no_beds, y_mc):.4f}")
 
-labels = ['Direction 1', 'Direction 2', 'Direction 3']
-colors = ['#2563eb', '#2563eb', '#cbd5e1']
-edgecolors = ['#1e40af', '#1e40af', '#94a3b8']
-label_colors = ['#1e3a5f', '#1e3a5f', '#94a3b8']
-
-bars = ax.bar(labels, sv_pct, width=0.55, color=colors,
-              edgecolor=edgecolors, linewidth=0.8)
-
-for bar, pct, lc in zip(bars, sv_pct, label_colors):
-    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1.5,
-            f'{pct:.1f}%', ha='center', va='bottom', fontsize=13,
-            fontweight='bold', color=lc)
-
-# Cumulative line
-cumulative = np.cumsum(sv_pct)
-x_positions = range(len(sv_pct))
-ax.plot(x_positions, cumulative, 'o-', color='#dc2626', markersize=6,
-        linewidth=1.8, zorder=5)
-ax.text(1 + 0.15, cumulative[1] - 1, f'{cumulative[1]:.0f}%',
-        fontsize=10, color='#dc2626', ha='left', va='top')
-ax.text(2 - 0.15, cumulative[2] + 1, f'{cumulative[2]:.0f}%',
-        fontsize=10, color='#dc2626', ha='right', va='bottom')
-
-ax.set_ylabel('Variance explained (%)', fontsize=11)
-ax.set_title('Two directions capture nearly all the variance',
-             fontsize=13, fontweight='bold')
-ax.set_ylim(0, 112)
-ax.yaxis.set_major_locator(mticker.MultipleLocator(25))
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.grid(axis='y', alpha=0.25, linewidth=0.5)
-ax.set_axisbelow(True)
-plt.tight_layout()
-plt.show()
-
-print("The 3rd direction contributes very little — beds is mostly redundant with bedrooms.")
+print("\nWith beds:")
+for name, coef in zip(X_with_beds.columns, m_with.coef_):
+    print(f"  {name:12s}  {coef:+.2f}")
+print(f"  R² = {m_with.score(X_with_beds, y_mc):.4f}")
 ```
 
-:::{.callout-tip}
-## Think About It
-A model with 50 features but rank 3 — what does that tell you about the data? How many features are really doing the work?
-:::
+Adding beds barely changes $R^2$ — the redundant feature contributes little new information. The coefficient on bedrooms may shift noticeably as the model redistributes explanatory power between the two correlated features.
 
-## What predictions are possible?
+## Residual diagnostics
 
-The opening of this chapter asked: given your features, what predictions are possible? The column space of $X$ is the set of all achievable predictions. Any target vector outside the column space cannot be reached exactly — the best a linear model can do is find the closest point inside the column space.
-
-Let's project actual Airbnb prices onto the column space of two feature sets and measure the gap.
+The normal equations guarantee $X^T \epsilon = 0$ — no linear pattern remains between the included features and the residuals. But patterns can still lurk. A scatter plot of residuals vs. predicted values reveals common problems: fan shapes (heteroscedasticity), curves (missing nonlinearity), and clusters (missing categorical features).
 
 ```{python}
-# Build two design matrices: one with 2 features, one with 4
-X_small = df_mc[['bedrooms', 'bathrooms']].values
-X_large = df_mc[['bedrooms', 'bathrooms', 'accommodates', 'number_of_reviews']].values
-y = df_mc['price_clean'].values
+y_hat_full = model_full.predict(X_full)
+residuals_full = prices.values - y_hat_full
 
-# Project y onto each column space using least squares
-beta_small = np.linalg.lstsq(X_small, y, rcond=None)[0]
-beta_large = np.linalg.lstsq(X_large, y, rcond=None)[0]
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 
-y_hat_small = X_small @ beta_small
-y_hat_large = X_large @ beta_large
-
-# Residuals: what the model cannot reach
-resid_small = y - y_hat_small
-resid_large = y - y_hat_large
-
-print("Projection of actual prices onto the column space:")
-print(f"  2 features (bedrooms, bathrooms):")
-print(f"    residual norm = {np.linalg.norm(resid_small):,.0f}")
-print(f"    avg |residual| = ${np.mean(np.abs(resid_small)):.0f} per listing")
-print(f"  4 features (+ accommodates, reviews):")
-print(f"    residual norm = {np.linalg.norm(resid_large):,.0f}")
-print(f"    avg |residual| = ${np.mean(np.abs(resid_large)):.0f} per listing")
-print()
-print("More independent features → larger column space → smaller residual.")
-```
-
-The scatter plots below compare predicted prices (the projection onto the column space, computed by `np.linalg.lstsq`) against actual prices. Points on the dashed $y = x$ line would be perfect predictions. Color intensity shows how many listings land in each hex bin.
-
-```{python}
-#| fig-cap: "Actual vs predicted Airbnb prices for two models. A larger column space (right) pulls predictions closer to actual prices."
-# Visualize: actual prices vs projected prices
-fig, axes = plt.subplots(1, 2, figsize=(12, 5.2))
-limit = 500
-norm = mcolors.LogNorm(vmin=1, vmax=600)
-ss_tot = np.sum((y - np.mean(y))**2)
-
-for ax, y_hat, title_str in [
-    (axes[0], y_hat_small, '2 features: bedrooms + bathrooms'),
-    (axes[1], y_hat_large, '4 features: + accommodates + reviews')
-]:
-    r2 = 1 - np.sum((y - y_hat)**2) / ss_tot
-    mae = np.mean(np.abs(y - y_hat))
-    mask = (y_hat >= 0) & (y_hat <= limit) & (y >= 0) & (y <= limit)
-
-    hb = ax.hexbin(y_hat[mask], y[mask], gridsize=45, cmap='YlOrRd',
-                   mincnt=1, norm=norm, extent=[0, limit, 0, limit],
-                   linewidths=0.1, edgecolors='face')
-    ax.plot([0, limit], [0, limit], color='#222', ls='--', lw=2, zorder=5)
-    ax.text(limit * 0.76, limit * 0.70, 'y = x', fontsize=9, color='#222',
-            rotation=45, ha='center',
-            bbox=dict(facecolor='white', edgecolor='none', alpha=0.8, pad=1))
-    ax.text(0.04, 0.96,
-            f'$R^2 = {r2:.2f}$\nmean |residual| = ${mae:.0f}',
-            transform=ax.transAxes, fontsize=10.5, va='top',
-            bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
-                      edgecolor='#999', alpha=0.95))
-    ax.set_xlabel('predicted price ($)')
-    ax.set_ylabel('actual price ($)')
-    ax.set_title(title_str, fontsize=11.5, pad=6)
-    ax.set_xlim(0, limit)
-    ax.set_ylim(0, limit)
-    ax.set_aspect('equal')
-
-fig.subplots_adjust(right=0.88, wspace=0.25)
-cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
-fig.colorbar(hb, cax=cbar_ax, label='listings per bin')
-plt.show()
-```
-
-The gap between the $y = x$ line and the point cloud is the residual — the part of actual prices that lives outside the column space. A richer column space (more independent features) narrows the gap, but some gap always remains. No linear combination of these features can perfectly reproduce the full complexity of Airbnb pricing.
-
-## Checking the residuals
-
-The normal equations guarantee $X^Te = 0$ — that's a mathematical fact. But a good model should also have residuals that look like random noise. The orthogonality is guaranteed; the randomness is not. Let's check.
-
-```{python}
-# Residual plot — using the main df with interaction model from Part 1
-y_main = prices.values
-y_hat_main = model_interact.predict(X_interact)
-residuals_main = y_main - y_hat_main
-
-fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-
-axes[0].scatter(y_hat_main, residuals_main, alpha=0.05, s=10)
+# Residuals vs fitted
+axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
 axes[0].axhline(0, color='red', lw=1.5)
 axes[0].set_xlabel('Predicted price ($)')
 axes[0].set_ylabel('Residual ($)')
 axes[0].set_title('Residuals vs predicted values')
 
-axes[1].hist(residuals_main, bins=60, edgecolor='white', alpha=0.7)
+# Histogram of residuals
+axes[1].hist(residuals_full, bins=60, edgecolor='white', alpha=0.7)
 axes[1].set_xlabel('Residual ($)')
 axes[1].set_ylabel('Count')
 axes[1].set_title('Distribution of residuals')
 
 plt.tight_layout()
 plt.show()
-
-print("Notice: the spread of residuals increases with predicted price.")
-print("This is heteroscedasticity — the model's errors are not constant.")
 ```
 
-:::{.callout-warning}
+Two patterns stand out. First, the spread of residuals fans out at higher predicted prices — the model's errors are larger for expensive listings. Second, the residual distribution is right-skewed, with a heavy upper tail.
+
 ## Heteroscedasticity
 
-When the spread of residuals changes with the predicted value, we have **heteroscedasticity**. Coefficient estimates remain valid, but standard errors from the usual OLS formula become unreliable under heteroscedasticity. We'll revisit this issue in Chapter 12.
+When the variance of the residuals changes with the predicted value, we have **heteroscedasticity** (from the Greek: "different scatter"). The fan-shaped residual plot above is a classic signal.
+
+:::{.callout-important}
+## Definition: Heteroscedasticity
+
+**Heteroscedasticity** means the spread of residuals is not constant across the range of predictions. A fan-shaped residual plot is the telltale sign. Coefficient estimates remain unbiased, but standard errors (and therefore confidence intervals and p-values) become unreliable under heteroscedasticity.
 :::
 
-## Preview
+The log transform often helps: by compressing the right tail of the price distribution, it stabilizes the variance of the residuals.
 
-More features can make predictions *worse* on new data — even when training R² keeps improving. In [Chapter 6](lec06-trees.qmd), we meet a model that engineers features automatically. In [Chapter 7](lec07-validation.qmd), we develop the tools to tell when we've gone too far.
+```{python}
+# Compare residual plots: level vs log
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 
-## Key takeaways
+# Level model
+axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
+axes[0].axhline(0, color='red', lw=1.5)
+axes[0].set_xlabel('Predicted price ($)')
+axes[0].set_ylabel('Residual ($)')
+axes[0].set_title('Level model: fan-shaped residuals')
 
-- **Feature engineering transforms raw data into numbers regression can use.** Categories become dummies, text becomes structured fields, nonlinear relationships become polynomial columns.
-- **Log transforms change coefficient interpretation** — additive ($y \sim x$), multiplicative ($\log y \sim x$), or elasticity ($\log y \sim \log x$). Choose the transform that matches the data-generating process.
-- **One-hot encoding** converts categories to binary columns. `drop_first=True` avoids collinearity; the dropped category is the reference level.
-- **Polynomial features and interactions** let linear models capture nonlinear patterns. The mantra: **"linear in parameters, not in features."**
-- **Adjusted R²** penalizes complexity; raw R² always increases with more features, even noise features.
-- **Multicollinearity**: nearly parallel features don't expand the column space. High correlation between feature columns means the second feature adds little new information.
-- **Rank** tells you how many truly independent features you have. Singular values quantify each direction's contribution.
-- **Residual patterns diagnose missing structure or wrong functional form.** Heteroscedasticity (fan-shaped residuals) signals non-constant error variance.
+# Log model
+model_log_full = LinearRegression().fit(X_full, np.log(prices))
+log_resid = np.log(prices.values) - model_log_full.predict(X_full)
+log_fitted = model_log_full.predict(X_full)
+axes[1].scatter(log_fitted, log_resid, alpha=0.05, s=5)
+axes[1].axhline(0, color='red', lw=1.5)
+axes[1].set_xlabel('Predicted log(price)')
+axes[1].set_ylabel('Residual')
+axes[1].set_title('Log model: more uniform spread')
+
+plt.tight_layout()
+plt.show()
+```
+
+The log-transformed model produces residuals with more uniform spread — the fan shape is reduced. The log transform is appropriate whenever the response is positive, right-skewed, and grows multiplicatively.
+
+# Recap: the regression toolkit
+
+This chapter extended the regression framework from Chapter 4 in three directions:
+
+- **Multiple regression** with numeric features: more features expand the column space, and the normal equations $X^TX\beta = X^Ty$ give the coefficients in closed form.
+- **One-hot encoding** brings categorical variables into the model. The reference level is absorbed into the intercept; other coefficients measure differences relative to it.
+- **Feature engineering** — polynomials, interactions, missingness indicators, log transforms — expands what "linear in parameters" can express.
+
+The R² progression tells the story: bedrooms alone explains a fraction of the variance; adding bathrooms, room type, and borough progressively narrows the gap between predicted and actual prices. Feature engineering is where domain knowledge meets statistics — knowing that location affects the value of space is domain knowledge; encoding the interaction between bedrooms and borough is statistics.
+
+## What we still can't answer
+
+Three questions remain open:
+
+1. **Is the coefficient real or noise?** The bathrooms coefficient is about \$22, but with a different sample it might be \$18 or \$26. We'll quantify the uncertainty with confidence intervals in [Chapter 12](lec12-regression-inference.qmd).
+2. **Does the model generalize to new data?** Training $R^2$ always increases with more features, even noise features. We'll develop train-test splits and cross-validation in [Chapter 7](lec07-validation.qmd).
+3. **Does adding a bathroom *cause* higher prices?** Regression coefficients measure association. Causation requires a different framework — [Chapter 18](lec18-causal.qmd).
 
 ## Study guide
 
 ### Key ideas
 
-- **Feature engineering** — creating new input variables from raw data to improve a model's predictions.
-- **Log-transform interpretation** — log-transforming $y$, $x$, or both changes what a coefficient means: additive effect, multiplicative effect, or elasticity. See the interpretation table in this chapter.
-- **One-hot encoding** converts a categorical variable with $k$ categories into $k-1$ binary (0/1) columns (the dropped category is the **reference level**). Each dummy coefficient measures a shift relative to that baseline.
-- **Boolean threshold encoding** — for ordinal variables with $K$ levels, create $K-1$ binary features $[\mathbb{1}(x \ge 2), \ldots, \mathbb{1}(x \ge K)]$. Preserves ordering without forcing a linear relationship or discarding order like one-hot encoding.
-- **Polynomial features** — powers of a variable ($x^2, x^3, \ldots$) that let a linear model capture curved relationships. The model is still linear in $\beta$, not in $x$.
-- **Interaction terms** — products of two features (e.g., bedrooms $\times$ $\mathbb{1}_{\text{Manhattan}}$) that let one feature's effect depend on another.
-- **Adjusted R^2** penalizes model complexity, preventing R^2 from rewarding useless features. Use it to compare models with different numbers of predictors.
-- **Multicollinearity** — when feature vectors are nearly parallel, so one is approximately a scalar multiple of another. Redundant features don't expand the column space.
-- **Rank** — the number of linearly independent columns in a matrix. Singular values tell you how much each independent direction contributes.
-- **Missing values as features** — missing values can be turned into features. For categoricals, treat "missing" as its own category. For numerics, pair an imputed value with a binary missingness indicator so the model can learn whether missingness itself predicts the outcome. A missingness indicator helps when missingness is **informative** (MAR or MNAR) and adds noise when it's MCAR.
-- **Weak supervision** — using noisy, programmatic labels (e.g., from an LLM) instead of expensive hand labels. LLM featurization converts unstructured text into structured features via a well-specified prompt. Good prompts define each field precisely, request a structured output format, and target features that complement (rather than duplicate) existing columns.
-- **Heteroscedasticity** — when the spread of residuals changes with the predicted value. Coefficient estimates remain valid, but standard errors become unreliable.
-- **Residual diagnostics** — patterns in residual plots (fan shapes, curves) reveal missing structure or wrong functional form.
+- **Column space** — the set of all possible predictions $X\beta$. More independent columns means a larger column space and a closer projection.
+- **Normal equations** — $X^TX\beta = X^Ty$. The algebraic form of "the residual is orthogonal to every feature." Derived by stacking the orthogonality conditions.
+- **Coefficient interpretation** — in multiple regression, each coefficient measures the association between a feature and the response **holding all other features constant**. Coefficients change between simple and multiple regression because of confounding among features.
+- **One-hot encoding** — converts a categorical variable with $k$ categories into $k-1$ binary columns. The dropped category is the **reference level**, absorbed into the intercept.
+- **Feature engineering** — creating new input columns (polynomials, interactions, indicators) so a linear model can capture nonlinear patterns. The model stays linear in $\beta$.
+- **Polynomial features** — powers of a variable ($x^2, x^3, \ldots$) that capture curvature. High-degree polynomials overfit and extrapolate wildly.
+- **Interaction terms** — products of two features ($x_1 \times x_2$) that let one feature's effect depend on another.
+- **Log transform** — regressing $\log(y)$ on $x$ gives multiplicative coefficients (percentage changes per unit increase in $x$). Appropriate for positive, right-skewed responses.
+- **Adjusted $R^2$** — penalizes for the number of features, preventing $R^2$ from rewarding useless predictors.
+- **Multicollinearity** — when feature columns are highly correlated, the column space barely grows. Coefficients become unstable and hard to interpret.
+- **Heteroscedasticity** — non-constant residual variance (fan-shaped residual plots). Coefficients remain unbiased but standard errors become unreliable.
+- **Missing values as features** — pair imputed values with a binary missingness indicator to let the model learn from informative missingness.
 
 ### Computational tools
 
-- `pd.get_dummies(df, drop_first=True)` — one-hot encode categorical columns, dropping one to avoid collinearity
-- `PolynomialFeatures(degree=d)` — generates polynomial features up to degree $d$; still linear in parameters
-- `df['col'].isna().astype(int)` — create a missingness indicator column
-- `np.linalg.matrix_rank(X)` — rank of a matrix
-- `np.linalg.svd(X)` — singular value decomposition (more in Chapter 14)
-- `df.corr()` — correlation matrix (related: high correlation ↔ near-collinearity)
-- `train_test_split(X, y, test_size=0.3, random_state=42)` — splits data for honest evaluation
+- `np.linalg.solve(A, b)` — solve $Ax = b$ without forming $A^{-1}$ (for the normal equations)
+- `pd.get_dummies(df, drop_first=True)` — one-hot encode categorical variables, dropping the reference level
+- `PolynomialFeatures(degree=d)` — generate polynomial features up to degree $d$
+- `LinearRegression().fit(X, y)` — fit a linear model; `.coef_` for slopes, `.intercept_` for intercept
+- `.score(X, y)` — compute $R^2$ on data
 
 ### For the quiz
 
-- Know what one-hot encoding produces and why `drop_first=True` is needed.
-- Be able to write the formula for a model with polynomial or interaction features and explain why it's still "linear regression."
-- Interpret a coefficient from a log-transformed regression (e.g., if $\beta_1 = 0.08$ in $\log(y) \sim x$, what does that mean in original units?).
-- Be able to explain what LLM featurization does, why it's called weak supervision, and what makes a good extraction prompt.
-- Know when a missingness indicator helps (informative/MNAR) vs. adds noise (MCAR).
-- Be able to write the boolean threshold encoding for an ordinal variable and explain how it differs from one-hot encoding.
-- Know what multicollinearity means and how it limits a model's predictive power.
-- Understand the connection between rank and the number of independent features.
-- Recognize heteroscedasticity in a residual plot and state its consequences.
+- Be able to write and interpret the normal equations ($X^T \epsilon = 0$).
+- Given a regression output with dummy variables, interpret coefficients relative to the reference level.
+- Explain why the bedrooms coefficient changes between simple and multiple regression.
+- Know what polynomial overfitting looks like and why training $R^2$ is misleading.
+- Interpret a coefficient from a log-transformed model (percentage change vs. dollar change).
+- Identify heteroscedasticity from a residual plot and suggest a remedy.

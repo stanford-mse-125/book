@@ -296,7 +296,7 @@ The normal curve fits almost perfectly. **The close fit isn't a coincidence.** A
 
 ## The CLT explains why
 
-The Central Limit Theorem (CLT) says: **if you average many independent things, the result is approximately normal.**
+The Central Limit Theorem (CLT) says: **if you average many independent things, the result is approximately normal — for large enough $n$.**
 
 More precisely: if $X_1, X_2, \ldots, X_n$ are **iid** — **independent and identically distributed**, meaning each observation is drawn from the same distribution independently of the others — with mean $\mu$ and standard deviation $\sigma$, then for large $n$. You worked with iid random variables throughout your probability course — every time you assumed observations were drawn independently from the same distribution.
 
