@@ -235,14 +235,23 @@ Two vectors $u$ and $v$ are **orthogonal** if $u^T v = 0$. Orthogonal vectors ar
 
 Correlation and orthogonality are the two endpoints we will use throughout the chapter: correlated columns contribute to prediction, orthogonal residuals signal that no further correlation remains to exploit.
 
-## The norm measures prediction error
+# Predicting with no features
 
-Suppose you predict every listing's price with a single number $\hat{y}$. The **residual error** for listing $i$ is $\epsilon_i = y_i - \hat{y}$, and the residual vector $\epsilon = y - \hat{y}\mathbf{1}$ collects all the individual errors. The norm $\|\epsilon\|$ measures total prediction error.
+## The simplest predictor: a constant
 
-The index plot below previews the geometry. Black dots are the actual prices, the green horizontal line is a constant prediction (the mean), and the vertical segments are the residuals.
+Before using any features at all, consider the simplest possible prediction: guess the same number $c$ for every listing. 
+
+How bad is this guess?
+The **residual error** for listing $i$ is $\epsilon_i = y_i - c$.
+Define the vector of all 1's, $\mathbf{1}$.
+In vector notation, our predictions are $c \mathbf{1}$,
+and the residual vector $\epsilon = y - c\mathbf{1}$ collects all the individual errors.
+
+We can see these errors on an index plot.
+Black dots are the actual prices, the green horizontal line is a constant prediction $\hat{y}$, and the vertical segments are the residuals.
 
 ```{python}
-# Preview: residuals from predicting with the mean
+# Visualize residuals
 y_bar = toy_price.mean()
 
 fig, ax = plt.subplots(figsize=(8, 4))
@@ -255,7 +264,7 @@ for i in range(len(toy_price)):
 
 ax.set_xlabel('Listing index')
 ax.set_ylabel('Price ($)')
-ax.set_title('Residuals from predicting with the mean')
+ax.set_title('Residuals from predicting a constant')
 ax.set_xticks(indices)
 ax.set_xticklabels([f'{i+1}' for i in range(len(indices))])
 ax.legend(fontsize=11)
@@ -266,16 +275,12 @@ plt.show()
 
 residuals = toy_price - y_bar
 print(f"Residual vector: {residuals}")
-print(f"||residuals|| = {np.linalg.norm(residuals):.2f}")
 ```
 
-# Predicting with no features
+## The best constant guess
 
-## The simplest predictor: a constant
-
-Before using any features at all, consider the simplest possible prediction: guess the same number $\hat{y}$ for every listing. What single number should you guess?
-
-The answer depends on how you measure error. Two natural choices are the sum of absolute deviations $\sum_i |y_i - c|$ and the sum of squared errors $\sum_i (y_i - c)^2$. The figure below computes both losses on the full NYC Airbnb price column for a sweep of candidate constants $c$.
+What single number should you guess?
+The answer depends on how you measure error. Two natural error measures are the sum of absolute deviations $\sum_i |y_i - c|$ and the sum of squared errors $\sum_i (y_i - c)^2$. The figure below computes both losses on the full NYC Airbnb price column for a sweep of candidate constants $c$.
 
 ```{python}
 # Stacked view: real price distribution on top, then the two loss curves
@@ -311,7 +316,7 @@ axes[1].legend()
 axes[2].plot(c_values, sq_errors, lw=2, color='#2d8a4e')
 axes[2].axvline(mean_price, color='#2d8a4e', ls='--', lw=1.5,
                 label=f'mean = {mean_price:.0f}')
-axes[2].set_xlabel('Guess $c$ (price in $/night)')
+axes[2].set_xlabel(r'Guess $c$ (price in $/night)')
 axes[2].set_ylabel('Sum of squared errors')
 axes[2].set_title(r'Squared error $\sum_i (y_i - c)^2$ is minimized at the mean')
 axes[2].legend()
@@ -337,7 +342,7 @@ We verify the squared-error result with a one-line calculus proof.
 
 $$\frac{d}{dc} \sum_{i=1}^n (y_i - c)^2 = -2\sum_{i=1}^n (y_i - c) = 0 \quad \Longrightarrow \quad c = \frac{1}{n}\sum_{i=1}^n y_i = \bar{y}$$
 
-The optimal constant prediction under squared error is the sample mean $\bar{y}$. The absolute-error result takes more work: $|y_i - c|$ is not differentiable at $c = y_i$, so no calculus proof applies. The median emerges from a discrete balancing argument — the optimum is the value that splits the data points into equal halves above and below.
+The optimal constant prediction under squared error is the sample mean $\bar{y}$. The absolute-error result takes more work: $|y_i - c|$ is not differentiable at $c = y_i$, so no calculus proof applies. The median emerges from a discrete balancing argument — when half the data points are above and half below, there's no benefit to changing $c$.
 
 :::{.callout-tip}
 ## Think About It
@@ -347,7 +352,7 @@ The squared-error curve is a smooth parabola; the absolute-error curve has a sha
 
 ## Notation
 
-Let's establish the notation we will use throughout the rest of the book.
+Let's establish the notation we will use throughout the rest of the book. Standard statistics notation puts a hat $\hat y$ on any quantity estimated from data, pronounced "y hat".
 
 :::{.callout-important}
 ## Definition: Regression notation
@@ -359,7 +364,7 @@ Let's establish the notation we will use throughout the rest of the book.
 - $\beta_0$ — the **intercept** (the constant term in the model)
 :::
 
-For the constant model, $\hat{y}_i = \beta_0$ for all $i$, and the best choice is $\hat{\beta}_0 = \bar{y}$.
+For the constant model, the prediction $\hat{y}_i = \beta_0$ for all $i$, and the best choice is $\hat{\beta}_0 = \bar{y}$, the mean of the responses.
 
 ## Residuals sum to zero
 
@@ -413,50 +418,6 @@ where $x_i$ is the number of bedrooms for listing $i$. The prediction $\hat{y}$ 
 A **linear combination** of vectors $v_1, v_2$ is any expression $\beta_1 v_1 + \beta_2 v_2$, where $\beta_1, \beta_2$ are scalars (plain numbers). The prediction $\hat{y} = \beta_0 \mathbf{1} + \beta_1 x$ is a linear combination of two column vectors.
 :::
 
-To see the linear combination on real data, sort the listings by bedrooms. The bedrooms vector becomes monotonically increasing — a staircase rising from studios to 5-bedroom apartments — and $\hat{y} = \beta_0 + \beta_1 x$ becomes a rising staircase on top of the constant prediction $\bar{y}$.
-
-```{python}
-# Fit the simple regression up front so we can reuse the coefficients
-# in the linear-combination plot and the candidate-line plot below.
-model = LinearRegression()
-model.fit(df[['bedrooms']], prices)
-b0, b1 = model.intercept_, model.coef_[0]
-print(f"Fitted model: ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
-```
-
-```{python}
-# Sort the full dataset by bedrooms so the bedrooms vector rises monotonically.
-# Subsample for visual clarity (28k dots on top of each other hide the structure).
-rng = np.random.default_rng(0)
-sample_idx = rng.choice(len(df), size=2000, replace=False)
-sample = df.iloc[sample_idx].sort_values('bedrooms').reset_index(drop=True)
-
-idx_plot = np.arange(len(sample))
-beds_sorted = sample['bedrooms'].values
-price_sorted = sample['price'].values
-pred_linear = b0 + b1 * beds_sorted
-y_bar_sample = prices.mean()
-
-fig, ax = plt.subplots(figsize=(9, 4.5))
-ax.scatter(idx_plot, price_sorted, color='#aaaaaa', s=8, alpha=0.45,
-           label='actual price $y$ (sample of 2,000)')
-ax.axhline(y_bar_sample, color='#2d8a4e', lw=2, ls='--',
-           label=f'constant $\\bar{{y}}$ = {y_bar_sample:.0f}')
-ax.plot(idx_plot, pred_linear, color='#2d6a9f', lw=2.5,
-        label=f'$\\hat{{y}} = {b0:.0f} + {b1:.0f} \\cdot$ bedrooms')
-
-ax.set_xlabel('Listing index (sorted by bedrooms)')
-ax.set_ylabel('Price ($/night)')
-ax.set_title('Prediction varies with bedrooms')
-ax.legend(fontsize=10, loc='upper left')
-for spine in ['top', 'right']:
-    ax.spines[spine].set_visible(False)
-plt.tight_layout()
-plt.show()
-```
-
-The flat green dashes are the constant prediction $\beta_0 \mathbf{1} = \bar{y}$ the previous section settled on. The blue staircase is the linear prediction: it matches the constant at 0 bedrooms and climbs as the bedroom count grows. The linear model absorbs the rising trend the constant could not.
-
 ## The span: all reachable predictions
 
 Different choices of $(\beta_0, \beta_1)$ produce different prediction vectors. The **span** of $\mathbf{1}$ and $x$ is the set of *all* prediction vectors you can reach by varying the weights.
@@ -482,6 +443,8 @@ fig, ax = plt.subplots(figsize=(8, 5))
 ax.scatter(df['bedrooms'], prices, alpha=0.04, s=10, color='#cccccc')
 
 x_line = np.linspace(0, 6, 100)
+b0 = 71 # scikit-learn will find something close to this; we will see how in a moment
+b1 = 49 # scikit-learn will find something close to this; we will see how in a moment
 candidates = [
     (50,   30, '#e74c3c', f'low intercept: ŷ = 50 + 30x'),
     (150,  30, '#3498db', f'high intercept: ŷ = 150 + 30x'),
@@ -594,7 +557,15 @@ The **projection** of a vector $y$ onto a subspace is the closest point in that 
 
 ## Simple regression on Airbnb data
 
-We already fit the simple regression above — `model` was created with scikit-learn's `LinearRegression()`, `.fit()` found the best coefficients, and `.coef_` and `.intercept_` store the slope and intercept. Print the coefficients alongside $R^2$ and draw the fitted line on the original scatter:
+Let's fit the simple regression $\hat{y} = \beta_0 + \beta_1 x$ to the full NYC Airbnb data, where $x$ is the bedrooms column.
+```{python}
+model = LinearRegression()
+model.fit(df[['bedrooms']], prices)
+b0, b1 = model.intercept_, model.coef_[0]
+print(f"Fitted model: ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
+```
+The linear regression `model` is created with scikit-learn's `LinearRegression()`, `.fit()` finds the best coefficients, and `.coef_` and `.intercept_` store the slope and intercept. 
+Print the coefficients alongside $R^2$ and draw the fitted line on the original scatter:
 
 ```{python}
 print(f"ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
@@ -639,6 +610,43 @@ for k in [0, 1, 3, 5]:
     label = 'studio' if k == 0 else f'{k}-bedroom'
     print(f"  {label:<12} → ${pred:.0f} per night")
 ```
+
+## Seeing the residuals
+
+We can view the errors more clearly if we sort the listings by bedrooms. The bedrooms vector becomes monotonically increasing — a staircase rising from studios to 5-bedroom apartments — and $\hat{y} = \beta_0 + \beta_1 x$ becomes a rising staircase on top of the constant prediction $\bar{y}$.
+
+```{python}
+# Sort the full dataset by bedrooms so the bedrooms vector rises monotonically.
+# Subsample for visual clarity (28k dots on top of each other hide the structure).
+rng = np.random.default_rng(0)
+sample_idx = rng.choice(len(df), size=2000, replace=False)
+sample = df.iloc[sample_idx].sort_values('bedrooms').reset_index(drop=True)
+
+idx_plot = np.arange(len(sample))
+beds_sorted = sample['bedrooms'].values
+price_sorted = sample['price'].values
+pred_linear = b0 + b1 * beds_sorted
+y_bar_sample = prices.mean()
+
+fig, ax = plt.subplots(figsize=(9, 4.5))
+ax.scatter(idx_plot, price_sorted, color='#aaaaaa', s=8, alpha=0.45,
+           label='actual price $y$ (sample of 2,000)')
+ax.axhline(y_bar_sample, color='#2d8a4e', lw=2, ls='--',
+           label=f'constant $\\bar{{y}}$ = {y_bar_sample:.0f}')
+ax.plot(idx_plot, pred_linear, color='#2d6a9f', lw=2.5,
+        label=f'$\\hat{{y}} = {b0:.0f} + {b1:.0f} \\cdot$ bedrooms')
+
+ax.set_xlabel('Listing index (sorted by bedrooms)')
+ax.set_ylabel('Price ($/night)')
+ax.set_title('Prediction varies with bedrooms')
+ax.legend(fontsize=10, loc='upper left')
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+The flat green dashes are the constant prediction $\beta_0 \mathbf{1} = \bar{y}$ the previous section settled on. The blue staircase is the linear prediction: it matches the constant at 0 bedrooms and climbs as the bedroom count grows. The linear model absorbs the rising trend the constant could not.
 
 :::{.callout-warning}
 ## Association, not causation
@@ -855,48 +863,61 @@ print(f"\nIn simple regression, R² = r². With multiple predictors, only R² ap
 
 The name "regression" has a surprising origin. In the 1880s, Francis Galton studied the heights of parents and their adult children. He noticed a striking pattern: unusually tall parents tended to have children who were tall — but *less* tall than their parents. Unusually short parents had children who were short — but *less* short. Heights "regressed toward the mean."
 
-We do not have access to Galton's original notebooks, so we reproduce the *shape* of his finding with simulated data inspired by his observed correlation of roughly 0.5. The picture below is a synthetic dataset designed to match that correlation — not Galton's raw records — but the pattern it reveals is the one he first described.
+We can reproduce Galton's original analysis on his own data. The dataset below is Galton's 1886 family-heights dataset, recording the heights of 934 adult children from 205 families. Galton put everyone on a common scale by multiplying female heights by 1.08 (the typical male/female ratio of his era), then plotted each child's height against the **midparent height** — the average of the father's height and 1.08 times the mother's height.
 
 ```{python}
-# Simulate Galton-style height data.
-# Correlation ≈ 0.5 matches Galton's observed parent-child heights.
-# Model: child height = 50% parent height + 50% population mean + noise,
-# with the mixing weight chosen so the implied correlation is about 0.5.
-np.random.seed(42)
-n_families = 500
-parent_height = np.random.normal(68, 3, n_families)
-child_height = 0.5 * parent_height + 0.5 * 68 + np.random.normal(0, 2.5, n_families)
+# Galton's 1886 family heights
+galton = pd.read_csv(f'{DATA_DIR}/galton/galton.csv')
 
-r_heights = np.corrcoef(parent_height, child_height)[0, 1]
+# Galton adjusted female heights by 1.08 to put everyone on a male scale
+galton['adjusted_child'] = np.where(
+    galton['gender'] == 'female',
+    galton['childHeight'] * 1.08,
+    galton['childHeight'])
+
+print(f"{len(galton)} children from {galton['family'].nunique()} families")
+print(f"Midparent height: mean = {galton['midparentHeight'].mean():.1f}\", "
+      f"SD = {galton['midparentHeight'].std():.1f}\"")
+print(f"Adjusted child height: mean = {galton['adjusted_child'].mean():.1f}\", "
+      f"SD = {galton['adjusted_child'].std():.1f}\"")
+```
+
+Now fit a regression of adjusted child height on midparent height and plot it against the 45-degree line ("child has the same height as the midparent").
+
+```{python}
+x_mp = galton['midparentHeight'].values
+y_ch = galton['adjusted_child'].values
+
+model_galton = LinearRegression()
+model_galton.fit(x_mp.reshape(-1, 1), y_ch)
+slope_g = model_galton.coef_[0]
+intercept_g = model_galton.intercept_
+r_g = np.corrcoef(x_mp, y_ch)[0, 1]
 
 fig, ax = plt.subplots(figsize=(7, 6))
-ax.scatter(parent_height, child_height, alpha=0.3, s=20, color='#2d6a9f')
+ax.scatter(x_mp, y_ch, alpha=0.25, s=20, color='#2d6a9f')
 
-# Regression line
-model_galton = LinearRegression()
-model_galton.fit(parent_height.reshape(-1, 1), child_height)
-x_galton = np.linspace(58, 78, 100)
-ax.plot(x_galton, model_galton.predict(x_galton.reshape(-1, 1)),
-        color='#c44e52', lw=2.5, label=f'regression line (slope = {model_galton.coef_[0]:.2f})')
+x_line = np.linspace(x_mp.min() - 1, x_mp.max() + 1, 100)
+ax.plot(x_line, model_galton.predict(x_line.reshape(-1, 1)),
+        color='#c44e52', lw=2.5,
+        label=f'regression line (slope = {slope_g:.2f})')
+ax.plot(x_line, x_line, 'k--', lw=1, alpha=0.5, label='child = midparent')
 
-# 45-degree line (child = parent)
-ax.plot([58, 78], [58, 78], 'k--', lw=1, alpha=0.5, label='child = parent')
-
-ax.set_xlabel("Parent's height (inches)")
-ax.set_ylabel("Child's height (inches)")
-ax.set_title("Tall parents have tall children — but less tall")
-ax.legend(fontsize=10)
+ax.set_xlabel("Midparent height (inches)")
+ax.set_ylabel("Adjusted child height (inches)")
+ax.set_title("Tall parents have tall children — but less tall (Galton 1886)")
+ax.legend(fontsize=10, loc='lower right')
 for spine in ['top', 'right']:
     ax.spines[spine].set_visible(False)
 plt.tight_layout()
 plt.show()
 
-print(f"Correlation between parent and child heights: r = {r_heights:.2f}")
-print(f"Regression slope: {model_galton.coef_[0]:.2f}")
-print(f"\nThe slope is less than 1: children of tall parents are less extreme.")
+print(f"Correlation r = {r_g:.3f}")
+print(f"Regression slope = {slope_g:.3f}  (Galton's own estimate: about 2/3)")
+print(f"Intercept = {intercept_g:.2f}")
 ```
 
-The regression line is flatter than the 45-degree line (where child = parent). Parents 2 standard deviations above average have children predicted to be only about $r \times 2$ standard deviations above average — pulled back toward the mean.
+The regression line is flatter than the 45-degree line. Parents 2 standard deviations above average have children predicted to be only about $r \times 2$ standard deviations above average — pulled back toward the mean. Galton's own estimate of the slope was about 2/3; the slope fitted to his data is close to that value.
 
 :::{.callout-important}
 ## Definition: Regression to the mean
