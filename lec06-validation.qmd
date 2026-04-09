@@ -22,7 +22,7 @@ The Epic sepsis model is not an isolated failure. Dermatology AI systems have re
 
 Before trusting any model's reported performance, ask: training data from *when*? From *where*? From *whom*? Is the deployment population the same? The Epic sepsis model trained on one hospital system and deployed at another. The dermatology AI trained on light skin and deployed on everyone. In each case, the mismatch between training and deployment data — distribution shift — explains the failure.
 
-In [Chapter 5](lec05-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. In [Chapter 6](lec06-trees.qmd), we met decision trees and random forests, which engineer features automatically. But we've been measuring performance on the *same data we trained on*. Evaluating a model on its training data is like grading a student on the questions they've already seen — of course they'll do well. The question the hospital *should* have asked is the question this chapter answers: **does this model generalize?** We'll develop the tools to answer it: train/test splits, cross-validation, and the bias-variance tradeoff that explains why more complex models don't always win.
+In [Chapter 5](lec05-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. But we've been measuring performance on the *same data we trained on*. Evaluating a model on its training data is like grading a student on the questions they've already seen — of course they'll do well. The question the hospital *should* have asked is the question this chapter answers: **does this model generalize?** We'll develop the tools to answer it: train/test splits, cross-validation, and the bias-variance tradeoff that explains why more complex models don't always win.
 
 :::{.callout-note}
 ## All Models Are Wrong
@@ -277,8 +277,6 @@ The training $R^2$ approaches 1 — the model nearly perfectly memorizes the tra
 
 Wait — can $R^2$ be negative? Yes, on test data. On training data, $R^2$ is always between 0 and 1 (when the model includes an intercept). On test data, no such guarantee holds. Recall that $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$. When a model's predictions on new data are worse than simply predicting the mean every time, the residual sum of squares exceeds the total sum of squares, and $R^2$ drops below zero. Negative $R^2$ on test data means the model is worse than predicting the mean — a sign of catastrophic overfitting.
 
-In [Chapter 6](lec06-trees.qmd), we saw similar overfitting with deep decision trees: a tree with no depth limit perfectly memorizes the training set but generalizes poorly.
-
 ## The bias-variance tradeoff
 
 The polynomial experiment showed a striking pattern: test error first decreased and then increased as models got more complex. Why? The answer is one of the most important ideas in all of applied statistics: the **bias-variance tradeoff**.
@@ -518,9 +516,9 @@ The U-shaped CV curve confirms the bias-variance tradeoff in action. Too small a
 
 ## The modern view: when more complexity helps
 
-The classical bias-variance tradeoff says: more complexity eventually hurts. But in [Chapter 6](lec06-trees.qmd), we saw that random forests — averages of many overfit trees — improve with more trees, not fewer. That pattern departs from the U-shaped curve above.
+The classical bias-variance tradeoff says: more complexity eventually hurts. But there's an important exception. If you train many overfit models on different random subsets of the data and *average* their predictions, the average can be more accurate than any individual model — even though each model is overfit. Averaging reduces variance without increasing bias, escaping the U-shaped curve.
 
-The resolution: averaging independent overfit models (bagging) reduces variance without increasing bias. Each individual tree is high-variance, but their average is stable. The ensemble principle — that averaging independent overfit models can escape the classical tradeoff — motivates much of modern machine learning. (We demonstrated the effect in [Chapter 6](lec06-trees.qmd): adding more trees to a random forest reduced test error monotonically, with no U-shape.)
+In [Chapter 7](lec07-trees.qmd), we'll see this principle in action with **random forests**: ensembles of hundreds of overfit decision trees whose average prediction is remarkably stable. Adding more trees to the ensemble never hurts — a fundamental departure from the polynomial story above.
 
 
 ## Key takeaways
@@ -535,11 +533,11 @@ The resolution: averaging independent overfit models (bagging) reduces variance 
 
 - **Lasso shrinks coefficients to zero, performing automatic feature selection.** Instead of manually choosing features, let the L1 penalty figure it out. Choose the penalty strength $\alpha$ by cross-validation.
 
-- **Random forests escape the classical tradeoff through averaging.** Each tree is overfit, but their errors point in different directions. Averaging cancels noise without losing signal.
+- **Averaging overfit models can escape the classical tradeoff.** If independent models are each overfit but their errors point in different directions, averaging cancels noise without losing signal. [Chapter 7](lec07-trees.qmd) demonstrates this with random forests.
 
 - **Distribution shift: training data $\neq$ deployment data is the root cause of many failures.** Before trusting a model, ask: training data from when, from where, from whom?
 
-- **Forward references:** [Chapter 8](lec08-sampling.qmd) (bootstrap), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 16](lec16-backtesting.qmd) (temporal validation), [Chapter 17](lec17-automl-llms.qmd) (ensembles deep dive).
+- **Forward references:** [Chapter 7](lec07-trees.qmd) (decision trees and random forests), [Chapter 8](lec08-sampling.qmd) (bootstrap), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 16](lec16-backtesting.qmd) (temporal validation), [Chapter 17](lec17-automl-llms.qmd) (ensembles deep dive).
 
 
 ## Study guide
@@ -569,4 +567,4 @@ The resolution: averaging independent overfit models (bagging) reduces variance 
 
 ### For the quiz
 
-You are responsible for: train/test split, cross-validation (how it works and why it's better than a single split), overfitting concept, bias-variance tradeoff (the classical U-shape), Lasso concept (what it does, not the optimization details), distribution shift, and why random forest test error plateaus rather than showing a U-shape.
+You are responsible for: train/test split, cross-validation (how it works and why it's better than a single split), overfitting concept, bias-variance tradeoff (the classical U-shape), Lasso concept (what it does, not the optimization details), distribution shift, and the principle that averaging overfit models reduces variance (demonstrated with random forests in Chapter 7).

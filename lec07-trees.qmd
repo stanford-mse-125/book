@@ -18,7 +18,7 @@ from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, plot_tre
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import r2_score, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
@@ -69,7 +69,7 @@ Engineering features by hand is creative but tedious. What if the model could fi
 
 A **decision tree** splits the feature space into regions and predicts the mean price in each region. Each internal node asks an if/then question about one feature: "Is bedrooms > 2?" or "Is borough = Manhattan?" The tree learns which questions to ask and where to split — no manual feature engineering needed.
 
-A model that memorizes training data looks perfect on those same observations but fails on new ones. To get an honest measure of prediction quality, we hold out 30% of listings as a **test set** that the model never sees during fitting. [Chapter 7](lec07-validation.qmd) develops this idea fully.
+A model that memorizes training data looks perfect on those same observations but fails on new ones. In [Chapter 6](lec06-validation.qmd), we learned to hold out data as a **test set** that the model never sees during fitting. Let's apply that here: we hold out 30% of listings for honest evaluation.
 
 ```{python}
 # Hold out 30% of listings for honest evaluation
@@ -169,6 +169,8 @@ plt.show()
 
 The pattern is dramatic. Training R² climbs toward 1.0 as the tree memorizes the data. Test R² peaks at a shallow depth and then deteriorates — the tree learns noise rather than signal.
 
+The pattern is the **bias-variance tradeoff** from [Chapter 6](lec06-validation.qmd) in action. A shallow tree has high bias (it underfits — too few splits to capture the real pattern) but low variance (it's stable across different training samples). A deep tree has low bias but high variance — it memorizes the noise in whatever training data it happens to see. The sweet spot balances these two forces. In Chapter 6 we saw this tradeoff with polynomial degree; here the "complexity knob" is tree depth.
+
 Let's visualize the predictions from a shallow and deep tree to see what overfitting looks like.
 
 ```{python}
@@ -209,6 +211,49 @@ The shallow tree produces smooth, interpretable predictions. The deep tree produ
 :::{.callout-tip}
 ## Think About It
 A deep tree achieves a training R² close to 1.0. Why doesn't that make it a good model? What would you look at to decide when to stop growing the tree?
+:::
+
+
+## Choosing tree depth by cross-validation
+
+The depth experiment above shows that deeper isn't always better. How do we pick the right depth? The same tool from [Chapter 6](lec06-validation.qmd): **cross-validation**. We fit a decision tree at each candidate depth, score it with 5-fold CV, and pick the depth with the best average test performance.
+
+```{python}
+depths_cv = [1, 2, 3, 4, 5, 7, 10, 15, 20]
+cv_means = []
+cv_stds = []
+
+for d in depths_cv:
+    tree_cv = DecisionTreeRegressor(max_depth=d, random_state=42)
+    scores = cross_val_score(tree_cv, X_train, y_train, cv=5, scoring='r2')
+    cv_means.append(scores.mean())
+    cv_stds.append(scores.std())
+    print(f"depth={d:>2d}: CV R² = {scores.mean():.4f} ± {scores.std():.4f}")
+
+best_depth = depths_cv[np.argmax(cv_means)]
+print(f"\nBest depth by CV: {best_depth}")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.errorbar(depths_cv, cv_means, yerr=cv_stds, fmt='o-', color='steelblue',
+            linewidth=2, markersize=8, capsize=5, label='CV R² ± 1 std')
+ax.axvline(best_depth, color='orangered', linestyle='--', linewidth=2,
+           label=f'Best depth = {best_depth}')
+ax.set_xlabel('Tree depth (max_depth)')
+ax.set_ylabel('Cross-validated R²')
+ax.set_title('Choosing tree depth by cross-validation')
+ax.legend(fontsize=12)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+The U-shaped CV curve mirrors the polynomial experiment from [Chapter 6](lec06-validation.qmd): too shallow underfits, too deep overfits, and cross-validation finds the sweet spot. The same framework — different model, same principle.
+
+:::{.callout-tip}
+## Think About It
+Compare this CV curve to the polynomial degree CV curve from Chapter 6. Both show a peak followed by decline. What's the "complexity knob" in each case? (For polynomials: the degree. For trees: the depth.)
 :::
 
 
@@ -278,7 +323,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-No U-shape! The test R² increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial story in [Chapter 5](lec05-feature-engineering.qmd), where higher polynomial degrees eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in [Chapter 17](lec17-automl-llms.qmd), adding too many trees *can* overfit.)
+No U-shape! The test R² increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial and tree-depth experiments in [Chapter 6](lec06-validation.qmd), where more complexity eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in [Chapter 17](lec17-automl-llms.qmd), adding too many trees *can* overfit.)
 
 
 ### Individual trees are overfit; their average is smooth
@@ -444,6 +489,7 @@ Everything above predicts a continuous number (price). **Classification** predic
 - **Random forest** — an ensemble of bagged decision trees with feature subsampling. More trees = better or flat, never worse.
 - **Feature importance (MDI)** — mean decrease in impurity: the average reduction in squared error (or Gini impurity) across all splits using a given feature. Biased toward high-cardinality features; permutation importance is a more robust alternative.
 - **Missing data in trees** — trees handle missing values natively via surrogate splits or learned missing-value routing, unlike linear models that require imputation.
+- **Cross-validation for tree depth** — applying 5-fold CV to select the best `max_depth`, the same way we selected polynomial degree and lasso penalty in Chapter 6.
 
 ### Computational tools
 
@@ -453,7 +499,8 @@ Everything above predicts a continuous number (price). **Classification** predic
 - `export_text(tree, feature_names=...)` — prints the tree's decision rules as text
 - `rf.feature_importances_` — array of feature importance scores (mean decrease in impurity)
 - `train_test_split(X, y, test_size=0.3)` — splits data into training and test sets for honest evaluation
+- `cross_val_score(model, X, y, cv=5)` — 5-fold cross-validation; use to choose tree depth
 
 ### For the quiz
 
-You are responsible for: how a decision tree splits (greedy recursive partitioning), why deep trees overfit, how bagging and feature subsampling combine to form a random forest, why adding more trees never hurts, feature importance interpretation, and the advantages of trees over linear models for handling missing data and categorical features.
+You are responsible for: how a decision tree splits (greedy recursive partitioning), why deep trees overfit, how bagging and feature subsampling combine to form a random forest, why adding more trees never hurts, feature importance interpretation, the advantages of trees over linear models for handling missing data and categorical features, and how to use cross-validation to choose tree depth (same principle as choosing polynomial degree or lasso α).
