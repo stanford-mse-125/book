@@ -80,6 +80,8 @@ Adding bathrooms improves $R^2$. The intercept and the bedrooms coefficient both
 
 Chapter 4 worked with one feature at a time — a single column vector $x$ of bedrooms, paired with the column of ones for the intercept. Multiple regression wants many features, and writing them out one at a time gets unwieldy. Stack them into a matrix instead.
 
+You already know what a feature matrix looks like: it is the numeric part of a pandas DataFrame. Each row is one listing, each column is one feature, and each cell holds a number. Calling `df[['bedrooms', 'bathrooms']].values` converts that chunk of the DataFrame into a NumPy matrix — that matrix *is* $X$, just with a mathematical name.
+
 :::{.callout-important}
 ## Definition: Feature matrix
 
@@ -88,7 +90,13 @@ $$\hat{y} = X\beta,$$
 where $\beta \in \mathbb{R}^p$ is a vector of coefficients, one per column of $X$. By convention we include a column of ones in $X$ so that $\beta_0$ (the intercept) sits alongside the other coefficients.
 :::
 
-For the two-feature model above, $X$ has three columns: the all-ones column, `bedrooms`, and `bathrooms`. The prediction for listing $i$ is the inner product of row $i$ of $X$ with $\beta$ — the same "sum of feature times coefficient" we wrote out in Chapter 4, now packaged so the whole dataset's predictions are produced at once by the matrix–vector product $X\beta$.
+The matrix–vector product $X\beta$ is just a compact way to write out all $n$ predictions at once. Entry by entry,
+$$\hat{y}_i = \sum_{j=1}^p X_{ij}\,\beta_j = \beta_1 X_{i1} + \beta_2 X_{i2} + \cdots + \beta_p X_{ip}.$$
+Each prediction $\hat{y}_i$ is the inner product of row $i$ of $X$ with $\beta$ — listing $i$'s feature values weighted by the coefficients. Writing $\hat{y} = X\beta$ bundles those $n$ sums into one compact expression and produces the full prediction vector in a single stroke.
+
+For the two-feature model above, $X$ has three columns: the all-ones column, `bedrooms`, and `bathrooms`. The prediction for listing $i$ is
+$$\hat{y}_i = \beta_0 \cdot 1 + \beta_1 \cdot \text{bedrooms}_i + \beta_2 \cdot \text{bathrooms}_i,$$
+and stacking those $n$ predictions gives $\hat{y} = X\beta$.
 
 ## Column space
 

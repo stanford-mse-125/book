@@ -225,7 +225,40 @@ print(f"price · bedrooms = {dot_price_beds}")
 print(f"Both vectors trend upward → large positive inner product")
 ```
 
-A two-dimensional example builds the intuition for the sign. Take $u = (1, 0)$ pointing along the x-axis. Then $u \cdot (1, 1) = 1$ (positive — the second vector leans into the same half-plane, an acute angle), $u \cdot (0, 1) = 0$ (zero — straight up, a right angle), and $u \cdot (-1, 0) = -1$ (negative — pointing the opposite way). The sign of the inner product tracks the angle between the vectors.
+A two-dimensional picture builds the intuition for the sign. Pin $u = (1, 0)$ pointing along the x-axis, and sweep a second vector $v$ through three positions: leaning into the same half-plane (acute angle, positive dot product), straight up (right angle, zero), and pointing the opposite way (obtuse angle, negative). The sign of the inner product tracks the angle between the vectors.
+
+```{python}
+#| code-fold: true
+fig, axes = plt.subplots(1, 3, figsize=(9, 3.2))
+
+cases = [
+    (np.array([1, 1]),  '$v = (1, 1)$',  '$u \\cdot v = +1$',  '#2d8a4e', 'acute\npositive'),
+    (np.array([0, 1]),  '$v = (0, 1)$',  '$u \\cdot v = 0$',   '#8e44ad', 'right angle\nzero'),
+    (np.array([-1, 0]), '$v = (-1, 0)$', '$u \\cdot v = -1$',  '#c44e52', 'opposite\nnegative'),
+]
+u = np.array([1, 0])
+
+for ax, (v, vlab, dot_lab, col, tag) in zip(axes, cases):
+    ax.annotate('', xy=u, xytext=(0, 0),
+                arrowprops=dict(arrowstyle='->', color='#2d6a9f', lw=2.5))
+    ax.text(u[0] + 0.05, u[1] - 0.12, '$u = (1, 0)$', fontsize=10, color='#2d6a9f')
+    ax.annotate('', xy=v, xytext=(0, 0),
+                arrowprops=dict(arrowstyle='->', color=col, lw=2.5))
+    ax.text(v[0] * 0.6 + 0.08, v[1] * 0.6 + 0.08, vlab, fontsize=10, color=col)
+    ax.set_title(f'{tag}\n{dot_lab}', fontsize=11)
+    ax.set_xlim(-1.4, 1.4)
+    ax.set_ylim(-0.5, 1.4)
+    ax.set_aspect('equal')
+    ax.axhline(0, color='#cccccc', lw=0.8, zorder=0)
+    ax.axvline(0, color='#cccccc', lw=0.8, zorder=0)
+    for spine in ['top', 'right']:
+        ax.spines[spine].set_visible(False)
+    ax.set_xticks([-1, 0, 1])
+    ax.set_yticks([0, 1])
+
+plt.tight_layout()
+plt.show()
+```
 
 :::{.callout-important}
 ## Definition: Orthogonal
@@ -430,7 +463,59 @@ $$\text{span}(v_1, v_2) = \{\beta_1 v_1 + \beta_2 v_2 : \beta_1, \beta_2 \in \ma
 For a linear model $\hat{y} = \beta_0 \mathbf{1} + \beta_1 x$, the span is the set of all possible predictions — every line you could draw through the scatter plot.
 :::
 
-Each $(\beta_0, \beta_1)$ traces out a different line on the scatter plot. The plot below overlays four candidates on the price-vs-bedrooms scatter.
+How big is the span? On the bedrooms-vs-price scatter plot, every choice of $(\beta_0, \beta_1)$ traces a different line — and there are infinitely many lines, so it *looks* like the span is huge. That picture misleads. With $n$ listings, the actual prediction vector $\hat{y}$ lives in $\mathbb{R}^n$, which has $n$ dimensions. The span of $\{\mathbf{1}, x\}$ is only a two-dimensional plane inside that vast space — a sliver. The constraint only becomes visible when we look at all $n$ coordinates at once.
+
+```{python}
+# Fit the least-squares line once; we'll use it as one of the candidates
+# in the next two visualizations.
+model = LinearRegression().fit(df[['bedrooms']], prices)
+b0, b1 = model.intercept_, model.coef_[0]
+print(f"Least-squares fit: ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
+```
+
+```{python}
+#| code-fold: true
+# Span is only 2D: on the index plot you can see that tuning (β₀, β₁)
+# produces very smooth prediction vectors — nothing like the noisy real prices.
+rng = np.random.default_rng(0)
+sample_idx = rng.choice(len(df), size=200, replace=False)
+beds_sample = df['bedrooms'].values[sample_idx]
+price_sample = prices[sample_idx]
+order = np.argsort(beds_sample)
+beds_sorted_s = beds_sample[order]
+price_sorted_s = price_sample[order]
+
+fig, ax = plt.subplots(figsize=(9, 4.5))
+idx = np.arange(len(beds_sorted_s))
+
+# Real price vector: noisy, zigzags even after sorting
+ax.scatter(idx, price_sorted_s, s=18, color='black', alpha=0.6,
+           label='actual price vector $y$', zorder=3)
+
+# A few candidate prediction vectors from span{1, x}
+candidates_span = [(50, 30, '#e74c3c'),
+                   (150, 30, '#3498db'),
+                   (100, -10, '#8e44ad'),
+                   (round(b0), round(b1), '#2d8a4e')]
+for c0, c1, color in candidates_span:
+    pred = c0 + c1 * beds_sorted_s
+    ax.plot(idx, pred, color=color, lw=2, alpha=0.85,
+            label=f'$\\hat y = {c0:.0f} + {c1:.0f}\\,x$')
+
+ax.set_xlabel('Listing index (sorted by bedrooms)')
+ax.set_ylabel('Price ($)')
+ax.set_title('Only a sliver of $\\mathbb{R}^n$ is reachable: every $\\hat{y}$ '
+             'in span$\\{\\mathbf{1}, x\\}$ is smooth in the bedrooms order')
+ax.legend(fontsize=9, loc='upper left')
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+The black dots are a random 200-listing sample of the actual prices, sorted by bedrooms. They zigzag — a 1-bedroom listing can cost anywhere from \$30 to \$400, because bedrooms is not the only thing that determines price. The colored curves are predictions from four points in span$\{\mathbf{1}, x\}$. Each one is forced to be a linear function of the sorted bedrooms: three piecewise-constant steps and nothing more. No matter how we tune $(\beta_0, \beta_1)$, the prediction vector looks like one of those curves. The span is a two-parameter sliver of $\mathbb{R}^n$, not the whole space — most vectors in $\mathbb{R}^n$ cannot be produced at all, no matter how we choose the weights.
+
+Now switch back to the scatter-plot view to ask the complementary question: *among* the lines we can reach, which is the best fit?
 
 :::{.callout-tip}
 ## Think About It
@@ -443,8 +528,6 @@ fig, ax = plt.subplots(figsize=(8, 5))
 ax.scatter(df['bedrooms'], prices, alpha=0.04, s=10, color='#cccccc')
 
 x_line = np.linspace(0, 6, 100)
-b0 = 71 # scikit-learn will find something close to this; we will see how in a moment
-b1 = 49 # scikit-learn will find something close to this; we will see how in a moment
 candidates = [
     (50,   30, '#e74c3c', f'low intercept: ŷ = 50 + 30x'),
     (150,  30, '#3498db', f'high intercept: ŷ = 150 + 30x'),
@@ -557,19 +640,12 @@ The **projection** of a vector $y$ onto a subspace is the closest point in that 
 
 ## Simple regression on Airbnb data
 
-Let's fit the simple regression $\hat{y} = \beta_0 + \beta_1 x$ to the full NYC Airbnb data, where $x$ is the bedrooms column.
-```{python}
-model = LinearRegression()
-model.fit(df[['bedrooms']], prices)
-b0, b1 = model.intercept_, model.coef_[0]
-print(f"Fitted model: ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
-```
-The linear regression `model` is created with scikit-learn's `LinearRegression()`, `.fit()` finds the best coefficients, and `.coef_` and `.intercept_` store the slope and intercept. 
-Print the coefficients alongside $R^2$ and draw the fitted line on the original scatter:
+We already fit the simple regression $\hat{y} = \beta_0 + \beta_1 x$ above to compute the least-squares candidate line. The linear regression `model` was created with scikit-learn's `LinearRegression()`, `.fit()` found the best coefficients, and `.coef_` and `.intercept_` store the slope and intercept. Print the coefficients alongside $R^2$ and draw the fitted line on the original scatter:
 
 ```{python}
+r2 = model.score(df[['bedrooms']], prices)
 print(f"ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
-print(f"R² = {model.score(df[['bedrooms']], prices):.3f}")
+print(f"R² = {r2:.3f}")
 ```
 
 ```{python}
