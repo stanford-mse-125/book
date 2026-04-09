@@ -44,7 +44,7 @@ df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
 # Price is already a clean integer column (no $ signs); filter to reasonable range
 df['price'] = pd.to_numeric(df['price'], errors='coerce')
-df = df[df['price'].between(10, 500)].reset_index(drop=True)
+df = df[df['price'].between(10, 999)].reset_index(drop=True)
 prices = df['price']
 
 print(f"Working with {len(df):,} listings")

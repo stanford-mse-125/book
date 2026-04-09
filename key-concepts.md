@@ -118,84 +118,102 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 ---
 
-## Lecture 4: Linear Models — From Data to Geometry
+## Lecture 4: From the Mean to Simple Regression
 
-**Objectives addressed:** 4 (vectors, linear combinations, span), 5 (regression as projection)
+**Objectives addressed:** 4 (vectors, linear combinations, span), 5 (regression as projection — simple case)
 
 **Key concepts:**
-- Two views of vectors in data: rows as points in R^d, columns as vectors in R^n
-- Linear combinations: mixing feature columns with different weights
-- Span = set of all possible predictions from a linear model
-- Column space of a feature matrix = what the model can predict
-- Regression finds the closest point in the column space to the response vector (projection)
-- Residual vector is orthogonal to the column space
-- The normal equations: X^T X β = X^T y
-- R-squared as fraction of variance explained
-- Multiple regression: adding features expands the column space
+- Two views of a dataset: rows as points in R^d, columns as vectors in R^n
+- Visualizing high-dimensional column vectors via index plots (value vs sorted index)
+- Norms measure vector length and prediction error
+- Predicting with a constant: the mean minimizes squared error; the median minimizes absolute error
+- Residuals sum to zero: 1^T ε = 0 (the first "normal equation")
+- Linear combinations of feature vectors produce predictions
+- Span of {1, x} = set of all reachable lines through the data
+- Inner products measure how aligned two vectors are
+- Orthogonality is the optimality condition: residual ⊥ every feature vector
+- Simple regression as projection onto span{1, x}
+- R² as fraction of variance explained
+- R² = cos²θ (Pythagorean decomposition)
+- R² = r² in simple regression
+- Regression to the mean (Galton's heights)
 
 **Key vocabulary:**
-- Vector, scalar, linear combination
-- Span, column space
-- Inner product, dot product, cosine similarity
+- Vector, scalar
 - Norm, distance
+- Linear combination, span
+- Inner product, dot product
 - Orthogonal
+- Residual, projection
 - Linear function
-- Projection, residual
 - R-squared (R²)
-- Normal equations
+- Cosine similarity
 - Coefficient interpretation
 - Regression to the mean
 
 **Key formulas:**
-- ŷ = Xβ (prediction is in column space)
-- e = y − ŷ (residual)
-- X^T e = 0 (orthogonality condition)
-- R² = 1 − ||e||²/||y − ȳ||²
+- ŷ = β₀ (mean model) → ŷ = β₀ + β₁x (simple regression)
+- ε = y − ŷ (residual)
+- 1^T ε = 0, x^T ε = 0 (orthogonality conditions)
+- R² = 1 − ||ε||²/||y − ȳ||²
+- R² = cos²θ (angle between centered y and centered ŷ)
 
 **Prerequisites:** MS&E 120 (vectors as random variables); some students have EE103/CME103 (VMLS)
 
 **Connections:**
-- Forward: Lec 5 (feature engineering, diagnostics), Lec 14 (PCA as finding optimal column space)
-- VMLS: Ch 1 (vectors), Ch 5 (linear independence), Ch 13 (least squares)
+- Forward: Lec 5 (multiple regression, normal equations, feature engineering), Lec 14 (PCA as finding optimal column space)
+- VMLS: Ch 1 (vectors), Ch 13 (least squares)
 - ORIE 4741: linear.tex uses column space framing for least squares
 
-**Surprise moment:** Adding number_of_reviews increases R² but has a negative coefficient — more reviews correlates with *lower* price (confounding preview)
+**Surprise moment:** The mean-and-feature principle generalizes — adding one feature is just the mean model with one more orthogonality condition. "Normal equations" already appeared when we minimized squared error with no features.
 
 ---
 
-## Lecture 5: Feature Engineering and Regression Diagnostics
+## Lecture 5: Multiple Regression and Feature Engineering
 
-**Objectives addressed:** 12 (feature engineering)
+**Objectives addressed:** 5 (regression as projection — matrix form), 12 (feature engineering)
 
 **Key concepts:**
-- Log transforms change coefficient interpretation (multiplicative vs additive)
-- One-hot encoding: converting categorical variables to 0/1 columns
+- Multiple regression generalizes simple regression: stack orthogonality conditions into X^T ε = 0
+- Column space of X = set of all reachable predictions (generalizes span from Lec 4)
+- Normal equations: β = (X^T X)^{-1} X^T y
+- "Holding constant" interpretation of coefficients in multiple regression
+- One-hot encoding: categorical variables → binary indicator columns
+- Reference level: drop one category; others interpreted relative to it
 - "Linear in parameters, not features": polynomials and interactions make linear models powerful
-- Polynomial features: capturing nonlinear relationships ($x, x^2, x^3$)
-- Interaction terms: when one feature's effect depends on another (bedrooms × borough)
-- Adjusted R²: penalizing complexity (R² always goes up; adjusted R² doesn't)
-- LLM-based featurization / weak supervision
-- Multicollinearity: nearly parallel features don't expand the column space
-- Rank: how many truly independent features you have
-- Residual diagnostics: heteroscedasticity, missing structure
+- Polynomial features and the overfitting parade: high-degree polynomials fit training data well but extrapolate wildly
+- Interaction terms: when one feature's effect depends on another
+- Missing values as features (missingness indicator)
+- Log transforms on y change coefficient interpretation (percentage vs dollar); motivated by extrapolation/multiplicative growth
+- Four log-transform combinations (level-level, log-level, level-log, log-log)
+- Adjusted R²: penalizing complexity
+- Multicollinearity: nearly parallel features create unstable coefficients
+- Residual diagnostics: heteroscedasticity, curves, clusters, Q-Q plots
 
 **Key vocabulary:**
-- Feature engineering, one-hot encoding
+- Column space, multiple regression
+- Normal equations, matrix form
+- One-hot encoding, reference level, indicator variable
+- Feature engineering
 - Polynomial features, interaction term
-- Log transform
+- Log transform, elasticity
 - Adjusted R-squared
-- Multicollinearity, rank
-- Singular values
-- Heteroscedasticity
-- LLM featurization, weak supervision
+- Multicollinearity
+- Heteroscedasticity, Q-Q plot, residual diagnostics
 
-**Prerequisites:** Lec 4 (regression, column space, span)
+**Key formulas:**
+- ŷ = Xβ (matrix form)
+- X^T ε = 0 (stacked orthogonality conditions)
+- β = (X^T X)^{-1} X^T y (normal equations)
+
+**Prerequisites:** Lec 4 (simple regression, span, orthogonality, inner product, R²)
 
 **Connections:**
-- Backward: Lec 4 (regression, column space)
-- Forward: Lec 6 (validation — are these features overfitting?), Lec 7 (trees as automatic feature engineering), Lec 12 (which features are statistically significant?)
+- Backward: Lec 4 (single-feature version of everything here)
+- Forward: Lec 6 (trees as automatic feature engineering), Lec 7 (validation — train/test R²), Lec 12 (which features are statistically significant?), Lec 18 (when is a coefficient causal?)
+- VMLS: Ch 5 (linear independence), Ch 13 (least squares)
 
-**Surprise moment:** Bedrooms and beds are nearly collinear — adding both barely expands the column space. LLM-extracted features from listing descriptions improve R².
+**Surprise moment:** The polynomial overfitting parade — R² keeps climbing as you increase degree, but the predictions become nonsensical (negative or wildly inflated prices for 10+ bedrooms). The model with the highest training R² is not the best model.
 
 ---
 

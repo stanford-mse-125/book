@@ -1,5 +1,5 @@
 ---
-title: "Linear Models: From Data to Geometry"
+title: "From the Mean to Simple Regression"
 execute:
   enabled: true
 jupyter: python3
@@ -9,11 +9,9 @@ jupyter: python3
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-import matplotlib.ticker as mticker
 import seaborn as sns
 from sklearn.linear_model import LinearRegression
-from mpl_toolkits.mplot3d import Axes3D
+from sklearn.metrics import r2_score
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
@@ -26,957 +24,756 @@ DATA_DIR = 'data'
 
 ## How much is a bathroom worth?
 
-An Airbnb host adds a second bathroom. How much more should they charge per night?
-Regression gives the answer — and linear algebra tells us *why* it works. This chapter builds both from scratch: what a linear model can predict, what it can't, and how regression finds the best prediction.
+You host an Airbnb apartment in New York City. A contractor offers to convert a closet into a second bathroom for \$15,000. Should you do it? If the extra bathroom lets you charge \$20 more per night, the renovation pays for itself in under two years. If it adds only \$5, you should keep the closet.
 
-## Vectors are everywhere in data
+To answer the question, you need a model that predicts price from features like bedrooms and bathrooms. This chapter builds that model from scratch — starting with the simplest possible prediction (a single number for every listing), then improving it by incorporating one feature at a time. Along the way, you'll learn to represent data as vectors, measure prediction error with norms, and discover that regression is really just a geometric projection.
 
-To answer the pricing question, we need to represent listings as mathematical objects we can compute with. The right abstraction: **vectors**.
+Here is the roadmap:
 
-There are two natural ways to see vectors in a dataset:
-
-1. **Each row is a vector.** A single Airbnb listing with (bedrooms, bathrooms, price) is a point in $\mathbb{R}^3$. ($\mathbb{R}^3$ just means a list of 3 real numbers — so (2, 1, 150) is a point in $\mathbb{R}^3$.)
-2. **Each column is a vector.** The "bedrooms" column across all $n$ listings is a vector in $\mathbb{R}^n$ (one entry per listing).
-
-You'll use both views constantly — and they answer different questions. Let's start with a tiny example to build intuition, then look at real data.
+1. **Vectors in data** — two ways to view a dataset, norms, and distances.
+2. **Predicting with no features** — the mean as the best constant predictor.
+3. **Predicting with one feature** — simple regression as a projection.
+4. **How good is the fit?** — $R^2$, cosine similarity, and the Pythagorean theorem.
+5. **Regression to the mean** — why extreme observations revert toward the average.
 
 ```{python}
-# A tiny dataset: 5 Airbnb listings with 2 features
-bedrooms  = np.array([1, 2, 3, 2, 1])
-bathrooms = np.array([1, 1, 2, 2, 1])
+# Load the NYC Airbnb dataset
+listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 
-# Each listing is a point in R^2
-print(f"Listing 1: bedrooms={bedrooms[0]}, bathrooms={bathrooms[0]}")
-print(f"Listing 3: bedrooms={bedrooms[2]}, bathrooms={bathrooms[2]}")
-print()
-print(f"The 'bedrooms' column is a vector in R^5: {bedrooms}")
-print(f"The 'bathrooms' column is a vector in R^5: {bathrooms}")
+cols = ['id', 'name', 'price', 'bedrooms', 'bathrooms', 'beds',
+        'room_type', 'neighbourhood_group_cleansed', 'accommodates',
+        'number_of_reviews', 'review_scores_rating']
+df = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
+df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
+
+# Price is already a clean integer column (no $ signs); filter to reasonable range
+df['price'] = pd.to_numeric(df['price'], errors='coerce')
+df = df[df['price'].between(10, 999)].reset_index(drop=True)
+prices = df['price'].values
+
+print(f"Working with {len(df):,} Airbnb listings")
+df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 ```
 
-Let's plot the row view: each listing as a point in 2D space, with bedrooms on one axis and bathrooms on the other.
+# Vectors in data
+
+## Two views of a dataset
+
+A dataset is a table of numbers. There are two natural ways to see vectors in that table, and they answer different questions.
+
+:::{.callout-important}
+## Definition: Vector
+
+A **vector** is an ordered list of numbers. In this course, a vector $v \in \mathbb{R}^d$ is a list of $d$ real numbers: $v = (v_1, v_2, \ldots, v_d)$. A **scalar** is a single number.
+:::
+
+**Row view:** each listing is a point in feature space. A listing with 2 bedrooms, 1 bathroom, and a price of \$150 is the point $(2, 1, 150)$ in $\mathbb{R}^3$. Nearby points represent similar listings.
+
+**Column view:** each feature is a vector across all $n$ listings. The "bedrooms" column is a vector in $\mathbb{R}^n$ — one entry per listing. Columns that trend together (bedrooms and price both increase for larger apartments) carry similar information.
+
+Let's build intuition with a toy example: five listings with two features.
 
 ```{python}
-# View 1: Each listing as a point in R^2
-fig, ax = plt.subplots(figsize=(8, 5))
+# A tiny dataset: 5 Airbnb listings
+bedrooms  = np.array([1, 2, 3, 2, 1])
+bathrooms = np.array([1, 1, 2, 2, 1])
+toy_price = np.array([100, 150, 250, 200, 120])
 
-# Light background with subtle integer grid
-ax.set_facecolor('#fafafa')
-for x in range(0, 5):
-    ax.axvline(x, color='#e0e0e0', linewidth=0.5, zorder=0)
-for y in range(0, 4):
-    ax.axhline(y, color='#e0e0e0', linewidth=0.5, zorder=0)
+print("Row view — each listing is a point in R^2:")
+for i in range(5):
+    print(f"  Listing {i+1}: ({bedrooms[i]}, {bathrooms[i]})")
+print()
+print(f"Column view — bedrooms is a vector in R^5: {bedrooms}")
+print(f"Column view — bathrooms is a vector in R^5: {bathrooms}")
+```
+
+## Rows as points
+
+Each listing occupies a position in feature space. Listings with similar features sit close together; dissimilar listings sit far apart.
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
 
 point_color = '#2d6a9f'
 highlight_color = '#c44e52'
-drop_color = '#999999'
 
-# Drop-lines for Listing 3 to reinforce coordinate reading
-highlight_idx = 2
-hx, hy = bedrooms[highlight_idx], bathrooms[highlight_idx]
-ax.plot([hx, hx], [0, hy], color=drop_color, linewidth=0.8,
-        linestyle=(0, (4, 3)), zorder=2)
-ax.plot([0, hx], [hy, hy], color=drop_color, linewidth=0.8,
-        linestyle=(0, (4, 3)), zorder=2)
+ax.scatter(bedrooms, bathrooms, s=100, color=point_color,
+           edgecolors='white', linewidths=1.2, zorder=5)
 
-# Regular points
-mask = np.ones(len(bedrooms), dtype=bool)
-mask[highlight_idx] = False
-ax.scatter(bedrooms[mask], bathrooms[mask], s=90, color=point_color,
-           edgecolors='white', linewidths=1.0, zorder=5)
+# Highlight Listing 3
+ax.scatter([bedrooms[2]], [bathrooms[2]], s=120, color=highlight_color,
+           edgecolors='white', linewidths=1.2, zorder=6)
 
-# Highlighted point
-ax.scatter([hx], [hy], s=110, color=highlight_color,
-           edgecolors='white', linewidths=1.0, zorder=5)
-
-# Labels with manual offsets to avoid overlaps
-label_specs = [
-    (0, (12, -2), 'left', '#333333', 'normal'),
-    (1, (10, 6), 'left', '#333333', 'normal'),
-    (2, (10, 6), 'left', highlight_color, 'semibold'),
-    (3, (-12, 8), 'right', '#333333', 'normal'),
-    (4, (12, 10), 'left', '#333333', 'normal'),
-]
-for idx, offset, ha, color, weight in label_specs:
-    ax.annotate(f'Listing {idx+1}', (bedrooms[idx], bathrooms[idx]),
+# Labels
+offsets = [(12, -2), (10, 6), (10, 6), (-12, 8), (12, 10)]
+for i, off in enumerate(offsets):
+    color = highlight_color if i == 2 else '#333333'
+    weight = 'semibold' if i == 2 else 'normal'
+    ax.annotate(f'Listing {i+1}', (bedrooms[i], bathrooms[i]),
                 fontsize=10, color=color, fontweight=weight,
-                xytext=offset, textcoords='offset points', ha=ha, va='center')
+                xytext=off, textcoords='offset points')
 
-ax.annotate(f'({hx}, {hy})', (hx, hy), fontsize=9.5, color='#666666',
-            xytext=(10, -10), textcoords='offset points',
-            ha='left', va='top', fontstyle='italic')
-
-ax.set_xlabel('Bedrooms', fontsize=12, labelpad=8)
-ax.set_ylabel('Bathrooms', fontsize=12, labelpad=8)
-ax.set_title('Nearby listings have similar features', fontsize=14, pad=12)
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Bathrooms')
+ax.set_title('Each listing is a point in feature space')
 ax.set_xlim(-0.2, 4.2)
 ax.set_ylim(-0.2, 3.2)
 ax.set_xticks([0, 1, 2, 3, 4])
 ax.set_yticks([0, 1, 2, 3])
 for spine in ['top', 'right']:
     ax.spines[spine].set_visible(False)
-for spine in ['bottom', 'left']:
-    ax.spines[spine].set_color('#555555')
-    ax.spines[spine].set_linewidth(0.8)
-ax.tick_params(colors='#555555', labelsize=10)
 plt.tight_layout()
 plt.show()
 ```
 
-How different are two listings? Subtract their feature vectors entry-by-entry to get a **difference vector**.
+## Columns as vectors in $\mathbb{R}^n$
+
+Now flip your perspective. Instead of one listing as a point in feature space, look at one *feature* as a vector across all listings. The price column is a vector in $\mathbb{R}^n$ — one entry per listing. So is the bedrooms column. When two column vectors trend in the same direction, those features carry related information.
+
+The **index plot** below makes the column view concrete. Each dot represents one listing, plotted by its index (horizontal) and feature value (vertical). When two features rise and fall together across listings, they "move together" — a pattern we will soon quantify with the inner product.
 
 ```{python}
-# How different are listings 1 and 3?
+# Sort listings by price to reveal structure
+sort_idx = np.argsort(toy_price)
+sorted_price = toy_price[sort_idx]
+sorted_beds = bedrooms[sort_idx]
+
+fig, ax = plt.subplots(figsize=(8, 4))
+indices = np.arange(len(toy_price))
+
+ax.plot(indices, sorted_price, 'ko-', ms=8, lw=1.5, label='price ($)', zorder=5)
+ax.plot(indices, sorted_beds * 50, 's-', color='#c44e52', ms=7, lw=1.5,
+        label='bedrooms (×50, for scale)', zorder=4)
+
+ax.set_xlabel('Listing index (sorted by price)')
+ax.set_ylabel('Value')
+ax.set_title('Price and bedrooms move together across listings')
+ax.set_xticks(indices)
+ax.set_xticklabels([f'{i+1}' for i in range(len(indices))])
+ax.legend(fontsize=11)
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+## Difference vector and distance
+
+How different are two listings? Subtract their feature vectors entry by entry to get a **difference vector**.
+
+```{python}
 listing_1 = np.array([bedrooms[0], bathrooms[0]])  # (1, 1)
 listing_3 = np.array([bedrooms[2], bathrooms[2]])  # (3, 2)
-
 diff = listing_3 - listing_1
+
 print(f"Listing 1: {listing_1}")
 print(f"Listing 3: {listing_3}")
 print(f"Difference: {listing_3} - {listing_1} = {diff}")
 print(f"\nListing 3 has {diff[0]} more bedrooms and {diff[1]} more bathroom.")
 ```
 
-The difference tells us *how* the listings differ — but it's still two numbers. To collapse it into one number that measures "how far apart," we need the length of the difference vector. The **norm** generalizes the Pythagorean theorem to measure the length of any vector.
-
-```{python}
-# The norm measures length — a generalization of the Pythagorean theorem
-for i, name in [(0, 'Listing 1'), (2, 'Listing 3')]:
-    vec = np.array([bedrooms[i], bathrooms[i]])
-    length = np.sqrt(vec[0]**2 + vec[1]**2)
-    print(f"{name}: {vec}, length = sqrt({vec[0]}^2 + {vec[1]}^2) = {length:.2f}")
-```
+The difference vector tells us *how* two listings differ, but the result is still two numbers. To collapse the difference into a single number that measures "how far apart," we need the length of the difference vector.
 
 :::{.callout-important}
 ## Definition: Norm
+
 The **norm** (or **length**) of a vector $v$ is
-$$\|v\| = \sqrt{v \cdot v} = \sqrt{\sum_{i=1}^n v_i^2}$$
-The norm measures **magnitude** — how large the vector is. In code: `np.linalg.norm(v)`.
+$$\|v\| = \sqrt{\sum_{i=1}^n v_i^2}$$
+The norm generalizes the Pythagorean theorem to any number of dimensions. In code: `np.linalg.norm(v)`.
 :::
 
-Now we can scalarize the difference. The **distance** between two listings is the norm of their difference vector.
+The **distance** between two vectors is the norm of their difference: $d(u, v) = \|u - v\|$.
 
 ```{python}
-# Distance = norm of the difference vector
 dist = np.linalg.norm(diff)
-print(f"Difference vector: {listing_3} - {listing_1} = {diff}")
-print(f"Distance = norm of difference = {dist:.2f}")
+print(f"Difference vector: {diff}")
+print(f"Distance = ||diff|| = sqrt({diff[0]}² + {diff[1]}²) = {dist:.2f}")
 ```
 
-:::{.callout-important}
-## Definition: Distance
-The **distance** between two vectors $u$ and $v$ is the norm of their difference:
-$$d(u, v) = \|u - v\|$$
-Smaller distance means more similar. Larger distance means more different.
-:::
+## The norm measures prediction error
 
-Distance tells us how far apart two listings are. But sometimes we want a different question: do two listings have similar *proportions* of features, regardless of scale? An apartment with 4 bedrooms and 2 bathrooms has the same 2:1 ratio as one with 2 bedrooms and 1 bathroom — but they're far apart. To measure this kind of directional similarity, we need a new tool.
+Why define a norm? The norm turns a vector of errors into a single number measuring total prediction quality.
 
-The **inner product** multiplies corresponding entries and adds them up.
+Suppose you predict every listing's price with a single number $\hat{y}$. The **residual** for listing $i$ is $\epsilon_i = y_i - \hat{y}$, and the residual vector $\epsilon = y - \hat{y}\mathbf{1}$ collects all the individual errors. The norm $\|\epsilon\|$ measures total prediction error.
+
+The index plot below previews the geometry. Black dots are the actual prices, the green horizontal line is a constant prediction (the mean), and the vertical segments are the residuals.
 
 ```{python}
-# Inner product: a measure of similarity
-similarity = listing_1[0] * listing_3[0] + listing_1[1] * listing_3[1]
-print(f"Listing 1: {listing_1}")
-print(f"Listing 3: {listing_3}")
-print(f"Entry-by-entry product sum: {listing_1[0]}*{listing_3[0]} + {listing_1[1]}*{listing_3[1]} = {similarity}")
+# Preview: residuals from predicting with the mean
+y_bar = toy_price.mean()
+
+fig, ax = plt.subplots(figsize=(8, 4))
+indices = np.arange(len(toy_price))
+ax.scatter(indices, toy_price, color='black', s=60, zorder=5, label='actual price $y_i$')
+ax.axhline(y_bar, color='#2d8a4e', lw=2.5, ls='--', label=f'mean $\\bar{{y}}$ = {y_bar:.0f}')
+
+for i in range(len(toy_price)):
+    ax.plot([i, i], [toy_price[i], y_bar], color='#c44e52', lw=1.5, alpha=0.7)
+
+ax.set_xlabel('Listing index')
+ax.set_ylabel('Price ($)')
+ax.set_title('Residuals from predicting with the mean')
+ax.set_xticks(indices)
+ax.set_xticklabels([f'{i+1}' for i in range(len(indices))])
+ax.legend(fontsize=11)
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+
+residuals = toy_price - y_bar
+print(f"Residual vector: {residuals}")
+print(f"||residuals|| = {np.linalg.norm(residuals):.2f}")
 ```
 
-The inner product is positive here because both listings have positive feature values. To see negative and zero inner products, center the vectors by subtracting the mean — this reveals which listings deviate in the *same* direction vs. *opposite* directions from the average.
+# Predicting with no features
+
+## The simplest predictor: a constant
+
+Before using any features at all, consider the simplest possible prediction: guess the same number $\hat{y}$ for every listing. What single number should you guess?
+
+The answer depends on how you measure error. Two natural choices are the sum of absolute deviations $\sum_i |y_i - c|$ and the sum of squared errors $\sum_i (y_i - c)^2$.
 
 ```{python}
-# Center the listing vectors: how does each deviate from the average listing?
-mean_vec = np.array([bedrooms.mean(), bathrooms.mean()])
-centered_1 = listing_1 - mean_vec  # below average in both
-centered_3 = listing_3 - mean_vec  # above average in both
-centered_2 = np.array([bedrooms[1], bathrooms[1]]) - mean_vec  # avg bedrooms, below avg baths
+# Compare absolute vs squared error for different guesses
+c_values = np.linspace(50, 300, 200)
+y_vals = toy_price
 
-print(f"Mean listing: ({mean_vec[0]:.1f}, {mean_vec[1]:.1f})")
-print(f"Listing 1 centered: ({centered_1[0]:.1f}, {centered_1[1]:.1f})  — below average in both")
-print(f"Listing 3 centered: ({centered_3[0]:.1f}, {centered_3[1]:.1f})  — above average in both")
-print(f"Listing 2 centered: ({centered_2[0]:.1f}, {centered_2[1]:.1f})")
-print()
+abs_errors = [np.sum(np.abs(y_vals - c)) for c in c_values]
+sq_errors = [np.sum((y_vals - c)**2) for c in c_values]
 
-dot_neg = np.dot(centered_1, centered_3)
-dot_zero = np.dot(centered_1, centered_2)
-print(f"Centered dot product (1 vs 3): {dot_neg:.2f}  — NEGATIVE (opposite directions from mean)")
-print(f"Centered dot product (1 vs 2): {dot_zero:.2f}  — ZERO (perpendicular deviations)")
-```
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-:::{.callout-important}
-## Definition: Inner Product (Dot Product)
-The **inner product** (or **dot product**) of two vectors $u, v \in \mathbb{R}^n$ is the scalar
-$$u \cdot v = u^T v = \sum_{i=1}^n u_i v_i$$
-A positive inner product indicates the vectors tend to point in the same direction; a negative value indicates opposite directions; zero indicates perpendicularity.
-:::
+axes[0].plot(c_values, abs_errors, lw=2)
+axes[0].axvline(np.median(y_vals), color='#c44e52', ls='--', lw=1.5,
+                label=f'median = {np.median(y_vals):.0f}')
+axes[0].set_xlabel('Guess $c$')
+axes[0].set_ylabel('Sum of absolute deviations')
+axes[0].set_title('Absolute error → median')
+axes[0].legend()
 
-The raw inner product depends on both direction *and* magnitude. A listing with 10 bedrooms and 10 bathrooms would have a large inner product with almost any other listing, simply from its scale. To isolate directional similarity, divide by the norms of both vectors. (Since we already defined norms above, this formula should look natural.)
+axes[1].plot(c_values, sq_errors, lw=2)
+axes[1].axvline(np.mean(y_vals), color='#2d8a4e', ls='--', lw=1.5,
+                label=f'mean = {np.mean(y_vals):.0f}')
+axes[1].set_xlabel('Guess $c$')
+axes[1].set_ylabel('Sum of squared errors')
+axes[1].set_title('Squared error → mean')
+axes[1].legend()
 
-```{python}
-# Cosine similarity: inner product divided by both norms
-cos_sim = similarity / (np.linalg.norm(listing_1) * np.linalg.norm(listing_3))
-print(f"Inner product: {similarity}")
-print(f"Norms: {np.linalg.norm(listing_1):.2f} and {np.linalg.norm(listing_3):.2f}")
-print(f"Cosine similarity: {similarity} / ({np.linalg.norm(listing_1):.2f} * {np.linalg.norm(listing_3):.2f}) = {cos_sim:.3f}")
-print(f"\nA value near 1 means these listings have similar proportions of bedrooms to bathrooms.")
-```
-
-:::{.callout-important}
-## Definition: Cosine Similarity
-The **cosine similarity** between two vectors $\mathbf{a}$ and $\mathbf{b}$ measures the cosine of the angle between them:
-
-$$\text{cosine similarity} = \frac{\mathbf{a} \cdot \mathbf{b}}{\|\mathbf{a}\| \, \|\mathbf{b}\|}$$
-
-Values range from $-1$ (opposite directions) to $+1$ (same direction). A value of $0$ means the vectors are perpendicular (orthogonal). Cosine similarity measures *direction*, ignoring *magnitude* — two vectors that point the same way have cosine similarity 1 regardless of their lengths.
-:::
-
-## Linear functions and linear combinations
-
-What does a linear model actually *do*? It takes each feature column, multiplies it by a weight, and adds them up. Let's watch.
-
-```{python}
-# Two feature vectors (columns of our data matrix)
-bedrooms_vec = np.array([1, 2, 3, 2, 1])  # bedrooms column
-bathrooms_vec = np.array([1, 1, 2, 2, 1])  # bathrooms column
-
-# A linear combination: 100*bedrooms + 50*bathrooms
-beta1, beta2 = 100, 50
-prediction = beta1 * bedrooms_vec + beta2 * bathrooms_vec
-print(f"Weights: beta1={beta1}, beta2={beta2}")
-print(f"bedrooms:    {bedrooms_vec}")
-print(f"bathrooms:   {bathrooms_vec}")
-print(f"prediction:  {prediction}")
-print()
-print(f"Listing 1: {beta1}*{bedrooms_vec[0]} + {beta2}*{bathrooms_vec[0]} = ${prediction[0]}")
-print(f"Listing 3: {beta1}*{bedrooms_vec[2]} + {beta2}*{bathrooms_vec[2]} = ${prediction[2]}")
-```
-
-Scaling by a weight and adding — that's all a linear model does. This operation has a name:
-
-:::{.callout-important}
-## Definition: Linear Combination
-A **linear combination** of vectors $v_1, v_2$ is any expression $\beta_1 v_1 + \beta_2 v_2$ where $\beta_1, \beta_2$ are **scalars** (plain numbers).
-:::
-
-A linear model $\hat{y} = \beta_1 x_1 + \beta_2 x_2$ says: "the prediction is a linear combination of the feature columns."
-
-Why do linear combinations matter? Because they behave predictably: doubling a weight doubles its contribution. There are no interaction surprises, no thresholds, no sudden jumps. This predictability has a formal name:
-
-:::{.callout-important}
-## Definition: Linear Function
-A function $f$ is **linear** if it satisfies two properties:
-$$f(ax + by) = a\,f(x) + b\,f(y)$$
-for all vectors $x, y$ and all scalars $a, b$. Equivalently: scaling the input scales the output, and adding inputs adds outputs.
-:::
-
-Familiar examples of linear functions: multiplying by a constant ($f(x) = 3x$), matrix multiplication ($f(x) = Ax$), and the inner product with a fixed vector ($f(x) = w \cdot x$). Non-examples: squaring ($f(x) = x^2$, since $(2x)^2 \neq 2x^2$) and adding a constant ($f(x) = x + 1$, since $f(0) \neq 0$).
-
-Different weights produce different prediction vectors. The plot below shows several linear combinations of two vectors $v_1$ and $v_2$ in $\mathbb{R}^2$. Each black dot is one choice of weights, and the dashed arrows show the construction: follow $\beta_1 v_1$ from the origin, then $\beta_2 v_2$ to reach the result. The background grid shows all integer-weight combinations -- notice how they tile the plane.
-
-```{python}
-#| code-fold: true
-v1 = np.array([2, 1])
-v2 = np.array([1, 2])
-fig, ax = plt.subplots(figsize=(8, 6))
-c1, c2, c_result, c_lattice = '#2d8a4e', '#c44e52', '#2b2b2b', '#9999bb'
-a_range, b_range = np.arange(-4, 6), np.arange(-4, 6)
-for a in a_range:
-    for b in b_range:
-        pt = a * v1 + b * v2
-        if -3 <= pt[0] <= 7.5 and -2.5 <= pt[1] <= 6.5:
-            ax.plot(*pt, 'o', color=c_lattice, ms=3.5, alpha=0.4, zorder=1)
-for a in a_range:
-    line = np.array([a * v1 + t * v2 for t in np.linspace(-4, 5, 100)])
-    mask = (line[:, 0] >= -3) & (line[:, 0] <= 7.5) & (line[:, 1] >= -2.5) & (line[:, 1] <= 6.5)
-    idx = np.where(mask)[0]
-    if len(idx) > 0:
-        ax.plot(line[idx, 0], line[idx, 1], color=c_lattice, lw=0.35, alpha=0.25, zorder=0)
-for b in b_range:
-    line = np.array([t * v1 + b * v2 for t in np.linspace(-4, 5, 100)])
-    mask = (line[:, 0] >= -3) & (line[:, 0] <= 7.5) & (line[:, 1] >= -2.5) & (line[:, 1] <= 6.5)
-    idx = np.where(mask)[0]
-    if len(idx) > 0:
-        ax.plot(line[idx, 0], line[idx, 1], color=c_lattice, lw=0.35, alpha=0.25, zorder=0)
-ax.axhline(0, color='#999999', lw=0.6, zorder=1)
-ax.axvline(0, color='#999999', lw=0.6, zorder=1)
-arrow_kw = dict(arrowstyle='->', mutation_scale=18)
-ax.annotate('', xy=v1, xytext=(0, 0), arrowprops=dict(**arrow_kw, color=c1, lw=3), zorder=10)
-ax.annotate('', xy=v2, xytext=(0, 0), arrowprops=dict(**arrow_kw, color=c2, lw=3), zorder=10)
-ax.text(v1[0]+0.15, v1[1]-0.35, r'$\mathbf{v}_1$ (bedrooms)', fontsize=13, color=c1, fontweight='bold', zorder=11)
-ax.text(v2[0]-0.65, v2[1]+0.15, r'$\mathbf{v}_2$ (bathrooms)', fontsize=13, color=c2, fontweight='bold', zorder=11)
-def fmt_label(a, b):
-    def coeff(x, var):
-        if x == 1: return var
-        if x == -1: return f'-{var}'
-        if x == int(x): return f'{int(x)}{var}'
-        return f'{x}{var}'
-    pa = coeff(a, r'\mathbf{v}_1')
-    pb = coeff(abs(b), r'\mathbf{v}_2')
-    return f'${pa} + {pb}$' if b >= 0 else f'${pa} - {pb}$'
-examples = [(2, 1, (8, -6), 'left'), (-0.5, 2, (-10, 6), 'right'), (1, -1, (8, 2), 'left')]
-dash_kw = dict(arrowstyle='->', lw=1.5, linestyle=(0, (5, 3)), shrinkA=0, shrinkB=2)
-for a, b, text_off, ha in examples:
-    sv1 = a * v1
-    result = sv1 + b * v2
-    ax.annotate('', xy=sv1, xytext=(0, 0), arrowprops=dict(**dash_kw, color=c1, alpha=0.55), zorder=4)
-    ax.annotate('', xy=result, xytext=sv1, arrowprops=dict(**dash_kw, color=c2, alpha=0.55), zorder=4)
-    ax.plot(*result, 'o', color=c_result, ms=8, zorder=8, markeredgecolor='white', markeredgewidth=1.2)
-    ax.annotate(fmt_label(a, b), xy=result, fontsize=11, color=c_result,
-                xytext=text_off, textcoords='offset points', ha=ha, zorder=9)
-ax.set_xlim(-2.5, 7)
-ax.set_ylim(-2, 6.5)
-ax.set_aspect('equal')
-ax.set_xlabel('listing 1', fontsize=12)
-ax.set_ylabel('listing 2', fontsize=12)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.spines['left'].set_color('#cccccc')
-ax.spines['bottom'].set_color('#cccccc')
-ax.tick_params(colors='#666666', which='both')
+for ax in axes:
+    for spine in ['top', 'right']:
+        ax.spines[spine].set_visible(False)
 plt.tight_layout()
 plt.show()
 ```
 
+Minimizing absolute error gives the **median**. Minimizing squared error gives the **mean**. We can verify the squared-error result with a one-line calculus proof.
+
+**Why squared error gives the mean.** We want the constant $c$ that minimizes $\sum_i (y_i - c)^2$. Take the derivative with respect to $c$ and set it to zero:
+
+$$\frac{d}{dc} \sum_{i=1}^n (y_i - c)^2 = -2\sum_{i=1}^n (y_i - c) = 0 \quad \Longrightarrow \quad c = \frac{1}{n}\sum_{i=1}^n y_i = \bar{y}$$
+
+The optimal constant prediction under squared error is the sample mean $\bar{y}$.
+
 :::{.callout-tip}
 ## Think About It
-In the plot above, can you reach *every* point in $\mathbb{R}^2$ using linear combinations of $v_1$ and $v_2$? What if $v_1$ and $v_2$ pointed in the same direction?
+
+Try the interactive widget below. Drag the slider to move the predicted value $\hat{y}$ across the histogram. Watch how the total absolute error and total squared error change. Which loss function has a sharper minimum?
 :::
 
-## Span: the set of all possible predictions
+```{python}
+# Interactive widget: move ŷ and watch the error change
+try:
+    from ipywidgets import interact, FloatSlider
 
-What's the set of ALL points you can reach by choosing different weights? For the two vectors in the plot, you can reach every point in the plane — but only because $v_1$ and $v_2$ point in different directions. If they were parallel, you'd be stuck on a line.
+    def plot_loss(y_hat=164.0):
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-For a linear model, this set is the set of all possible predictions. It tells you what your model **can** and **cannot** predict, before you fit anything. Let's visualize it in 3D, where the geometry is easier to see. We use `np.column_stack` to assemble the feature columns into a matrix, and `np.linalg.lstsq` to find the closest point in the span to a target vector.
+        # Left: histogram with movable line
+        axes[0].hist(prices[:2000], bins=40, edgecolor='white', alpha=0.6, color='#2d6a9f')
+        axes[0].axvline(y_hat, color='#c44e52', lw=2.5, label=f'$\\hat{{y}}$ = {y_hat:.0f}')
+        axes[0].axvline(np.mean(prices[:2000]), color='#2d8a4e', lw=1.5, ls='--',
+                        label=f'mean = {np.mean(prices[:2000]):.0f}')
+        axes[0].axvline(np.median(prices[:2000]), color='#8e44ad', lw=1.5, ls='--',
+                        label=f'median = {np.median(prices[:2000]):.0f}')
+        axes[0].set_xlabel('Price ($)')
+        axes[0].set_ylabel('Count')
+        axes[0].set_title('Airbnb price distribution')
+        axes[0].legend(fontsize=9)
+
+        # Right: error values
+        subset = prices[:2000]
+        abs_err = np.sum(np.abs(subset - y_hat))
+        sq_err = np.sum((subset - y_hat)**2)
+        axes[1].bar(['Sum |y - ŷ|', 'Sum (y - ŷ)²'], [abs_err / 1e3, sq_err / 1e6],
+                    color=['#8e44ad', '#2d8a4e'], alpha=0.7)
+        axes[1].set_ylabel('Error (thousands / millions)')
+        axes[1].set_title(f'Absolute: {abs_err/1e3:.1f}K  |  Squared: {sq_err/1e6:.2f}M')
+
+        for ax in axes:
+            for spine in ['top', 'right']:
+                ax.spines[spine].set_visible(False)
+        plt.tight_layout()
+        plt.show()
+
+    interact(plot_loss,
+             y_hat=FloatSlider(min=50, max=400, step=5, value=164,
+                               description='ŷ ($):', style={'description_width': 'initial'}))
+except ImportError:
+    print("ipywidgets not available — skipping interactive widget.")
+    print("The mean minimizes squared error; the median minimizes absolute error.")
+```
+
+## Notation
+
+Let's establish the notation we will use throughout the rest of the book.
+
+:::{.callout-important}
+## Definition: Regression notation
+
+- $y = (y_1, \ldots, y_n)$ — the **response** vector (actual prices)
+- $\hat{y} = (\hat{y}_1, \ldots, \hat{y}_n)$ — the **prediction** vector
+- $\bar{y} = \frac{1}{n}\sum_i y_i$ — the **sample mean** of $y$
+- $\epsilon = y - \hat{y}$ — the **residual** vector (prediction errors)
+- $\beta_0$ — the **intercept** (the constant term in the model)
+:::
+
+For the constant model, $\hat{y}_i = \beta_0$ for all $i$, and the best choice is $\hat{\beta}_0 = \bar{y}$.
+
+## Residuals sum to zero
+
+When $\hat{y} = \bar{y}$ for every listing, the residuals satisfy a simple but important identity:
+
+$$\sum_{i=1}^n \epsilon_i = \sum_{i=1}^n (y_i - \bar{y}) = n\bar{y} - n\bar{y} = 0$$
+
+In vector notation, $\mathbf{1}^T \epsilon = 0$, where $\mathbf{1}$ is the vector of all ones. The positive and negative errors cancel exactly. This identity will reappear — and generalize — when we move to regression.
 
 ```{python}
-v1_3d = np.array([2, 1, 0])
-v2_3d = np.array([0, 1, 2])
-target = np.array([1, 3, 1])
+# Verify: residuals from the mean sum to zero
+y_bar_full = prices.mean()
+residuals_mean = prices - y_bar_full
 
-# Project target onto span(v1, v2) via least squares
-V = np.column_stack([v1_3d, v2_3d])
-coeffs = np.linalg.lstsq(V, target, rcond=None)[0]
-proj = V @ coeffs
-residual = target - proj
+print(f"Mean price: ${y_bar_full:.2f}")
+print(f"Sum of residuals: {np.sum(residuals_mean):.6f}  (≈ 0)")
+```
 
-# --- Colors ---
-PLANE_COLOR = '#b3d9ff'
-GRID_CLR = '#5dade2'
-V1_COLOR = '#d35400'
-V2_COLOR = '#1a8a4a'
-TARGET_COLOR = '#c0392b'
-PROJ_COLOR = '#b8860b'
-RESID_COLOR = '#555555'
+## The mean ignores features
 
-fig = plt.figure(figsize=(10, 7.5))
-ax = fig.add_subplot(111, projection='3d')
-ax.view_init(elev=25, azim=225)
+The mean is optimal among constant predictions, but a constant prediction ignores everything we know about each listing. The scatter plot below shows price versus bedrooms with a horizontal line at $\bar{y}$. The mean captures the overall level but misses the upward trend — larger listings cost more.
 
-# Translucent plane (the span)
-s_range = np.linspace(-0.5, 1.7, 30)
-t_range = np.linspace(-0.5, 1.7, 30)
-S, T = np.meshgrid(s_range, t_range)
-ax.plot_surface(S * v1_3d[0] + T * v2_3d[0],
-                S * v1_3d[1] + T * v2_3d[1],
-                S * v1_3d[2] + T * v2_3d[2],
-                alpha=0.2, color=PLANE_COLOR, edgecolor='none', shade=False)
-
-# Subtle grid lines on the plane
-for c in np.linspace(-0.2, 1.5, 7):
-    for base, other in [(v1_3d, v2_3d), (v2_3d, v1_3d)]:
-        p0, p1 = -0.4 * base + c * other, 1.6 * base + c * other
-        ax.plot([p0[0], p1[0]], [p0[1], p1[1]], [p0[2], p1[2]],
-                color=GRID_CLR, alpha=0.12, lw=0.5)
-
-# Basis vectors (bold arrows)
-for v, color in [(v1_3d, V1_COLOR), (v2_3d, V2_COLOR)]:
-    ax.quiver(0, 0, 0, *v, color=color, arrow_length_ratio=0.06, lw=3.2)
-
-# Line from origin to projection (shows it's a linear combination)
-ax.plot([0, proj[0]], [0, proj[1]], [0, proj[2]],
-        color=PROJ_COLOR, ls='-', lw=1.5, alpha=0.3)
-
-# Points: target, projection, origin
-ax.scatter(*proj, color=PROJ_COLOR, s=140, zorder=10,
-           edgecolors='#6d5b00', linewidths=2.0)
-ax.scatter(*target, color=TARGET_COLOR, s=140, zorder=10,
-           edgecolors='#641e16', linewidths=2.0)
-ax.scatter(0, 0, 0, color='black', s=30, zorder=5)
-
-# Residual (dashed line from target to projection)
-ax.plot([target[0], proj[0]], [target[1], proj[1]], [target[2], proj[2]],
-        color=RESID_COLOR, ls=(0, (5, 3)), lw=2.8, alpha=0.8)
-
-# Right-angle mark at projection (shows orthogonality)
-resid_dir = residual / np.linalg.norm(residual)
-in_plane = v1_3d / np.linalg.norm(v1_3d)
-sz = 0.3
-rp1 = proj + sz * resid_dir
-rp2 = proj + sz * resid_dir + sz * in_plane
-rp3 = proj + sz * in_plane
-ax.plot([rp1[0], rp2[0], rp3[0]], [rp1[1], rp2[1], rp3[1]],
-        [rp1[2], rp2[2], rp3[2]], color=RESID_COLOR, lw=1.5, alpha=0.6)
-
-# Labels with thin leader lines to avoid overlap
-ax.text(*(v1_3d * 1.12 + [0.1, 0.1, -0.15]),
-        '$v_1$', fontsize=17, fontweight='bold', color=V1_COLOR)
-ax.text(*(v2_3d * 1.12 + [-0.15, 0, 0.2]),
-        '$v_2$', fontsize=17, fontweight='bold', color=V2_COLOR)
-
-tgt_lbl = target + np.array([-0.4, 0.7, 0.3])
-ax.plot([target[0], tgt_lbl[0]], [target[1], tgt_lbl[1]],
-        [target[2], tgt_lbl[2]], color=TARGET_COLOR, lw=0.8, alpha=0.4)
-ax.text(*tgt_lbl, 'target $y$', fontsize=14,
-        fontweight='bold', color=TARGET_COLOR, ha='center', va='bottom')
-
-proj_lbl = proj + np.array([0.5, -0.8, -0.4])
-ax.plot([proj[0], proj_lbl[0]], [proj[1], proj_lbl[1]],
-        [proj[2], proj_lbl[2]], color=PROJ_COLOR, lw=0.8, alpha=0.4)
-ax.text(*proj_lbl, 'projection $\\hat{y}$', fontsize=13,
-        fontweight='bold', color=PROJ_COLOR, ha='center', va='top')
-
-mid = (target + proj) / 2
-ax.text(*(mid + [0.6, 0.3, 0.3]), 'residual\n$y - \\hat{y}$',
-        fontsize=10, color=RESID_COLOR, style='italic', ha='left', va='center')
-
-ax.text(*(1.2 * v1_3d + 1.3 * v2_3d + [0, -0.2, 0]),
-        'span($v_1, v_2$)', fontsize=10, color='#2471a3', alpha=0.55,
-        style='italic')
-ax.text(-0.15, -0.35, -0.1, '$0$', fontsize=11, color='gray')
-
-# Clean up axes (geometry speaks for itself)
-for axis in [ax.xaxis, ax.yaxis, ax.zaxis]:
-    axis.pane.set_alpha(0.02)
-    axis.line.set_alpha(0.1)
-ax.set_xticklabels([])
-ax.set_yticklabels([])
-ax.set_zticklabels([])
-ax.tick_params(axis='both', which='both', length=0)
-ax.grid(True, alpha=0.06)
-
-fig.suptitle('Projection onto the span of two vectors',
-             fontsize=15, fontweight='bold', y=0.95)
-fig.text(0.5, 0.02,
-         'The closest reachable point to $y$ is its orthogonal '
-         'projection $\\hat{y}$ onto the plane',
-         fontsize=11, ha='center', color='#555555')
-plt.subplots_adjust(top=0.92, bottom=0.06)
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.scatter(df['bedrooms'], prices, alpha=0.04, s=10, color='#aaaaaa')
+ax.axhline(y_bar_full, color='#2d8a4e', lw=2.5, ls='--',
+           label=f'constant prediction $\\bar{{y}}$ = ${y_bar_full:.0f}')
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Price ($/night)')
+ax.set_title('The mean cannot capture the bedrooms-price pattern')
+ax.legend(fontsize=11, loc='upper left')
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
 plt.show()
 ```
 
-Two vectors in $\mathbb{R}^3$ span a *plane*, not all of 3D space. That means some target values $y$ are impossible to reach exactly — there are targets that no linear combination of your features can produce. The blue surface in the plot is the set of all reachable points — it has a name:
+# Predicting with one feature
+
+## From constant to linear
+
+The mean ignores bedrooms entirely. Can we do better by letting the prediction vary with bedrooms? The simplest way: a straight line.
+
+$$\hat{y}_i = \beta_0 + \beta_1 \, x_i$$
+
+where $x_i$ is the number of bedrooms for listing $i$. The prediction $\hat{y}$ is a **linear combination** of two column vectors: the ones vector $\mathbf{1}$ (scaled by $\beta_0$) and the bedrooms vector $x$ (scaled by $\beta_1$).
+
+:::{.callout-important}
+## Definition: Linear combination
+
+A **linear combination** of vectors $v_1, v_2$ is any expression $\beta_1 v_1 + \beta_2 v_2$, where $\beta_1, \beta_2$ are scalars (plain numbers). The prediction $\hat{y} = \beta_0 \mathbf{1} + \beta_1 x$ is a linear combination of two column vectors.
+:::
+
+The index plot below shows how a linear combination mixes the two ingredient vectors. The flat green line is $\mathbf{1}$ (the intercept term), the red curve is the bedrooms column, and the blue curve is their weighted sum — the prediction.
+
+```{python}
+# Show linear combination on the index plot
+n_toy = len(toy_price)
+idx = np.arange(n_toy)
+beta0_demo, beta1_demo = 70, 50
+
+ones_vec = np.ones(n_toy)
+pred_demo = beta0_demo * ones_vec + beta1_demo * bedrooms
+
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(idx, beta0_demo * ones_vec, '--', color='#2d8a4e', lw=2,
+        label=f'$\\beta_0 \\cdot \\mathbf{{1}}$ = {beta0_demo}')
+ax.plot(idx, beta1_demo * bedrooms, 's--', color='#c44e52', lw=1.5, ms=6,
+        label=f'$\\beta_1 \\cdot x$ = {beta1_demo} × bedrooms')
+ax.plot(idx, pred_demo, 'o-', color='#2d6a9f', lw=2, ms=7,
+        label=f'$\\hat{{y}}$ = {beta0_demo} + {beta1_demo} × bedrooms')
+ax.scatter(idx, toy_price, color='black', s=50, zorder=10, label='actual price $y$')
+
+ax.set_xlabel('Listing index')
+ax.set_ylabel('Value')
+ax.set_title('Prediction is a linear combination of 1 and bedrooms')
+ax.set_xticks(idx)
+ax.set_xticklabels([f'{i+1}' for i in range(n_toy)])
+ax.legend(fontsize=10, loc='upper left')
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+## The span: all reachable predictions
+
+Different choices of $(\beta_0, \beta_1)$ produce different prediction vectors. The **span** of $\mathbf{1}$ and $x$ is the set of *all* prediction vectors you can reach by varying the weights.
 
 :::{.callout-important}
 ## Definition: Span
-The **span** of a set of vectors is the set of ALL their linear combinations:
+
+The **span** of vectors $v_1, v_2$ is the set of all their linear combinations:
 $$\text{span}(v_1, v_2) = \{\beta_1 v_1 + \beta_2 v_2 : \beta_1, \beta_2 \in \mathbb{R}\}$$
+For a linear model $\hat{y} = \beta_0 \mathbf{1} + \beta_1 x$, the span is the set of all possible predictions — every line you could draw through the scatter plot.
 :::
 
-The dashed line in the plot above is the **residual**: the gap between the target and the closest reachable point. Later in this chapter, we'll see that regression finds exactly this closest point — the **projection** of $y$ onto the column space. The residual is what's left over.
-
-## Column space: from features to matrices
-
-A DataFrame is already organized as columns of features. To do linear algebra, we stack those columns into a **matrix** $X$ — each column is a feature, each row is an observation. The function `np.column_stack` does this from arrays; with pandas, it's just selecting columns. Once we have $X$, the matrix-vector product `X @ beta` computes the linear combination for all listings at once.
+Each $(\beta_0, \beta_1)$ traces out a different line on the scatter plot. The plot below shows several candidate lines. Which one looks best?
 
 ```{python}
-# Build the design matrix from our tiny example
-X = np.column_stack([bedrooms_vec, bathrooms_vec])
-print("Design matrix X (5 listings x 2 features):")
-print(X)
-print()
-print(f"Column 1 (bedrooms): {X[:, 0]}")
-print(f"Column 2 (bathrooms): {X[:, 1]}")
-print()
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.scatter(df['bedrooms'], prices, alpha=0.04, s=10, color='#cccccc')
 
-# Any prediction is X @ beta
-beta = np.array([100, 50])
-y_hat = X @ beta
-print(f"With beta = {beta}:")
-print(f"Prediction y_hat = X @ beta = {y_hat}")
+x_line = np.linspace(0, 6, 100)
+candidates = [(80, 20, '#e74c3c', 'steep: ŷ = 80 + 20x'),
+              (120, 30, '#3498db', 'steeper: ŷ = 120 + 30x'),
+              (180, -10, '#8e44ad', 'downward: ŷ = 180 − 10x'),
+              (100, 40, '#2d8a4e', 'just right?')]
+
+for b0, b1, color, label in candidates:
+    ax.plot(x_line, b0 + b1 * x_line, lw=2, color=color, label=label, alpha=0.8)
+
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Price ($/night)')
+ax.set_title('Many lines are possible — which is best?')
+ax.set_ylim(0, 400)
+ax.legend(fontsize=10)
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
 ```
-
-Let's unpack the notation $\hat{y} = X\beta$. For a single listing $i$, the prediction is a weighted sum of its features:
-
-$$(X\beta)_i = \sum_{j=1}^{p} X_{ij}\,\beta_j = \beta_1 \, \text{bedrooms}_i + \beta_2 \, \text{bathrooms}_i$$
-
-The matrix product computes this for *every* listing simultaneously. Equivalently, $X\beta = \beta_1 x_1 + \beta_2 x_2$, where $x_1$ and $x_2$ are the columns of $X$. Every prediction is a linear combination of the columns of $X$. The set of all such predictions — for every possible $\beta$ — is the span of the columns:
-
-$$X = \begin{bmatrix} | & | \\ x_1 & x_2 \\ | & | \end{bmatrix}$$
-
-:::{.callout-important}
-## Definition: Column Space
-The **column space** of $X$ is the span of its columns:
-$$\text{col}(X) = \text{span}(x_1, x_2) = \{X\beta : \beta \in \mathbb{R}^2\}$$
-This set is exactly the collection of all possible predictions $\hat{y} = X\beta$ for a linear model. Different $\beta$ = different predictions, but they all live in the column space.
-:::
-
-The column space of $X$ determines what your model can predict. More features (more columns) = larger column space = more possible predictions. But there's a catch...
-
-:::{.callout-warning}
-## Linear models can predict impossible values
-Nothing stops $X\beta$ from predicting a *negative* price. The column space doesn't know that prices must be positive. Linear models predict what the math allows, not what makes sense. (We'll revisit this limitation when we encounter logistic regression in Chapter 13.)
-:::
 
 :::{.callout-tip}
 ## Think About It
-If you have 3 features but one is an exact linear combination of the other two, what is the dimension of the column space? (Hint: it's not 3.)
+
+By eye, which line best summarizes the data? What criterion are you implicitly using to judge?
 :::
 
-## Simple regression on real data
+## The geometric view: projection
 
-The column space tells us what a linear model *can* predict. Let's fit one on real data and see.
+Here is the key geometric insight. The span of $\mathbf{1}$ and $x$ forms a plane in $\mathbb{R}^n$ (the space of all $n$-dimensional vectors). The response vector $y$ is a point in that same space, but $y$ generally does *not* lie in the plane — no line fits the data perfectly.
 
-We load the NYC Airbnb dataset with `pd.read_csv`, drop rows with missing values using `.dropna()`, and filter to reasonable prices.
-
-```{python}
-# Load and clean Airbnb data
-airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
-
-# Price column — convert to numeric (strip any formatting characters)
-airbnb['price_clean'] = pd.to_numeric(
-    airbnb['price'].astype(str).str.replace('[$,]', '', regex=True),
-    errors='coerce')
-
-# Working subset
-cols = ['bedrooms', 'bathrooms', 'beds', 'price_clean',
-        'accommodates', 'number_of_reviews', 'room_type']
-n_before = len(airbnb)
-df = airbnb[cols].dropna()
-print(f"Dropped {n_before - len(df):,} rows with missing values in {cols}")
-df = df[(df['price_clean'] > 0) & (df['price_clean'] <= 500)]
-print(f"{len(df):,} listings, price range: ${df['price_clean'].min():.0f} – ${df['price_clean'].max():.0f}")
-df.head()
-```
-
-### Simple regression: price ~ bedrooms
-
-Let's start simple. How does price change with the number of bedrooms? We create a `LinearRegression()` object from scikit-learn, call `.fit()` to find the best weights, and then `.predict()` to generate predictions. The fitted model stores the slope in `.coef_` and the intercept in `.intercept_`.
+The best prediction $\hat{y}$ is the point in the plane closest to $y$. Geometry tells us that the closest point is the **orthogonal projection** — the point where the residual $\epsilon = y - \hat{y}$ is perpendicular to the plane.
 
 ```{python}
-# Scatter plot + regression line
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.scatter(df['bedrooms'], df['price_clean'], alpha=0.05, s=10)
+#| code-fold: true
+# Cartoon: y projected onto span{1, x}
+fig, ax = plt.subplots(figsize=(7, 6))
 
-# Fit simple regression
-model_simple = LinearRegression()
-model_simple.fit(df[['bedrooms']], df['price_clean'])
-x_line = np.linspace(0, 6, 100)
-y_line = model_simple.predict(x_line.reshape(-1, 1))
-ax.plot(x_line, y_line, 'r-', lw=2.5, label=f'ŷ = {model_simple.intercept_:.0f} + {model_simple.coef_[0]:.0f} × bedrooms')
+# The plane (shown as a line in 2D)
+t = np.linspace(-0.3, 3.0, 100)
+ax.plot(t, 0.4 * t, color='#2d6a9f', lw=2.5, label='span{$\\mathbf{1}, x$}')
 
-ax.set_xlabel('Bedrooms')
-ax.set_ylabel('Price ($/night)')
-ax.set_title('Each bedroom adds ~$40/night')
-ax.legend(fontsize=12)
-plt.tight_layout()
-plt.show()
+y_pt = np.array([1.8, 2.2])
+d = np.array([1, 0.4])
+d_unit = d / np.linalg.norm(d)
+yhat_pt = np.dot(y_pt, d_unit) * d_unit
+e_vec = y_pt - yhat_pt
 
-print(f"Each additional bedroom is associated with ${model_simple.coef_[0]:.0f} more per night.")
-print(f"A 0-bedroom listing (studio) is predicted at ${model_simple.intercept_:.0f}/night — the intercept.")
-```
+# Vectors
+ax.annotate('', xy=y_pt, xytext=(0, 0),
+            arrowprops=dict(arrowstyle='->', color='#c0392b', lw=2.5))
+ax.text(y_pt[0] - 0.5, y_pt[1] + 0.15, '$y$ (actual prices)',
+        fontsize=13, color='#c0392b', fontweight='bold')
 
-The intercept captures the **base price** of a listing, independent of its size. Without it, the regression line would be forced through the origin — predicting \$0 for a studio. Geometrically, including an intercept adds a constant vector $\mathbf{1} = (1, 1, \ldots, 1)$ to the column space. `LinearRegression()` includes an intercept by default; to omit it, pass `fit_intercept=False`.
+ax.annotate('', xy=yhat_pt, xytext=(0, 0),
+            arrowprops=dict(arrowstyle='->', color='#2d6a9f', lw=2.5))
+ax.text(yhat_pt[0] + 0.1, yhat_pt[1] - 0.25, '$\\hat{y}$ (best prediction)',
+        fontsize=13, color='#2d6a9f', fontweight='bold')
 
-```{python}
-# What happens without an intercept?
-model_no_intercept = LinearRegression(fit_intercept=False)
-model_no_intercept.fit(df[['bedrooms']], df['price_clean'])
+ax.annotate('', xy=y_pt, xytext=yhat_pt,
+            arrowprops=dict(arrowstyle='->', color='#555555', lw=2, ls='--'))
+mid = (y_pt + yhat_pt) / 2
+ax.text(mid[0] + 0.12, mid[1] + 0.08, '$\\epsilon$\n(residual)',
+        fontsize=12, color='#555555', style='italic')
 
-print(f"With intercept:    ŷ = {model_simple.intercept_:.0f} + {model_simple.coef_[0]:.0f} × bedrooms  (R² = {model_simple.score(df[['bedrooms']], df['price_clean']):.3f})")
-print(f"Without intercept: ŷ = {model_no_intercept.coef_[0]:.0f} × bedrooms               (R² = {model_no_intercept.score(df[['bedrooms']], df['price_clean']):.3f})")
-print()
-print("Forcing the line through the origin loses predictive power and misrepresents studios.")
-```
+# Right angle
+sz = 0.12
+p_dir = d_unit
+r_dir = e_vec / np.linalg.norm(e_vec)
+sq = np.array([yhat_pt + sz*p_dir,
+               yhat_pt + sz*p_dir + sz*r_dir,
+               yhat_pt + sz*r_dir])
+ax.plot(sq[:, 0], sq[:, 1], 'k-', lw=1.2)
 
-:::{.callout-note}
-## Why is it called "regression"?
+ax.plot(0, 0, 'ko', ms=5)
+ax.text(-0.15, -0.15, '$0$', fontsize=11, color='gray')
 
-The name comes from Francis Galton, who in the 1880s studied the heights of fathers and sons. Unusually tall fathers tended to have sons who were tall — but *less* tall than their fathers. Unusually short fathers had sons who were short — but *less* short. Heights "regressed toward the mean."
-
-Galton's method for quantifying this trend — fitting a line through the data — became "regression," and the name stuck even though we now use it for problems that have nothing to do with reverting to averages. We formalize **regression to the mean** below, once we connect $r$ to $R^2$. (For the full story, see Salsburg, *The Lady Tasting Tea*, Ch. 4.)
-:::
-
-That's the regression line. But *why* this line? There are infinitely many lines we could draw through this cloud. Regression picks the one that minimizes the total squared distance from the data to the line. Why squared distances, not absolute distances or something else?
-
-### Why squared error? It estimates the conditional mean.
-
-Squared error leads to a linear algebra problem — the projection — with a clean closed-form solution. But there's a deeper reason: it estimates the **conditional mean** $\mathbb{E}[Y \mid X]$.
-
-To see why, consider a simpler question: what constant $c$ minimizes $\mathbb{E}[(Y - c)^2]$? Taking the derivative and setting it to zero:
-
-$$\frac{d}{dc} \mathbb{E}[(Y-c)^2] = -2\,\mathbb{E}[Y-c] = 0 \quad \Longrightarrow \quad c = \mathbb{E}[Y]$$
-
-The constant that minimizes mean squared error is the **mean** of $Y$. The same argument applies conditional on $X$: minimizing $\mathbb{E}[(Y - f(X))^2]$ over all functions $f$ gives $f(X) = \mathbb{E}[Y \mid X]$. Regression restricts $f$ to be linear, so the regression line is the best *linear* approximation to the conditional mean.
-
-Other loss functions estimate other summaries: absolute error gives the conditional **median**, and quantile loss gives conditional quantiles. We could choose a different loss — and we will, in Chapter 13 for classification. For now, squared error gives us the most elegant geometry.
-
-We can verify this visually: if regression estimates the conditional mean, the regression line should pass through the average price at each value of bedrooms.
-
-```{python}
-# Conditional means: average price for each number of bedrooms
-cond_means = df.groupby('bedrooms')['price_clean'].mean()
-cond_means = cond_means[cond_means.index <= 6]
-
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.scatter(df['bedrooms'], df['price_clean'], alpha=0.03, s=10, color='#cccccc')
-ax.scatter(cond_means.index, cond_means.values, s=150, color='#c44e52',
-           edgecolors='white', lw=2, zorder=10,
-           label=r'conditional mean $\mathbb{E}[\mathrm{price} \mid \mathrm{bedrooms}]$')
-x_line = np.linspace(0, 6, 100)
-y_line = model_simple.predict(x_line.reshape(-1, 1))
-ax.plot(x_line, y_line, '-', color='#2d6a9f', lw=2.5, label='regression line')
-ax.set_xlabel('Bedrooms')
-ax.set_ylabel('Price ($/night)')
-ax.legend(fontsize=11, loc='upper left')
+ax.set_xlim(-0.5, 3.0)
+ax.set_ylim(-0.4, 2.8)
+ax.set_aspect('equal')
+ax.set_title('Regression finds the closest point in the span to $y$', fontsize=12)
+ax.legend(fontsize=11, loc='lower right')
+for spine in ax.spines.values():
+    spine.set_visible(False)
+ax.set_xticks([])
+ax.set_yticks([])
 plt.tight_layout()
 plt.show()
 ```
 
-The red dots (conditional means) sit close to the regression line, confirming that least squares approximates $\mathbb{E}[\text{price} \mid \text{bedrooms}]$. The fit isn't exact because the regression line is constrained to be linear — the true conditional mean function may be nonlinear.
+The dashed line (the residual) meets the plane at a right angle. That perpendicularity is not a coincidence — it is the defining property of the least squares solution.
 
-## How good is the fit? Defining $R^2$
+## The inner product
 
-How much of the variation in prices does the model explain? We quantify this with $R^2$.
+To make "perpendicular" precise, we need a way to measure the angle between two vectors. The **inner product** (or **dot product**) does exactly that.
 
-The prediction $\hat{y}$ splits the target into two pieces: what the model captures ($\hat{y}$) and what it misses (the residual $e = y - \hat{y}$). The total variation in $y$ (measured from its mean $\bar{y}$) decomposes as:
+:::{.callout-important}
+## Definition: Inner product (dot product)
 
-$$R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2} = 1 - \frac{\text{residual variance}}{\text{total variance}}$$
+The **inner product** of two vectors $u, v \in \mathbb{R}^n$ is
+$$u^T v = \sum_{i=1}^n u_i v_i$$
+A positive inner product means the vectors tend to point in the same direction; a negative value means opposite directions; zero means the vectors are **orthogonal** (perpendicular).
+:::
 
-An $R^2$ of 0 means the model does no better than predicting the mean for every listing. An $R^2$ of 1 means the model explains all the variation — every prediction matches exactly.
+Recall the index plot: price and bedrooms both increase for larger apartments. That shared upward trend means their inner product is large and positive — they "point" in a similar direction in $\mathbb{R}^n$.
+
+```{python}
+# Inner product between price and bedrooms (on the toy data)
+dot_price_beds = np.dot(toy_price, bedrooms)
+print(f"price · bedrooms = {dot_price_beds}")
+print(f"Both vectors trend upward → large positive inner product")
+```
+
+:::{.callout-important}
+## Definition: Orthogonal
+
+Two vectors $u$ and $v$ are **orthogonal** if $u^T v = 0$. Orthogonal vectors are perpendicular — they share no common direction.
+:::
+
+## Orthogonality = best fit
+
+The best prediction makes the residual orthogonal to every feature used in the model. For the constant model, the single feature was $\mathbf{1}$, and we showed $\mathbf{1}^T \epsilon = 0$ (residuals sum to zero). For the linear model $\hat{y} = \beta_0 \mathbf{1} + \beta_1 x$, the residual must satisfy *two* orthogonality conditions:
+
+$$\mathbf{1}^T \epsilon = 0 \qquad \text{and} \qquad x^T \epsilon = 0$$
+
+The first condition says the residuals sum to zero (same as before). The second says the residuals have no linear association with bedrooms — if you scatter residuals against bedrooms, the trend is flat. Together, these two conditions pin down the unique best line.
+
+:::{.callout-important}
+## Definition: Normal equations (simple regression)
+
+The orthogonality conditions $\mathbf{1}^T \epsilon = 0$ and $x^T \epsilon = 0$, where $\epsilon = y - \beta_0 \mathbf{1} - \beta_1 x$, are the **normal equations** for simple regression. They determine the unique least squares coefficients $\beta_0$ and $\beta_1$.
+:::
+
+Why "orthogonal = optimal"? If the residual had a nonzero inner product with some feature column, the errors would still have a systematic pattern aligned with that feature. You could reduce the error by adjusting the coefficient on that feature — absorbing the remaining pattern into the prediction. At the optimum, no such improvement is possible, so $x^T \epsilon = 0$ for every feature.
+
+:::{.callout-important}
+## Definition: Projection
+
+The **projection** of a vector $y$ onto a subspace is the closest point in that subspace to $y$. For regression, the subspace is the span of the feature columns, and the projection is $\hat{y}$. The residual $\epsilon = y - \hat{y}$ is orthogonal to the subspace.
+:::
+
+## Simple regression on Airbnb data
+
+Let's fit a simple regression on the full Airbnb dataset. We create a `LinearRegression()` object from scikit-learn, call `.fit()` to find the best coefficients, and `.predict()` to generate predictions. The fitted model stores the slope in `.coef_` and the intercept in `.intercept_`.
+
+```{python}
+# Fit simple regression: price ~ bedrooms
+model = LinearRegression()
+model.fit(df[['bedrooms']], prices)
+
+b0, b1 = model.intercept_, model.coef_[0]
+print(f"ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
+print(f"R² = {model.score(df[['bedrooms']], prices):.3f}")
+```
+
+```{python}
+# Scatter plot with regression line
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.scatter(df['bedrooms'], prices, alpha=0.04, s=10, color='#aaaaaa')
+x_line = np.linspace(0, 6, 100)
+y_line = model.predict(x_line.reshape(-1, 1))
+ax.plot(x_line, y_line, color='#c44e52', lw=2.5,
+        label=f'ŷ = {b0:.0f} + {b1:.0f} × bedrooms')
+
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Price ($/night)')
+ax.set_title('Simple regression: price vs. bedrooms')
+ax.legend(fontsize=12, loc='upper left')
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+## Interpreting the coefficients
+
+The intercept $\beta_0$ is the predicted price for a listing with zero bedrooms — a studio apartment. The slope $\beta_1$ is the predicted price increase per additional bedroom.
+
+```{python}
+print(f"Intercept (β₀): ${b0:.0f} — predicted price for a studio")
+print(f"Slope (β₁):     ${b1:.0f} — each additional bedroom is associated")
+print(f"                       with roughly ${b1:.0f} more per night")
+```
+
+:::{.callout-warning}
+## Association, not causation
+
+The regression coefficient measures a statistical association: listings with more bedrooms tend to cost more. The coefficient does not tell us that *adding* a bedroom to a fixed listing would increase its price by this amount. Larger listings differ from smaller ones in many ways — location, amenities, quality — and the bedroom coefficient may be absorbing some of those differences. We return to causal reasoning in [Chapter 18](lec18-causal-inference.qmd).
+:::
+
+## Verifying orthogonality
+
+The normal equations guarantee that the residual is orthogonal to both $\mathbf{1}$ and the bedrooms column. Let's verify.
+
+```{python}
+y_hat = model.predict(df[['bedrooms']])
+residuals = prices - y_hat
+
+dot_ones = np.dot(residuals, np.ones(len(df)))
+dot_beds = np.dot(residuals, df['bedrooms'].values)
+
+print(f"residuals · 1 (ones vector):  {dot_ones:.4f}   (≈ 0)")
+print(f"residuals · x (bedrooms):     {dot_beds:.4f}   (≈ 0)")
+print(f"\nBoth inner products are effectively zero — orthogonality holds.")
+```
+
+If we scatter the residuals against bedrooms, the resulting plot should show no trend — the residual is "flat" with respect to the feature.
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.scatter(df['bedrooms'], residuals, alpha=0.04, s=10, color='#aaaaaa')
+ax.axhline(0, color='#c44e52', lw=1.5)
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Residual ($)')
+ax.set_title('Residuals vs. bedrooms — no linear trend remains')
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+:::{.callout-tip}
+## Think About It
+
+What would a *curved* pattern in the residual plot suggest? (Hint: consider whether the linear model captures the full relationship.)
+:::
+
+A curved residual plot would mean the true relationship between price and bedrooms is nonlinear — the linear model misses systematic structure. We address nonlinear patterns with feature engineering in [Chapter 5](lec05-feature-engineering.qmd).
+
+# How good is the fit?
+
+## $R^2$: fraction of variance explained
+
+How much of the variation in prices does the regression explain? The prediction $\hat{y}$ splits the response into two parts: what the model captures ($\hat{y} - \bar{y}$) and what it misses (the residual $\epsilon = y - \hat{y}$).
 
 :::{.callout-important}
 ## Definition: $R^2$ (coefficient of determination)
 
-$$R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2}$$
+$$R^2 = 1 - \frac{\|\epsilon\|^2}{\|y - \bar{y}\|^2} = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2}$$
 
-$R^2$ measures the fraction of variance in $y$ "explained" by the model. It ranges from 0 (the model explains nothing beyond the mean) to 1 (perfect fit). We'll see a geometric interpretation — $R^2$ as a projection ratio — later in this chapter.
+$R^2$ measures the fraction of variance in $y$ explained by the model. A value of 0 means the model does no better than predicting $\bar{y}$ for every listing. A value of 1 means a perfect fit.
 :::
 
-### $R^2 = r^2$ in simple regression
-
-Before adding more features, let's connect $R^2$ to a quantity you've seen in introductory statistics: the **correlation coefficient** $r$.
-
-The correlation coefficient $r$ measures the strength and direction of the linear association between two variables. We compute it with `.corr()`. It ranges from $-1$ (perfect negative linear relationship) to $+1$ (perfect positive). The regression line can be written as $\hat{y} = r \cdot \frac{SD_y}{SD_x}(x - \bar{x}) + \bar{y}$, which makes $r$ the slope in standardized units.
-
 ```{python}
-# Compute the correlation coefficient between price and bedrooms
-r = df['price_clean'].corr(df['bedrooms'])
-print(f"Correlation between price and bedrooms: r = {r:.4f}")
-print(f"r² = {r**2:.4f}")
-print()
+ss_res = np.sum(residuals**2)
+ss_tot = np.sum((prices - prices.mean())**2)
+r2 = 1 - ss_res / ss_tot
 
-# Compare to R² from the simple regression
-y_hat_simple = model_simple.predict(df[['bedrooms']])
-ss_res = np.sum((df['price_clean'] - y_hat_simple)**2)
-ss_tot = np.sum((df['price_clean'] - df['price_clean'].mean())**2)
-r2_simple_model = 1 - ss_res / ss_tot
-print(f"R² from simple regression: {r2_simple_model:.4f}")
-print(f"They match: r² = R² in simple regression.")
+print(f"||residuals||² = {ss_res:,.0f}")
+print(f"||y - ȳ||²     = {ss_tot:,.0f}")
+print(f"R² = 1 - {ss_res:,.0f} / {ss_tot:,.0f} = {r2:.3f}")
+print(f"\nBedrooms alone explains roughly {r2*100:.0f}% of the price variation.")
 ```
 
-For a model with **one** predictor, $R^2$ is literally the square of the correlation coefficient $r$. Why? The simple regression prediction is $\hat{y}_i = \bar{y} + r \cdot \frac{SD_y}{SD_x}(x_i - \bar{x})$, so the explained variance is $r^2$ times the total variance. With multiple predictors, $R^2$ still measures the fraction of variance explained, but there's no single $r$ to square.
+## Cosine similarity
 
-The connection between $r$ and $R^2$ also explains Galton's original observation. For real data, $|r| < 1$, so the predicted value $\hat{y}$ is always *closer to the mean* than $x$ is (in standardized units). Fathers who are 2 SDs above average height have sons whose predicted height is only $r \times 2$ SDs above average — less extreme, pulled back toward the mean.
+The inner product measures whether two vectors point in the same direction, but its value depends on both direction *and* magnitude. To isolate direction, divide by the norms.
 
 :::{.callout-important}
-## Definition: Regression to the mean
+## Definition: Cosine similarity
 
-**Regression to the mean** is the phenomenon whereby extreme observations tend to be followed by less extreme ones. It arises whenever the correlation between successive measurements is imperfect ($|r| < 1$) and is a purely statistical phenomenon — not a biological or physical one. Galton's observation of heights "regressing" toward the average is the origin of the term "regression" itself.
-:::
-
-## Multiple regression: more features, bigger column space
-
-What happens when we add more features? The column space gets bigger — and so does $R^2$.
-
-Our model says each bedroom adds some amount per night. But bigger apartments also have more bathrooms and can accommodate more guests. The bedroom coefficient might be picking up the effect of all of these correlated features. To isolate the bedroom effect, we need to *hold other features constant*.
-
-Each new (independent) feature expands the column space, giving us a richer set of possible predictions.
-
-To include a categorical variable like `room_type`, we use `pd.get_dummies()` to create binary (0/1) columns — one per category. We drop one category (the reference level) to avoid redundancy; `drop_first=True` handles this. In [Chapter 5](lec05-feature-engineering.qmd), we'll explore this technique and many others in detail.
-
-```{python}
-# Multiple regression: price ~ bedrooms + bathrooms + room_type
-# One-hot encode room_type
-df_model = df.copy()
-df_model = pd.get_dummies(df_model, columns=['room_type'], drop_first=True, dtype=float)
-
-features = ['bedrooms', 'bathrooms', 'room_type_Private room', 'room_type_Shared room']
-X_multi = df_model[features]
-y_multi = df_model['price_clean']
-
-model_multi = LinearRegression()
-model_multi.fit(X_multi, y_multi)
-
-print("Multiple regression: price ~ bedrooms + bathrooms + room_type")
-print(f"  Intercept: ${model_multi.intercept_:.2f}")
-print()
-for feat, coef in zip(features, model_multi.coef_):
-    print(f"  {feat:30s}  ${coef:+.2f}")
-```
-
-**Coefficient interpretation:**
-
-- Each additional bedroom is associated with about \$33 more per night, **holding other features constant**.
-- Each additional bathroom is associated with about \$22 more per night.
-- A private room costs roughly \$90 *less* than an entire home/apt, all else equal.
-
-Now we can answer the opening question: our host should charge about \$22 more for that second bathroom, holding bedrooms and room type fixed.
-
-The "holding constant" part is crucial — multiple regression provides something simple regression cannot. The coefficient on bedrooms means that if we compare two listings with the same number of bathrooms, the same room type, and the same everything else — but one has one more bedroom — the model predicts the extra bedroom is worth about \$33/night.
-
-These coefficients are **point estimates** — we'll quantify their uncertainty with confidence intervals in Chapter 12.
-
-## The geometric view: orthogonality and the normal equations
-
-We've seen that the column space determines what a linear model can predict. Now let's understand *how* regression picks the best prediction in that space — and *why* orthogonality is the key.
-
-### Orthogonality in real features
-
-We saw that collinear features (small angle) carry redundant information. What about the opposite extreme — features at 90 degrees to each other? Let's check which Airbnb features are closest to perpendicular.
-
-```{python}
-# Orthogonality computation: are any Airbnb features approximately orthogonal?
-# Center the vectors (subtract the mean) so dot product corresponds to correlation
-beds_c = df['beds'].values - df['beds'].mean()
-reviews_c = df['number_of_reviews'].values - df['number_of_reviews'].mean()
-bedrooms_c = df['bedrooms'].values - df['bedrooms'].mean()
-
-# Dot products (unnormalized)
-dot_beds_reviews = np.dot(beds_c, reviews_c)
-dot_beds_bedrooms = np.dot(beds_c, bedrooms_c)
-
-# Cosine similarity = correlation for centered vectors
-cos_beds_reviews = dot_beds_reviews / (np.linalg.norm(beds_c) * np.linalg.norm(reviews_c))
-cos_beds_bedrooms = dot_beds_bedrooms / (np.linalg.norm(beds_c) * np.linalg.norm(bedrooms_c))
-
-print(f"beds vs number_of_reviews:")
-print(f"  dot product = {dot_beds_reviews:,.0f}")
-print(f"  cosine similarity (= correlation) = {cos_beds_reviews:.3f}")
-print(f"  angle = {np.degrees(np.arccos(np.clip(cos_beds_reviews, -1, 1))):.1f}°")
-print()
-print(f"beds vs bedrooms:")
-print(f"  dot product = {dot_beds_bedrooms:,.0f}")
-print(f"  cosine similarity (= correlation) = {cos_beds_bedrooms:.3f}")
-print(f"  angle = {np.degrees(np.arccos(np.clip(cos_beds_bedrooms, -1, 1))):.1f}°")
-print()
-print("Beds and reviews are nearly orthogonal — they carry independent information.")
-print("Beds and bedrooms are far from orthogonal — they carry redundant information.")
-```
-
-Beds and reviews aren't *exactly* perpendicular — the cosine similarity is near zero, not zero. But the contrast with beds-vs-bedrooms is stark. The exact case, where the dot product is precisely zero, has a name:
-
-:::{.callout-important}
-## Definition: Orthogonal Vectors
-Two vectors $u$ and $v$ are **orthogonal** (perpendicular) if their inner product is zero:
-$$u \cdot v = 0$$
-For centered data vectors, orthogonality corresponds to zero correlation — the features are **uncorrelated**. Uncorrelated features carry non-redundant information; neither can be predicted from the other by a linear model.
-:::
-
-Orthogonal features (90 degrees apart) expand the column space maximally; parallel features (0 degrees) don't expand it at all. Orthogonality isn't just a property of features — it's the key to understanding *why* regression works.
-
-### Prediction lives in the column space
-
-Here's the key idea:
-
-- Your feature matrix $X$ has columns $x_1, x_2, \ldots$
-- Any prediction $\hat{y} = X\beta$ is a **linear combination** of those columns
-- So $\hat{y}$ must live in the **column space** of $X$
-
-The true prices $y$ probably do NOT live in the column space. So regression finds the **closest point** in the column space to $y$. That closest point is the **projection** of $y$ onto $\text{col}(X)$.
-
-As George Box put it: **"All models are wrong, but some are useful."** The prediction $\hat{y}$ won't equal $y$ exactly — the model is wrong — but projection gives us the *best approximation* within the column space.
-
-:::{.callout-tip}
-## Think About It
-
-If $\hat{y}$ is the closest point in the column space to $y$, what direction must $y - \hat{y}$ point? (Hint: think about the closest point on a line to a point not on the line.)
+The **cosine similarity** between vectors $u$ and $v$ is
+$$\cos\theta = \frac{u^T v}{\|u\|\,\|v\|}$$
+Values range from $-1$ (opposite directions) to $+1$ (same direction). A value of $0$ means the vectors are orthogonal. For centered data, cosine similarity equals the Pearson correlation coefficient.
 :::
 
 ```{python}
-# Visualization code — focus on the output, not the plotting details.
-# This draws a 2D cartoon: y is a point, col(X) is a line,
-# and ŷ is the projection of y onto that line.
+# Cosine similarity between centered price and bedrooms = correlation
+price_centered = prices - prices.mean()
+beds_centered = df['bedrooms'].values - df['bedrooms'].mean()
 
-fig, ax = plt.subplots(figsize=(7, 6))
+cos_sim = np.dot(price_centered, beds_centered) / (
+    np.linalg.norm(price_centered) * np.linalg.norm(beds_centered))
+r_corr = df['price'].corr(df['bedrooms'])
 
-# The column space (a line through the origin in this picture)
-t = np.linspace(-0.5, 2.5, 100)
-ax.plot(t, 0.5 * t, 'C0-', lw=2, label='Column space of $X$')
-
-# y (the target)
-y_pt = np.array([1.5, 1.8])
-ax.plot(*y_pt, 'ro', ms=10, zorder=5)
-ax.annotate('$y$ (true prices)', xy=y_pt, fontsize=13,
-            xytext=(15, 10), textcoords='offset points', color='red')
-
-# ŷ (the projection)
-# Project y onto the line (direction [1, 0.5])
-d = np.array([1, 0.5])
-d_unit = d / np.linalg.norm(d)
-yhat_pt = np.dot(y_pt, d_unit) * d_unit
-ax.plot(*yhat_pt, 'C0o', ms=10, zorder=5)
-ax.annotate('$\hat{y}$ (prediction)', xy=yhat_pt, fontsize=13,
-            xytext=(-80, -25), textcoords='offset points', color='C0')
-
-# Residual (orthogonal)
-ax.annotate('', xy=y_pt, xytext=yhat_pt,
-            arrowprops=dict(arrowstyle='->', color='green', lw=2, ls='--'))
-ax.text(1.25, 1.3, '$e = y - \hat{y}$\n(residual)', fontsize=12, color='green')
-
-# Right angle marker
-from matplotlib.patches import Rectangle
-angle_size = 0.1
-corner = yhat_pt
-perp = (y_pt - yhat_pt)
-perp_unit = perp / np.linalg.norm(perp)
-par_unit = d_unit
-sq = np.array([corner, corner + angle_size*par_unit,
-               corner + angle_size*par_unit + angle_size*perp_unit,
-               corner + angle_size*perp_unit, corner])
-ax.plot(sq[:, 0], sq[:, 1], 'k-', lw=1)
-
-ax.set_xlim(-0.5, 2.5)
-ax.set_ylim(-0.5, 2.5)
-ax.set_aspect('equal')
-ax.set_xlabel('Dimension 1')
-ax.set_ylabel('Dimension 2')
-ax.set_title('Regression = projection onto column space')
-ax.legend(loc='lower right', fontsize=11)
-plt.tight_layout()
-plt.show()
+print(f"Cosine similarity (centered): {cos_sim:.4f}")
+print(f"Pearson correlation:           {r_corr:.4f}")
+print(f"They match — cosine similarity of centered vectors is the correlation.")
 ```
 
-The **residual** $e = y - \hat{y}$ is **orthogonal** to the column space. Orthogonality is the defining property of the least squares solution.
+## $R^2$ as cosine squared
 
-Why orthogonal? The perpendicular from a point to a subspace gives the closest point — just as dropping a perpendicular from a point to a line gives the nearest point on the line.
+After centering $y$ (subtracting $\bar{y}$), the Pythagorean theorem gives an exact decomposition:
 
-### Why orthogonality gives us the answer
+$$\|y - \bar{y}\|^2 = \|\hat{y} - \bar{y}\|^2 + \|\epsilon\|^2$$
 
-We're about to derive a formula for the regression coefficients that explains WHY sklearn gives the answer it does. The argument has three steps: name the error, see why orthogonality is the optimality condition, and write it as an equation.
+The centered prediction and the residual form the two legs of a right triangle, with the centered response as the hypotenuse. Dividing through:
 
-**Step 1: Name the error.** Call the **residual** $e = y - X\beta$ — the gap between the true prices and what the model predicts. Different $\beta$ produce different residuals; we want the $\beta$ that makes $e$ as small as possible.
+$$1 = \frac{\|\hat{y} - \bar{y}\|^2}{\|y - \bar{y}\|^2} + \frac{\|\epsilon\|^2}{\|y - \bar{y}\|^2} = R^2 + (1 - R^2)$$
 
-**Step 2: The improvement argument.** Suppose the residual $e$ is *not* orthogonal to some feature column $x_j$ — that is, $x_j \cdot e \neq 0$. Then the errors still have a systematic pattern aligned with $x_j$. We could reduce the error by nudging $\beta_j$ in the direction of $x_j \cdot e$, absorbing that pattern into the prediction. So the best $\beta$ cannot leave any such pattern behind: it must satisfy $x_j \cdot e = 0$ for *every* feature $j$.
-
-**Step 3: Write it as one equation.** Stacking the conditions $x_j \cdot e = 0$ for all features into a single matrix equation:
-
-$$X^T(y - X\beta) = 0$$
-
-Each row of this equation says "the residual has zero dot product with one column of $X$." Rearranging:
-
-$$X^T X \beta = X^T y \qquad \Longrightarrow \qquad \beta = (X^T X)^{-1} X^T y$$
-
-:::{.callout-important}
-## Definition: Normal Equations
-
-The **normal equations** $X^TX\beta = X^Ty$ give the least squares solution $\beta = (X^TX)^{-1}X^Ty$. The formula requires $X^TX$ to be invertible, which means the columns of $X$ must be linearly independent (recall the column space section above). Perfectly collinear features make the matrix singular, so no unique solution exists.
-:::
-
-You may have heard "regression minimizes the sum of squared errors." Now you can see *why*: the prediction that minimizes $\|y - \hat{y}\|^2$ is exactly the orthogonal projection of $y$ onto $\text{col}(X)$.
-
-The normal equations give us the exact solution in one step. For larger problems or different loss functions where no closed-form solution exists, we'll need an iterative approach called gradient descent (Chapter 13).
-
-```{python}
-# Verify: the normal equations give the same answer as sklearn
-
-# Simple regression with an intercept: price = beta0 + beta1 * bedrooms
-X_bedrooms = np.column_stack([np.ones(len(df)), df['bedrooms'].values])
-prices = df['price_clean'].values
-
-# Normal equations: beta = (X^T X)^{-1} X^T y
-# We use np.linalg.solve rather than np.linalg.inv — computing matrix
-# inverses explicitly is numerically unstable. For even better numerical
-# stability, production code uses the QR factorization (VMLS Ch 13).
-beta_normal = np.linalg.solve(X_bedrooms.T @ X_bedrooms, X_bedrooms.T @ prices)
-
-print("Normal equations:  intercept = {:.2f}, slope = {:.2f}".format(*beta_normal))
-print("sklearn:           intercept = {:.2f}, slope = {:.2f}".format(
-    model_simple.intercept_, model_simple.coef_[0]))
-```
-
-The two solutions match. Now let's verify the orthogonality property directly: the residuals should have zero dot product with every column of $X$.
-
-```{python}
-# Verify orthogonality: residuals are orthogonal to each column of X
-prices_hat = X_bedrooms @ beta_normal
-residuals = prices - prices_hat
-
-dot_with_ones = np.dot(residuals, X_bedrooms[:, 0])     # dot with intercept column
-dot_with_bedrooms = np.dot(residuals, X_bedrooms[:, 1])  # dot with bedrooms column
-
-print("Residuals dot (column of 1s):  {:.6f}  (≈ 0 ✓)".format(dot_with_ones))
-print("Residuals dot (bedrooms):      {:.6f}  (≈ 0 ✓)".format(dot_with_bedrooms))
-print()
-print("The residual is orthogonal to every column of X.")
-print("This IS the normal equation: X^T(y - Xβ) = 0.")
-print("The errors have no pattern left that could be captured by the features.")
-```
-
-## $R^2$ as a projection ratio
-
-We defined $R^2$ above as a ratio of sums of squares. Now that we've seen the geometry of projection, we can understand $R^2$ as an angle.
-
-After centering $y$ (subtracting the mean), the Pythagorean theorem gives an exact decomposition:
-
-$$\|y - \bar{y}\|^2 = \|\hat{y} - \bar{y}\|^2 + \|e\|^2$$
-
-The two terms on the right are orthogonal — $\hat{y} - \bar{y}$ lives in the column space, and $e$ is perpendicular to it. This equality holds when the model includes an intercept (which ours does); the intercept ensures residuals sum to zero via the normal equation $\mathbf{1}^T e = 0$.
-
-Dividing both sides by $\|y - \bar{y}\|^2$:
-
-$$1 = \frac{\|\hat{y} - \bar{y}\|^2}{\|y - \bar{y}\|^2} + \frac{\|e\|^2}{\|y - \bar{y}\|^2} = R^2 + (1 - R^2)$$
-
-This is precisely $1 = \cos^2\theta + \sin^2\theta$, where $\theta$ is the angle between the centered response $y - \bar{y}$ and the centered predictions $\hat{y} - \bar{y}$. So $R^2 = \cos^2\theta$: it measures how close $y$ is to the column space, as an angle.
+This decomposition is precisely $\cos^2\theta + \sin^2\theta = 1$, where $\theta$ is the angle between the centered response $y - \bar{y}$ and the centered prediction $\hat{y} - \bar{y}$. Therefore $R^2 = \cos^2\theta$: it measures how close $y$ is to the span of the features, expressed as an angle.
 
 ```{python}
 #| code-fold: true
 # R² as a projection ratio: the Pythagorean picture
 fig, ax = plt.subplots(figsize=(6, 6))
 
-# Choose vectors so the right angle is visually obvious.
-# A steeper column-space direction makes the triangle less flat.
 origin = np.array([0.0, 0.0])
-col_dir = np.array([2.0, 1.0])        # direction of column space
-y_vec = np.array([1.8, 2.8])          # y - ȳ (centered response)
-# Compute ŷ as the true orthogonal projection onto the column space direction.
+col_dir = np.array([2.0, 1.0])
+y_vec = np.array([1.8, 2.8])
 yhat_vec = col_dir * (np.dot(y_vec, col_dir) / np.dot(col_dir, col_dir))
-e_vec = y_vec - yhat_vec               # residual (orthogonal by construction)
+e_vec = y_vec - yhat_vec
 
-# Column space line
 slope = col_dir[1] / col_dir[0]
 t = np.linspace(-0.3, 3.5, 100)
 ax.plot(t, slope * t, color='#2d8a4e', lw=2.5, alpha=0.25)
 ax.text(3.1, slope * 3.1 + 0.12, 'col($X$)', fontsize=11,
         color='#2d8a4e', alpha=0.7, style='italic')
 
-# ŷ - ȳ vector (projection, along column space)
 ax.annotate('', xy=yhat_vec, xytext=origin,
             arrowprops=dict(arrowstyle='->', color='#2d6a9f', lw=2.8))
 ax.text(yhat_vec[0] + 0.08, yhat_vec[1] - 0.25,
         '$\\hat{y} - \\bar{y}$', fontsize=14, color='#2d6a9f', fontweight='bold')
 
-# y - ȳ vector (hypotenuse)
 ax.annotate('', xy=y_vec, xytext=origin,
             arrowprops=dict(arrowstyle='->', color='#c0392b', lw=2.8))
 ax.text(y_vec[0] - 0.55, y_vec[1] + 0.12, '$y - \\bar{y}$',
         fontsize=14, color='#c0392b', fontweight='bold')
 
-# Residual e (orthogonal to column space)
 ax.annotate('', xy=y_vec, xytext=yhat_vec,
             arrowprops=dict(arrowstyle='->', color='#555555', lw=2.2, ls='--'))
 mid_e = (y_vec + yhat_vec) / 2
-ax.text(mid_e[0] + 0.15, mid_e[1] + 0.05, '$e$',
+ax.text(mid_e[0] + 0.15, mid_e[1] + 0.05, '$\\epsilon$',
         fontsize=15, color='#555555', style='italic')
 
-# Right angle marker (large enough to be clearly visible)
 sz = 0.2
-p_dir = col_dir / np.linalg.norm(col_dir)   # unit vector along column space
-r_dir = e_vec / np.linalg.norm(e_vec)        # unit vector along residual
+p_dir = col_dir / np.linalg.norm(col_dir)
+r_dir = e_vec / np.linalg.norm(e_vec)
 sq = np.array([yhat_vec + sz * p_dir,
                yhat_vec + sz * p_dir + sz * r_dir,
                yhat_vec + sz * r_dir])
 ax.plot(sq[:, 0], sq[:, 1], 'k-', lw=1.2)
 
-# Angle arc for theta at the origin
 angle_y = np.arctan2(y_vec[1], y_vec[0])
 angle_yhat = np.arctan2(yhat_vec[1], yhat_vec[0])
 arc_r = 0.7
@@ -988,7 +785,6 @@ ax.text(arc_r * np.cos(mid_angle) + 0.08,
         arc_r * np.sin(mid_angle) + 0.05,
         '$\\theta$', fontsize=15, color='#8e44ad')
 
-# Formula box (top-right, away from the vectors)
 ax.text(2.4, 3.15,
         '$R^2 = \\cos^2\\theta'
         ' = \\dfrac{\\|\\hat{y} - \\bar{y}\\|^2}{\\|y - \\bar{y}\\|^2}$',
@@ -996,7 +792,6 @@ ax.text(2.4, 3.15,
         bbox=dict(boxstyle='round,pad=0.4', facecolor='#f0f0f0',
                   edgecolor='#cccccc'))
 
-# Origin label
 ax.plot(0, 0, 'ko', ms=5, zorder=5)
 ax.text(-0.18, -0.18, '$\\bar{y}$', fontsize=12, color='gray')
 
@@ -1013,141 +808,129 @@ plt.tight_layout()
 plt.show()
 ```
 
-```{python}
-# Compare simple vs multiple regression
-model_bed_only = LinearRegression().fit(df[['bedrooms']], df['price_clean'])
-y_hat_simple = model_bed_only.predict(df[['bedrooms']])
-y_hat_multi = model_multi.predict(X_multi)
+## $R^2 = r^2$ in simple regression
 
-r2_simple = 1 - np.sum((y_multi - y_hat_simple)**2) / np.sum((y_multi - y_multi.mean())**2)
-r2_multi = 1 - np.sum((y_multi - y_hat_multi)**2) / np.sum((y_multi - y_multi.mean())**2)
-
-print(f"R² with bedrooms only:                          {r2_simple:.3f}")
-print(f"R² with bedrooms + bathrooms + room_type:        {r2_multi:.3f}")
-print()
-print("More independent features → larger column space → better projection → higher R²")
-```
-
-The Pythagorean theorem gives us an exact decomposition: total variance = explained variance + residual variance.
+For a model with **one** predictor, $R^2$ equals the square of the Pearson correlation coefficient $r$. The simple regression prediction can be written as $\hat{y}_i = \bar{y} + r \cdot \frac{SD_y}{SD_x}(x_i - \bar{x})$, so the explained variance is exactly $r^2$ times the total variance.
 
 ```{python}
-# Verify the Pythagorean decomposition
-y_vals = y_multi.values
-y_bar = y_vals.mean()
-y_hat_vals = y_hat_multi
-
-ss_total = np.sum((y_vals - y_bar)**2)        # ||y - ȳ||²
-ss_model = np.sum((y_hat_vals - y_bar)**2)    # ||ŷ - ȳ||²
-ss_resid = np.sum((y_vals - y_hat_vals)**2)   # ||e||²
-
-print(f"SS_total = {ss_total:,.0f}")
-print(f"SS_model = {ss_model:,.0f}")
-print(f"SS_resid = {ss_resid:,.0f}")
-print(f"SS_model + SS_resid = {ss_model + ss_resid:,.0f}  (≈ SS_total ✓)")
-print()
-print(f"R² = SS_model / SS_total = {ss_model/ss_total:.4f}")
-print(f"R² = 1 - SS_resid/SS_total = {1 - ss_resid/ss_total:.4f}")
+r = df['price'].corr(df['bedrooms'])
+print(f"Pearson correlation r = {r:.4f}")
+print(f"r² = {r**2:.4f}")
+print(f"R² from regression  = {r2:.4f}")
+print(f"\nIn simple regression, R² = r². With multiple predictors, only R² applies.")
 ```
 
-An $R^2$ around 0.45 means our model explains about 45% of the variation in prices. The remaining 55% comes from factors we didn't include — neighborhood, amenities, photos, host reputation.
+# Regression to the mean
+
+## Galton's heights
+
+The name "regression" has a surprising origin. In the 1880s, Francis Galton studied the heights of parents and their adult children. He noticed a striking pattern: unusually tall parents tended to have children who were tall — but *less* tall than their parents. Unusually short parents had children who were short — but *less* short. Heights "regressed toward the mean."
+
+Let's reproduce Galton's finding. We simulate parent-child height pairs with a correlation of about 0.5, roughly matching Galton's observed data.
+
+```{python}
+# Simulate Galton-style height data
+np.random.seed(42)
+n_families = 500
+parent_height = np.random.normal(68, 3, n_families)
+child_height = 0.5 * parent_height + 0.5 * 68 + np.random.normal(0, 2.5, n_families)
+
+r_heights = np.corrcoef(parent_height, child_height)[0, 1]
+
+fig, ax = plt.subplots(figsize=(7, 6))
+ax.scatter(parent_height, child_height, alpha=0.3, s=20, color='#2d6a9f')
+
+# Regression line
+model_galton = LinearRegression()
+model_galton.fit(parent_height.reshape(-1, 1), child_height)
+x_galton = np.linspace(58, 78, 100)
+ax.plot(x_galton, model_galton.predict(x_galton.reshape(-1, 1)),
+        color='#c44e52', lw=2.5, label=f'regression line (slope = {model_galton.coef_[0]:.2f})')
+
+# 45-degree line (child = parent)
+ax.plot([58, 78], [58, 78], 'k--', lw=1, alpha=0.5, label='child = parent')
+
+ax.set_xlabel("Parent's height (inches)")
+ax.set_ylabel("Child's height (inches)")
+ax.set_title("Tall parents have tall children — but less tall")
+ax.legend(fontsize=10)
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+
+print(f"Correlation between parent and child heights: r = {r_heights:.2f}")
+print(f"Regression slope: {model_galton.coef_[0]:.2f}")
+print(f"\nThe slope is less than 1: children of tall parents are less extreme.")
+```
+
+The regression line is flatter than the 45-degree line (where child = parent). Parents 2 standard deviations above average have children predicted to be only about $r \times 2$ standard deviations above average — pulled back toward the mean.
+
+:::{.callout-important}
+## Definition: Regression to the mean
+
+**Regression to the mean** is the phenomenon whereby extreme observations tend to be followed by less extreme ones. The effect arises whenever the correlation between two measurements is imperfect ($|r| < 1$). The predicted value $\hat{y}$ is always closer to $\bar{y}$ (in standardized units) than $x$ is to $\bar{x}$. This phenomenon is purely statistical — not biological or causal.
+:::
+
+Galton's method for quantifying the trend — fitting a line through the data — became known as "regression," and the name stuck even though we now use it for problems that have nothing to do with reverting to averages. (For the full story, see Salsburg, *The Lady Tasting Tea*, Ch. 4.)
 
 :::{.callout-tip}
 ## Think About It
 
-Can R-squared ever *decrease* when you add a feature? No. Adding a feature expands the column space — the projection onto a larger subspace can only get closer to $y$, never farther. So training R² can only increase (or stay the same). But as we'll see in [Chapter 6](lec06-validation.qmd), *test* R² can absolutely decrease.
+Where else do you see regression to the mean? Consider: a sports team wins 90% of games one season. Would you expect the same record next year? A student scores in the 99th percentile on one exam — will they do the same on the next?
 :::
 
-## Checking the residuals
+# Closing
 
-The normal equations guarantee $X^Te = 0$ — that's a mathematical fact. But a good model should also have residuals that look like random noise. Why? If you can see a pattern in the residuals — a trend, a curve, a fan shape — then the residuals are *predictable*. And if you can predict the residual, you can add that prediction to $\hat{y}$ and get a better model. Residuals that look like noise mean there's nothing left to extract.
+## From the mean to simple regression
 
-The orthogonality condition only guarantees no *linear* pattern with the included features. It says nothing about nonlinear patterns or features you left out. We check with a scatter plot of residuals vs. predicted values and a histogram (`.hist()`) of the residual distribution.
+This chapter built predictions in two stages:
 
-```{python}
-# Residual plot
-residuals_multi = y_multi - y_hat_multi
+1. **No features (1 parameter).** The best constant prediction is the mean $\bar{y}$. The residual is orthogonal to the ones vector: $\mathbf{1}^T \epsilon = 0$.
 
-fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+2. **One feature (2 parameters).** The best linear prediction $\hat{y} = \beta_0 + \beta_1 x$ is the orthogonal projection of $y$ onto span$\{\mathbf{1}, x\}$. The residual satisfies $\mathbf{1}^T \epsilon = 0$ *and* $x^T \epsilon = 0$.
 
-axes[0].scatter(y_hat_multi, residuals_multi, alpha=0.05, s=10)
-axes[0].axhline(0, color='red', lw=1.5)
-axes[0].set_xlabel('Predicted price ($)')
-axes[0].set_ylabel('Residual ($)')
-axes[0].set_title('Residual spread increases with predicted price')
+The principle is the same in both cases: minimize squared error, which amounts to making the residual orthogonal to every feature. $R^2$ measures how much of $y$ lives in the feature span — geometrically, $\cos^2\theta$ of the angle between $y$ and $\hat{y}$.
 
-axes[1].hist(residuals_multi, bins=60, edgecolor='white', alpha=0.7)
-axes[1].set_xlabel('Residual ($)')
-axes[1].set_ylabel('Count')
-axes[1].set_title('Residuals are roughly symmetric but heavy-tailed')
-
-plt.tight_layout()
-plt.show()
-
-print("Notice: the spread of residuals increases with predicted price.")
-print("This is heteroscedasticity — the model's errors are not constant.")
-```
-
-The residual plot reveals a fan shape: the spread of residuals increases with predicted price. The residual histogram is right-skewed, not symmetric. Both patterns signal that a simple linear model on raw prices has room for improvement — transformations, additional features, or a different model family might help. We'll develop these diagnostic tools in [Chapter 5](lec05-feature-engineering.qmd).
-
-## Preview
-
-In [Chapter 5](lec05-feature-engineering.qmd), we'll transform raw data — categories, text, nonlinear patterns — into features a linear model can use. We'll also develop diagnostic tools for when things go wrong: multicollinearity, overfitting, and residual patterns that signal missing structure.
-
-## Key takeaways
-
-- **Vectors in data**: each feature column is a vector, each data point is a vector.
-- **Linear combinations**: a linear model predicts $\hat{y} = \beta_1 x_1 + \beta_2 x_2 + \cdots$ — a linear combination of feature columns.
-- **Span and column space**: the set of all possible predictions is the column space of $X$.
-- **Regression finds the closest point** in the column space to $y$ — the projection.
-- **The residual is orthogonal** to the column space — this is why the formula works.
-- **$R^2$** measures how much of $y$ lives in the column space — the fraction of variance explained.
-- **More features = larger column space = better fit** (on training data) — but not always better predictions on new data.
-
-## Further reading
-
-Want to build more intuition? The [3Blue1Brown "Essence of Linear Algebra"](https://www.3blue1brown.com/topics/linear-algebra) series is excellent and requires no prerequisites — watch at least episodes 1–4.
-
-For a deeper formal treatment: **VMLS** (Boyd & Vandenberghe), Chapters 1 (Vectors) and 5 (Linear independence).
+In [Chapter 5](lec05-feature-engineering.qmd), we add more features — bathrooms, room type, neighborhood — and discover that the same orthogonality principle scales to any number of predictors. More features expand the column space, giving the projection a chance to get closer to $y$. We will also transform raw data into features a linear model can use: one-hot encoding for categories, polynomials for nonlinear patterns, and log transforms for multiplicative relationships.
 
 ## Study guide
 
 ### Key ideas
 
-- **Vector**: an ordered list of numbers. Each feature column and each data row is a vector.
-- **Linear function**: $f$ is linear if $f(ax + by) = af(x) + bf(y)$. Linear models are linear in the weights $\beta$.
-- **Inner product (dot product)**: $u \cdot v = \sum u_i v_i$ — measures similarity between vectors (but depends on magnitude; use cosine similarity to isolate direction).
-- **Cosine similarity**: $\cos\theta = \frac{u \cdot v}{\|u\|\|v\|}$ — directional similarity, independent of magnitude. Equals correlation for centered vectors.
-- **Norm**: $\|v\| = \sqrt{v \cdot v}$ — the length/magnitude of a vector.
-- **Distance**: $d(u,v) = \|u - v\|$ — measures dissimilarity between vectors.
-- **Linear combination**: $\beta_1 v_1 + \beta_2 v_2$ — a weighted sum of vectors. A **scalar** is a single number used as a weight.
-- **Span**: the set of all linear combinations of a set of vectors.
-- **Column space**: the span of the columns of a matrix $X$ — equivalently, the set of all possible predictions $X\beta$.
-- **Orthogonal**: vectors with zero inner product; for centered data, orthogonality means zero correlation (uncorrelated).
-- **Projection** — the closest point in a subspace to a given vector. Regression finds the orthogonal projection of $y$ onto the column space of $X$.
-- **Residual** — the error $e = y - \hat{y}$; orthogonal to the column space. The residual is orthogonal to every column of $X$ — that's the normal equation.
-- **Normal equations** — $X^TX\beta = X^Ty$, the algebraic form of the orthogonality condition.
-- **$R^2$** — fraction of variance explained; $R^2 = 1 - \|e\|^2 / \|y - \bar{y}\|^2$. It always increases with more features (on training data).
-- **Coefficient interpretation** — "holding other features constant," the predicted change in $y$ per unit change in one feature. A regression coefficient measures association, not causation.
-- **$R^2 = r^2$ in simple regression** — the correlation coefficient $r$ measures linear association ($-1$ to $+1$); $R^2$ measures variance explained ($0$ to $1$). For one predictor, $R^2$ is just $r$ squared. With multiple predictors, only $R^2$ applies.
-- **Regression to the mean** — extreme observations tend to be followed by less extreme ones whenever correlation is imperfect ($|r| < 1$). A statistical phenomenon, not a causal one.
+- **Vector** — an ordered list of numbers. Each feature column is a vector in $\mathbb{R}^n$; each data row is a vector in $\mathbb{R}^d$.
+- **Norm** — $\|v\| = \sqrt{\sum v_i^2}$, the length of a vector. Norms measure magnitude.
+- **Distance** — $d(u,v) = \|u - v\|$, the norm of the difference vector.
+- **Inner product** — $u^T v = \sum u_i v_i$. Positive means same direction; zero means orthogonal.
+- **Cosine similarity** — $\cos\theta = u^T v / (\|u\|\|v\|)$. Equals the Pearson correlation for centered vectors.
+- **Linear combination** — $\beta_1 v_1 + \beta_2 v_2$, a weighted sum of vectors.
+- **Span** — the set of all linear combinations of a set of vectors. Determines what a linear model can predict.
+- **Orthogonal** — vectors with zero inner product. Orthogonality of the residual to the features is the optimality condition for least squares.
+- **Projection** — the closest point in a subspace to $y$. Regression finds the projection of $y$ onto the span of the feature columns.
+- **Residual** — $\epsilon = y - \hat{y}$, the part of $y$ the model cannot explain. Orthogonal to every feature column.
+- **Normal equations** — $\mathbf{1}^T \epsilon = 0$ and $x^T \epsilon = 0$ for simple regression. The algebraic expression of the orthogonality conditions.
+- **$R^2$** — fraction of variance explained; $R^2 = 1 - \|\epsilon\|^2 / \|y - \bar{y}\|^2$. Equals $\cos^2\theta$ in the Pythagorean decomposition.
+- **$R^2 = r^2$ in simple regression** — the correlation coefficient $r$ measures linear association ($-1$ to $+1$); $R^2$ measures variance explained ($0$ to $1$). For one predictor, squaring $r$ gives $R^2$.
+- **Regression to the mean** — extreme observations tend to be followed by less extreme ones whenever $|r| < 1$.
+- **Coefficient interpretation** — $\beta_0$ is the predicted $y$ when $x = 0$; $\beta_1$ is the predicted change in $y$ per unit change in $x$. Association, not causation.
 
 ### Computational tools
 
 - `np.dot(u, v)` or `u @ v` — inner product (dot product)
 - `np.linalg.norm(v)` — Euclidean norm (length) of a vector
-- `np.column_stack([a, b])` — build a design matrix from column vectors
-- `np.linalg.solve(A, b)` — solve $Ax = b$ without forming $A^{-1}$
-- `LinearRegression()` — create a linear regression model
+- `LinearRegression()` — create a linear regression model (scikit-learn)
 - `.fit(X, y)` — fit the model to data
 - `.predict(X)` — generate predictions
-- `.coef_` — fitted coefficients (slopes)
+- `.coef_` — fitted slope(s)
 - `.intercept_` — fitted intercept
-- `pd.get_dummies()` — one-hot encode categorical variables
+- `.score(X, y)` — compute $R^2$
+- `df['col1'].corr(df['col2'])` — Pearson correlation coefficient
 
 ### For the quiz
 
-- Be able to determine whether a vector is in the span of given vectors.
-- Know what happens to the column space when you add a redundant feature.
-- Be able to write the normal equations and explain what they mean geometrically.
-- Given a regression output, interpret a coefficient in context ("holding other features constant...").
-- Explain why training $R^2$ can never decrease when you add a feature.
+- Given a scatter plot, sketch the regression line and identify $\beta_0$ and $\beta_1$.
+- Interpret a regression coefficient in context ("each additional bedroom is associated with...").
+- Explain why the mean minimizes squared error (one-line calculus argument).
+- State the orthogonality conditions for simple regression and explain what each condition means.
+- Compute $R^2$ from sums of squares and interpret the result.
+- Identify regression to the mean in a described scenario.
