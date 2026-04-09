@@ -34,7 +34,8 @@ DATA_DIR = 'data'
 listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 
 cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'room_type',
-        'neighbourhood_group_cleansed', 'accommodates', 'number_of_reviews']
+        'neighbourhood_group_cleansed', 'accommodates', 'number_of_reviews',
+        'latitude', 'longitude']
 df = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
@@ -52,9 +53,12 @@ df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 We prepare the same feature matrix used in [Chapter 5](lec05-feature-engineering.qmd): numeric features plus one-hot encoded categoricals via `pd.get_dummies()`.
 
 ```{python}
-# One-hot encode categorical features
+# One-hot encode categorical features; include continuous features
+# (latitude, longitude, accommodates, number_of_reviews) so trees have
+# real numeric signal to split on
 cat_features = pd.get_dummies(df[['room_type', 'borough']], drop_first=True)
-num_features = df[['bedrooms', 'bathrooms']]
+num_features = df[['bedrooms', 'bathrooms', 'accommodates', 'number_of_reviews',
+                   'latitude', 'longitude']]
 X_base = pd.concat([num_features, cat_features], axis=1)
 feature_names = list(X_base.columns)
 
@@ -69,7 +73,7 @@ Engineering features by hand is creative but tedious. What if the model could fi
 
 A **decision tree** splits the feature space into regions and predicts the mean price in each region. Each internal node asks an if/then question about one feature: "Is bedrooms > 2?" or "Is borough = Manhattan?" The tree learns which questions to ask and where to split — no manual feature engineering needed.
 
-A model that memorizes training data looks perfect on those same observations but fails on new ones. In [Chapter 6](lec06-validation.qmd), we learned to hold out data as a **test set** that the model never sees during fitting. Let's apply that here: we hold out 30% of listings for honest evaluation.
+We hold out 30% of listings as a test set so we can measure honest generalization, following the train/test split from [Chapter 6](lec06-validation.qmd).
 
 ```{python}
 # Hold out 30% of listings for honest evaluation
@@ -113,7 +117,7 @@ The tree picks its own split points. Look at the first split — does it match y
 
 ### How a decision tree splits
 
-A decision tree partitions the feature space using a **greedy** algorithm. At each node, it considers every feature and every possible threshold, choosing the split that produces the most homogeneous child nodes.
+A decision tree partitions the feature space using a **greedy** algorithm (**greedy**: chooses the locally best split at each step without planning ahead). At each node, it considers every feature and every possible threshold, choosing the split that produces the most homogeneous child nodes.
 
 For regression, "homogeneous" means low variance. The algorithm picks the split that minimizes the total squared error in the two child nodes:
 
@@ -121,7 +125,7 @@ $$\min_{j,\, s} \left[ \sum_{x_i \in R_1(j,s)} (y_i - \bar{y}_1)^2 + \sum_{x_i \
 
 where $R_1(j,s) = \{x : x_j \le s\}$ and $R_2(j,s) = \{x : x_j > s\}$ are the two regions created by splitting feature $j$ at threshold $s$, and $\bar{y}_1, \bar{y}_2$ are the mean outcomes in each region. Each leaf predicts the mean of the training observations that fall into it.
 
-For classification, the criterion is **Gini impurity** instead of squared error. A node is "pure" if every observation in it has the same label. The Gini index $\hat{p}(1 - \hat{p})$ measures how mixed a node is, where $\hat{p}$ is the fraction of observations with label 1. The algorithm greedily picks splits that maximize the total decrease in impurity.
+For classification, the criterion is **Gini impurity** instead of squared error. A node is "pure" if every observation in it has the same label. The Gini index $\hat{p}(1 - \hat{p})$ measures how mixed a node is, where $\hat{p}$ is the fraction of observations with label 1 (for binary classification; generalizes to $1 - \sum_k \hat{p}_k^2$ for multi-class). The algorithm greedily picks splits that maximize the total decrease in impurity.
 
 The process is **recursive**: after the first split creates two child nodes, the algorithm splits each child independently, and so on. The tree grows until a stopping criterion is met — typically a maximum depth or a minimum number of samples per leaf.
 
@@ -133,7 +137,7 @@ print(export_text(tree_viz, feature_names=feature_names, max_depth=3))
 
 ## Overfitting a single tree
 
-A decision tree with no depth limit will keep splitting until every leaf contains a single training observation. The result: perfect training accuracy and terrible generalization. Let's see the damage.
+A decision tree with no depth limit will keep splitting until every leaf contains a single training observation. The result: perfect training accuracy and terrible generalization.
 
 ```{python}
 # Fit trees at increasing depths and track train vs test R²
@@ -167,9 +171,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-The pattern is dramatic. Training R² climbs toward 1.0 as the tree memorizes the data. Test R² peaks at a shallow depth and then deteriorates — the tree learns noise rather than signal.
+Training R² climbs from 0.30 toward 1.00 while test R² peaks around depth 7 and then collapses.
 
-The pattern is the **bias-variance tradeoff** from [Chapter 6](lec06-validation.qmd) in action. A shallow tree has high bias (it underfits — too few splits to capture the real pattern) but low variance (it's stable across different training samples). A deep tree has low bias but high variance — it memorizes the noise in whatever training data it happens to see. The sweet spot balances these two forces. In Chapter 6 we saw this tradeoff with polynomial degree; here the "complexity knob" is tree depth.
+The pattern is the **bias-variance tradeoff** from [Chapter 6](lec06-validation.qmd) in action. A shallow tree has high bias (it underfits — too few splits to capture the real pattern) but low variance (it's stable across different training samples). A deep tree has low bias but high variance — it memorizes the noise in whatever training data it happens to see. The sweet spot balances these two forces. In Chapter 6 we saw this tradeoff with polynomial degree; here the "complexity knob" is tree depth. Extreme shallow trees have very low variance; moderate-depth trees already show meaningful sensitivity to the training set.
 
 Let's visualize the predictions from a shallow and deep tree to see what overfitting looks like.
 
@@ -179,7 +183,7 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
 
 # Create prediction grid: vary bedrooms, hold other features at median
 median_features = X_train.median()
-bedroom_range = np.arange(0, 7, 0.05)
+bedroom_range = np.arange(0, 7, 0.1)
 X_slice = pd.DataFrame(
     np.tile(median_features.values, (len(bedroom_range), 1)),
     columns=X_train.columns
@@ -218,6 +222,8 @@ A deep tree achieves a training R² close to 1.0. Why doesn't that make it a goo
 
 The depth experiment above shows that deeper isn't always better. How do we pick the right depth? The same tool from [Chapter 6](lec06-validation.qmd): **cross-validation**. We fit a decision tree at each candidate depth, score it with 5-fold CV, and pick the depth with the best average test performance.
 
+You might ask: the depth experiment above already showed test R² peaking around depth 7. Why do we need CV? Two reasons. First, a single train/test split is noisy; CV averages over 5 splits for a stabler estimate. Second — more importantly — if you tune the depth by peeking at the test set, the test set is no longer a clean held-out estimate of deployment performance. Cross-validation does the tuning on the training data, keeping the test set untouched for a final honest report.
+
 ```{python}
 depths_cv = [1, 2, 3, 4, 5, 7, 10, 15, 20]
 cv_means = []
@@ -249,12 +255,28 @@ plt.tight_layout()
 plt.show()
 ```
 
-The U-shaped CV curve mirrors the polynomial experiment from [Chapter 6](lec06-validation.qmd): too shallow underfits, too deep overfits, and cross-validation finds the sweet spot. The same framework — different model, same principle.
+The U-shaped CV curve mirrors the polynomial experiment from [Chapter 6](lec06-validation.qmd): too shallow underfits, too deep overfits, and cross-validation finds the sweet spot.
+
+:::{.callout-tip}
+## Same framework, different model
+
+In [Chapter 6](lec06-validation.qmd), you used 5-fold cross-validation to pick the best polynomial degree. Here you just used the same workflow — `cross_val_score` with a 5-fold CV — to pick the best tree depth. **The same framework generalizes to any hyperparameter.** Lasso $\alpha$, polynomial degree, tree depth, number of neighbors, regularization strength — all are picked by the same mechanical procedure: sweep candidate values, score each by CV, take the best.
+:::
 
 :::{.callout-tip}
 ## Think About It
-Compare this CV curve to the polynomial degree CV curve from Chapter 6. Both show a peak followed by decline. What's the "complexity knob" in each case? (For polynomials: the degree. For trees: the depth.)
+Compare this CV curve to the polynomial degree CV curve from Chapter 6. Both show a peak followed by decline. What's the "complexity knob" in each case, and why does test performance decline past the peak?
 :::
+
+Let's refit a tree at the best CV depth and evaluate on the held-out test set for an honest final score.
+
+```{python}
+best_tree = DecisionTreeRegressor(max_depth=best_depth, random_state=42)
+best_tree.fit(X_train, y_train)
+print(f"Tree at CV-best depth={best_depth}: Test R² = {best_tree.score(X_test, y_test):.3f}")
+```
+
+Cross-validation picked the depth without ever touching the test set. The test-set score reported above is an honest estimate of how this tree will perform on new listings.
 
 
 ## Random forests
@@ -275,20 +297,20 @@ print(f"  Decision Tree (depth=4):     {tree_test_r2:.3f}")
 print(f"  Random Forest (100 trees):   {rf_test_r2:.3f}")
 ```
 
-The forest beats the single tree — and we didn't tune any hyperparameters beyond the number of trees.
+The forest beats the single tree — with no hyperparameter tuning beyond the tree count.
 
 
 ### How random forests work: bagging + feature subsampling
 
 A random forest combines two ideas:
 
-1. **Bagging** (bootstrap aggregating): each tree trains on a different bootstrap sample — a random draw (with replacement) from the training data. Each sample is the same size as the original dataset but contains some observations multiple times and omits others.
+1. **Bagging** (bootstrap aggregating): each tree trains on a different bootstrap sample — a random draw (with replacement) from the training data. Each sample is the same size as the original dataset but contains some observations multiple times and omits others. For example, if the original dataset has 3 observations $(A, B, C)$, a bootstrap sample might be $(A, B, B)$ or $(C, C, A)$ — same size, random draws with replacement.
 
 2. **Feature subsampling**: at each split, the tree considers only a random subset of features (typically $\sqrt{p}$ out of $p$ total features). This forces the trees to find different splits, reducing the correlation between trees.
 
 The ensemble prediction is the average of all individual tree predictions (for regression) or majority vote (for classification).
 
-Each individual tree is overfit — it has memorized the noise in its particular bootstrap sample. Averaging works because different trees memorize *different* noise.
+Each individual tree is overfit — it has memorized the noise in its particular bootstrap sample. Different trees memorize *different* noise, so averaging cancels it.
 
 
 ### More trees never hurts
@@ -379,7 +401,7 @@ The core insight of **bagging** (bootstrap aggregating): averaging many overfit 
 
 ## Random forest as benchmark
 
-How does the random forest compare to the hand-engineered linear model from [Chapter 5](lec05-feature-engineering.qmd)? Let's put them head to head.
+How does the random forest compare to the hand-engineered linear model from [Chapter 5](lec05-feature-engineering.qmd)? Compare their test R².
 
 ```{python}
 # Linear model with interactions (same as Chapter 5)
@@ -424,7 +446,7 @@ fig, ax = plt.subplots(figsize=(10, 6))
 colors = ['#2171b5' if v > importances.median() else '#aec7e8' for v in importances_sorted]
 importances_sorted.plot(kind='barh', ax=ax, color=colors, edgecolor='white')
 ax.set_xlabel('Feature importance (mean decrease in impurity)')
-ax.set_title('Random forest feature importance: which variables matter most?')
+ax.set_title('Random forest feature importance')
 plt.tight_layout()
 plt.show()
 ```
@@ -467,6 +489,8 @@ Everything above predicts a continuous number (price). **Classification** predic
 - **Decision trees find splits automatically — no manual feature engineering.** The model examines every feature and every threshold, choosing splits that minimize prediction error. No need for one-hot encoding, polynomial terms, or interaction terms.
 
 - **A single deep tree overfits: perfect training score, poor test score.** With no depth limit, a tree memorizes the training data. The training R² approaches 1 while the test R² deteriorates.
+
+- **Cross-validation picks the best hyperparameter.** Sweep candidate tree depths, score each by 5-fold CV on the training set, and pick the depth with the highest CV R². The same procedure selects polynomial degree, lasso α, and any other complexity knob.
 
 - **Random forests average many overfit trees; the average is stable.** Each tree sees different bootstrap data and different feature subsets. The noise cancels; the signal persists.
 
