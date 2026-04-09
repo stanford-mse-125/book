@@ -15,10 +15,10 @@ book:
         - lec03-munging.qmd
         - lec04-regression.qmd
         - lec05-feature-engineering.qmd
-        - lec06-trees.qmd
+        - lec06-validation.qmd
+        - lec07-trees.qmd
     - part: "Act 2: Trust Models"
       chapters:
-        - lec07-validation.qmd
         - lec08-sampling.qmd
         - lec09-permutation-tests.qmd
         - lec10-hypothesis-testing.qmd
