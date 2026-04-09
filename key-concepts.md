@@ -111,7 +111,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 2 (found the mess), Lec 1 (hospital data)
-- Forward: Lec 7 (missing value handling as feature engineering), Lec 17 (trees handle missing values naturally — a qualitatively different approach)
+- Forward: Lec 5 (missingness indicators as features), Lec 7 (trees handle missing values natively)
 - ORIE 4741: Feature engineering lecture covers informative vs. uninformative missingness
 
 **Surprise moment:** Missing data is unevenly distributed across hospital ownership types — group comparisons are biased
@@ -210,7 +210,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 4 (single-feature version of everything here)
-- Forward: Lec 6 (trees as automatic feature engineering), Lec 7 (validation — train/test R²), Lec 12 (which features are statistically significant?), Lec 18 (when is a coefficient causal?)
+- Forward: Lec 6 (validation — train/test R²), Lec 7 (trees as automatic feature engineering), Lec 12 (which features are statistically significant?), Lec 18 (when is a coefficient causal?)
 - VMLS: Ch 5 (linear independence), Ch 13 (least squares)
 
 **Surprise moment:** The polynomial overfitting parade — R² keeps climbing as you increase degree, but the predictions become nonsensical (negative or wildly inflated prices for 10+ bedrooms). The model with the highest training R² is not the best model.
@@ -658,10 +658,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Distribution shift
 - Naive forecast, seasonal naive, drift
 
-**Prerequisites:** Lec 6 (train/test split, cross-validation, feature engineering)
+**Prerequisites:** Lec 5 (feature engineering), Lec 6 (train/test split, cross-validation)
 
 **Connections:**
-- Backward: Lec 6 (train/test, feature engineering)
+- Backward: Lec 5 (feature engineering), Lec 6 (train/test, cross-validation)
 - Forward: Lec 17 (AutoML limitations with temporal data)
 - FPP3 Ch 5 (the forecasting toolbox — train/test for time series)
 - ORIE 4741: feature_engineering.tex (AR, ARMA, ARIMA, exponential smoothing); train-test-validate.tex ("can't randomly split time series")
