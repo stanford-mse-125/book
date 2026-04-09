@@ -463,59 +463,15 @@ $$\text{span}(v_1, v_2) = \{\beta_1 v_1 + \beta_2 v_2 : \beta_1, \beta_2 \in \ma
 For a linear model $\hat{y} = \beta_0 \mathbf{1} + \beta_1 x$, the span is the set of all possible predictions — every line you could draw through the scatter plot.
 :::
 
-How big is the span? On the bedrooms-vs-price scatter plot, every choice of $(\beta_0, \beta_1)$ traces a different line — and there are infinitely many lines, so it *looks* like the span is huge. That picture misleads. With $n$ listings, the actual prediction vector $\hat{y}$ lives in $\mathbb{R}^n$, which has $n$ dimensions. The span of $\{\mathbf{1}, x\}$ is only a two-dimensional plane inside that vast space — a sliver. The constraint only becomes visible when we look at all $n$ coordinates at once.
-
 ```{python}
 # Fit the least-squares line once; we'll use it as one of the candidates
-# in the next two visualizations.
+# in the two visualizations below.
 model = LinearRegression().fit(df[['bedrooms']], prices)
 b0, b1 = model.intercept_, model.coef_[0]
 print(f"Least-squares fit: ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
 ```
 
-```{python}
-#| code-fold: true
-# Span is only 2D: on the index plot you can see that tuning (β₀, β₁)
-# produces very smooth prediction vectors — nothing like the noisy real prices.
-rng = np.random.default_rng(0)
-sample_idx = rng.choice(len(df), size=200, replace=False)
-beds_sample = df['bedrooms'].values[sample_idx]
-price_sample = prices[sample_idx]
-order = np.argsort(beds_sample)
-beds_sorted_s = beds_sample[order]
-price_sorted_s = price_sample[order]
-
-fig, ax = plt.subplots(figsize=(9, 4.5))
-idx = np.arange(len(beds_sorted_s))
-
-# Real price vector: noisy, zigzags even after sorting
-ax.scatter(idx, price_sorted_s, s=18, color='black', alpha=0.6,
-           label='actual price vector $y$', zorder=3)
-
-# A few candidate prediction vectors from span{1, x}
-candidates_span = [(50, 30, '#e74c3c'),
-                   (150, 30, '#3498db'),
-                   (100, -10, '#8e44ad'),
-                   (round(b0), round(b1), '#2d8a4e')]
-for c0, c1, color in candidates_span:
-    pred = c0 + c1 * beds_sorted_s
-    ax.plot(idx, pred, color=color, lw=2, alpha=0.85,
-            label=f'$\\hat y = {c0:.0f} + {c1:.0f}\\,x$')
-
-ax.set_xlabel('Listing index (sorted by bedrooms)')
-ax.set_ylabel('Price ($)')
-ax.set_title('Only a sliver of $\\mathbb{R}^n$ is reachable: every $\\hat{y}$ '
-             'in span$\\{\\mathbf{1}, x\\}$ is smooth in the bedrooms order')
-ax.legend(fontsize=9, loc='upper left')
-for spine in ['top', 'right']:
-    ax.spines[spine].set_visible(False)
-plt.tight_layout()
-plt.show()
-```
-
-The black dots are a random 200-listing sample of the actual prices, sorted by bedrooms. They zigzag — a 1-bedroom listing can cost anywhere from \$30 to \$400, because bedrooms is not the only thing that determines price. The colored curves are predictions from four points in span$\{\mathbf{1}, x\}$. Each one is forced to be a linear function of the sorted bedrooms: three piecewise-constant steps and nothing more. No matter how we tune $(\beta_0, \beta_1)$, the prediction vector looks like one of those curves. The span is a two-parameter sliver of $\mathbb{R}^n$, not the whole space — most vectors in $\mathbb{R}^n$ cannot be produced at all, no matter how we choose the weights.
-
-Now switch back to the scatter-plot view to ask the complementary question: *among* the lines we can reach, which is the best fit?
+Each $(\beta_0, \beta_1)$ traces a different line on the bedrooms-vs-price scatter plot. The plot below overlays four candidates.
 
 :::{.callout-tip}
 ## Think About It
@@ -549,7 +505,57 @@ plt.tight_layout()
 plt.show()
 ```
 
-The red and blue lines share the same slope but disagree on where the line should start. The purple line slopes the wrong way — more bedrooms should raise the price, not lower it. The green line is the one scikit-learn will find in a moment; for now it is just another candidate. To *decide* between candidates we need a principled criterion — and the right criterion turns out to be geometric.
+The red and blue lines share the same slope but disagree on where the line should start. The purple line slopes the wrong way — more bedrooms should raise the price, not lower it. The green line is the one scikit-learn will find in a moment; for now it is just another candidate.
+
+### How big is the span, really?
+
+The scatter plot above is misleading in one important way. It makes the span *look* enormous: any slope, any intercept, any line you want. Every choice of $(\beta_0, \beta_1)$ gives a new line, and there are infinitely many of them. From this 2D picture, it looks like you can reach anything.
+
+That picture hides the real geometry. The actual prediction vector $\hat{y}$ has one coordinate per listing — it lives in $\mathbb{R}^n$, where $n$ is the number of listings (here, close to 30,000). The span of $\{\mathbf{1}, x\}$ is a two-dimensional plane inside that vast space — a sliver. To see the constraint, switch from the scatter view to the index view, where all $n$ coordinates appear at once.
+
+```{python}
+#| code-fold: true
+# Span is only 2D: on the index plot you can see that tuning (β₀, β₁)
+# produces very smooth prediction vectors — nothing like the noisy real prices.
+rng = np.random.default_rng(0)
+sample_idx = rng.choice(len(df), size=200, replace=False)
+beds_sample = df['bedrooms'].values[sample_idx]
+price_sample = prices[sample_idx]
+order = np.argsort(beds_sample)
+beds_sorted_s = beds_sample[order]
+price_sorted_s = price_sample[order]
+
+fig, ax = plt.subplots(figsize=(9, 4.5))
+idx = np.arange(len(beds_sorted_s))
+
+# Real price vector: noisy, zigzags even after sorting
+ax.scatter(idx, price_sorted_s, s=18, color='black', alpha=0.6,
+           label='actual price vector $y$', zorder=3)
+
+# The same four candidates from the scatter plot above
+candidates_span = [(50, 30, '#e74c3c'),
+                   (150, 30, '#3498db'),
+                   (100, -10, '#8e44ad'),
+                   (round(b0), round(b1), '#2d8a4e')]
+for c0, c1, color in candidates_span:
+    pred = c0 + c1 * beds_sorted_s
+    ax.plot(idx, pred, color=color, lw=2, alpha=0.85,
+            label=f'$\\hat y = {c0:.0f} + {c1:.0f}\\,x$')
+
+ax.set_xlabel('Listing index (sorted by bedrooms)')
+ax.set_ylabel('Price ($)')
+ax.set_title('Only a sliver of $\\mathbb{R}^n$ is reachable: every $\\hat{y}$ '
+             'in span$\\{\\mathbf{1}, x\\}$ is smooth in the bedrooms order')
+ax.legend(fontsize=9, loc='upper left')
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+The black dots are a 200-listing sample of the actual prices, sorted by bedrooms. They zigzag across the plot — a 1-bedroom listing can cost anywhere from \$30 to \$400, because bedrooms is not the only thing that determines price. The colored curves are the *same four candidates* from the scatter plot above, now drawn on the index view. Each one collapses to a piecewise-constant staircase: listings with the same bedroom count get the same prediction, so tuning $(\beta_0, \beta_1)$ only controls the height and slope of the steps. No matter how we choose the weights, the prediction vector cannot zigzag the way the real prices do.
+
+That is the real geometry. The span is a two-parameter sliver of $\mathbb{R}^n$, not the whole space. Most vectors in $\mathbb{R}^n$ cannot be produced at all. Our job is not to reach the true price vector — we cannot — but to find the closest point in the sliver to $y$. To *decide* which candidate is closest we need a principled criterion, and the right criterion turns out to be geometric.
 
 ## The geometric view: projection
 
