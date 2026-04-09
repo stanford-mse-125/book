@@ -126,36 +126,21 @@ plt.tight_layout()
 plt.show()
 ```
 
-## Columns as vectors in $\mathbb{R}^n$
-
-Now flip your perspective. Instead of one listing as a point in feature space, look at one *feature* as a vector across all listings. The price column is a vector in $\mathbb{R}^n$ — one entry per listing. So is the bedrooms column. When two column vectors trend in the same direction, those features carry related information.
-
-The **index plot** below makes the column view concrete. Each dot represents one listing, plotted by its index (horizontal) and feature value (vertical). When two features rise and fall together across listings, they "move together" — a pattern we will soon quantify with the inner product.
+Scaling up from five listings to 28,778, the row view becomes a scatter plot of every listing positioned by two features. The figure below plots price against bedrooms for the full NYC dataset. Each gray dot is one listing; larger apartments drift toward higher prices.
 
 ```{python}
-# Sort listings by price to reveal structure
-sort_idx = np.argsort(toy_price)
-sorted_price = toy_price[sort_idx]
-sorted_beds = bedrooms[sort_idx]
-
-fig, ax = plt.subplots(figsize=(8, 4))
-indices = np.arange(len(toy_price))
-
-ax.plot(indices, sorted_price, 'ko-', ms=8, lw=1.5, label='price ($)', zorder=5)
-ax.plot(indices, sorted_beds * 50, 's-', color='#c44e52', ms=7, lw=1.5,
-        label='bedrooms (×50, for scale)', zorder=4)
-
-ax.set_xlabel('Listing index (sorted by price)')
-ax.set_ylabel('Value')
-ax.set_title('Price and bedrooms move together across listings')
-ax.set_xticks(indices)
-ax.set_xticklabels([f'{i+1}' for i in range(len(indices))])
-ax.legend(fontsize=11)
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.scatter(df['bedrooms'], prices, alpha=0.04, s=10, color='#2d6a9f')
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Price ($/night)')
+ax.set_title(f'NYC Airbnb: price vs. bedrooms ({len(df):,} listings)')
 for spine in ['top', 'right']:
     ax.spines[spine].set_visible(False)
 plt.tight_layout()
 plt.show()
 ```
+
+The upward drift is the pattern a linear model will try to capture. Hold on to the picture — we will return to it repeatedly as the chapter develops.
 
 ## Difference vector and distance
 
@@ -190,11 +175,69 @@ print(f"Difference vector: {diff}")
 print(f"Distance = ||diff|| = sqrt({diff[0]}² + {diff[1]}²) = {dist:.2f}")
 ```
 
+## Columns as vectors in $\mathbb{R}^n$
+
+Now flip your perspective. Instead of one listing as a point in feature space, look at one *feature* as a vector across all listings. The price column is a vector in $\mathbb{R}^n$ — one entry per listing. So is the bedrooms column.
+
+We can't plot these vectors in $\mathbb{R}^n$: any picture we make is in $\mathbb{R}^2$. Instead, an **index plot** can visualize the column space. Each dot represents one listing, plotted by its index (horizontal) and feature value (vertical). The index plot below sorts the five toy listings by price and overlays bedrooms on the same axis.
+
+```{python}
+# Sort listings by price to reveal structure
+sort_idx = np.argsort(toy_price)
+sorted_price = toy_price[sort_idx]
+sorted_beds = bedrooms[sort_idx]
+
+fig, ax = plt.subplots(figsize=(8, 4))
+indices = np.arange(len(toy_price))
+
+ax.plot(indices, sorted_price, 'ko-', ms=8, lw=1.5, label='price ($)', zorder=5)
+ax.plot(indices, sorted_beds * 50, 's-', color='#c44e52', ms=7, lw=1.5,
+        label='bedrooms (×50, for scale)', zorder=4)
+
+ax.set_xlabel('Listing index (sorted by price)')
+ax.set_ylabel('Value')
+ax.set_title('Price and bedrooms rise together across listings')
+ax.set_xticks(indices)
+ax.set_xticklabels([f'{i+1}' for i in range(len(indices))])
+ax.legend(fontsize=11)
+for spine in ['top', 'right']:
+    ax.spines[spine].set_visible(False)
+plt.tight_layout()
+plt.show()
+```
+
+Price and bedrooms rise together: the two columns are **correlated**. Correlation is the word you already know for this pattern, and in this chapter it returns with a geometric meaning. Two correlated columns, viewed as vectors in $\mathbb{R}^n$, point in similar directions. The tool that quantifies "similar direction" is the **inner product**.
+
+:::{.callout-important}
+## Definition: Inner product (dot product)
+
+The **inner product** of two vectors $u, v \in \mathbb{R}^n$ is
+$$u^T v = \sum_{i=1}^n u_i v_i$$
+A positive inner product means the vectors tend to point in the same direction; a negative value means opposite directions; zero means the vectors are **orthogonal** (perpendicular).
+:::
+
+The formula matches the index plot exactly. Multiply price and bedrooms entry by entry, then add. When both vectors are large at the same listings, every product is large and the sum piles up — a big positive inner product signals a shared direction in $\mathbb{R}^n$.
+
+```{python}
+# Inner product between price and bedrooms (on the toy data)
+dot_price_beds = np.dot(toy_price, bedrooms)
+print(f"price · bedrooms = {dot_price_beds}")
+print(f"Both vectors trend upward → large positive inner product")
+```
+
+A two-dimensional example builds the intuition for the sign. Take $u = (1, 0)$ pointing along the x-axis. Then $u \cdot (1, 1) = 1$ (positive — the second vector leans into the same half-plane, an acute angle), $u \cdot (0, 1) = 0$ (zero — straight up, a right angle), and $u \cdot (-1, 0) = -1$ (negative — pointing the opposite way). The sign of the inner product tracks the angle between the vectors.
+
+:::{.callout-important}
+## Definition: Orthogonal
+
+Two vectors $u$ and $v$ are **orthogonal** if $u^T v = 0$. Orthogonal vectors are perpendicular — they share no common direction.
+:::
+
+Correlation and orthogonality are the two endpoints we will use throughout the chapter: correlated columns contribute to prediction, orthogonal residuals signal that no further correlation remains to exploit.
+
 ## The norm measures prediction error
 
-Why define a norm? The norm turns a vector of errors into a single number measuring total prediction quality.
-
-Suppose you predict every listing's price with a single number $\hat{y}$. The **residual** for listing $i$ is $\epsilon_i = y_i - \hat{y}$, and the residual vector $\epsilon = y - \hat{y}\mathbf{1}$ collects all the individual errors. The norm $\|\epsilon\|$ measures total prediction error.
+Suppose you predict every listing's price with a single number $\hat{y}$. The **residual error** for listing $i$ is $\epsilon_i = y_i - \hat{y}$, and the residual vector $\epsilon = y - \hat{y}\mathbf{1}$ collects all the individual errors. The norm $\|\epsilon\|$ measures total prediction error.
 
 The index plot below previews the geometry. Black dots are the actual prices, the green horizontal line is a constant prediction (the mean), and the vertical segments are the residuals.
 
@@ -232,33 +275,46 @@ print(f"||residuals|| = {np.linalg.norm(residuals):.2f}")
 
 Before using any features at all, consider the simplest possible prediction: guess the same number $\hat{y}$ for every listing. What single number should you guess?
 
-The answer depends on how you measure error. Two natural choices are the sum of absolute deviations $\sum_i |y_i - c|$ and the sum of squared errors $\sum_i (y_i - c)^2$.
+The answer depends on how you measure error. Two natural choices are the sum of absolute deviations $\sum_i |y_i - c|$ and the sum of squared errors $\sum_i (y_i - c)^2$. The figure below computes both losses on the full NYC Airbnb price column for a sweep of candidate constants $c$.
 
 ```{python}
-# Compare absolute vs squared error for different guesses
-c_values = np.linspace(50, 300, 200)
-y_vals = toy_price
+# Stacked view: real price distribution on top, then the two loss curves
+# evaluated on the full price column.
+c_values = np.linspace(10, 500, 400)
+abs_errors = np.array([np.sum(np.abs(prices - c)) for c in c_values])
+sq_errors  = np.array([np.sum((prices - c)**2)    for c in c_values])
 
-abs_errors = [np.sum(np.abs(y_vals - c)) for c in c_values]
-sq_errors = [np.sum((y_vals - c)**2) for c in c_values]
+mean_price = prices.mean()
+median_price = np.median(prices)
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
 
-axes[0].plot(c_values, abs_errors, lw=2)
-axes[0].axvline(np.median(y_vals), color='#c44e52', ls='--', lw=1.5,
-                label=f'median = {np.median(y_vals):.0f}')
-axes[0].set_xlabel('Guess $c$')
-axes[0].set_ylabel('Sum of absolute deviations')
-axes[0].set_title('Absolute error → median')
+# Row 1: histogram of real prices with mean and median marked
+axes[0].hist(prices, bins=60, color='#2d6a9f', alpha=0.7, edgecolor='white')
+axes[0].axvline(mean_price, color='#2d8a4e', lw=2.5, ls='--',
+                label=f'mean = {mean_price:.0f}')
+axes[0].axvline(median_price, color='#c44e52', lw=2.5, ls='--',
+                label=f'median = {median_price:.0f}')
+axes[0].set_ylabel('Number of listings')
+axes[0].set_title('NYC Airbnb price distribution')
 axes[0].legend()
 
-axes[1].plot(c_values, sq_errors, lw=2)
-axes[1].axvline(np.mean(y_vals), color='#2d8a4e', ls='--', lw=1.5,
-                label=f'mean = {np.mean(y_vals):.0f}')
-axes[1].set_xlabel('Guess $c$')
-axes[1].set_ylabel('Sum of squared errors')
-axes[1].set_title('Squared error → mean')
+# Row 2: sum of absolute deviations — V-shape, min at the median
+axes[1].plot(c_values, abs_errors, lw=2, color='#c44e52')
+axes[1].axvline(median_price, color='#c44e52', ls='--', lw=1.5,
+                label=f'median = {median_price:.0f}')
+axes[1].set_ylabel('Sum of absolute deviations')
+axes[1].set_title(r'Absolute error $\sum_i |y_i - c|$ is minimized at the median')
 axes[1].legend()
+
+# Row 3: sum of squared errors — parabola, min at the mean
+axes[2].plot(c_values, sq_errors, lw=2, color='#2d8a4e')
+axes[2].axvline(mean_price, color='#2d8a4e', ls='--', lw=1.5,
+                label=f'mean = {mean_price:.0f}')
+axes[2].set_xlabel('Guess $c$ (price in $/night)')
+axes[2].set_ylabel('Sum of squared errors')
+axes[2].set_title(r'Squared error $\sum_i (y_i - c)^2$ is minimized at the mean')
+axes[2].legend()
 
 for ax in axes:
     for spine in ['top', 'right']:
@@ -267,7 +323,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-Minimizing absolute error gives the **median**. Minimizing squared error gives the **mean**.
+Minimizing absolute error gives the **median**. Minimizing squared error gives the **mean**. The shared x-axis makes the alignment visual: the V-shape bottoms out at the median, the parabola bottoms out at the mean, and both picks sit inside the bulk of the distribution above.
 
 :::{.callout-tip}
 ## Think About It
@@ -286,63 +342,8 @@ The optimal constant prediction under squared error is the sample mean $\bar{y}$
 :::{.callout-tip}
 ## Think About It
 
-Try the interactive widget below. Drag the slider to move the predicted value $\hat{y}$ across the histogram. Watch how the mean absolute error and the root-mean-squared error change as you sweep across the price distribution. Which loss function has a sharper minimum — and where does each one bottom out?
+The squared-error curve is a smooth parabola; the absolute-error curve has a sharp V. What does the shape of each curve tell you about sensitivity to small changes in your guess? If you shift $c$ by one dollar near the optimum, which loss punishes you more — absolute or squared?
 :::
-
-```{python}
-# Interactive widget: move ŷ and watch the error change.
-# Static frames render as a fallback when ipywidgets is unavailable
-# (e.g., in the rendered book).
-subset = prices[:2000]
-mean_subset = np.mean(subset)
-median_subset = np.median(subset)
-
-
-def plot_loss(y_hat):
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-
-    # Left: histogram with movable line
-    axes[0].hist(subset, bins=40, edgecolor='white', alpha=0.6, color='#2d6a9f')
-    axes[0].axvline(y_hat, color='#c44e52', lw=2.5, label=f'$\\hat{{y}}$ = {y_hat:.0f}')
-    axes[0].axvline(mean_subset, color='#2d8a4e', lw=1.5, ls='--',
-                    label=f'mean = {mean_subset:.0f}')
-    axes[0].axvline(median_subset, color='#8e44ad', lw=1.5, ls='--',
-                    label=f'median = {median_subset:.0f}')
-    axes[0].set_xlabel('Price ($)')
-    axes[0].set_ylabel('Count')
-    axes[0].set_title('Airbnb price distribution')
-    axes[0].legend(fontsize=9)
-
-    # Right: both errors on a common per-listing dollar scale
-    mae = np.mean(np.abs(subset - y_hat))
-    rmse = np.sqrt(np.mean((subset - y_hat)**2))
-    axes[1].bar(['Mean |y − ŷ|\n(MAE)', 'RMSE\n√mean (y − ŷ)²'],
-                [mae, rmse],
-                color=['#8e44ad', '#2d8a4e'], alpha=0.7)
-    axes[1].set_ylabel('Error per listing ($)')
-    axes[1].set_ylim(0, 200)
-    axes[1].set_title(f'MAE: ${mae:.0f}   |   RMSE: ${rmse:.0f}')
-
-    for ax in axes:
-        for spine in ['top', 'right']:
-            ax.spines[spine].set_visible(False)
-    plt.tight_layout()
-    plt.show()
-
-
-try:
-    from ipywidgets import interact, FloatSlider
-    interact(plot_loss,
-             y_hat=FloatSlider(min=50, max=400, step=5, value=164,
-                               description='ŷ ($):',
-                               style={'description_width': 'initial'}))
-except ImportError:
-    print("ipywidgets not available — showing four static frames instead.")
-    print("Watch how MAE and RMSE change as ŷ sweeps across the distribution.\n")
-    for y_hat in [100, int(round(median_subset)), int(round(mean_subset)), 250]:
-        plot_loss(y_hat)
-    print("The mean minimizes RMSE; the median minimizes MAE.")
-```
 
 ## Notation
 
@@ -412,37 +413,49 @@ where $x_i$ is the number of bedrooms for listing $i$. The prediction $\hat{y}$ 
 A **linear combination** of vectors $v_1, v_2$ is any expression $\beta_1 v_1 + \beta_2 v_2$, where $\beta_1, \beta_2$ are scalars (plain numbers). The prediction $\hat{y} = \beta_0 \mathbf{1} + \beta_1 x$ is a linear combination of two column vectors.
 :::
 
-The index plot below shows how a linear combination mixes the two ingredient vectors. The flat green line is $\mathbf{1}$ (the intercept term), the red curve is the bedrooms column, and the blue curve is their weighted sum — the prediction.
+To see the linear combination on real data, sort the listings by bedrooms. The bedrooms vector becomes monotonically increasing — a staircase rising from studios to 5-bedroom apartments — and $\hat{y} = \beta_0 + \beta_1 x$ becomes a rising staircase on top of the constant prediction $\bar{y}$.
 
 ```{python}
-# Show linear combination on the index plot
-n_toy = len(toy_price)
-idx = np.arange(n_toy)
-beta0_demo, beta1_demo = 70, 50
+# Fit the simple regression up front so we can reuse the coefficients
+# in the linear-combination plot and the candidate-line plot below.
+model = LinearRegression()
+model.fit(df[['bedrooms']], prices)
+b0, b1 = model.intercept_, model.coef_[0]
+print(f"Fitted model: ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
+```
 
-ones_vec = np.ones(n_toy)
-pred_demo = beta0_demo * ones_vec + beta1_demo * bedrooms
+```{python}
+# Sort the full dataset by bedrooms so the bedrooms vector rises monotonically.
+# Subsample for visual clarity (28k dots on top of each other hide the structure).
+rng = np.random.default_rng(0)
+sample_idx = rng.choice(len(df), size=2000, replace=False)
+sample = df.iloc[sample_idx].sort_values('bedrooms').reset_index(drop=True)
 
-fig, ax = plt.subplots(figsize=(8, 4))
-ax.plot(idx, beta0_demo * ones_vec, '--', color='#2d8a4e', lw=2,
-        label=f'$\\beta_0 \\cdot \\mathbf{{1}}$ = {beta0_demo}')
-ax.plot(idx, beta1_demo * bedrooms, 's--', color='#c44e52', lw=1.5, ms=6,
-        label=f'$\\beta_1 \\cdot x$ = {beta1_demo} × bedrooms')
-ax.plot(idx, pred_demo, 'o-', color='#2d6a9f', lw=2, ms=7,
-        label=f'$\\hat{{y}}$ = {beta0_demo} + {beta1_demo} × bedrooms')
-ax.scatter(idx, toy_price, color='black', s=50, zorder=10, label='actual price $y$')
+idx_plot = np.arange(len(sample))
+beds_sorted = sample['bedrooms'].values
+price_sorted = sample['price'].values
+pred_linear = b0 + b1 * beds_sorted
+y_bar_sample = prices.mean()
 
-ax.set_xlabel('Listing index')
-ax.set_ylabel('Value')
-ax.set_title('Prediction is a linear combination of 1 and bedrooms')
-ax.set_xticks(idx)
-ax.set_xticklabels([f'{i+1}' for i in range(n_toy)])
+fig, ax = plt.subplots(figsize=(9, 4.5))
+ax.scatter(idx_plot, price_sorted, color='#aaaaaa', s=8, alpha=0.45,
+           label='actual price $y$ (sample of 2,000)')
+ax.axhline(y_bar_sample, color='#2d8a4e', lw=2, ls='--',
+           label=f'constant $\\bar{{y}}$ = {y_bar_sample:.0f}')
+ax.plot(idx_plot, pred_linear, color='#2d6a9f', lw=2.5,
+        label=f'$\\hat{{y}} = {b0:.0f} + {b1:.0f} \\cdot$ bedrooms')
+
+ax.set_xlabel('Listing index (sorted by bedrooms)')
+ax.set_ylabel('Price ($/night)')
+ax.set_title('Prediction varies with bedrooms')
 ax.legend(fontsize=10, loc='upper left')
 for spine in ['top', 'right']:
     ax.spines[spine].set_visible(False)
 plt.tight_layout()
 plt.show()
 ```
+
+The flat green dashes are the constant prediction $\beta_0 \mathbf{1} = \bar{y}$ the previous section settled on. The blue staircase is the linear prediction: it matches the constant at 0 bedrooms and climbs as the bedroom count grows. The linear model absorbs the rising trend the constant could not.
 
 ## The span: all reachable predictions
 
@@ -456,12 +469,12 @@ $$\text{span}(v_1, v_2) = \{\beta_1 v_1 + \beta_2 v_2 : \beta_1, \beta_2 \in \ma
 For a linear model $\hat{y} = \beta_0 \mathbf{1} + \beta_1 x$, the span is the set of all possible predictions — every line you could draw through the scatter plot.
 :::
 
-Each $(\beta_0, \beta_1)$ traces out a different line on the scatter plot. Before we peek at the picture, take a second to predict.
+Each $(\beta_0, \beta_1)$ traces out a different line on the scatter plot. The plot below overlays four candidates on the price-vs-bedrooms scatter.
 
 :::{.callout-tip}
 ## Think About It
 
-The plot below will show four candidate lines drawn through the bedrooms-vs-price scatter. Before you look, commit to an answer: which line do you expect to look best, and what criterion are you implicitly using to judge? "Passes through the middle of the cloud" is a starting point — try to make the criterion precise enough that you could compute it.
+Look at the four candidate lines below. Which one do you think minimizes the total squared error — and what criterion is your eye implicitly using to decide? "Passes through the middle of the cloud" is a starting point; try to make the criterion precise enough that you could compute it.
 :::
 
 ```{python}
@@ -469,13 +482,15 @@ fig, ax = plt.subplots(figsize=(8, 5))
 ax.scatter(df['bedrooms'], prices, alpha=0.04, s=10, color='#cccccc')
 
 x_line = np.linspace(0, 6, 100)
-candidates = [(80, 20, '#e74c3c', 'steep: ŷ = 80 + 20x'),
-              (120, 30, '#3498db', 'steeper: ŷ = 120 + 30x'),
-              (180, -10, '#8e44ad', 'downward: ŷ = 180 − 10x'),
-              (100, 40, '#2d8a4e', 'just right?')]
+candidates = [
+    (50,   30, '#e74c3c', f'low intercept: ŷ = 50 + 30x'),
+    (150,  30, '#3498db', f'high intercept: ŷ = 150 + 30x'),
+    (100, -10, '#8e44ad', f'wrong sign: ŷ = 100 − 10x'),
+    (b0,   b1, '#2d8a4e', f'least squares: ŷ = {b0:.0f} + {b1:.0f}x'),
+]
 
-for b0, b1, color, label in candidates:
-    ax.plot(x_line, b0 + b1 * x_line, lw=2, color=color, label=label, alpha=0.8)
+for c0, c1, color, label in candidates:
+    ax.plot(x_line, c0 + c1 * x_line, lw=2, color=color, label=label, alpha=0.85)
 
 ax.set_xlabel('Bedrooms')
 ax.set_ylabel('Price ($/night)')
@@ -488,7 +503,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-None of the candidates look obviously right. The red and blue lines are too steep at the low end; the purple line slopes the wrong way; the green line is closer but still arbitrary. To pick the best line we need a principled criterion — and the right criterion turns out to be geometric.
+The red and blue lines share the same slope but disagree on where the line should start. The purple line slopes the wrong way — more bedrooms should raise the price, not lower it. The green line is the one scikit-learn will find in a moment; for now it is just another candidate. To *decide* between candidates we need a principled criterion — and the right criterion turns out to be geometric.
 
 ## The geometric view: projection
 
@@ -553,36 +568,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The dashed line (the residual) meets the plane at a right angle. That perpendicularity is not a coincidence — it is the defining property of the least squares solution.
-
-## The inner product
-
-To make "perpendicular" precise, we need a way to measure the angle between two vectors. The **inner product** (or **dot product**) does exactly that.
-
-:::{.callout-important}
-## Definition: Inner product (dot product)
-
-The **inner product** of two vectors $u, v \in \mathbb{R}^n$ is
-$$u^T v = \sum_{i=1}^n u_i v_i$$
-A positive inner product means the vectors tend to point in the same direction; a negative value means opposite directions; zero means the vectors are **orthogonal** (perpendicular).
-:::
-
-A two-dimensional example builds the intuition. Take $u = (1, 0)$ pointing along the x-axis. Then $u \cdot (1, 1) = 1$ (positive — the second vector leans into the same half-plane, an acute angle), $u \cdot (0, 1) = 0$ (zero — straight up, a right angle), and $u \cdot (-1, 0) = -1$ (negative — pointing the opposite way). The sign of the inner product tracks the angle between the vectors.
-
-Recall the index plot: price and bedrooms both increase for larger listings. That shared upward trend means their inner product is large and positive — they "point" in a similar direction in $\mathbb{R}^n$.
-
-```{python}
-# Inner product between price and bedrooms (on the toy data)
-dot_price_beds = np.dot(toy_price, bedrooms)
-print(f"price · bedrooms = {dot_price_beds}")
-print(f"Both vectors trend upward → large positive inner product")
-```
-
-:::{.callout-important}
-## Definition: Orthogonal
-
-Two vectors $u$ and $v$ are **orthogonal** if $u^T v = 0$. Orthogonal vectors are perpendicular — they share no common direction.
-:::
+The dashed line (the residual) meets the plane at a right angle. We already have the tool to make "right angle" precise: the inner product. The residual is orthogonal to every vector in the plane, meaning $u^T \epsilon = 0$ for every $u \in \text{span}\{\mathbf{1}, x\}$. That single condition determines the best line.
 
 ## Orthogonality = best fit
 
@@ -608,14 +594,9 @@ The **projection** of a vector $y$ onto a subspace is the closest point in that 
 
 ## Simple regression on Airbnb data
 
-Let's fit a simple regression on the full Airbnb dataset. We create a `LinearRegression()` object from scikit-learn, call `.fit()` to find the best coefficients, and `.predict()` to generate predictions. The fitted model stores the slope in `.coef_` and the intercept in `.intercept_`.
+We already fit the simple regression above — `model` was created with scikit-learn's `LinearRegression()`, `.fit()` found the best coefficients, and `.coef_` and `.intercept_` store the slope and intercept. Print the coefficients alongside $R^2$ and draw the fitted line on the original scatter:
 
 ```{python}
-# Fit simple regression: price ~ bedrooms
-model = LinearRegression()
-model.fit(df[['bedrooms']], prices)
-
-b0, b1 = model.intercept_, model.coef_[0]
 print(f"ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
 print(f"R² = {model.score(df[['bedrooms']], prices):.3f}")
 ```

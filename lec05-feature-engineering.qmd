@@ -318,7 +318,43 @@ The negative reviews coefficient is a textbook confounding trap. Demand drives b
 
 Every model we've fit so far is $\hat{y} = X\beta$ — linear in the parameters $\beta$. The features $X$ can be anything: raw columns, squared columns, products of columns, or columns derived from text. The regression machinery doesn't change; only the inputs do.
 
-This fact is the mantra of feature engineering: **"linear in parameters, not in features."** As George Box put it: "All models are wrong, but some are useful." Feature engineering makes linear models more useful by expanding what "linear" can express.
+The mantra of feature engineering captures the point: **"linear in parameters, not in features."** As George Box put it: "All models are wrong, but some are useful." Feature engineering makes linear models more useful by expanding what "linear" can express.
+
+Part 3 works through four moves, from simple to elaborate. We start with missing values — a one-column trick that turns an awkward data-cleaning problem into a feature. Then polynomials let the slope bend. Interactions let the slope depend on another variable. And in the next section, log transforms reshape the response itself.
+
+## Missing values as features
+
+A missing review score is not just an annoyance — it carries information. New listings have no reviews. If newer listings tend to price differently, a missingness indicator gives the model access to that signal.
+
+```{python}
+# Create a missingness indicator for review scores
+df['review_missing'] = df['review_scores_rating'].isna().astype(int)
+n_missing = df['review_missing'].sum()
+print(f"Listings with missing review score: {n_missing:,} ({100*n_missing/len(df):.0f}%)")
+print()
+
+# Average price by missingness
+print("Average price:")
+print(df.groupby('review_missing')['price'].mean().round(0))
+```
+
+The approach: impute the missing numeric value (with the median, so outliers don't distort the fill) and add a binary column indicating which rows were imputed. The model can then learn whether "missing" predicts a different price from any observed score.
+
+```{python}
+# Impute + indicator
+median_score = df['review_scores_rating'].median()
+df['review_score_imputed'] = df['review_scores_rating'].fillna(median_score)
+
+print(f"Median review score (used for imputation): {median_score}")
+print(f"\nSample rows:")
+print(df[['review_scores_rating', 'review_score_imputed', 'review_missing']].head(10))
+```
+
+:::{.callout-warning}
+## Don't impute blindly
+
+Imputation replaces missing values with plausible substitutes. Without a missingness indicator, the model cannot distinguish real values from imputed ones. Always pair imputation with an indicator column when missingness might carry information — that is, when the data is MAR or MNAR (see [Chapter 3](lec03-munging.qmd)).
+:::
 
 ## Polynomial features
 
@@ -326,7 +362,7 @@ Does price increase at the same rate per bedroom, or does the relationship flatt
 
 $$\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$$
 
-This equation is nonlinear in $x$ but linear in $(\beta_0, \beta_1, \beta_2)$. The function `PolynomialFeatures` from scikit-learn generates these columns.
+The equation is nonlinear in $x$ but linear in $(\beta_0, \beta_1, \beta_2)$. The function `PolynomialFeatures` from scikit-learn generates these columns.
 
 ```{python}
 X_bedrooms = df[['bedrooms']]
@@ -348,7 +384,7 @@ The degree-2 model captures a gentle price plateau at higher bedroom counts. But
 Let's fit polynomials from degree 1 through 10 and see what each predicts for listings with many bedrooms.
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
 max_obs = float(df['bedrooms'].max())
 
 # Left: polynomial fits extrapolated
@@ -447,7 +483,7 @@ The coefficient $\beta_3$ captures how much *more* (or less) a bedroom is worth 
 
 ```{python}
 # Regression lines by borough: with and without interactions
-fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 4), sharey=True)
 palette = sns.color_palette('Set2', n_colors=df['borough'].nunique())
 
 for ax, title, use_interaction in [
@@ -509,48 +545,16 @@ print(slope_table.to_string(index=False))
 
 An extra bedroom in Manhattan is associated with a substantially larger price increase than the same bedroom in the Bronx. A model without interaction terms hides this heterogeneity inside a single pooled coefficient.
 
-## Missing values as features
-
-A missing review score is not just an annoyance — it carries information. New listings have no reviews. If newer listings tend to price differently, a missingness indicator gives the model access to that signal.
-
-```{python}
-# Create a missingness indicator for review scores
-df['review_missing'] = df['review_scores_rating'].isna().astype(int)
-n_missing = df['review_missing'].sum()
-print(f"Listings with missing review score: {n_missing:,} ({100*n_missing/len(df):.0f}%)")
-print()
-
-# Average price by missingness
-print("Average price:")
-print(df.groupby('review_missing')['price'].mean().round(0))
-```
-
-The approach: impute the missing numeric value (with the median, so outliers don't distort the fill) and add a binary column indicating which rows were imputed. The model can then learn whether "missing" predicts a different price from any observed score.
-
-```{python}
-# Impute + indicator
-median_score = df['review_scores_rating'].median()
-df['review_score_imputed'] = df['review_scores_rating'].fillna(median_score)
-
-print(f"Median review score (used for imputation): {median_score}")
-print(f"\nSample rows:")
-print(df[['review_scores_rating', 'review_score_imputed', 'review_missing']].head(10))
-```
-
-:::{.callout-warning}
-## Don't impute blindly
-
-Imputation replaces missing values with plausible substitutes. Without a missingness indicator, the model cannot distinguish real values from imputed ones. Always pair imputation with an indicator column when missingness might carry information — that is, when the data is MAR or MNAR (see [Chapter 3](lec03-munging.qmd)).
-:::
-
 # Log transforms: transforming y
 
-## The extrapolation problem
+## From additive to multiplicative
 
-Our linear model says each bedroom adds a fixed dollar amount to the price. Going from 1 to 2 bedrooms adds the same amount as going from 7 to 8 bedrooms. But \$49 is a large fraction of a \$120 studio and a small fraction of a \$400 luxury apartment. Prices grow **multiplicatively**, not additively.
+The polynomial parade tried to capture curvature by piling on higher-order terms — and extrapolated into absurdity. The problem was the model's additive structure: each new term adds a correction, and nothing in the math keeps predictions positive or prevents them from swinging below zero.
+
+A log transform attacks the same curvature from a different angle. Instead of letting $X$ grow into more columns, it reshapes $y$. The linear model then says each bedroom adds a fixed dollar amount to the price — going from 1 to 2 bedrooms adds the same amount as going from 7 to 8. But \$49 is a large fraction of a \$120 studio and a small fraction of a \$400 luxury apartment. Prices grow **multiplicatively**, not additively, and taking logs turns multiplicative growth into the additive structure linear regression assumes.
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
 
 # Left: price vs bedrooms (original scale)
 ax = axes[0]
@@ -668,7 +672,7 @@ print(f"Correlation between bedrooms and bathrooms:  {corr_bath:.3f}")
 ```
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(11, 4.8),
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.2),
                          gridspec_kw={'width_ratios': [1.15, 1]})
 
 # Left: 2D histogram
@@ -728,7 +732,7 @@ for name, coef in zip(X_with_beds.columns, m_with.coef_):
 print(f"  R² = {m_with.score(X_with_beds, y_mc):.4f}")
 ```
 
-Adding beds barely changes $R^2$ — the redundant feature contributes little new information. The coefficient on bedrooms may shift noticeably as the model redistributes explanatory power between the two correlated features.
+Watch what happens to the coefficients. Without beds, bedrooms gets about \$46 and bathrooms about \$12. Once beds enters, bedrooms drops to roughly \$20, bathrooms drops to about \$5, and beds picks up around \$29. $R^2$ improves, but the bedrooms coefficient has been cut by more than half — the model is redistributing credit among correlated features, and the individual numbers have lost their stable meaning. Predictions remain serviceable; interpretations do not.
 
 ## Residual diagnostics
 
@@ -738,7 +742,7 @@ The normal equations guarantee $X^T \epsilon = 0$ — no linear pattern remains 
 y_hat_full = model_full.predict(X_full)
 residuals_full = prices.values - y_hat_full
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
 
 # Residuals vs fitted
 axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
@@ -773,7 +777,7 @@ The log transform often helps: by compressing the right tail of the price distri
 
 ```{python}
 # Compare residual plots: level vs log
-fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
 
 # Level model
 axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
