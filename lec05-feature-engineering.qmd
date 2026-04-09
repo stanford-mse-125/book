@@ -31,7 +31,7 @@ An Airbnb host is considering adding a second bathroom to their listing. How muc
 
 Today we add bathrooms, then room type, then neighborhood. Along the way we discover that naively adding features can mislead: the coefficient on bedrooms shifts once bathrooms enter the model, and the coefficient on number of reviews turns out negative in a way no host should take at face value. We finish with **feature engineering** — polynomials, interactions, log transforms, and missingness indicators — which turns linear regression into a surprisingly expressive tool.
 
-The roadmap: add numeric features (bathrooms), then categorical features (room type via one-hot encoding), then engineered features (polynomials, interactions, log transforms). At each step the model stays $\hat{y} = X\beta$; we just expand the columns of $X$.
+The roadmap: add numeric features (bathrooms), then categorical features (room type via one-hot encoding), then engineered features (polynomials, interactions, log transforms). At each step the model stays linear; we just expand the set of features.
 
 ## The data
 
@@ -40,7 +40,7 @@ listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 
 cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'beds',
         'room_type', 'neighbourhood_group_cleansed', 'accommodates',
-        'number_of_reviews', 'review_scores_rating']
+        'number_of_reviews', 'cleaning_fee']
 df = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
@@ -74,11 +74,25 @@ print(f"Multiple regression: price = {model_two.intercept_:.0f} + {model_two.coe
 print(f"  R² = {model_two.score(df[['bedrooms', 'bathrooms']], prices):.3f}")
 ```
 
-Adding bathrooms improves $R^2$. The intercept and the bedrooms coefficient both changed — we'll return to why shortly. First, a geometric reading of why $R^2$ went up at all.
+Adding bathrooms improves $R^2$. The intercept and the bedrooms coefficient both changed — we'll return to why shortly. First we need a compact way to talk about "the features" as a single object, and then a geometric reading of why $R^2$ went up at all.
+
+## The feature matrix
+
+Chapter 4 worked with one feature at a time — a single column vector $x$ of bedrooms, paired with the column of ones for the intercept. Multiple regression wants many features, and writing them out one at a time gets unwieldy. Stack them into a matrix instead.
+
+:::{.callout-important}
+## Definition: Feature matrix
+
+With $p$ features measured on $n$ listings, stack the feature vectors as columns of an $n \times p$ **feature matrix** $X$. Each *row* of $X$ is one listing's features; each *column* is one feature across all listings. A linear model with this matrix is
+$$\hat{y} = X\beta,$$
+where $\beta \in \mathbb{R}^p$ is a vector of coefficients, one per column of $X$. By convention we include a column of ones in $X$ so that $\beta_0$ (the intercept) sits alongside the other coefficients.
+:::
+
+For the two-feature model above, $X$ has three columns: the all-ones column, `bedrooms`, and `bathrooms`. The prediction for listing $i$ is the inner product of row $i$ of $X$ with $\beta$ — the same "sum of feature times coefficient" we wrote out in Chapter 4, now packaged so the whole dataset's predictions are produced at once by the matrix–vector product $X\beta$.
 
 ## Column space
 
-$R^2$ improved because bathrooms added information bedrooms alone missed. Geometrically, we think of the improvement as an expansion of the **column space** — the set of predictions the model can reach. Every prediction $\hat{y} = X\beta$ is a linear combination of the columns of $X$, so adding a feature is the same as adding a new direction the prediction vector can move in.
+$R^2$ improved because bathrooms added information bedrooms alone missed. Geometrically, we think of the improvement as an expansion of the **column space** — the set of predictions the model can reach. Every prediction $\hat{y} = X\beta$ is a linear combination of the columns of $X$, so adding a feature is the same as adding a new direction the prediction vector can move in. Chapter 4 called the set of reachable predictions the **span** of the feature vectors; the column space is the same idea, now expressed as the span of the columns of $X$.
 
 In Chapter 4, with one feature plus an intercept, the column space was a 2D plane inside $\mathbb{R}^n$ (all possible lines through the data). Adding bathrooms as a third column expands the column space to three dimensions — a richer set of possible predictions, and a larger space for $y$ to project onto.
 
@@ -195,7 +209,7 @@ room_dummies = pd.get_dummies(df['room_type'], prefix='room_type')
 room_dummies.head()
 ```
 
-There is a subtlety. The three dummy columns sum to 1 for every row — which is the same as the intercept column we already include. Including all three makes the columns linearly dependent: the column space doesn't grow, but the normal equations become unsolvable ($X^TX$ is singular). The fix: drop one category, called the **reference level**.
+There is a subtlety. The three dummy columns sum to 1 for every row — exactly the all-ones column $\mathbf{1}$ that the intercept already contributes. Adding the three dummies together reproduces a column that is already in $X$, so the extra column is *linearly dependent* on the existing columns. Recall from Chapter 4 that the span is the set of all reachable predictions; the column space is the span of $X$'s columns. Adding a linearly dependent column doesn't grow the span at all — it just creates a collinearity, and the normal equations become unsolvable ($X^TX$ is singular). The fix: drop one category, called the **reference level**, so the remaining dummy columns are linearly independent of the intercept.
 
 :::{.callout-important}
 ## Definition: Reference level
@@ -285,7 +299,7 @@ plt.show()
 
 ## The reviews puzzle
 
-What happens when we add `number_of_reviews` to the model?
+What happens when we add `number_of_reviews` to the model? Before looking at the coefficient, compare $R^2$ with and without the new feature.
 
 ```{python}
 # Add number of reviews
@@ -297,14 +311,24 @@ X_reviews = pd.concat([
 y_reviews = df_reviews['price']
 
 model_reviews = LinearRegression().fit(X_reviews, y_reviews)
+r2_reviews = model_reviews.score(X_reviews, y_reviews)
 
+print(f"Without reviews: R² = {r2_full:.4f}")
+print(f"With reviews:    R² = {r2_reviews:.4f}")
+print(f"Improvement:     {r2_reviews - r2_full:+.5f}")
+```
+
+The R² is essentially identical to four decimal places — adding reviews buys us nothing in predictive accuracy. Now the coefficient:
+
+```{python}
 print("Coefficients with reviews included:")
 for name, coef in zip(X_reviews.columns, model_reviews.coef_):
     print(f"  {name:30s}  {coef:+.2f}")
-print(f"\nR² = {model_reviews.score(X_reviews, y_reviews):.3f}")
 ```
 
 The coefficient on `number_of_reviews` is *negative*. Taken at face value, more reviews are associated with lower prices. That reading is tempting and wrong. Reviews and price are both downstream of demand: cheaper listings get booked more often, so they accumulate more reviews over time. The regression sees the statistical association but has no window into the underlying mechanism. An analyst who stops at the coefficient — or worse, recommends a host strategy based on it — has confused association with causation.
+
+A second reason to ignore the coefficient: the feature isn't earning its place in the model. It doesn't meaningfully improve predictions, *and* its sign is confounded. A feature that carries neither predictive nor causal weight has no business influencing decisions.
 
 :::{.callout-tip}
 ## Think About It
@@ -318,37 +342,70 @@ The negative reviews coefficient is a textbook confounding trap. Demand drives b
 
 Every model we've fit so far is $\hat{y} = X\beta$ — linear in the parameters $\beta$. The features $X$ can be anything: raw columns, squared columns, products of columns, or columns derived from text. The regression machinery doesn't change; only the inputs do.
 
-The mantra of feature engineering captures the point: **"linear in parameters, not in features."** As George Box put it: "All models are wrong, but some are useful." Feature engineering makes linear models more useful by expanding what "linear" can express.
+The mantra of feature engineering captures the point: **"linear in parameters, not in features."** The regression fits a straight-line combination of whatever columns you hand it, so the creative work happens *before* the fit — in the choice of which columns to build. A well-chosen transformation of the raw data lets a linear model capture curvature, heterogeneity, and scale in ways its mechanical simplicity would otherwise rule out.
 
 Part 3 works through four moves, from simple to elaborate. We start with missing values — a one-column trick that turns an awkward data-cleaning problem into a feature. Then polynomials let the slope bend. Interactions let the slope depend on another variable. And in the next section, log transforms reshape the response itself.
 
 ## Missing values as features
 
-A missing review score is not just an annoyance — it carries information. New listings have no reviews. If newer listings tend to price differently, a missingness indicator gives the model access to that signal.
+A missing `cleaning_fee` is not just an annoyance — it carries information. A host who leaves the cleaning fee blank is often a casual operator, a budget listing, or someone who absorbs cleaning into the nightly rate. The missingness itself is a signal about the listing, and we'd like the model to see it.
 
 ```{python}
-# Create a missingness indicator for review scores
-df['review_missing'] = df['review_scores_rating'].isna().astype(int)
-n_missing = df['review_missing'].sum()
-print(f"Listings with missing review score: {n_missing:,} ({100*n_missing/len(df):.0f}%)")
+# cleaning_fee is stored as a numeric dollar amount (already parsed);
+# roughly one in five listings leaves it blank.
+n_missing_fee = df['cleaning_fee'].isna().sum()
+pct_missing_fee = 100 * n_missing_fee / len(df)
+print(f"Listings with missing cleaning fee: {n_missing_fee:,} ({pct_missing_fee:.1f}%)")
 print()
 
-# Average price by missingness
-print("Average price:")
-print(df.groupby('review_missing')['price'].mean().round(0))
+# Median price split by whether the fee is present
+median_missing = df[df['cleaning_fee'].isna()]['price'].median()
+median_present = df[df['cleaning_fee'].notna()]['price'].median()
+print(f"Median price when cleaning fee is missing: ${median_missing:.0f}")
+print(f"Median price when cleaning fee is present: ${median_present:.0f}")
 ```
 
-The approach: impute the missing numeric value (with the median, so outliers don't distort the fill) and add a binary column indicating which rows were imputed. The model can then learn whether "missing" predicts a different price from any observed score.
+Listings with a missing cleaning fee are noticeably cheaper on average — the missingness isn't random noise, it's tracking something real about the listing. The approach: impute the missing numeric value, then add a binary `fee_missing` column. The model can then learn whether "missing" predicts a different price from any observed fee.
+
+For least squares, the **mean** is the right value to impute. Replacing a missing cell with the mean minimizes the squared-error contribution of that cell on average, which is exactly the loss the regression is trying to reduce.
 
 ```{python}
-# Impute + indicator
-median_score = df['review_scores_rating'].median()
-df['review_score_imputed'] = df['review_scores_rating'].fillna(median_score)
+# Impute the cleaning fee with its mean and record which rows were filled in
+mean_fee = df['cleaning_fee'].mean()
+df['cleaning_fee_imputed'] = df['cleaning_fee'].fillna(mean_fee)
+df['fee_missing'] = df['cleaning_fee'].isna().astype(int)
 
-print(f"Median review score (used for imputation): {median_score}")
+print(f"Mean cleaning fee (used for imputation): ${mean_fee:.2f}")
 print(f"\nSample rows:")
-print(df[['review_scores_rating', 'review_score_imputed', 'review_missing']].head(10))
+print(df[['cleaning_fee', 'cleaning_fee_imputed', 'fee_missing']].head(10))
 ```
+
+Does the indicator carry its own weight, beyond the imputed value? Fit three models and compare.
+
+```{python}
+# Baseline: the full model without any cleaning-fee information
+X_base = X_full
+m_base = LinearRegression().fit(X_base, prices)
+r2_base = m_base.score(X_base, prices)
+
+# Add the imputed fee by itself
+X_fee = pd.concat([X_full, df[['cleaning_fee_imputed']]], axis=1).astype(float)
+m_fee = LinearRegression().fit(X_fee, prices)
+r2_fee = m_fee.score(X_fee, prices)
+
+# Add the imputed fee and the missingness indicator
+X_fee_ind = pd.concat([X_full, df[['cleaning_fee_imputed', 'fee_missing']]], axis=1).astype(float)
+m_fee_ind = LinearRegression().fit(X_fee_ind, prices)
+r2_fee_ind = m_fee_ind.score(X_fee_ind, prices)
+
+print(f"Baseline (no fee):            R² = {r2_base:.4f}")
+print(f"+ imputed cleaning fee:       R² = {r2_fee:.4f}")
+print(f"+ imputed fee + fee_missing:  R² = {r2_fee_ind:.4f}")
+print()
+print(f"fee_missing coefficient: ${m_fee_ind.coef_[-1]:+.2f}")
+```
+
+The imputed fee pushes $R^2$ up sharply — the fee itself is a strong price signal. Adding the `fee_missing` indicator contributes a smaller additional bump, and the indicator's coefficient is negative: even after accounting for the imputed fee, listings that left it blank are associated with lower prices. The model has learned something from the *pattern* of missingness that raw imputation alone can't capture.
 
 :::{.callout-warning}
 ## Don't impute blindly
@@ -381,9 +438,10 @@ The degree-2 model captures a gentle price plateau at higher bedroom counts. But
 
 ## The polynomial overfitting parade
 
-Let's fit polynomials from degree 1 through 10 and see what each predicts for listings with many bedrooms.
+Let's fit polynomials from degree 1 through 6 and see what each predicts across the range of observed listings.
 
 ```{python}
+MAX_DEGREE = 6
 fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
 max_obs = float(df['bedrooms'].max())
 
@@ -395,64 +453,65 @@ x_extrap = np.linspace(0, 10, 300).reshape(-1, 1)
 # Shade the region beyond the observed bedroom counts
 ax.axvspan(max_obs, 10, alpha=0.15, color='red', label='Extrapolation region')
 
-colors_poly = plt.cm.viridis(np.linspace(0, 0.9, 10))
+colors_poly = plt.cm.viridis(np.linspace(0, 0.9, MAX_DEGREE))
 r2_list = []
-degree10_pred = None
+top_degree_pred = None
 
-for degree in range(1, 11):
+for degree in range(1, MAX_DEGREE + 1):
     poly = PolynomialFeatures(degree=degree, include_bias=False)
     X_p = poly.fit_transform(X_bedrooms)
     m = LinearRegression().fit(X_p, prices)
     r2_list.append(m.score(X_p, prices))
     pred = m.predict(poly.transform(x_extrap))
-    if degree == 10:
-        degree10_pred = pred
-    if degree in [1, 2, 5, 10]:
+    if degree == MAX_DEGREE:
+        top_degree_pred = pred
+    if degree in [1, 2, 5, MAX_DEGREE]:
         ax.plot(x_extrap, pred, color=colors_poly[degree-1], linewidth=2,
                 label=f'Degree {degree}')
 
 ax.axhline(0, color='black', linewidth=0.5)
 ax.set_xlabel('Bedrooms')
 ax.set_ylabel('Predicted price ($)')
-ax.set_title('R² says degree 10 is best. Do you agree?')
+ax.set_title('R² says higher degree is better. Do you agree?')
 ax.legend(fontsize=9, loc='upper left')
 ax.set_ylim(-300, 600)
 
-# Annotate the degree-10 curve inside the extrapolation region
-ax.annotate('Degree 10 predicts\nabsurd prices here',
-            xy=(9.3, degree10_pred[-10]),
+# Annotate the highest-degree curve inside the extrapolation region
+ax.annotate(f'Degree {MAX_DEGREE} swings\nwildly here',
+            xy=(9.3, top_degree_pred[-10]),
             xytext=(7.2, -220),
             fontsize=9, color='#b00020',
             arrowprops=dict(arrowstyle='->', color='#b00020', lw=1.2))
 
 # Right: R² by degree
 ax = axes[1]
-bars = ax.bar(range(1, 11), r2_list, color=colors_poly, edgecolor='white')
+bars = ax.bar(range(1, MAX_DEGREE + 1), r2_list, color=colors_poly, edgecolor='white')
 for i, r2_val in enumerate(r2_list):
     ax.text(i + 1, r2_val + 0.003, f'{r2_val:.3f}', ha='center', fontsize=8)
 ax.set_xlabel('Polynomial degree')
 ax.set_ylabel('Training R²')
-ax.set_title('R² climbs toward 1.0 — but is the model improving?')
+ax.set_title('R² climbs — but the gains shrink fast')
 
 plt.tight_layout()
 plt.show()
 ```
 
-Low-degree polynomials produce reasonable curves. High-degree polynomials oscillate wildly at the edges of the observed data range and extrapolate nonsensically beyond it. For 8 bedrooms — near the upper edge of observed listings — the degree-10 fit already looks suspicious. For 10 bedrooms — well outside the observed range, inside the shaded extrapolation region — its predictions swing into absurd territory. Polynomial features fit training data well but extrapolate according to their mathematical form, not the underlying phenomenon.
+Low-degree polynomials produce reasonable curves. High-degree polynomials oscillate at the edges of the observed range and extrapolate nonsensically beyond it. Inside the observed data the degree-6 curve already wobbles noticeably, and inside the shaded extrapolation region its predictions swing into territory no sensible host would accept. Polynomial features fit training data well but extrapolate according to their mathematical form, not the underlying phenomenon.
 
-Meanwhile, training $R^2$ increases at every step. By that metric, degree 10 is the "best" model.
+Meanwhile, training $R^2$ keeps inching up at every step — from about 0.16 at degree 1 to about 0.27 at degree 6. Each additional degree buys less and less: the last few steps add barely 0.001 per degree, and degrees beyond 6 add essentially nothing to training $R^2$ while making the extrapolation even wilder.
 
 ```{python}
 # Predictions at specific bedroom counts
 print("Predicted price by bedroom count:")
+degrees_to_show = [1, 2, 5, MAX_DEGREE]
 print(f"{'Bedrooms':>10}", end='')
-for d in [1, 2, 5, 10]:
+for d in degrees_to_show:
     print(f"{'Degree '+str(d):>12}", end='')
 print()
 
 for beds in [1, 3, 5, 7, 9]:
     print(f"{beds:>10}", end='')
-    for d in [1, 2, 5, 10]:
+    for d in degrees_to_show:
         poly = PolynomialFeatures(degree=d, include_bias=False)
         X_p = poly.fit_transform(X_bedrooms)
         m = LinearRegression().fit(X_p, prices)
@@ -464,7 +523,7 @@ for beds in [1, 3, 5, 7, 9]:
 :::{.callout-tip}
 ## Think About It
 
-Training $R^2$ says degree 10 is the best model. Do you agree? Split the question in two. *In-sample:* for a new 3-bedroom listing (well inside the observed data), would the degree-10 prediction be reasonable? *Out-of-sample:* for a new 9-bedroom listing (outside the observed range), would you trust it? Training $R^2$ always increases with more features — a property of projection onto a larger column space — but the model's predictions can become worse everywhere the data is thin. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
+Training $R^2$ keeps rising with degree. Do you agree that higher degree is "better"? Split the question in two. *In-sample:* for a new 3-bedroom listing (well inside the observed data), would the degree-6 prediction be reasonable? *Out-of-sample:* for a new 9-bedroom listing (outside the observed range), would you trust it? Training $R^2$ always increases with more features — a property of projection onto a larger column space — but the model's predictions can become worse everywhere the data is thin. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
 :::
 
 :::{.callout-note}
@@ -481,69 +540,102 @@ $$\hat{y} = \beta_0 + \beta_1 \cdot \text{bedrooms} + \beta_2 \cdot \mathbb{1}_{
 
 The coefficient $\beta_3$ captures how much *more* (or less) a bedroom is worth in Manhattan compared to the reference borough.
 
+Fit both models first — a pooled model that forces one shared bedroom slope across boroughs, and an interaction model that lets the slope vary by borough.
+
 ```{python}
-# Regression lines by borough: with and without interactions
+# Pooled model: bedrooms + borough dummies (shared slope, borough-specific intercepts)
+borough_dummies = pd.get_dummies(df['borough'], drop_first=True).astype(float)
+X_pooled = pd.concat([df[['bedrooms']], borough_dummies], axis=1)
+model_pooled = LinearRegression().fit(X_pooled, prices)
+
+# Interaction model: add bedrooms × borough columns
+interactions = borough_dummies.multiply(df['bedrooms'], axis=0)
+interactions.columns = [f'bedrooms_x_{col}' for col in interactions.columns]
+X_interact_only = pd.concat([df[['bedrooms']], borough_dummies, interactions], axis=1)
+model_interact_only = LinearRegression().fit(X_interact_only, prices)
+
+# The reference borough is the one that was dropped by drop_first=True
+ref_borough = sorted(df['borough'].unique())[0]
+shared_slope = model_pooled.coef_[0]
+print(f"Pooled model: shared bedroom slope = ${shared_slope:.0f}/BR across all boroughs")
+print(f"Reference borough (absorbed into intercept): {ref_borough}")
+```
+
+With both models in hand, we can draw one line per borough under each. Under the pooled model every borough uses the same slope; under the interaction model every borough uses its own.
+
+```{python}
+# Draw per-borough lines implied by each model
 fig, axes = plt.subplots(1, 2, figsize=(9.5, 4), sharey=True)
 palette = sns.color_palette('Set2', n_colors=df['borough'].nunique())
+borough_order = [ref_borough] + list(borough_dummies.columns)
+color_map = dict(zip(borough_order, palette))
 
-for ax, title, use_interaction in [
-    (axes[0], 'Without interaction (parallel lines)', False),
-    (axes[1], 'With interaction (different slopes)', True)
+def borough_intercept_pooled(borough):
+    intercept = model_pooled.intercept_
+    if borough != ref_borough:
+        idx = list(borough_dummies.columns).index(borough) + 1
+        intercept = intercept + model_pooled.coef_[idx]
+    return intercept
+
+def borough_line_interact(borough):
+    intercept = model_interact_only.intercept_
+    slope = model_interact_only.coef_[0]
+    if borough != ref_borough:
+        nb = len(borough_dummies.columns)
+        idx_dummy = list(borough_dummies.columns).index(borough) + 1
+        idx_inter = 1 + nb + list(borough_dummies.columns).index(borough)
+        intercept = intercept + model_interact_only.coef_[idx_dummy]
+        slope = slope + model_interact_only.coef_[idx_inter]
+    return intercept, slope
+
+for ax, title, kind in [
+    (axes[0], 'Without interaction (parallel lines, shared slope)', 'pooled'),
+    (axes[1], 'With interaction (different slopes per borough)', 'interact')
 ]:
-    for color, (borough, group) in zip(palette, df.groupby('borough')):
+    for borough, group in df.groupby('borough'):
+        color = color_map[borough]
         ax.scatter(group['bedrooms'], group['price'], alpha=0.02, s=3, color=color)
         if len(group) > 50:
-            X_b = group[['bedrooms']]
-            if use_interaction:
-                mb = LinearRegression().fit(X_b, group['price'])
+            x_range = np.array([0.0, group['bedrooms'].max()])
+            if kind == 'pooled':
+                intercept = borough_intercept_pooled(borough)
+                slope = shared_slope
             else:
-                # Fit a pooled model (same slope for all boroughs)
-                mb = LinearRegression().fit(X_b, group['price'])
-            x_range = np.array([[0], [group['bedrooms'].max()]])
-            ax.plot(x_range, mb.predict(x_range), color=color, linewidth=2.5,
-                    label=f'{borough} (${mb.coef_[0]:.0f}/BR)')
+                intercept, slope = borough_line_interact(borough)
+            ax.plot(x_range, intercept + slope * x_range, color=color, linewidth=2.5,
+                    label=f'{borough} (${slope:.0f}/BR)')
     ax.set_xlabel('Bedrooms')
     ax.set_ylabel('Price ($)')
     ax.set_title(title)
     ax.legend(fontsize=8, loc='upper left')
     ax.set_xlim(-0.5, 6.5)
+    ax.set_ylim(0, 500)
 
 plt.tight_layout()
 plt.show()
 ```
 
-The slopes differ substantially across boroughs. An extra bedroom in Manhattan adds much more to the predicted price than the same bedroom in the Bronx. Without interaction terms, a model with borough dummies produces parallel lines — the same slope everywhere, shifted vertically by borough. Interaction terms let the slopes vary.
+In the left panel every borough shares the same slope — the pooled model forces one bedroom coefficient for the whole city, and the only room for variation across boroughs is the intercept. In the right panel the interaction model lets each borough set its own slope, and the slopes differ substantially. An extra bedroom in Manhattan or Brooklyn adds much more to the predicted price than the same bedroom in the Bronx.
 
 ```{python}
-# Build a model with interactions: bedrooms × borough
-borough_dummies = pd.get_dummies(df['borough'], drop_first=True)
-interactions = borough_dummies.multiply(df['bedrooms'], axis=0)
-interactions.columns = [f'bedrooms_x_{col}' for col in interactions.columns]
-
-X_interact = pd.concat([X_full, borough_dummies, interactions], axis=1).astype(float)
-model_interact = LinearRegression().fit(X_interact, prices)
-r2_interact = model_interact.score(X_interact, prices)
-
-print(f"Without borough or interactions: R² = {r2_full:.3f}  ({X_full.shape[1]} features)")
-print(f"With borough + interactions:     R² = {r2_interact:.3f}  ({X_interact.shape[1]} features)")
+# Compare R² across the two models
+r2_pooled = model_pooled.score(X_pooled, prices)
+r2_interact = model_interact_only.score(X_interact_only, prices)
+print(f"Pooled (borough intercepts only): R² = {r2_pooled:.4f}")
+print(f"With bedrooms × borough:          R² = {r2_interact:.4f}")
 ```
 
-The $R^2$ jump is not just a model-level summary. We can read off the borough-specific bedroom slopes directly by fitting simple regressions within each borough.
+The interaction model also nests the room-type and bathrooms features from earlier. Refitting with the full feature set plus interactions gives our richest model so far.
 
 ```{python}
-# Bedroom slope within each borough
-slopes = []
-for borough, group in df.groupby('borough'):
-    if len(group) > 50:
-        m_b = LinearRegression().fit(group[['bedrooms']], group['price'])
-        slopes.append((borough, round(m_b.coef_[0], 2), len(group)))
-
-slope_table = (pd.DataFrame(slopes, columns=['borough', '$/bedroom', 'n'])
-               .sort_values('$/bedroom', ascending=False))
-print(slope_table.to_string(index=False))
+# Full model + bedrooms × borough interactions for the recap R² table
+X_interact_full = pd.concat([X_full, borough_dummies, interactions], axis=1).astype(float)
+model_interact = LinearRegression().fit(X_interact_full, prices)
+r2_interact_full = model_interact.score(X_interact_full, prices)
+print(f"Full features + borough + interactions: R² = {r2_interact_full:.4f}  ({X_interact_full.shape[1]} features)")
 ```
 
-An extra bedroom in Manhattan is associated with a substantially larger price increase than the same bedroom in the Bronx. A model without interaction terms hides this heterogeneity inside a single pooled coefficient.
+A model without interaction terms hides borough-level heterogeneity inside a single pooled slope. Interactions let the model say what every real-estate agent already knows: a bedroom is not worth the same dollars everywhere.
 
 # Log transforms: transforming y
 
@@ -551,57 +643,113 @@ An extra bedroom in Manhattan is associated with a substantially larger price in
 
 The polynomial parade tried to capture curvature by piling on higher-order terms — and extrapolated into absurdity. The problem was the model's additive structure: each new term adds a correction, and nothing in the math keeps predictions positive or prevents them from swinging below zero.
 
-A log transform attacks the same curvature from a different angle. Instead of letting $X$ grow into more columns, it reshapes $y$. The linear model then says each bedroom adds a fixed dollar amount to the price — going from 1 to 2 bedrooms adds the same amount as going from 7 to 8. But \$49 is a large fraction of a \$120 studio and a small fraction of a \$400 luxury apartment. Prices grow **multiplicatively**, not additively, and taking logs turns multiplicative growth into the additive structure linear regression assumes.
+A log transform attacks the same curvature from a different angle. Instead of letting $X$ grow into more columns, it reshapes $y$. The motivation is a simple observation about the bedroom premium: adding a bedroom to a luxury apartment is worth more in absolute dollars than adding a bedroom to a rundown studio. Large Airbnbs are scarce; the handful that can host a family reunion or a bachelor party command a disproportionate premium over the many cramped studios. The dollar response to "one more bedroom" *grows* with the base size, which is exactly the super-linear pattern a straight-line fit cannot match.
+
+A log transform captures that pattern cleanly. On the log scale, a one-unit increase in bedrooms multiplies the price by a *constant factor*. Apply the same multiplier to a big Manhattan base and you get a big dollar jump; apply it to a small Bronx base and you get a small dollar jump — same proportional increase, very different dollar amounts.
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
+# Fit two models we can compare: a level model and a log model, each with borough
+log_prices = np.log(prices)
 
-# Left: price vs bedrooms (original scale)
+X_level_b = pd.concat([df[['bedrooms']], borough_dummies], axis=1).astype(float)
+model_level_b = LinearRegression().fit(X_level_b, prices)
+r2_level_b = model_level_b.score(X_level_b, prices)
+
+model_loglevel = LinearRegression().fit(X_level_b, log_prices)
+r2_loglevel = model_loglevel.score(X_level_b, log_prices)
+
+print(f"price      ~ bedrooms + borough: R² = {r2_level_b:.4f}")
+print(f"log(price) ~ bedrooms + borough: R² = {r2_loglevel:.4f}  (comparing log-y to log-y)")
+print(f"\nShared multiplier per bedroom (log model): e^{model_loglevel.coef_[0]:.3f}"
+      f" = {np.exp(model_loglevel.coef_[0]):.3f}")
+```
+
+The two $R^2$ values measure different things — one fits price, the other fits log price — so the bare comparison isn't decisive. What *is* decisive is the visual: on a log-scaled y-axis, the same curvy cloud straightens out.
+
+```{python}
+# Visualize the log transform's effect using a semilogy y-axis
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 4), sharex=True)
+bedroom_grid = np.linspace(0, 6, 200)
+
+# Left: level model overlaid on a semilogy plot.
+# The fit is a straight line in dollars but curves on a log-y axis.
 ax = axes[0]
 ax.scatter(df['bedrooms'], prices, alpha=0.05, s=5, color='gray')
-x_line = np.linspace(0, 6, 100)
-y_line = model_simple.predict(x_line.reshape(-1, 1))
-ax.plot(x_line, y_line, 'r-', lw=2.5)
+level_pred = model_simple.predict(bedroom_grid.reshape(-1, 1))
+ax.plot(bedroom_grid, level_pred, 'r-', lw=2.5, label='level fit')
+ax.set_yscale('log')
 ax.set_xlabel('Bedrooms')
-ax.set_ylabel('Price ($)')
-ax.set_title('Linear scale: curvature at high end')
+ax.set_ylabel('Price ($, log scale)')
+ax.set_title('Level fit: curves on log-y axis')
+ax.yaxis.set_major_formatter(mticker.ScalarFormatter())
+ax.legend(fontsize=9, loc='upper left')
 
-# Right: log(price) vs bedrooms
+# Right: log fit on a semilogy plot - straight line in log space
 ax = axes[1]
-log_prices = np.log(prices)
-ax.scatter(df['bedrooms'], log_prices, alpha=0.05, s=5, color='gray')
-model_log = LinearRegression().fit(df[['bedrooms']], log_prices)
-y_log_line = model_log.predict(x_line.reshape(-1, 1))
-ax.plot(x_line, y_log_line, 'r-', lw=2.5)
+ax.scatter(df['bedrooms'], prices, alpha=0.05, s=5, color='gray')
+# Fit log(price) ~ bedrooms (single feature), then exponentiate to plot on price axis
+model_log_simple = LinearRegression().fit(df[['bedrooms']], log_prices)
+log_fit_price = np.exp(model_log_simple.predict(bedroom_grid.reshape(-1, 1)))
+ax.plot(bedroom_grid, log_fit_price, 'r-', lw=2.5, label='log-level fit')
+ax.set_yscale('log')
 ax.set_xlabel('Bedrooms')
-ax.set_ylabel('log(Price)')
-ax.set_title('Log scale: relationship is straighter')
+ax.set_ylabel('Price ($, log scale)')
+ax.set_title('Log-level fit: straight on log-y axis')
+ax.yaxis.set_major_formatter(mticker.ScalarFormatter())
+ax.legend(fontsize=9, loc='upper left')
 
 plt.tight_layout()
 plt.show()
 ```
 
-The right panel shows that $\log(\text{price})$ vs. bedrooms is approximately linear — the log transform straightens the relationship.
+On a log-scaled y-axis, the log-level fit is a straight line and the level fit visibly curves. The log model has matched the super-linear bedroom premium that the level model had to fake with a tilted straight line.
+
+## Dollar increases differ by borough, percentage increases don't
+
+The log-with-borough fit makes the Manhattan-vs-Bronx story numerical. Every borough gets the same multiplier per bedroom, but that multiplier applies to different base prices — so the *dollar* increase per bedroom ends up much larger in expensive boroughs.
+
+```{python}
+# Translate the log-level coefficients back into dollar increases per bedroom
+# by borough. Each borough's base (0-bedroom) price differs; the multiplier
+# per bedroom is shared across boroughs.
+beta_bed_log = model_loglevel.coef_[0]
+multiplier = np.exp(beta_bed_log)
+
+rows = []
+for i, borough in enumerate([ref_borough] + list(borough_dummies.columns)):
+    if i == 0:
+        log_base = model_loglevel.intercept_
+    else:
+        log_base = model_loglevel.intercept_ + model_loglevel.coef_[i]
+    base_price = np.exp(log_base)
+    next_price = np.exp(log_base + beta_bed_log)
+    rows.append((borough, base_price, next_price, next_price - base_price))
+
+dollar_table = pd.DataFrame(
+    rows, columns=['borough', '0-BR base', '1-BR price', '$ per bedroom (0→1)']
+).sort_values('$ per bedroom (0→1)', ascending=False)
+print(f"Shared multiplier per bedroom: {multiplier:.3f}  (≈ {(multiplier-1)*100:.0f}% per bedroom)")
+print()
+print(dollar_table.round(0).to_string(index=False))
+```
+
+A bedroom in Manhattan adds many more dollars than a bedroom in the Bronx, even though both boroughs share the same *proportional* increase. The log model expresses that heterogeneity with a single extra coefficient instead of a fleet of interaction terms.
 
 ## Log transform on the response
 
 Regressing $\log(\text{price})$ on bedrooms changes what the coefficient means. Instead of "each bedroom adds \$X," the coefficient measures a percentage change.
 
 ```{python}
-# Fit log(price) ~ bedrooms
-model_log = LinearRegression()
-model_log.fit(df[['bedrooms']], log_prices)
-
-beta1_log = model_log.coef_[0]
-multiplier = np.exp(beta1_log)
-pct_change = (multiplier - 1) * 100
+beta1_log = model_log_simple.coef_[0]
+multiplier_simple = np.exp(beta1_log)
+pct_change = (multiplier_simple - 1) * 100
 
 print(f"log(price) ~ bedrooms:  β₁ = {beta1_log:.4f}")
-print(f"Each bedroom multiplies price by e^{beta1_log:.4f} = {multiplier:.3f}")
+print(f"Each bedroom multiplies price by e^{beta1_log:.4f} = {multiplier_simple:.3f}")
 print(f"That corresponds to a {pct_change:.1f}% increase per bedroom.")
 ```
 
-On the log scale, a one-unit increase in bedrooms multiplies the predicted price by $e^{\beta_1}$. The multiplicative structure captures the intuition that a bedroom matters proportionally more for a cheap listing than for an expensive one.
+On the log scale, a one-unit increase in bedrooms multiplies the predicted price by $e^{\beta_1}$. The multiplicative structure encodes the super-linear bedroom premium: the *dollar* response to one more bedroom grows with the base size, but the *proportional* response stays fixed.
 
 ## The four transform combinations
 
@@ -612,8 +760,8 @@ Depending on whether you log-transform $y$, $x$, or both, the coefficient takes 
 
 | Model | Coefficient $\beta_1$ means | Example |
 |-------|---------------------------|---------|
-| $y \sim x$ | 1-unit increase in $x$ → $\beta_1$ change in $y$ | each bedroom adds \$49 |
-| $\log(y) \sim x$ | 1-unit increase in $x$ → multiply $y$ by $e^{\beta_1}$ | each bedroom multiplies price by 1.33 |
+| $y \sim x$ | 1-unit increase in $x$ → $\beta_1$ change in $y$ | each bedroom adds roughly \$49 |
+| $\log(y) \sim x$ | 1-unit increase in $x$ → multiply $y$ by $e^{\beta_1}$ | each bedroom multiplies price by about 1.33 |
 | $y \sim \log(x)$ | 1% increase in $x$ → $\beta_1/100$ change in $y$ | 10% more sqft → \$5 higher price |
 | $\log(y) \sim \log(x)$ | 1% increase in $x$ → $\beta_1$% change in $y$ (elasticity) | 10% more sqft → 5% higher price |
 
@@ -647,7 +795,7 @@ models_summary = {
     'bedrooms only': (model_simple.score(df[['bedrooms']], prices), 1),
     '+ bathrooms': (model_two.score(df[['bedrooms', 'bathrooms']], prices), 2),
     '+ room type': (r2_full, X_full.shape[1]),
-    '+ borough + interactions': (r2_interact, X_interact.shape[1]),
+    '+ borough + interactions': (r2_interact_full, X_interact_full.shape[1]),
 }
 
 print(f"{'Model':<30s}  {'R²':>6s}  {'Adj R²':>7s}  {'k':>3s}")
