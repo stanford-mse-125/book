@@ -186,7 +186,7 @@ When the errors are normally distributed, least squares and maximum likelihood e
 
 ## [7A] Lecture 7: A dramatic demonstration
 
-**Source:** lec07-trees-validation.qmd, lines 188-257 | **Tag:** HW
+**Source:** lec06-validation.qmd, lines 188-257 | **Tag:** HW
 **Reuse:** Using a smaller sample (n=500), increase polynomial degree from 1 to 7. At what degree does test R^2 go negative? Why?
 
 ### A dramatic demonstration
@@ -263,7 +263,7 @@ Wait — can $R^2$ be negative? Yes, on test data. On training data, $R^2$ is al
 
 ## [7B] Lecture 7: Beyond the U-shape — double descent
 
-**Source:** lec07-trees-validation.qmd, lines 591-611 | **Tag:** EXAM
+**Source:** lec06-validation.qmd, lines 591-611 | **Tag:** EXAM
 **Reuse:** Describe the double descent phenomenon. Why doesn't it contradict bias-variance? (bonus question)
 
 ## Beyond the U-shape: double descent
@@ -291,7 +291,7 @@ When you train a random forest with very deep trees (no max depth), each tree in
 
 ## [7C] Lecture 7: When R^2 is low — hospital data
 
-**Source:** lec07-trees-validation.qmd, lines 614-673 | **Tag:** HW
+**Source:** lec06-validation.qmd, lines 614-673 | **Tag:** HW
 **Reuse:** Fit models to predict hospital readmission rates. Why is R^2 low regardless of features?
 
 ## When R² is low — hospital data
@@ -358,7 +358,7 @@ Does a low $R^2$ mean the model is bad, or that the outcome is inherently hard t
 
 ## [7D] Lecture 7: Von Neumann elephant quote
 
-**Source:** lec07-trees-validation.qmd, lines 284-289 | **Tag:** ARCHIVE
+**Source:** lec06-validation.qmd, lines 284-289 | **Tag:** ARCHIVE
 **Reuse:** (archive only)
 
 :::{.callout-note}

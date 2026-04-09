@@ -21,7 +21,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 | "Far better an approximate answer to the right question, which is often vague, than an exact answer to the wrong question, which can always be made precise" | John Tukey | Lec 1, 17 | Framing matters more than precision |
 | "If you torture the data long enough, it will confess to anything" | Ronald Coase | Lec 11 | Multiple testing / p-hacking |
 | "No amount of experimentation can ever prove me right; a single experiment can prove me wrong" | (attr. Einstein) | Lec 10 | Reject or fail to reject — never "prove" |
-| "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk" | John von Neumann | Lec 7 | Overfitting / bias-variance |
+| "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk" | John von Neumann | Lec 6 | Overfitting / bias-variance |
 | "Prediction is very difficult, especially about the future" | Niels Bohr (attr.) | Lec 16 | Backtesting / non-stationarity |
 | "Correlation is not causation" | (common) | Lec 11, 18 | Confounding |
 
@@ -193,44 +193,13 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 4 (regression, column space)
-- Forward: Lec 6 (trees as automatic feature engineering), Lec 7 (validation — are these features overfitting?), Lec 12 (which features are statistically significant?)
+- Forward: Lec 6 (validation — are these features overfitting?), Lec 7 (trees as automatic feature engineering), Lec 12 (which features are statistically significant?)
 
 **Surprise moment:** Bedrooms and beds are nearly collinear — adding both barely expands the column space. LLM-extracted features from listing descriptions improve R².
 
 ---
 
-## Lecture 6: Decision Trees and Random Forests
-
-**Objectives addressed:** 12 (feature engineering — automatic)
-
-**Key concepts:**
-- Decision trees: recursive splitting finds patterns without manual feature engineering
-- Trees handle categories and missing data natively
-- A single deep tree overfits: perfect training score, poor test score
-- Random forests: average many overfit trees for stable predictions
-- Bagging + feature subsampling
-- More trees never hurts (unlike more polynomial features)
-- Feature importance: which variables does the forest rely on?
-
-**Key vocabulary:**
-- Decision tree, recursive splitting
-- Overfitting (single tree)
-- Random forest, bagging
-- Feature subsampling
-- Feature importance (MDI)
-
-**Prerequisites:** Lec 5 (feature engineering, regression)
-
-**Connections:**
-- Backward: Lec 5 (manual feature engineering — trees automate this)
-- Forward: Lec 7 (validation, bias-variance tradeoff), Lec 13 (classification trees)
-- ORIE 4741: trees material
-
-**Surprise moment:** A single deep tree gets perfect training R² but terrible test R². Average 100 of them and test R² beats everything.
-
----
-
-## Lecture 7: Validation and the Bias-Variance Tradeoff
+## Lecture 6: Validation and the Bias-Variance Tradeoff
 
 **Objectives addressed:** 11 (train/test/validate model selection)
 
@@ -253,17 +222,49 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Bias-variance tradeoff
 - Lasso, regularization
 
-**Prerequisites:** Lec 6 (trees, random forests)
+**Prerequisites:** Lec 5 (feature engineering, polynomial overfitting)
 
 **Connections:**
-- Backward: Lec 6 (trees — overfitting a single tree)
-- Forward: Lec 8 (can we trust our estimates?), Lec 12 (regression inference), Lec 16 (temporal validation breaks random splitting)
+- Backward: Lec 5 (polynomial overfitting motivates validation)
+- Forward: Lec 7 (trees apply CV for depth selection), Lec 8 (can we trust our estimates?), Lec 12 (regression inference), Lec 16 (temporal validation breaks random splitting)
 
 **Aphorisms:** "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk" (von Neumann); "All models are wrong, but some are useful" (Box)
 
-**Surprise moment:** The most complex polynomial model performs worst on test data. But averaging 100 overfit trees beats everything — the classical U-shape doesn't apply to ensembles.
+**Surprise moment:** The most complex polynomial model performs worst on test data — negative R² on the test set, worse than predicting the mean.
 
 **Study guide scope:** Students are responsible for classical bias-variance (the U-shape), overfitting concept, train/test split, cross-validation, Lasso concept. They should understand *that* averaging overfit trees works but are NOT responsible for the mathematical details of why.
+
+---
+
+## Lecture 7: Decision Trees and Random Forests
+
+**Objectives addressed:** 12 (feature engineering — automatic)
+
+**Key concepts:**
+- Decision trees: recursive splitting finds patterns without manual feature engineering
+- Trees handle categories and missing data natively
+- A single deep tree overfits: perfect training score, poor test score
+- Random forests: average many overfit trees for stable predictions
+- Bagging + feature subsampling
+- More trees never hurts (unlike more polynomial features)
+- Feature importance: which variables does the forest rely on?
+- Cross-validation for tree depth selection (applying Ch 6 framework)
+
+**Key vocabulary:**
+- Decision tree, recursive splitting
+- Overfitting (single tree)
+- Random forest, bagging
+- Feature subsampling
+- Feature importance (MDI)
+
+**Prerequisites:** Lec 5 (feature engineering), Lec 6 (train/test, CV, bias-variance)
+
+**Connections:**
+- Backward: Lec 5 (manual feature engineering — trees automate this), Lec 6 (validation, bias-variance tradeoff — trees apply these concepts)
+- Forward: Lec 13 (classification trees)
+- ORIE 4741: trees material
+
+**Surprise moment:** A single deep tree gets perfect training R² but terrible test R². Average 100 of them and test R² beats everything.
 
 ---
 
@@ -520,7 +521,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Prerequisites:** Lec 5-7 (regression, feature engineering)
 
 **Connections:**
-- Backward: Lec 5 (regression — OLS has closed form; logistic does not), Lec 6 (RF classifier preview), Lec 7 (feature engineering, train/test), Lec 8 (bootstrap for logistic regression), Lec 12 (regression inference framework)
+- Backward: Lec 5 (regression — OLS has closed form; logistic does not), Lec 6 (train/test, validation), Lec 7 (RF classifier preview), Lec 8 (bootstrap for logistic regression), Lec 12 (regression inference framework)
 - Forward: Lec 17 (AutoML for classification; gradient boosting uses gradient descent ideas)
 - ORIE 4741: losses.tex — "the loss function determines what the model finds" (logistic = MLE under Bernoulli)
 - ORIE 4741: linear.tex — full gradient descent derivation with convergence analysis (we simplify to the intuition + computation)
@@ -639,10 +640,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Distribution shift
 - Naive forecast, seasonal naive, drift
 
-**Prerequisites:** Lec 7 (train/test split, cross-validation, feature engineering)
+**Prerequisites:** Lec 6 (train/test split, cross-validation, feature engineering)
 
 **Connections:**
-- Backward: Lec 7 (train/test, feature engineering)
+- Backward: Lec 6 (train/test, feature engineering)
 - Forward: Lec 17 (AutoML limitations with temporal data)
 - FPP3 Ch 5 (the forecasting toolbox — train/test for time series)
 - ORIE 4741: feature_engineering.tex (AR, ARMA, ARIMA, exponential smoothing); train-test-validate.tex ("can't randomly split time series")
@@ -779,8 +780,8 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 | 8 | Hypotheses, p-values, simulation | **Lec 9, 10** | |
 | 9 | Multiple testing (Bonferroni, FDR) | **Lec 11** | |
 | 10 | Regression coefficient inference (t-tests) | **Lec 12** | |
-| 11 | Train/test/validate model selection | **Lec 7** | Lec 12, 16 |
-| 12 | Feature engineering, trees | **Lec 5, 6** | Lec 7, 16 |
+| 11 | Train/test/validate model selection | **Lec 6** | Lec 12, 16 |
+| 12 | Feature engineering, trees | **Lec 5, 7** | Lec 6, 16 |
 | 13 | Logistic regression, classification metrics | **Lec 13** | |
 | 14 | PCA, interpret PCs | **Lec 14** | |
 | 15 | K-means, cluster quality | **Lec 15** | |
@@ -790,7 +791,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 | 19 | AI coding assistants | **Lec 17** | |
 | 20 | AI failure modes | **Lec 17** | Lec 1, 3 |
 | 21 | Prompt decomposition | **Lec 17** | |
-| 22 | Reports with visualizations | **Lec 2** | Lec 6 |
+| 22 | Reports with visualizations | **Lec 2** | Lec 7 |
 | 23 | Present/defend findings | *Not in lectures — addressed via HW review sessions and project* | |
 
 ### Gaps and notes
@@ -809,10 +810,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - ✅ **Odds ratios** (exp(β) interpretation) → Lec 13
 - ✅ **Gradient descent** (metaphorical + computational, hiking/landscape, convex vs non-convex) → Lec 13; HW problem candidate
 - ✅ **Chi-squared tests** (goodness of fit, independence) → Lec 10
-- ✅ **Lasso** → Lec 7, alongside bias-variance tradeoff and model complexity control
-- ✅ **VIF** → Lec 7 "further reading" only (too technical for lecture)
-- ✅ **Random forests as black-box benchmark** → Lec 7 (now with practical tree intro); how trees work → Lec 17
-- ✅ **Trees handle missing values** → forward-referenced from Lec 3 to Lec 6
+- ✅ **Lasso** → Lec 6, alongside bias-variance tradeoff and model complexity control
+- ✅ **VIF** → Lec 6 "further reading" only (too technical for lecture)
+- ✅ **Random forests as black-box benchmark** → Lec 7 (practical tree intro); how trees work → Lec 17
+- ✅ **Trees handle missing values** → forward-referenced from Lec 3 to Lec 7
 - ✅ **Power analysis** → Lec 10 (conceptual + computational via simulation/statsmodels, not formula derivation); HW problem candidate
 - ✅ **Statistical aphorisms** → distributed across lectures (see aphorisms table)
 - ✅ **Study guide sections** → structural requirement for every lecture .qmd
@@ -826,5 +827,5 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - **PCA as "regression onto optimal covariates"** — for Lec 14
 - **K-means as GLRM special case** — may be too advanced, but PCA↔k-means connection is valuable for Lec 15
 - **Informative vs. uninformative missingness** (ambulance heart rate example) — for Lec 3
-- **Bias-variance tradeoff + double descent** — for Lec 7 (RESOLVED: teach classical as primary framework; 10-15 min frontier window on double descent; three-level understanding; key refs: Belkin 2019, Hastie 2022)
-- **Hospital buying an ML system** opening — $$ framing for Lec 7
+- **Bias-variance tradeoff + double descent** — for Lec 6 (RESOLVED: teach classical as primary framework; 10-15 min frontier window on double descent; three-level understanding; key refs: Belkin 2019, Hastie 2022)
+- **Hospital buying an ML system** opening — $$ framing for Lec 6

@@ -1054,7 +1054,7 @@ An $R^2$ around 0.45 means our model explains about 45% of the variation in pric
 :::{.callout-tip}
 ## Think About It
 
-Can R-squared ever *decrease* when you add a feature? No. Adding a feature expands the column space — the projection onto a larger subspace can only get closer to $y$, never farther. So training R² can only increase (or stay the same). But as we'll see in [Chapter 7](lec07-validation.qmd), *test* R² can absolutely decrease.
+Can R-squared ever *decrease* when you add a feature? No. Adding a feature expands the column space — the projection onto a larger subspace can only get closer to $y$, never farther. So training R² can only increase (or stay the same). But as we'll see in [Chapter 6](lec06-validation.qmd), *test* R² can absolutely decrease.
 :::
 
 ## Checking the residuals

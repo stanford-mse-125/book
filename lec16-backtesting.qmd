@@ -91,7 +91,7 @@ A time series is **non-stationary** when its statistical properties (mean, varia
 
 ## Building a prediction model
 
-Let's try to predict tomorrow's AQI. A natural approach: use **lag features** — yesterday's AQI, the 7-day average, etc. This approach is just the feature engineering from Chapter 6, applied to time.
+Let's try to predict tomorrow's AQI. A natural approach: use **lag features** — yesterday's AQI, the 7-day average, etc. This approach is just the feature engineering from Chapter 5, applied to time.
 
 We'll focus on Los Angeles for a clean demonstration.
 
@@ -114,7 +114,7 @@ la.head(10)
 
 ## The standard split — and why it fails here
 
-Recall from Chapter 7 that we split data randomly into training and test sets. That approach assumed each observation was independent of the others. Time-ordered observations violate that assumption.
+Recall from Chapter 6 that we split data randomly into training and test sets. That approach assumed each observation was independent of the others. Time-ordered observations violate that assumption.
 
 Here's what most tutorials (and most AI tools) would do — randomly shuffle the data and split 80/20. Let's see how well it works.
 
@@ -387,7 +387,7 @@ This pattern is the value of walk-forward validation: it reveals *when* your mod
 
 ## Lag features are just feature engineering
 
-Recall from Chapter 6 that feature engineering transforms raw data into more useful predictors. Lag features are the same idea applied to time:
+Recall from Chapter 5 that feature engineering transforms raw data into more useful predictors. Lag features are the same idea applied to time:
 
 | Feature | What it captures |
 |---------|-----------------|

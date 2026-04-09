@@ -199,7 +199,7 @@ Key properties:
 
 :::{.callout-note}
 ## Looking ahead
-In the bias-variance decomposition (Chapter 7), the "variance" term is exactly $\text{Var}(\hat{f}(x))$ — how much the model's prediction varies across different training sets.
+In the bias-variance decomposition (Chapter 6), the "variance" term is exactly $\text{Var}(\hat{f}(x))$ — how much the model's prediction varies across different training sets.
 :::
 
 ## Covariance and correlation

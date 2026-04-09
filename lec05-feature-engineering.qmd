@@ -385,7 +385,7 @@ for beds in [1, 3, 5, 7, 9]:
 :::{.callout-tip}
 ## Think About It
 
-$R^2$ says degree 10 is the best model. Do you agree? Would you trust the degree-10 predictions for a new 7-bedroom listing? Training $R^2$ always increases with more features — a property of projection onto a larger column space — but the model's predictions can become worse. We'll develop formal tools to detect overfitting in [Chapter 7](lec07-validation.qmd).
+$R^2$ says degree 10 is the best model. Do you agree? Would you trust the degree-10 predictions for a new 7-bedroom listing? Training $R^2$ always increases with more features — a property of projection onto a larger column space — but the model's predictions can become worse. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
 :::
 
 :::{.callout-note}
@@ -592,7 +592,7 @@ for name, (r2, k) in models_summary.items():
     print(f"{name:<30s}  {r2:>.4f}  {adjusted_r2(r2, n, k):>.4f}  {k:>3d}")
 ```
 
-Adjusted $R^2$ rises more slowly than $R^2$ and can decline if the added features don't carry enough signal to justify their complexity. In [Chapter 7](lec07-validation.qmd), we'll use held-out test data for a more reliable assessment of model quality.
+Adjusted $R^2$ rises more slowly than $R^2$ and can decline if the added features don't carry enough signal to justify their complexity. In [Chapter 6](lec06-validation.qmd), we'll use held-out test data for a more reliable assessment of model quality.
 
 ## Multicollinearity
 
@@ -753,7 +753,7 @@ The R² progression tells the story: bedrooms alone explains a fraction of the v
 Three questions remain open:
 
 1. **Is the coefficient real or noise?** The bathrooms coefficient is about \$22, but with a different sample it might be \$18 or \$26. We'll quantify the uncertainty with confidence intervals in [Chapter 12](lec12-regression-inference.qmd).
-2. **Does the model generalize to new data?** Training $R^2$ always increases with more features, even noise features. We'll develop train-test splits and cross-validation in [Chapter 7](lec07-validation.qmd).
+2. **Does the model generalize to new data?** Training $R^2$ always increases with more features, even noise features. We'll develop train-test splits and cross-validation in [Chapter 6](lec06-validation.qmd).
 3. **Does adding a bathroom *cause* higher prices?** Regression coefficients measure association. Causation requires a different framework — [Chapter 18](lec18-causal.qmd).
 
 ## Study guide

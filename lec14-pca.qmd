@@ -398,7 +398,7 @@ Boroughs show less separation in these first two PCs. Geography isn't the domina
 
 :::{.callout-tip}
 ## Think About It
-Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Chapter 7)?
+Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Chapter 6)?
 :::
 
 PCA creates *new* features that are combinations of the originals — it's **dimensionality reduction**. Lasso picks a subset of existing features — that's **feature selection**. PCA is especially useful when your original features are correlated (like the six review scores): it creates uncorrelated summaries that capture more information per component.

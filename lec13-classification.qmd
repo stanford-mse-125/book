@@ -5,7 +5,7 @@ execute:
 jupyter: python3
 ---
 
-In Acts 1 and 2, we built and tested models for continuous outcomes. Act 3 extends these ideas to new settings, starting with classification — predicting categories instead of numbers. You used `RandomForestClassifier` back in Chapter 6. Today we understand *why* classification needs its own tools — and build a more interpretable classifier.
+In Acts 1 and 2, we built and tested models for continuous outcomes. Act 3 extends these ideas to new settings, starting with classification — predicting categories instead of numbers. You used `RandomForestClassifier` back in Chapter 7. Today we understand *why* classification needs its own tools — and build a more interpretable classifier.
 
 ## The 85% accuracy trap
 
@@ -149,7 +149,7 @@ A concrete example makes the log-odds scale tangible. If $p = 0.20$: odds $= 0.2
 There are two key conditions for logistic regression to be valid: (1) each outcome is independent of the others, and (2) each predictor is linearly related to the log-odds when all other predictors are held constant. Because the log-odds are linear in the features, the decision boundary (where $p = 0.5$) is a hyperplane — logistic regression can only produce linear decision boundaries.
 :::
 
-The name *logistic* regression reflects this core assumption: the log-odds are a **linear** function of the features. If the true decision boundary is curved, logistic regression will miss it — add polynomial or interaction features (Chapter 6) to capture nonlinear boundaries.
+The name *logistic* regression reflects this core assumption: the log-odds are a **linear** function of the features. If the true decision boundary is curved, logistic regression will miss it — add polynomial or interaction features (Chapter 5) to capture nonlinear boundaries.
 
 ```{python}
 # Visualize the sigmoid function
@@ -293,7 +293,7 @@ for _, row in coef_df.iterrows():
 
 A concrete example: if a patient's predicted CHD probability is 0.20 (odds = 0.25), a one-SD increase in age multiplies those odds by about 1.7x, giving new odds of 0.424 — corresponding to a probability of about 30%.
 
-The model says: age, systolic blood pressure, glucose, and male sex are the strongest risk factors. This ranking matches medical knowledge — but notice that the model treats each feature independently. It doesn't know that high blood pressure and high BMI often go together, or that young smokers face different risks than old smokers (for that, we'd need interaction terms — recall Chapter 6). We'll come back to this.
+The model says: age, systolic blood pressure, glucose, and male sex are the strongest risk factors. This ranking matches medical knowledge — but notice that the model treats each feature independently. It doesn't know that high blood pressure and high BMI often go together, or that young smokers face different risks than old smokers (for that, we'd need interaction terms — recall Chapter 5). We'll come back to this.
 
 :::{.callout-tip}
 ## The Divide-by-4 Rule
@@ -605,7 +605,7 @@ For older patients, the model separates CHD from non-CHD reasonably well (the di
 
 **Why this matters:** An AI assistant would report the overall AUC of 0.75, declare the model "moderately good," and move on. It wouldn't check subgroup performance. But in practice, a model that fails for young patients is dangerous — it creates a false sense of security for exactly the people who most need screening.
 
-What could we do about it? Options include training separate models for different age groups, adding interaction terms (recall Chapter 6), or collecting more data on young CHD patients. There's no easy fix — but the first step is always checking.
+What could we do about it? Options include training separate models for different age groups, adding interaction terms (recall Chapter 5), or collecting more data on young CHD patients. There's no easy fix — but the first step is always checking.
 
 ## Same problem, different domain: hospital readmissions
 
