@@ -334,14 +334,14 @@ for name, coef in zip(X_reviews.columns, model_reviews.coef_):
     print(f"  {name:30s}  {coef:+.2f}")
 ```
 
-The coefficient on `number_of_reviews` is *negative*. Taken at face value, more reviews are associated with lower prices. That reading is tempting and wrong. Reviews and price are both downstream of demand: cheaper listings get booked more often, so they accumulate more reviews over time. The regression sees the statistical association but has no window into the underlying mechanism. An analyst who stops at the coefficient — or worse, recommends a host strategy based on it — has confused association with causation.
+The coefficient on `number_of_reviews` is *negative*. Taken at face value, more reviews are associated with lower prices. That reading is tempting and wrong. Reviews are downstream of **bookings**, and bookings are driven by price in the wrong direction: cheaper listings get booked more often, and every booking is another chance to earn a review. So high-review listings are, in part, the ones that sold a lot because they were cheap. Regressing price on reviews captures that backward flow alongside whatever real signal might exist. The regression sees the statistical association but has no window into the direction of influence. An analyst who stops at the coefficient — or worse, recommends a host strategy based on it — has confused association with causation.
 
 A second reason to ignore the coefficient: the feature isn't earning its place in the model. It doesn't meaningfully improve predictions, *and* its sign is confounded. A feature that carries neither predictive nor causal weight has no business influencing decisions.
 
 :::{.callout-tip}
 ## Think About It
 
-The negative reviews coefficient is a textbook confounding trap. Demand drives both variables, so multiple regression cannot untangle them from observational data alone. Disentangling cause from correlation requires the causal inference tools we develop in [Chapter 18](lec18-causal.qmd). Until then, treat a surprising coefficient as a signal to search for a lurking variable, not as a policy recommendation.
+The negative reviews coefficient is a textbook *reverse-causation* trap. Price influences how often a listing sells, bookings drive review counts, so reviews sit downstream of price. Multiple regression cannot untangle this from observational data alone: the backward flow shows up inside the coefficient. Disentangling direction from correlation requires the causal inference tools we develop in [Chapter 18](lec18-causal.qmd). Until then, treat a surprising coefficient as a signal to interrogate the direction of influence, not as a policy recommendation.
 :::
 
 # Feature engineering: transforming X
@@ -356,7 +356,7 @@ Part 3 works through four moves, from simple to elaborate. We start with missing
 
 ## Missing values as features
 
-A missing `cleaning_fee` is not just an annoyance — it carries information. A host who leaves the cleaning fee blank is often a casual operator, a budget listing, or someone who absorbs cleaning into the nightly rate. The missingness itself is a signal about the listing, and we'd like the model to see it.
+A missing `cleaning_fee` is not just an annoyance — it carries information. A host who leaves the cleaning fee blank is often signalling that **the guest is expected to clean the place themselves** before checkout: wash the dishes, strip the sheets, take out the trash. That's a very different listing from one with a $75 cleaning fee attached. The missingness itself is a signal about the listing, and we'd like the model to see it.
 
 ```{python}
 # cleaning_fee is stored as a numeric dollar amount (already parsed);
@@ -373,18 +373,18 @@ print(f"Median price when cleaning fee is missing: ${median_missing:.0f}")
 print(f"Median price when cleaning fee is present: ${median_present:.0f}")
 ```
 
-Listings with a missing cleaning fee are noticeably cheaper on average — the missingness isn't random noise, it's tracking something real about the listing. The approach: impute the missing numeric value, then add a binary `fee_missing` column. The model can then learn whether "missing" predicts a different price from any observed fee.
+Listings with a missing cleaning fee are noticeably cheaper on average — the missingness isn't random noise, it's tracking something real about the listing. The approach: impute the missing numeric value with *any* constant, then add a binary `fee_missing` column. The model can then learn whether "missing" predicts a different price from any observed fee.
 
-For least squares, the **mean** is the right value to impute. Replacing a missing cell with the mean minimizes the squared-error contribution of that cell on average, which is exactly the loss the regression is trying to reduce.
+The cleanest choice is to impute with **zero**. A missing fee then contributes $\hat\beta_{\text{fee}} \cdot 0 + \hat\beta_{\text{missing}} \cdot 1 = \hat\beta_{\text{missing}}$ to the predicted price — a single number that captures the entire "missing fee" effect. The choice of imputation constant doesn't actually matter for predictions: any other value $c$ would shift $\hat\beta_{\text{missing}}$ by exactly $-c \cdot \hat\beta_{\text{fee}}$, leaving $\hat y$ identical for every row. Zero just gives the indicator coefficient a clean interpretation.
 
 ```{python}
-# Impute the cleaning fee with its mean and record which rows were filled in
-mean_fee = df['cleaning_fee'].mean()
-df['cleaning_fee_imputed'] = df['cleaning_fee'].fillna(mean_fee)
+# Impute the cleaning fee with zero and record which rows were filled in.
+# Any constant would give the same predictions; zero makes the missingness
+# coefficient read directly as the price premium for "no fee listed".
+df['cleaning_fee_imputed'] = df['cleaning_fee'].fillna(0)
 df['fee_missing'] = df['cleaning_fee'].isna().astype(int)
 
-print(f"Mean cleaning fee (used for imputation): ${mean_fee:.2f}")
-print(f"\nSample rows:")
+print("Sample rows:")
 print(df[['cleaning_fee', 'cleaning_fee_imputed', 'fee_missing']].head(10))
 ```
 
@@ -410,10 +410,23 @@ print(f"Baseline (no fee):            R² = {r2_base:.4f}")
 print(f"+ imputed cleaning fee:       R² = {r2_fee:.4f}")
 print(f"+ imputed fee + fee_missing:  R² = {r2_fee_ind:.4f}")
 print()
-print(f"fee_missing coefficient: ${m_fee_ind.coef_[-1]:+.2f}")
+beta_fee = m_fee_ind.coef_[-2]
+beta_missing = m_fee_ind.coef_[-1]
+median_fee = df['cleaning_fee'].median()
+print(f"cleaning_fee_imputed coefficient: ${beta_fee:+.2f} per $1 of fee")
+print(f"fee_missing coefficient:          ${beta_missing:+.2f}")
+print()
+print(f"Median observed cleaning fee: ${median_fee:.0f}")
+print(f"Fee contribution for a median-fee listing: ${beta_fee * median_fee:+.2f}")
+print(f"Fee contribution for a missing-fee listing: ${beta_missing:+.2f}")
 ```
 
-The imputed fee pushes $R^2$ up sharply — the fee itself is a strong price signal. Adding the `fee_missing` indicator contributes a smaller additional bump, and the indicator's coefficient is negative: even after accounting for the imputed fee, listings that left it blank are associated with lower prices. The model has learned something from the *pattern* of missingness that raw imputation alone can't capture.
+The imputed fee pushes $R^2$ up sharply — the fee itself is a strong price signal. Adding the `fee_missing` indicator contributes a smaller additional bump. Now the key move: read the **total contribution** each row gets from the two new columns.
+
+- A listing with a missing fee has `cleaning_fee_imputed = 0` and `fee_missing = 1`, so its combined contribution is $\hat\beta_{\text{fee}} \cdot 0 + \hat\beta_{\text{missing}} \cdot 1 = \hat\beta_{\text{missing}} \approx \$25.87$.
+- A listing with the median observed fee ($50) has `cleaning_fee_imputed = 50` and `fee_missing = 0`, so its combined contribution is $\hat\beta_{\text{fee}} \cdot 50 \approx \$31.53$.
+
+The missing-fee listings are predicted about \$5–6 cheaper than a typical-fee listing, holding bedrooms, bathrooms, and room type fixed. That gap is the "missing carries information" signal: the model has learned something from the *pattern* of missingness that raw imputation alone can't capture.
 
 :::{.callout-warning}
 ## Don't impute blindly
@@ -898,11 +911,28 @@ The normal equations guarantee $X^T \epsilon = 0$ — no linear pattern remains 
 y_hat_full = model_full.predict(X_full)
 residuals_full = prices.values - y_hat_full
 
+def rolling_envelope(x, r, n_bins=25):
+    """±2σ envelope of residuals r across fitted values x, computed in bins."""
+    order = np.argsort(x)
+    x_sorted, r_sorted = x[order], r[order]
+    edges = np.quantile(x_sorted, np.linspace(0, 1, n_bins + 1))
+    centers, bands = [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        mask = (x_sorted >= lo) & (x_sorted <= hi)
+        if mask.sum() >= 20:
+            centers.append(x_sorted[mask].mean())
+            bands.append(2 * r_sorted[mask].std())
+    return np.array(centers), np.array(bands)
+
 fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
 
-# Residuals vs fitted
+# Residuals vs fitted, with ±2σ envelope to make the fan visible
 axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
 axes[0].axhline(0, color='red', lw=1.5)
+c, b = rolling_envelope(y_hat_full, residuals_full)
+axes[0].plot(c, b, color='red', lw=1.5, label='±2σ envelope')
+axes[0].plot(c, -b, color='red', lw=1.5)
+axes[0].legend(loc='upper left', fontsize=9)
 axes[0].set_xlabel('Predicted price ($)')
 axes[0].set_ylabel('Residual ($)')
 axes[0].set_title('Residuals vs predicted values')
@@ -917,11 +947,11 @@ plt.tight_layout()
 plt.show()
 ```
 
-Two patterns stand out. First, the spread of residuals fans out at higher predicted prices — the model's errors are larger for expensive listings. Second, the residual distribution is right-skewed, with a heavy upper tail.
+Two patterns stand out. First, the red envelope on the left panel — ±2 standard deviations of the residuals, computed in bins along the x-axis — widens as predicted prices grow. The cloud of residuals "fans out": cheap listings mispredict by tens of dollars, expensive listings mispredict by hundreds. This megaphone shape is what a *fan-shaped* residual plot looks like: flat on the left, flaring on the right. Second, the residual distribution is right-skewed, with a heavy upper tail.
 
 ## Heteroscedasticity
 
-When the variance of the residuals changes with the predicted value, we have **heteroscedasticity** (from the Greek: "different scatter"). The fan-shaped residual plot above is a classic signal.
+When the variance of the residuals changes with the predicted value, we have **heteroscedasticity** (from the Greek: "different scatter"). The fan-shaped residual plot above is a classic signal: if you trace the outer edge of the residual cloud from left to right, it looks like a megaphone opening up — narrow where predictions are small, wide where they're large.
 
 :::{.callout-important}
 ## Definition: Heteroscedasticity
@@ -932,12 +962,16 @@ When the variance of the residuals changes with the predicted value, we have **h
 The log transform often helps: by compressing the right tail of the price distribution, it stabilizes the variance of the residuals.
 
 ```{python}
-# Compare residual plots: level vs log
+# Compare residual plots: level vs log. Both panels get the ±2σ envelope
+# so the "fan" is visible rather than inferred.
 fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
 
 # Level model
 axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
 axes[0].axhline(0, color='red', lw=1.5)
+c, b = rolling_envelope(y_hat_full, residuals_full)
+axes[0].plot(c, b, color='red', lw=1.5)
+axes[0].plot(c, -b, color='red', lw=1.5)
 axes[0].set_xlabel('Predicted price ($)')
 axes[0].set_ylabel('Residual ($)')
 axes[0].set_title('Level model: fan-shaped residuals')
@@ -948,6 +982,9 @@ log_resid = np.log(prices.values) - model_log_full.predict(X_full)
 log_fitted = model_log_full.predict(X_full)
 axes[1].scatter(log_fitted, log_resid, alpha=0.05, s=5)
 axes[1].axhline(0, color='red', lw=1.5)
+c_log, b_log = rolling_envelope(log_fitted, log_resid)
+axes[1].plot(c_log, b_log, color='red', lw=1.5)
+axes[1].plot(c_log, -b_log, color='red', lw=1.5)
 axes[1].set_xlabel('Predicted log(price)')
 axes[1].set_ylabel('Residual')
 axes[1].set_title('Log model: more uniform spread')
