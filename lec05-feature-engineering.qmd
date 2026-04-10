@@ -98,21 +98,7 @@ For the two-feature model above, $X$ has three columns: the all-ones column, `be
 $$\hat{y}_i = \beta_0 \cdot 1 + \beta_1 \cdot \text{bedrooms}_i + \beta_2 \cdot \text{bathrooms}_i,$$
 and stacking those $n$ predictions gives $\hat{y} = X\beta$.
 
-## Column space
-
-$R^2$ improved because bathrooms added information bedrooms alone missed. Geometrically, we think of the improvement as an expansion of the **column space** — the set of predictions the model can reach. Every prediction $\hat{y} = X\beta$ is a linear combination of the columns of $X$, so adding a feature is the same as adding a new direction the prediction vector can move in. Chapter 4 called the set of reachable predictions the **span** of the feature vectors; the column space is the same idea, now expressed as the span of the columns of $X$.
-
-In Chapter 4, with one feature plus an intercept, the column space was a 2D plane inside $\mathbb{R}^n$ (all possible lines through the data). Adding bathrooms as a third column expands the column space to three dimensions — a richer set of possible predictions, and a larger space for $y$ to project onto.
-
-:::{.callout-important}
-## Definition: Column space
-
-The **column space** of a matrix $X$ is the set of all linear combinations of its columns:
-$$\text{col}(X) = \{X\beta : \beta \in \mathbb{R}^p\}$$
-This set is exactly the collection of all possible predictions $\hat{y} = X\beta$. More columns means a larger column space, which means the projection of $y$ onto that space can only get closer — never farther.
-:::
-
-More columns means a bigger column space, which means $\hat{y}$ can get closer to $y$. Training $R^2$ can only increase (or stay the same) when you add a feature.
+Every prediction $\hat{y} = X\beta$ is a linear combination of the columns of $X$ — the span from Chapter 4, now with more vectors. With one feature plus an intercept the span was a 2D plane inside $\mathbb{R}^n$; adding bathrooms as a third column expands it to a three-dimensional set of reachable predictions. More columns mean a larger span, so the projection of $y$ can only get closer. Training $R^2$ can only increase (or stay the same) when you add a feature.
 
 ## Normal equations
 
@@ -217,7 +203,21 @@ room_dummies = pd.get_dummies(df['room_type'], prefix='room_type')
 room_dummies.head()
 ```
 
-There is a subtlety. The three dummy columns sum to 1 for every row — exactly the all-ones column $\mathbf{1}$ that the intercept already contributes. Adding the three dummies together reproduces a column that is already in $X$, so the extra column is *linearly dependent* on the existing columns. Recall from Chapter 4 that the span is the set of all reachable predictions; the column space is the span of $X$'s columns. Adding a linearly dependent column doesn't grow the span at all — it just creates a collinearity, and the normal equations become unsolvable ($X^TX$ is singular). The fix: drop one category, called the **reference level**, so the remaining dummy columns are linearly independent of the intercept.
+There is a subtlety. Add the three dummy columns together, and you get a column of all ones — exactly the intercept column $\mathbf{1}$ that is already in the model. That means one of the dummies can be written as the intercept minus the other two: they form a **linearly dependent** set.
+
+:::{.callout-important}
+## Definition: Linear dependence
+
+A set of vectors $v_1, \ldots, v_k$ is **linearly dependent** if one of them can be written as a linear combination of the others. Equivalently, there exist scalars $c_1, \ldots, c_k$, not all zero, such that
+$$c_1 v_1 + c_2 v_2 + \cdots + c_k v_k = 0.$$
+A set that is not linearly dependent is **linearly independent**.
+:::
+
+The room-type dummies illustrate the definition concretely. Let $e, p, s$ be the Entire-home, Private-room, and Shared-room indicator columns. Every listing is in exactly one category, so for every row
+$$e_i + p_i + s_i = 1 = \mathbf{1}_i,$$
+and rearranging gives $\mathbf{1} - e - p - s = 0$ — a non-trivial linear combination of $\{\mathbf{1}, e, p, s\}$ that equals the zero vector. The four columns are linearly dependent.
+
+Adding a linearly dependent column doesn't grow the span — it just creates a collinearity, and the normal equations become unsolvable ($X^TX$ is singular). The fix: drop one category, called the **reference level**, so the remaining dummy columns are linearly independent of the intercept.
 
 :::{.callout-important}
 ## Definition: Reference level
@@ -531,7 +531,7 @@ for beds in [1, 3, 5, 7, 9]:
 :::{.callout-tip}
 ## Think About It
 
-Training $R^2$ keeps rising with degree. Do you agree that higher degree is "better"? Split the question in two. *In-sample:* for a new 3-bedroom listing (well inside the observed data), would the degree-6 prediction be reasonable? *Out-of-sample:* for a new 9-bedroom listing (outside the observed range), would you trust it? Training $R^2$ always increases with more features — a property of projection onto a larger column space — but the model's predictions can become worse everywhere the data is thin. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
+Training $R^2$ keeps rising with degree. Do you agree that higher degree is "better"? Split the question in two. *In-sample:* for a new 3-bedroom listing (well inside the observed data), would the degree-6 prediction be reasonable? *Out-of-sample:* for a new 9-bedroom listing (outside the observed range), would you trust it? Training $R^2$ always increases with more features — a property of projection onto a larger span — but the model's predictions can become worse everywhere the data is thin. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
 :::
 
 :::{.callout-note}
@@ -860,12 +860,12 @@ plt.tight_layout(w_pad=3)
 plt.show()
 ```
 
-When feature vectors point in nearly the same direction, adding the second one barely expands the column space. The phenomenon is called **multicollinearity**. Coefficients of collinear features can become large, opposite in sign, and unstable — small changes in the data produce large swings in the estimated coefficients. The predictions may still be fine, but individual coefficients become uninterpretable.
+When feature vectors point in nearly the same direction, adding the second one barely expands the span. The phenomenon is called **multicollinearity**. Coefficients of collinear features can become large, opposite in sign, and unstable — small changes in the data produce large swings in the estimated coefficients. The predictions may still be fine, but individual coefficients become uninterpretable.
 
 :::{.callout-important}
 ## Definition: Multicollinearity
 
-**Multicollinearity** occurs when two or more feature columns are highly correlated — their vectors point in nearly the same direction. The column space barely grows from the additional feature, and the normal equations become ill-conditioned: $(X^TX)^{-1}$ amplifies small perturbations in the data.
+**Multicollinearity** occurs when two or more feature columns are highly correlated — their vectors point in nearly the same direction. The span barely grows from the additional feature, and the normal equations become ill-conditioned: $(X^TX)^{-1}$ amplifies small perturbations in the data.
 :::
 
 ```{python}
@@ -962,7 +962,7 @@ The log-transformed model produces residuals with more uniform spread — the fa
 
 This chapter extended the regression framework from Chapter 4 in three directions:
 
-- **Multiple regression** with numeric features: more features expand the column space, and the normal equations $X^TX\beta = X^Ty$ give the coefficients in closed form.
+- **Multiple regression** with numeric features: more features expand the span of reachable predictions, and the normal equations $X^TX\beta = X^Ty$ give the coefficients in closed form.
 - **One-hot encoding** brings categorical variables into the model. The reference level is absorbed into the intercept; other coefficients measure differences relative to it.
 - **Feature engineering** — polynomials, interactions, missingness indicators, log transforms — expands what "linear in parameters" can express.
 
@@ -980,8 +980,7 @@ Three questions remain open:
 
 ### Key ideas
 
-- **Column space** — the set of all possible predictions $X\beta$. More independent columns means a larger column space and a closer projection.
-- **Normal equations** — $X^TX\beta = X^Ty$. The algebraic form of "the residual is orthogonal to every feature." Derived by stacking the orthogonality conditions.
+- **Normal equations** — $X^TX\beta = X^Ty$. The algebraic form of "the residual is orthogonal to every feature." Derived by stacking the orthogonality conditions. More independent feature columns means a larger span and a closer projection of $y$.
 - **Coefficient interpretation** — in multiple regression, each coefficient measures the association between a feature and the response **holding all other features constant**. Coefficients change between simple and multiple regression because of confounding among features.
 - **One-hot encoding** — converts a categorical variable with $k$ categories into $k-1$ binary columns. The dropped category is the **reference level**, absorbed into the intercept.
 - **Feature engineering** — creating new input columns (polynomials, interactions, indicators) so a linear model can capture nonlinear patterns. The model stays linear in $\beta$.
@@ -989,7 +988,7 @@ Three questions remain open:
 - **Interaction terms** — products of two features ($x_1 \times x_2$) that let the association between one feature and the response depend on another.
 - **Log transform** — regressing $\log(y)$ on $x$ gives multiplicative coefficients (percentage changes per unit increase in $x$). Appropriate for positive, right-skewed responses.
 - **Adjusted $R^2$** — penalizes for the number of features, preventing $R^2$ from rewarding useless predictors.
-- **Multicollinearity** — when feature columns are highly correlated, the column space barely grows. Coefficients become unstable and hard to interpret.
+- **Multicollinearity** — when feature columns are highly correlated, the span barely grows. Coefficients become unstable and hard to interpret.
 - **Heteroscedasticity** — non-constant residual variance (fan-shaped residual plots). Coefficients remain unbiased but standard errors become unreliable.
 - **Missing values as features** — pair imputed values with a binary missingness indicator to let the model learn from informative missingness.
 

@@ -33,7 +33,7 @@ Here is the roadmap:
 1. **Vectors in data** — two ways to view a dataset, norms, and distances.
 2. **Predicting with no features** — the mean as the best constant predictor.
 3. **Predicting with one feature** — simple regression as a projection.
-4. **How good is the fit?** — $R^2$, cosine similarity, and the Pythagorean theorem.
+4. **How good is the fit?** — $R^2$, correlation, and the Pythagorean theorem.
 5. **Regression to the mean** — why extreme observations revert toward the average.
 
 ```{python}
@@ -179,7 +179,7 @@ print(f"Distance = ||diff|| = sqrt({diff[0]}² + {diff[1]}²) = {dist:.2f}")
 
 Now flip your perspective. Instead of one listing as a point in feature space, look at one *feature* as a vector across all listings. The price column is a vector in $\mathbb{R}^n$ — one entry per listing. So is the bedrooms column.
 
-We can't plot these vectors in $\mathbb{R}^n$: any picture we make is in $\mathbb{R}^2$. Instead, an **index plot** can visualize the column space. Each dot represents one listing, plotted by its index (horizontal) and feature value (vertical). The index plot below sorts the five toy listings by price and overlays bedrooms on the same axis.
+We can't plot these vectors in $\mathbb{R}^n$: any picture we make is in $\mathbb{R}^2$. Instead, an **index plot** can visualize these high-dimensional vectors. Each dot represents one listing, plotted by its index (horizontal) and feature value (vertical). The index plot below sorts the five toy listings by price and overlays bedrooms on the same axis.
 
 ```{python}
 # Sort listings by price to reveal structure
@@ -206,7 +206,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-Price and bedrooms rise together: the two columns are **correlated**. Correlation is the word you already know for this pattern, and in this chapter it returns with a geometric meaning. Two correlated columns, viewed as vectors in $\mathbb{R}^n$, point in similar directions. The tool that quantifies "similar direction" is the **inner product**.
+Price and bedrooms rise together: the two columns are correlated. In this chapter, correlation gets a geometric meaning — two correlated columns, viewed as vectors in $\mathbb{R}^n$, point in similar directions. The tool that quantifies "similar direction" is the **inner product**.
 
 :::{.callout-important}
 ## Definition: Inner product (dot product)
@@ -265,6 +265,30 @@ plt.show()
 
 Two vectors $u$ and $v$ are **orthogonal** if $u^T v = 0$. Orthogonal vectors are perpendicular — they share no common direction.
 :::
+
+The raw inner product has a shortcoming: it mixes direction with magnitude. Scale the price column from dollars to cents and the inner product grows 100-fold, even though the geometric relationship is unchanged. To isolate direction, center each vector (subtract its mean so deviations from average are on equal footing) and then divide by norms. The result is the **correlation coefficient** you already know from probability.
+
+:::{.callout-important}
+## Definition: Correlation
+
+The **Pearson correlation coefficient** between two vectors $u, v \in \mathbb{R}^n$ is the inner product of their centered, length-normalized versions:
+$$r(u, v) = \frac{(u - \bar{u})^T (v - \bar{v})}{\|u - \bar{u}\| \; \|v - \bar{v}\|}$$
+where $\bar{u} = \frac{1}{n}\sum_i u_i$ is the mean of $u$ (similarly for $v$). The value of $r$ is always between $-1$ and $+1$:
+
+- $r = +1$: the centered vectors point in the same direction (perfect positive linear association).
+- $r = -1$: they point in opposite directions (perfect negative linear association).
+- $r = 0$: the centered vectors are orthogonal — no linear information.
+
+Correlation is unitless: scaling either column by a positive constant leaves $r$ unchanged.
+:::
+
+```{python}
+# Correlation between price and bedrooms on the full dataset
+r_price_beds = df['price'].corr(df['bedrooms'])
+print(f"r(price, bedrooms) = {r_price_beds:.4f}")
+print("Positive and moderate — prices and bedrooms move together, "
+      "but bedrooms is far from the whole story.")
+```
 
 Correlation and orthogonality are the two endpoints we will use throughout the chapter: correlated columns contribute to prediction, orthogonal residuals signal that no further correlation remains to exploit.
 
@@ -804,33 +828,7 @@ print(f"R² = 1 - {ss_res:,.0f} / {ss_tot:,.0f} = {r2:.3f}")
 print(f"\nBedrooms alone explains roughly {r2*100:.0f}% of the price variation.")
 ```
 
-## Cosine similarity
-
-The inner product measures whether two vectors point in the same direction, but its value depends on both direction *and* magnitude. To isolate direction, divide by the norms.
-
-:::{.callout-important}
-## Definition: Cosine similarity
-
-The **cosine similarity** between vectors $u$ and $v$ is
-$$\cos\theta = \frac{u^T v}{\|u\|\,\|v\|}$$
-Values range from $-1$ (opposite directions) to $+1$ (same direction). A value of $0$ means the vectors are orthogonal. For centered data, cosine similarity equals the Pearson correlation coefficient.
-:::
-
-```{python}
-# Cosine similarity between centered price and bedrooms = correlation
-price_centered = prices - prices.mean()
-beds_centered = df['bedrooms'].values - df['bedrooms'].mean()
-
-cos_sim = np.dot(price_centered, beds_centered) / (
-    np.linalg.norm(price_centered) * np.linalg.norm(beds_centered))
-r_corr = df['price'].corr(df['bedrooms'])
-
-print(f"Cosine similarity (centered): {cos_sim:.4f}")
-print(f"Pearson correlation:           {r_corr:.4f}")
-print(f"They match — cosine similarity of centered vectors is the correlation.")
-```
-
-## $R^2$ as cosine squared
+## $R^2$ and the angle between $y$ and $\hat{y}$
 
 After centering $y$ (subtracting $\bar{y}$), the Pythagorean theorem gives an exact decomposition:
 
@@ -840,7 +838,7 @@ The centered prediction and the residual form the two legs of a right triangle, 
 
 $$1 = \frac{\|\hat{y} - \bar{y}\|^2}{\|y - \bar{y}\|^2} + \frac{\|\epsilon\|^2}{\|y - \bar{y}\|^2} = R^2 + (1 - R^2)$$
 
-This decomposition is precisely $\cos^2\theta + \sin^2\theta = 1$, where $\theta$ is the angle between the centered response $y - \bar{y}$ and the centered prediction $\hat{y} - \bar{y}$. Therefore $R^2 = \cos^2\theta$: it measures how close $y$ is to the span of the features, expressed as an angle.
+The first ratio has a familiar name. By the definition of correlation, $\|\hat{y} - \bar{y}\| / \|y - \bar{y}\|$ is exactly $r(y, \hat{y})$ — the correlation between the actual and predicted prices. So $R^2 = r(y, \hat{y})^2$: it measures how closely the centered prediction vector aligns with the centered response, with perfect alignment ($r = \pm 1$) giving $R^2 = 1$ and orthogonal vectors ($r = 0$) giving $R^2 = 0$.
 
 ```{python}
 #| code-fold: true
@@ -850,19 +848,19 @@ This decomposition is precisely $\cos^2\theta + \sin^2\theta = 1$, where $\theta
 # of a right triangle.
 fig, ax = plt.subplots(figsize=(6, 6))
 
-# Set up the geometry: pick a 1D column space direction, and a point y off it
+# Set up the geometry: pick a 1D span direction, and a point y off it
 origin = np.array([0.0, 0.0])
-col_dir = np.array([2.0, 1.0])              # direction of col(X)
+col_dir = np.array([2.0, 1.0])              # direction of the feature span
 y_vec = np.array([1.8, 2.8])                # centered response y - ȳ
-# Project y onto col(X): ŷ = (y · d / d · d) · d
+# Project y onto the span: ŷ = (y · d / d · d) · d
 yhat_vec = col_dir * (np.dot(y_vec, col_dir) / np.dot(col_dir, col_dir))
 e_vec = y_vec - yhat_vec                    # residual ε (orthogonal leg)
 
-# Draw the column space as a faint line through the origin
+# Draw the span as a faint line through the origin
 slope = col_dir[1] / col_dir[0]
 t = np.linspace(-0.3, 3.5, 100)
 ax.plot(t, slope * t, color='#2d8a4e', lw=2.5, alpha=0.25)
-ax.text(3.1, slope * 3.1 + 0.12, 'col($X$)', fontsize=11,
+ax.text(3.1, slope * 3.1 + 0.12, 'span$\\{\\mathbf{1}, x\\}$', fontsize=11,
         color='#2d8a4e', alpha=0.7, style='italic')
 
 ax.annotate('', xy=yhat_vec, xytext=origin,
@@ -883,7 +881,7 @@ mid_e = (y_vec + yhat_vec) / 2
 ax.text(mid_e[0] + 0.15, mid_e[1] + 0.05, '$\\epsilon$',
         fontsize=15, color='#555555', style='italic')
 
-# Right-angle marker at ŷ (where ε meets col(X))
+# Right-angle marker at ŷ (where ε meets the span)
 sz = 0.2
 p_dir = col_dir / np.linalg.norm(col_dir)
 r_dir = e_vec / np.linalg.norm(e_vec)
@@ -905,7 +903,7 @@ ax.text(arc_r * np.cos(mid_angle) + 0.08,
         '$\\theta$', fontsize=15, color='#8e44ad')
 
 ax.text(2.4, 3.15,
-        '$R^2 = \\cos^2\\theta'
+        '$R^2 = r(y, \\hat{y})^2'
         ' = \\dfrac{\\|\\hat{y} - \\bar{y}\\|^2}{\\|y - \\bar{y}\\|^2}$',
         fontsize=13, color='#333333',
         bbox=dict(boxstyle='round,pad=0.4', facecolor='#f0f0f0',
@@ -921,7 +919,7 @@ for spine in ax.spines.values():
     spine.set_visible(False)
 ax.set_xticks([])
 ax.set_yticks([])
-ax.set_title('$R^2$ measures how close $y$ is to the column space',
+ax.set_title('$R^2$ measures how close $y$ is to the span',
              fontsize=12, pad=10)
 plt.tight_layout()
 plt.show()
@@ -1029,7 +1027,7 @@ This chapter built predictions in two stages:
 
 The principle is the same in both cases: minimize squared error, which amounts to making the residual orthogonal to every feature. $R^2$ measures how much of $y$ lives in the feature span — geometrically, $\cos^2\theta$ of the angle between $y$ and $\hat{y}$.
 
-In [Chapter 5](lec05-feature-engineering.qmd), we add more features — bathrooms, room type, neighborhood — and discover that the same orthogonality principle scales to any number of predictors. More features expand the column space, giving the projection a chance to get closer to $y$. We will also transform raw data into features a linear model can use: one-hot encoding for categories, polynomials for nonlinear patterns, and log transforms for multiplicative relationships.
+In [Chapter 5](lec05-feature-engineering.qmd), we add more features — bathrooms, room type, neighborhood — and discover that the same orthogonality principle scales to any number of predictors. More features expand the span, giving the projection a chance to get closer to $y$. We will also transform raw data into features a linear model can use: one-hot encoding for categories, polynomials for nonlinear patterns, and log transforms for multiplicative relationships.
 
 ## Study guide
 
@@ -1039,14 +1037,14 @@ In [Chapter 5](lec05-feature-engineering.qmd), we add more features — bathroom
 - **Norm** — $\|v\| = \sqrt{\sum v_i^2}$, the length of a vector. Norms measure magnitude.
 - **Distance** — $d(u,v) = \|u - v\|$, the norm of the difference vector.
 - **Inner product** — $u^T v = \sum u_i v_i$. Positive means same direction; zero means orthogonal.
-- **Cosine similarity** — $\cos\theta = u^T v / (\|u\|\|v\|)$. Equals the Pearson correlation for centered vectors.
+- **Correlation** — Pearson's $r(u, v)$ is the inner product of the centered, length-normalized vectors, ranging from $-1$ (opposite) to $+1$ (aligned). Unitless: rescaling a column leaves $r$ unchanged.
 - **Linear combination** — $\beta_1 v_1 + \beta_2 v_2$, a weighted sum of vectors.
 - **Span** — the set of all linear combinations of a set of vectors. Determines what a linear model can predict.
 - **Orthogonal** — vectors with zero inner product. Orthogonality of the residual to the features is the optimality condition for least squares.
 - **Projection** — the closest point in a subspace to $y$. Regression finds the projection of $y$ onto the span of the feature columns.
 - **Residual** — $\epsilon = y - \hat{y}$, the part of $y$ the model cannot explain. Orthogonal to every feature column.
 - **Normal equations** — $\mathbf{1}^T \epsilon = 0$ and $x^T \epsilon = 0$ for simple regression. The algebraic expression of the orthogonality conditions.
-- **$R^2$** — fraction of variance explained; $R^2 = 1 - \|\epsilon\|^2 / \|y - \bar{y}\|^2$. Equals $\cos^2\theta$ in the Pythagorean decomposition.
+- **$R^2$** — fraction of variance explained; $R^2 = 1 - \|\epsilon\|^2 / \|y - \bar{y}\|^2$. Equivalently, $R^2 = r(y, \hat{y})^2$.
 - **$R^2 = r^2$ in simple regression** — the correlation coefficient $r$ measures linear association ($-1$ to $+1$); $R^2$ measures variance explained ($0$ to $1$). For one predictor, squaring $r$ gives $R^2$.
 - **Regression to the mean** — extreme observations tend to be followed by less extreme ones whenever $|r| < 1$.
 - **Coefficient interpretation** — $\beta_0$ is the predicted $y$ when $x = 0$; $\beta_1$ is the predicted change in $y$ per unit change in $x$. Association, not causation.
