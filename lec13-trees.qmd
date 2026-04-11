@@ -9,6 +9,19 @@ You're building a pricing tool for Airbnb hosts. In [Chapter 5](lec05-feature-en
 
 What if the model could figure out where to split on its own? Decision trees do exactly that: they find the splits automatically. No encoding, no polynomial terms, no missing-value imputation. The model looks at the data and decides where to cut.
 
+:::{.callout-tip}
+## Two model families × two tasks
+
+In Chapters 4--6, you used **linear models** for regression (predicting prices). In [Chapter 7](lec07-classification.qmd), you used a linear model for classification (logistic regression). Today introduces a completely different model family --- **trees** --- that handles both tasks:
+
+|              | Regression | Classification |
+|--------------|-----------|----------------|
+| **Linear models** | Linear regression (Ch 4--5) | Logistic regression (Ch 7) |
+| **Trees** | Regression tree (today) | Classification tree (today) |
+
+Logistic regression is much more complex to optimize than linear regression (gradient descent vs. closed-form normal equations). For trees, regression and classification are equally simple --- just change the splitting criterion.
+:::
+
 ```{python}
 import numpy as np
 import pandas as pd
@@ -16,10 +29,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, plot_tree, export_text
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.metrics import (r2_score, mean_squared_error, confusion_matrix,
+                             precision_score, recall_score, f1_score,
+                             roc_curve, roc_auc_score, ConfusionMatrixDisplay)
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
@@ -279,7 +294,92 @@ print(f"Tree at CV-best depth={best_depth}: Test R² = {best_tree.score(X_test, 
 Cross-validation picked the depth without ever touching the test set. The test-set score reported above is an honest estimate of how this tree will perform on new listings.
 
 
+## Classification trees
+
+Everything above predicts a continuous price. But trees handle **classification** just as naturally. The splitting criterion changes from squared error to **Gini impurity**, but everything else --- greedy recursive partitioning, depth control, cross-validation --- stays the same.
+
+Let's create a binary target: is a listing "expensive" (price above $200)?
+
+```{python}
+# Binary target: expensive = price > $200
+y_train_exp = (y_train > 200).astype(int)
+y_test_exp = (y_test > 200).astype(int)
+
+print(f"Expensive listings: {y_train_exp.mean():.1%} of training set, "
+      f"{y_test_exp.mean():.1%} of test set")
+```
+
+We pick the tree depth by cross-validation, just as we did for regression.
+
+```{python}
+depths_clf = [1, 2, 3, 4, 5, 7, 10, 15, 20]
+cv_means_clf = []
+
+for d in depths_clf:
+    clf_cv = DecisionTreeClassifier(max_depth=d, random_state=42)
+    scores = cross_val_score(clf_cv, X_train, y_train_exp, cv=5, scoring='accuracy')
+    cv_means_clf.append(scores.mean())
+    print(f"depth={d:>2d}: CV accuracy = {scores.mean():.4f} ± {scores.std():.4f}")
+
+best_depth_clf = depths_clf[np.argmax(cv_means_clf)]
+print(f"\nBest depth by CV: {best_depth_clf}")
+```
+
+```{python}
+# Fit classification tree at best depth
+clf_tree = DecisionTreeClassifier(max_depth=best_depth_clf, random_state=42)
+clf_tree.fit(X_train, y_train_exp)
+
+y_pred_tree = clf_tree.predict(X_test)
+y_prob_tree = clf_tree.predict_proba(X_test)[:, 1]
+
+print(f"Classification tree (depth={best_depth_clf}):")
+print(f"  Accuracy  = {clf_tree.score(X_test, y_test_exp):.3f}")
+print(f"  Precision = {precision_score(y_test_exp, y_pred_tree):.3f}")
+print(f"  Recall    = {recall_score(y_test_exp, y_pred_tree):.3f}")
+print(f"  F1        = {f1_score(y_test_exp, y_pred_tree):.3f}")
+print(f"  AUC       = {roc_auc_score(y_test_exp, y_prob_tree):.3f}")
+```
+
+The confusion matrix shows how the tree's predictions break down.
+
+```{python}
+#| code-fold: true
+fig, ax = plt.subplots(figsize=(6, 5))
+cm = confusion_matrix(y_test_exp, y_pred_tree)
+disp = ConfusionMatrixDisplay(cm, display_labels=['< $200', '≥ $200'])
+disp.plot(ax=ax, cmap='Blues', values_format='d')
+ax.set_title(f'Classification tree (depth={best_depth_clf})')
+plt.tight_layout()
+plt.show()
+```
+
+The ROC curve plots the tradeoff between true positive rate (recall) and false positive rate as we vary the classification threshold.
+
+```{python}
+#| code-fold: true
+fpr_tree, tpr_tree, _ = roc_curve(y_test_exp, y_prob_tree)
+auc_tree = roc_auc_score(y_test_exp, y_prob_tree)
+
+fig, ax = plt.subplots(figsize=(7, 6))
+ax.plot(fpr_tree, tpr_tree, color='steelblue', linewidth=2.5,
+        label=f'Classification tree (AUC = {auc_tree:.3f})')
+ax.plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random guess')
+ax.set_xlabel('False positive rate')
+ax.set_ylabel('True positive rate (recall)')
+ax.set_title('ROC curve — classification tree')
+ax.legend(fontsize=11)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+The classification tree learns the same kinds of splits as the regression tree — room type, borough, bedrooms — but now it routes listings to "expensive" or "not expensive" leaves instead of predicting a dollar amount. If you already understand regression trees, you understand classification trees.
+
+
 ## Random forests
+
+One tree overfits. What about averaging many trees?
 
 One tree overfits. What about averaging many trees?
 
@@ -431,6 +531,121 @@ The random forest beats the linear model with interactions. Does that mean linea
 :::
 
 
+### Random forest classifier
+
+Same story for classification. A random forest classifier fits many classification trees on bootstrap samples and takes a majority vote.
+
+```{python}
+rf_clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+rf_clf.fit(X_train, y_train_exp)
+
+y_pred_rf = rf_clf.predict(X_test)
+y_prob_rf = rf_clf.predict_proba(X_test)[:, 1]
+
+print(f"Random forest classifier (100 trees):")
+print(f"  Accuracy  = {rf_clf.score(X_test, y_test_exp):.3f}")
+print(f"  Precision = {precision_score(y_test_exp, y_pred_rf):.3f}")
+print(f"  Recall    = {recall_score(y_test_exp, y_pred_rf):.3f}")
+print(f"  F1        = {f1_score(y_test_exp, y_pred_rf):.3f}")
+print(f"  AUC       = {roc_auc_score(y_test_exp, y_prob_rf):.3f}")
+```
+
+```{python}
+#| code-fold: true
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Confusion matrix
+cm_rf = confusion_matrix(y_test_exp, y_pred_rf)
+disp_rf = ConfusionMatrixDisplay(cm_rf, display_labels=['< $200', '≥ $200'])
+disp_rf.plot(ax=axes[0], cmap='Greens', values_format='d')
+axes[0].set_title('Random forest classifier (100 trees)')
+
+# ROC comparison: single tree vs forest
+fpr_rf, tpr_rf, _ = roc_curve(y_test_exp, y_prob_rf)
+auc_rf = roc_auc_score(y_test_exp, y_prob_rf)
+
+axes[1].plot(fpr_tree, tpr_tree, color='steelblue', linewidth=2,
+             label=f'Single tree (AUC = {auc_tree:.3f})')
+axes[1].plot(fpr_rf, tpr_rf, color='forestgreen', linewidth=2.5,
+             label=f'Random forest (AUC = {auc_rf:.3f})')
+axes[1].plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random guess')
+axes[1].set_xlabel('False positive rate')
+axes[1].set_ylabel('True positive rate (recall)')
+axes[1].set_title('ROC: single tree vs. random forest')
+axes[1].legend(fontsize=10)
+axes[1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+```
+
+Same story as regression: averaging reduces variance. The forest's ROC curve sits above the single tree's at nearly every threshold, and its AUC is higher. The forest gets more of the expensive listings right without flagging too many cheap ones.
+
+
+## Trees vs. logistic regression
+
+We now have two classification approaches for the same task: trees and logistic regression from [Chapter 7](lec07-classification.qmd). How do they compare?
+
+```{python}
+# Logistic regression on the same binary target
+lr = LogisticRegression(max_iter=1000, random_state=42)
+lr.fit(X_train, y_train_exp)
+
+y_pred_lr = lr.predict(X_test)
+y_prob_lr = lr.predict_proba(X_test)[:, 1]
+
+fpr_lr, tpr_lr, _ = roc_curve(y_test_exp, y_prob_lr)
+auc_lr = roc_auc_score(y_test_exp, y_prob_lr)
+```
+
+```{python}
+# Side-by-side comparison
+print(f"{'Metric':<12} {'Logistic Reg':>14} {'Tree (d={})'.format(best_depth_clf):>14} {'RF (100)':>14}")
+print("-" * 58)
+for name, fn in [('Precision', precision_score), ('Recall', recall_score),
+                 ('F1', f1_score)]:
+    print(f"{name:<12} {fn(y_test_exp, y_pred_lr):>14.3f} "
+          f"{fn(y_test_exp, y_pred_tree):>14.3f} "
+          f"{fn(y_test_exp, y_pred_rf):>14.3f}")
+print(f"{'AUC':<12} {auc_lr:>14.3f} {auc_tree:>14.3f} {auc_rf:>14.3f}")
+```
+
+```{python}
+#| code-fold: true
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.plot(fpr_lr, tpr_lr, color='darkorange', linewidth=2.5,
+        label=f'Logistic regression (AUC = {auc_lr:.3f})')
+ax.plot(fpr_tree, tpr_tree, color='steelblue', linewidth=2,
+        label=f'Classification tree (AUC = {auc_tree:.3f})')
+ax.plot(fpr_rf, tpr_rf, color='forestgreen', linewidth=2.5,
+        label=f'Random forest (AUC = {auc_rf:.3f})')
+ax.plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random guess')
+ax.set_xlabel('False positive rate')
+ax.set_ylabel('True positive rate (recall)')
+ax.set_title('ROC comparison: logistic regression vs. trees')
+ax.legend(fontsize=11)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+Each approach has distinct strengths:
+
+- **Logistic regression** produces interpretable coefficients (log-odds per feature). You can say "each additional bedroom increases the odds of being expensive by a factor of $e^{\beta}$." The model is fast, stable, and works well when the true decision boundary is roughly linear.
+
+- **Decision trees** capture nonlinear relationships and interactions without manual feature engineering. A tree can learn that "Manhattan listings with 2+ bedrooms are expensive" without you specifying the interaction. The tree structure is easy to visualize and explain to non-technical stakeholders.
+
+- **Random forests** combine the nonlinear power of trees with the variance reduction of ensembling. They're harder to interpret than either single model, but they consistently perform well on tabular data with minimal tuning.
+
+When to prefer each: use logistic regression when you need interpretable coefficients or when the dataset is small and you want a stable model. Use trees or forests when you have many features with potential interactions and don't need per-feature coefficient interpretations.
+
+:::{.callout-tip}
+## The 2×2 matrix, completed
+
+We started this chapter with a 2×2 table: linear models and trees, each applied to regression and classification. You've now seen all four cells. The key lesson: model families (linear vs. tree-based) and tasks (regression vs. classification) are independent choices. Once you learn a model family, applying it to either task is straightforward.
+:::
+
+
 ## Feature importance
 
 A random forest is harder to interpret than a linear regression — you can't point to a single coefficient and say "each bedroom adds \$X." But the forest does tell you which features it relies on most.
@@ -477,13 +692,6 @@ If 30% of your `bedrooms` column is missing and you impute with the median befor
 In practice, tree-based models (especially gradient-boosted trees like XGBoost) are the most popular choice for tabular data with missing values — precisely because they don't require the analyst to make imputation decisions that could introduce bias.
 
 
-::::{.callout-note}
-## Preview: classification
-
-Everything above predicts a continuous number (price). **Classification** predicts a discrete category instead — "expensive or not," "spam or not." You already know logistic regression from [Chapter 7](lec07-classification.qmd); trees handle classification just as naturally as regression. A classification tree predicts the majority class in each leaf, and a random forest classifier uses majority vote across trees.
-::::
-
-
 ## Key takeaways
 
 - **Decision trees find splits automatically — no manual feature engineering.** The model examines every feature and every threshold, choosing splits that minimize prediction error. No need for one-hot encoding, polynomial terms, or interaction terms.
@@ -500,6 +708,10 @@ Everything above predicts a continuous number (price). **Classification** predic
 
 - **Feature importance ranks which variables the forest relies on.** Mean decrease in impurity (MDI) measures how much each feature contributes to reducing prediction error, but beware of bias toward high-cardinality features.
 
+- **Classification trees use Gini impurity instead of squared error, but everything else stays the same.** Greedy splitting, depth control by CV, random forest ensembling — the entire framework transfers from regression to classification by swapping the splitting criterion.
+
+- **Trees vs. logistic regression is a real design choice.** Logistic regression gives interpretable coefficients (log-odds). Trees capture nonlinear patterns without manual feature engineering. Random forests trade interpretability for consistently strong performance.
+
 
 ## Study guide
 
@@ -514,17 +726,26 @@ Everything above predicts a continuous number (price). **Classification** predic
 - **Feature importance (MDI)** — mean decrease in impurity: the average reduction in squared error (or Gini impurity) across all splits using a given feature. Biased toward high-cardinality features; permutation importance is a more robust alternative.
 - **Missing data in trees** — trees handle missing values natively via surrogate splits or learned missing-value routing, unlike linear models that require imputation.
 - **Cross-validation for tree depth** — applying 5-fold CV to select the best `max_depth`, the same way we selected polynomial degree and lasso penalty in Chapter 6.
+- **Gini impurity** — the classification splitting criterion $\hat{p}(1-\hat{p})$; measures how mixed a node is. Replaces squared error when the target is categorical.
+- **Classification tree** — a decision tree that predicts the majority class in each leaf, using Gini impurity to choose splits. Same greedy recursive algorithm as regression trees.
+- **Random forest classifier** — an ensemble of classification trees using bagging and feature subsampling. Uses majority vote (or averaged predicted probabilities) instead of averaging predictions.
+- **Trees vs. logistic regression** — logistic regression gives interpretable coefficients (log-odds); trees capture nonlinear patterns without feature engineering. Random forests trade interpretability for strong default performance.
 
 ### Computational tools
 
 - `DecisionTreeRegressor(max_depth=4).fit(X, y)` — fits a regression tree with controlled depth
+- `DecisionTreeClassifier(max_depth=5).fit(X, y)` — fits a classification tree; uses Gini impurity
 - `RandomForestRegressor(n_estimators=100).fit(X, y)` — fits a random forest; more trees = better or flat, never worse
+- `RandomForestClassifier(n_estimators=100).fit(X, y)` — fits a classification forest; uses majority vote
 - `plot_tree(tree, feature_names=..., filled=True)` — visualizes a fitted decision tree
 - `export_text(tree, feature_names=...)` — prints the tree's decision rules as text
 - `rf.feature_importances_` — array of feature importance scores (mean decrease in impurity)
+- `confusion_matrix(y_true, y_pred)` — 2×2 matrix of true/false positives and negatives
+- `roc_curve(y_true, y_prob)` — computes FPR/TPR pairs for plotting the ROC curve
+- `roc_auc_score(y_true, y_prob)` — area under the ROC curve; higher = better discrimination
 - `train_test_split(X, y, test_size=0.3)` — splits data into training and test sets for honest evaluation
 - `cross_val_score(model, X, y, cv=5)` — 5-fold cross-validation; use to choose tree depth
 
 ### For the quiz
 
-You are responsible for: how a decision tree splits (greedy recursive partitioning), why deep trees overfit, how bagging and feature subsampling combine to form a random forest, why adding more trees never hurts, feature importance interpretation, the advantages of trees over linear models for handling missing data and categorical features, and how to use cross-validation to choose tree depth (same principle as choosing polynomial degree or lasso α).
+You are responsible for: how a decision tree splits (greedy recursive partitioning), why deep trees overfit, how bagging and feature subsampling combine to form a random forest, why adding more trees never hurts, feature importance interpretation, the advantages of trees over linear models for handling missing data and categorical features, how to use cross-validation to choose tree depth (same principle as choosing polynomial degree or lasso $\alpha$), classification trees and Gini impurity, confusion matrices and ROC curves for tree classifiers, and the tradeoffs between trees and logistic regression.
