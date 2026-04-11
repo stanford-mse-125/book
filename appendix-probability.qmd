@@ -300,7 +300,7 @@ Key facts:
 - $E[X] = np$
 - $\text{Var}(X) = np(1-p)$
 
-The special case $n = 1$ is the **Bernoulli distribution**: $X \sim \text{Bernoulli}(p)$ takes value 1 with probability $p$ and 0 with probability $1 - p$. You'll see this in Chapter 13, where each patient either has coronary heart disease or doesn't — a single Bernoulli trial.
+The special case $n = 1$ is the **Bernoulli distribution**: $X \sim \text{Bernoulli}(p)$ takes value 1 with probability $p$ and 0 with probability $1 - p$. You'll see this in Chapter 7, where each patient either has coronary heart disease or doesn't — a single Bernoulli trial.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(10, 3.5))
@@ -495,7 +495,7 @@ Two derived rules you'll use implicitly throughout the book:
 
 :::{.callout-note}
 ## Looking ahead
-Conditional probability is the engine behind classification (Chapter 13), where logistic regression estimates $P(\text{disease} \mid \text{features})$, and causal inference (Chapters 18--19), where conditioning on confounders changes the conditional distribution of the outcome. The closely related **likelihood function**, $P(\text{data} \mid \theta)$, reverses the conditioning — you'll see this formulation in Chapters 5 and 13.
+Conditional probability is the engine behind classification (Chapter 7), where logistic regression estimates $P(\text{disease} \mid \text{features})$, and causal inference (Chapters 18--19), where conditioning on confounders changes the conditional distribution of the outcome. The closely related **likelihood function**, $P(\text{data} \mid \theta)$, reverses the conditioning — you'll see this formulation in Chapters 5 and 7.
 :::
 
 ```{python}
@@ -520,7 +520,7 @@ print(f"\nEven with a good filter, only {p_spam_given_flagged:.0%} of flagged em
 print("are actually spam — because spam is rare (the 'base rate').")
 ```
 
-This "base rate" effect — where a low prior probability dominates even a good classifier — shows up whenever you interpret predictions on imbalanced data (Chapter 13). A model with 95% accuracy can still be mostly wrong on the rare class.
+This "base rate" effect — where a low prior probability dominates even a good classifier — shows up whenever you interpret predictions on imbalanced data (Chapter 7). A model with 95% accuracy can still be mostly wrong on the rare class.
 
 
 ## Summary

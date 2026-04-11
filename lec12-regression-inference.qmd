@@ -979,8 +979,9 @@ We revisit this topic in Chapter 18 when we ask: coaches *choose* when to rest p
 so is the "rest effect" actually a "coaching strategy" effect? That question is causal,
 and regression alone cannot answer it.
 
-**Next up:** Chapter 13 is the Act 2 capstone on classification, where we apply
-inference ideas to categorical outcomes.
+**Next up:** [Chapter 12.5](lec12.5-classification-inference.qmd) applies everything
+from Act 2 to classification problems. Then [Chapter 13](lec13-trees.qmd) opens Act 3
+with a completely different model family: decision trees and random forests.
 
 ## Study guide
 

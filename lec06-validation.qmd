@@ -5,7 +5,7 @@ execute:
 jupyter: python3
 ---
 
-A hospital is considering an AI system that predicts which patients will develop sepsis — a life-threatening condition where early intervention is critical. The vendor, Epic Systems, reports high accuracy.^[Specifically, the vendor reported an AUC (area under the ROC curve) of 0.76–0.83. We define AUC and other classification metrics in [Chapter 13](lec13-classification.qmd).] The hospital buys the system and deploys it. What questions should they have asked?
+A hospital is considering an AI system that predicts which patients will develop sepsis — a life-threatening condition where early intervention is critical. The vendor, Epic Systems, reports high accuracy.^[Specifically, the vendor reported an AUC (area under the ROC curve) of 0.76–0.83. We define AUC and other classification metrics in [Chapter 7](lec07-classification.qmd).] The hospital buys the system and deploys it. What questions should they have asked?
 
 When researchers at Michigan Medicine independently evaluated the model on 27,697 hospitalized patients, it missed 67% of sepsis cases while firing false alerts on 18% of all hospitalizations — drowning nurses in alarms for patients who were fine.^[Wong et al., "External Validation of a Widely Implemented Proprietary Sepsis Prediction Model in Hospitalized Patients," *JAMA Internal Medicine*, 2021. <https://pmc.ncbi.nlm.nih.gov/articles/PMC8218233/>] The root cause: Epic evaluated the model on data similar to its training data, not on an independent external test set. The model had learned patterns specific to one hospital system's patient population and coding practices. Those patterns didn't generalize.
 
@@ -37,7 +37,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LinearRegression, Lasso, LassoCV, Ridge
-from sklearn.preprocessing import PolynomialFeatures
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.model_selection import cross_val_score, train_test_split, KFold
 from sklearn.metrics import r2_score, mean_squared_error
 import warnings
@@ -587,7 +587,9 @@ The penalty $\alpha \sum |\beta_j|$ treats every coefficient on the same scale. 
 
 $$\tilde{x}_j = \frac{x_j - \bar{x}_j}{s_j}$$
 
-After standardization, every coefficient is in the same units (response per standard deviation of the feature), so the penalty shrinks them fairly. In practice, always standardize before applying lasso or ridge. We skip this step in the code below for simplicity — our features are already on roughly comparable scales — but for real analyses with mixed units, it's essential.
+After standardization, every coefficient is in the same units (response per standard deviation of the feature), so the penalty shrinks them fairly. In practice, always standardize before applying lasso or ridge.
+
+Scikit-learn's `StandardScaler` handles this. Fit the scaler on the training data (to learn the means and standard deviations), then transform both the training and test data using those same statistics. Applying the *training* statistics to the test data prevents information leakage — the test set plays no role in determining the scaling.
 
 ```{python}
 # Use degree-3 polynomial features on our 500-listing subsample
@@ -596,14 +598,19 @@ X_ks = build_features(base, 6)  # Level 6 = degree-3 polynomial features
 X_ks_tr = X_ks.iloc[train_idx].reset_index(drop=True)
 X_ks_te = X_ks.iloc[test_idx].reset_index(drop=True)
 
-# OLS on the same features (for comparison)
-ols_ks = LinearRegression().fit(X_ks_tr, y_train)
+# Standardize: fit on train, transform both
+scaler = StandardScaler()
+X_ks_tr_s = scaler.fit_transform(X_ks_tr)
+X_ks_te_s = scaler.transform(X_ks_te)
+
+# OLS on the same features (for comparison — unaffected by scaling)
+ols_ks = LinearRegression().fit(X_ks_tr_s, y_train)
 
 # Ridge shrinks all coefficients but keeps them all
-ridge = Ridge(alpha=1.0).fit(X_ks_tr, y_train)
+ridge = Ridge(alpha=1.0).fit(X_ks_tr_s, y_train)
 
 # Lasso automatically shrinks/eliminates features
-lasso = Lasso(alpha=1.0, random_state=42).fit(X_ks_tr, y_train)
+lasso = Lasso(alpha=1.0, random_state=42).fit(X_ks_tr_s, y_train)
 
 n_total = X_ks.shape[1]
 n_nonzero_lasso = (lasso.coef_ != 0).sum()
@@ -612,9 +619,9 @@ print(f"Degree-3 polynomial features: {n_total}")
 print(f"Ridge: all {n_total} coefficients nonzero (shrunk, not eliminated)")
 print(f"Lasso: {n_nonzero_lasso} nonzero (zeroed out {n_total - n_nonzero_lasso})")
 print()
-print(f"OLS   — Train R²: {ols_ks.score(X_ks_tr, y_train):.3f}  Test R²: {r2_score(y_test, ols_ks.predict(X_ks_te)):.3f}")
-print(f"Ridge — Train R²: {ridge.score(X_ks_tr, y_train):.3f}  Test R²: {r2_score(y_test, ridge.predict(X_ks_te)):.3f}")
-print(f"Lasso — Train R²: {lasso.score(X_ks_tr, y_train):.3f}  Test R²: {r2_score(y_test, lasso.predict(X_ks_te)):.3f}")
+print(f"OLS   — Train R²: {ols_ks.score(X_ks_tr_s, y_train):.3f}  Test R²: {r2_score(y_test, ols_ks.predict(X_ks_te_s)):.3f}")
+print(f"Ridge — Train R²: {ridge.score(X_ks_tr_s, y_train):.3f}  Test R²: {r2_score(y_test, ridge.predict(X_ks_te_s)):.3f}")
+print(f"Lasso — Train R²: {lasso.score(X_ks_tr_s, y_train):.3f}  Test R²: {r2_score(y_test, lasso.predict(X_ks_te_s)):.3f}")
 ```
 
 Both Ridge and Lasso beat OLS on the same features. The coefficient plots below reveal the mechanism.
@@ -651,12 +658,12 @@ The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff. Large $
 How do we pick the right $\alpha$? Scikit-learn's `LassoCV` automates the search: it fits lasso at many $\alpha$ values, scores each by cross-validation, and selects the $\alpha$ with the best CV performance.
 
 ```{python}
-lasso_cv = LassoCV(cv=5, random_state=42, max_iter=10000).fit(X_ks_tr, y_train)
+lasso_cv = LassoCV(cv=5, random_state=42, max_iter=10000).fit(X_ks_tr_s, y_train)
 
 print(f"Best alpha: {lasso_cv.alpha_:.4f}")
 print(f"Nonzero coefficients: {(lasso_cv.coef_ != 0).sum()} out of {len(lasso_cv.coef_)}")
-print(f"Train R²: {lasso_cv.score(X_ks_tr, y_train):.3f}")
-print(f"Test R²:  {r2_score(y_test, lasso_cv.predict(X_ks_te)):.3f}")
+print(f"Train R²: {lasso_cv.score(X_ks_tr_s, y_train):.3f}")
+print(f"Test R²:  {r2_score(y_test, lasso_cv.predict(X_ks_te_s)):.3f}")
 ```
 
 We can see the tradeoff directly by plotting cross-validated error against $\alpha$.
@@ -699,7 +706,7 @@ The U-shaped CV curve confirms the bias-variance tradeoff. Too small an $\alpha$
 
 - **Distribution shift is the root cause of many model failures.** A random train/test split tests in-distribution generalization; it cannot detect the kind of covariate or temporal shift that killed the Epic sepsis model.
 
-Where this leads: [Chapter 7](lec07-trees.qmd) (decision trees and random forests), [Chapter 8](lec08-sampling.qmd) (bootstrap), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 16](lec16-backtesting.qmd) (temporal validation).
+Where this leads: [Chapter 7](lec07-classification.qmd) (classification), [Chapter 8](lec08-sampling.qmd) (bootstrap), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 13](lec13-trees.qmd) (decision trees and random forests), [Chapter 16](lec16-backtesting.qmd) (temporal validation).
 
 
 ## Study guide
@@ -728,6 +735,7 @@ Where this leads: [Chapter 7](lec07-trees.qmd) (decision trees and random forest
 - `train_test_split(X, y, test_size=0.3)` — splits data into training and test sets
 - `cross_val_score(model, X, y, cv=5)` — performs 5-fold cross-validation and returns scores per fold
 - `r2_score(y_true, y_pred)` — computes $R^2$ on any set of true/predicted values
+- `StandardScaler().fit_transform(X_train)` — standardizes features to mean 0, std 1; use `.transform(X_test)` on test data
 - `Lasso(alpha=1.0).fit(X, y)` — fits a Lasso regression with regularization strength `alpha`
 - `LassoCV(cv=5).fit(X, y)` — searches over `alpha` values by cross-validation, selects the best
 - `PolynomialFeatures(degree=d)` — generates all polynomial terms up to degree $d$

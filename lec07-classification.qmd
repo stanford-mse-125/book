@@ -5,7 +5,7 @@ execute:
 jupyter: python3
 ---
 
-In Acts 1 and 2, we built and tested models for continuous outcomes. Act 3 extends these ideas to new settings, starting with classification — predicting categories instead of numbers. You used `RandomForestClassifier` back in Chapter 7. Today we understand *why* classification needs its own tools — and build a more interpretable classifier.
+So far, every model we've built predicts a number — price, readmission rate, test score. But many of the most consequential decisions are yes/no: Will this patient be readmitted? Is this email spam? Should we approve this loan? These are **classification** problems, and they need their own tools.
 
 ## The 85% accuracy trap
 

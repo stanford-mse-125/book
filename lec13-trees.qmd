@@ -480,7 +480,7 @@ In practice, tree-based models (especially gradient-boosted trees like XGBoost) 
 ::::{.callout-note}
 ## Preview: classification
 
-Everything above predicts a continuous number (price). **Classification** predicts a discrete category instead — "expensive or not," "spam or not." The same tree-based machinery applies: a classification tree predicts the majority class in each leaf, and a random forest classifier uses majority vote across trees. We develop classification properly with logistic regression in [Chapter 13](lec13-classification.qmd); for projects before then, `RandomForestClassifier` from scikit-learn works out of the box with the same `fit`/`score` interface.
+Everything above predicts a continuous number (price). **Classification** predicts a discrete category instead — "expensive or not," "spam or not." You already know logistic regression from [Chapter 7](lec07-classification.qmd); trees handle classification just as naturally as regression. A classification tree predicts the majority class in each leaf, and a random forest classifier uses majority vote across trees.
 ::::
 
 

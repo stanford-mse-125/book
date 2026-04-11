@@ -180,7 +180,7 @@ print(f"||e|| = {np.linalg.norm(e_3):.3f}")
 
 :::{.callout-note}
 ## Connection to maximum likelihood
-When the errors are normally distributed, least squares and maximum likelihood estimation (MLE) produce identical coefficient estimates. MLE chooses the parameters that make the observed data most probable — a principle that extends to logistic regression ([Lecture 13](lec13-classification.qmd)) and many other models. The equivalence breaks down when errors are non-normal, which is one reason diagnostics matter (later in this lecture).
+When the errors are normally distributed, least squares and maximum likelihood estimation (MLE) produce identical coefficient estimates. MLE chooses the parameters that make the observed data most probable — a principle that extends to logistic regression ([Lecture 7](lec07-classification.qmd)) and many other models. The equivalence breaks down when errors are non-normal, which is one reason diagnostics matter (later in this lecture).
 :::
 
 
@@ -768,7 +768,7 @@ in a lecture, the punchline motivates the careful checking that follows.
 
 ## [13A] Lecture 13: Gradient descent + hiking metaphor
 
-**Source:** lec13-classification.qmd, lines 182-240 | **Tag:** HW
+**Source:** lec07-classification.qmd, lines 182-240 | **Tag:** HW
 **Reuse:** Implement a simple gradient descent loop to fit logistic regression on this dataset
 
 ## Fitting logistic regression: gradient descent

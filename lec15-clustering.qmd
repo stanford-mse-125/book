@@ -470,7 +470,7 @@ Clustering is easy to **run** and hard to **validate**. The algorithm will alway
 ## Looking ahead
 
 We've now covered three major types of learning:
-- **Supervised** (regression in Chapters 5-7, classification in Chapter 13)
+- **Supervised** (regression in Chapters 4-6, classification in Chapter 7, trees in Chapter 13)
 - **Unsupervised for structure** (PCA in Chapter 14 — finding directions that explain variation)
 - **Unsupervised for grouping** (clustering today — assigning points to discrete clusters)
 
