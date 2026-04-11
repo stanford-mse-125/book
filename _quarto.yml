@@ -16,7 +16,7 @@ book:
         - lec04-regression.qmd
         - lec05-feature-engineering.qmd
         - lec06-validation.qmd
-        - lec07-trees.qmd
+        - lec07-classification.qmd
     - part: "Act 2: Trust Models"
       chapters:
         - lec08-sampling.qmd
@@ -24,9 +24,10 @@ book:
         - lec10-hypothesis-testing.qmd
         - lec11-multiple-testing.qmd
         - lec12-regression-inference.qmd
+        - lec12.5-classification-inference.qmd
     - part: "Act 3: See Further"
       chapters:
-        - lec13-classification.qmd
+        - lec13-trees.qmd
         - lec14-pca.qmd
         - lec15-clustering.qmd
         - lec16-backtesting.qmd
