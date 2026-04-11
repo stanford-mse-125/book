@@ -111,7 +111,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 2 (found the mess), Lec 1 (hospital data)
-- Forward: Lec 5 (missingness indicators as features), Lec 7 (trees handle missing values natively)
+- Forward: Lec 5 (missingness indicators as features), Lec 13 (trees handle missing values natively)
 - ORIE 4741: Feature engineering lecture covers informative vs. uninformative missingness
 
 **Surprise moment:** Missing data is unevenly distributed across hospital ownership types — group comparisons are biased
@@ -210,7 +210,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 4 (single-feature version of everything here)
-- Forward: Lec 6 (validation — train/test R²), Lec 7 (trees as automatic feature engineering), Lec 12 (which features are statistically significant?), Lec 18 (when is a coefficient causal?)
+- Forward: Lec 6 (validation — train/test R²), Lec 13 (trees as automatic feature engineering), Lec 12 (which features are statistically significant?), Lec 18 (when is a coefficient causal?)
 - VMLS: Ch 5 (linear independence), Ch 13 (least squares)
 
 **Surprise moment:** The polynomial overfitting parade — R² keeps climbing as you increase degree, but the predictions become nonsensical (negative or wildly inflated prices for 10+ bedrooms). The model with the highest training R² is not the best model.
@@ -252,7 +252,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 5 (polynomial overfitting motivates validation)
-- Forward: Lec 7 (trees apply CV for depth selection), Lec 8 (can we trust our estimates?), Lec 12 (regression inference), Lec 16 (temporal validation breaks random splitting)
+- Forward: Lec 13 (trees apply CV for depth selection), Lec 8 (can we trust our estimates?), Lec 12 (regression inference), Lec 16 (temporal validation breaks random splitting)
 
 **Aphorisms:** "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk" (von Neumann); "All models are wrong, but some are useful" (Box)
 
@@ -262,35 +262,53 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 ---
 
-## Lecture 7: Decision Trees and Random Forests
+## Lecture 7: Classification (Logistic Regression + Metrics)
 
-**Objectives addressed:** 12 (feature engineering — automatic)
+**Objectives addressed:** 13 (logistic regression, classification metrics — precision, recall, ROC)
 
 **Key concepts:**
-- Decision trees: recursive splitting finds patterns without manual feature engineering
-- Trees handle categories and missing data natively
-- A single deep tree overfits: perfect training score, poor test score
-- Random forests: average many overfit trees for stable predictions
-- Bagging + feature subsampling
-- More trees never hurts (unlike more polynomial features)
-- Feature importance: which variables does the forest rely on?
-- Cross-validation for tree depth selection (applying Ch 6 framework)
+- Binary classification: predicting categories, not quantities
+- Logistic regression: sigmoid function maps linear combination to probability
+- Odds and odds ratios: exp(βⱼ) = multiplicative change in odds per unit increase in xⱼ
+- Gradient descent: how logistic regression coefficients are estimated (no closed-form solution)
+  - The hiking metaphor: always walk downhill; reach the bottom of the valley
+  - When it works: convex loss landscapes (logistic regression — one basin)
+  - When it can fail: non-convex landscapes (neural networks — multiple basins, local minima)
+  - Computational perspective: show the algorithm, run it, watch it converge
+  - Good candidate for a homework problem
+- Class imbalance: why accuracy is misleading when one class dominates
+- Confusion matrix: TP, FP, TN, FN
+- Precision (of those you predicted positive, how many are?) and recall (of actual positives, how many did you catch?)
+- ROC curve and AUC: performance across all thresholds
+- Threshold selection depends on the cost of errors ($$ decision)
 
 **Key vocabulary:**
-- Decision tree, recursive splitting
-- Overfitting (single tree)
-- Random forest, bagging
-- Feature subsampling
-- Feature importance (MDI)
+- Logistic regression, sigmoid function
+- Odds, odds ratio, log-odds (logit)
+- Gradient descent, loss landscape, learning rate, convergence
+- Local minimum, global minimum (for non-convex problems)
+- Class imbalance, accuracy trap / accuracy paradox
+- Confusion matrix
+- True positive, false positive, true negative, false negative
+- Precision, recall, F1 score
+- ROC curve, AUC (Area Under Curve)
+- Threshold
 
-**Prerequisites:** Lec 5 (feature engineering), Lec 6 (train/test, CV, bias-variance)
+**Key formulas:**
+- Sigmoid: p = 1 / (1 + e^(−z)) where z = β₀ + β₁x₁ + ⋯
+- Logit (inverse sigmoid): log(p/(1−p)) = β₀ + β₁x₁ + ⋯
+- Odds ratio: exp(βⱼ) = how odds multiply per unit increase in xⱼ
+- Gradient descent update: β ← β − η · ∇L(β)
+- ORIE 4741: logistic loss = log(1 + exp(−y·w^T x)) — connects to ERM framework
+
+**Prerequisites:** Lec 4-6 (regression, feature engineering, validation)
 
 **Connections:**
-- Backward: Lec 5 (manual feature engineering — trees automate this), Lec 6 (validation, bias-variance tradeoff — trees apply these concepts)
-- Forward: Lec 13 (classification trees)
-- ORIE 4741: trees material
+- Backward: Lec 4-5 (regression — OLS has closed form; logistic does not), Lec 6 (train/test, validation — apply to classification)
+- Forward: Lec 12 (inference on logistic coefficients, calibration), Lec 13 (classification trees — trees handle both regression and classification), Lec 17 (gradient boosting uses gradient descent ideas)
+- ORIE 4741: losses.tex — logistic loss section
 
-**Surprise moment:** A single deep tree gets perfect training R² but terrible test R². Average 100 of them and test R² beats everything.
+**Surprise moment:** Overall AUC ~0.73 hides dramatic failures in subgroups — model fails for specific demographics
 
 ---
 
@@ -498,61 +516,61 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 5 (regression fitting), Lec 8 (bootstrap), Lec 10 (hypothesis testing), Lec 11 (multiple testing)
-- Forward: Lec 18 (when does regression estimate a causal effect?)
+- Forward: Ch 12.5 (classification meets inference — bootstrap CI for AUC, logistic coefficient tests), Lec 13 (trees apply regression and classification), Lec 18 (when does regression estimate a causal effect?)
 - Bridges Acts 1 and 2: combines modeling (regression from Act 1) with inference (testing from Act 2)
 
 **Surprise moment:** REST_DAYS is statistically significant (p ~ 0.04) but the effect is only 0.3 points — practically negligible
 
 ---
 
-## Lecture 13: Classification (Logistic Regression + Metrics)
+## Chapter 12.5: Classification Meets Inference (optional)
 
-**Objectives addressed:** 13 (logistic regression, classification metrics — precision, recall, ROC)
+**Objectives addressed:** 7 (bootstrap CIs), 8 (hypothesis tests), 9 (multiple testing), 13 (classification metrics)
 
 **Key concepts:**
-- Binary classification: predicting categories, not quantities
-- Logistic regression: sigmoid function maps linear combination to probability
-- Odds and odds ratios: exp(βⱼ) = multiplicative change in odds per unit increase in xⱼ
-- Gradient descent: how logistic regression coefficients are estimated (no closed-form solution)
-  - The hiking metaphor: always walk downhill; reach the bottom of the valley
-  - When it works: convex loss landscapes (logistic regression — one basin)
-  - When it can fail: non-convex landscapes (neural networks — multiple basins, local minima)
-  - Computational perspective: show the algorithm, run it, watch it converge
-  - Good candidate for a homework problem
-- Class imbalance: why accuracy is misleading when one class dominates
-- Confusion matrix: TP, FP, TN, FN
-- Precision (of those you predicted positive, how many are?) and recall (of actual positives, how many did you catch?)
-- ROC curve and AUC: performance across all thresholds
-- Threshold selection depends on the cost of errors ($$ decision)
+- Bootstrap CI for AUC
+- Permutation test for classifier vs. random guessing
+- Logistic coefficient hypothesis tests and odds ratio CIs (reinforces Lec 12)
+- Multiple testing in feature selection (BH correction)
+- Confounding in classification (Simpson's paradox for logistic regression)
 
-**Key vocabulary:**
-- Logistic regression, sigmoid function
-- Odds, odds ratio, log-odds (logit)
-- Gradient descent, loss landscape, learning rate, convergence
-- Local minimum, global minimum (for non-convex problems)
-- Class imbalance, accuracy trap / accuracy paradox
-- Confusion matrix
-- True positive, false positive, true negative, false negative
-- Precision, recall, F1 score
-- ROC curve, AUC (Area Under Curve)
-- Threshold
-
-**Key formulas:**
-- Sigmoid: p = 1 / (1 + e^(−z)) where z = β₀ + β₁x₁ + ⋯
-- Logit (inverse sigmoid): log(p/(1−p)) = β₀ + β₁x₁ + ⋯
-- Odds ratio: exp(βⱼ) = how odds multiply per unit increase in xⱼ
-- Gradient descent update: β ← β − η · ∇L(β)
-- ORIE 4741: logistic loss = log(1 + exp(−y·w^T x)) — connects to ERM framework
-
-**Prerequisites:** Lec 5-7 (regression, feature engineering)
+**Prerequisites:** Lec 7 (classification), Lec 8-12 (all inference tools)
 
 **Connections:**
-- Backward: Lec 5 (regression — OLS has closed form; logistic does not), Lec 6 (train/test, validation), Lec 7 (RF classifier preview), Lec 8 (bootstrap for logistic regression), Lec 12 (regression inference framework)
-- Forward: Lec 17 (AutoML for classification; gradient boosting uses gradient descent ideas)
-- ORIE 4741: losses.tex — "the loss function determines what the model finds" (logistic = MLE under Bernoulli)
-- ORIE 4741: linear.tex — full gradient descent derivation with convergence analysis (we simplify to the intuition + computation)
+- Backward: Lec 7 (classification model), Lec 8 (bootstrap), Lec 9 (permutation), Lec 10-11 (hypothesis testing, multiple testing), Lec 12 (regression inference, calibration)
+- Forward: Lec 13 (students can apply these tools to tree-based classifiers)
 
-**Surprise moment:** Overall AUC ~0.73 hides dramatic failures in subgroups — model fails for specific demographics
+---
+
+## Lecture 13: Decision Trees and Random Forests
+
+**Objectives addressed:** 12 (feature engineering — automatic)
+
+**Key concepts:**
+- Decision trees: recursive splitting finds patterns without manual feature engineering
+- Trees handle categories and missing data natively
+- A single deep tree overfits: perfect training score, poor test score
+- Random forests: average many overfit trees for stable predictions
+- Bagging + feature subsampling
+- More trees never hurts (unlike more polynomial features)
+- Feature importance: which variables does the forest rely on?
+- Cross-validation for tree depth selection (applying Ch 6 framework)
+
+**Key vocabulary:**
+- Decision tree, recursive splitting
+- Overfitting (single tree)
+- Random forest, bagging
+- Feature subsampling
+- Feature importance (MDI)
+
+**Prerequisites:** Lec 5 (feature engineering), Lec 6 (train/test, CV, bias-variance), Lec 7 (classification — students know logistic regression, confusion matrix, precision/recall, ROC)
+
+**Connections:**
+- Backward: Lec 5 (manual feature engineering — trees automate this), Lec 6 (validation, bias-variance tradeoff — trees apply these concepts), Lec 7 (classification — trees handle both regression and classification; the 2×2 matrix payoff)
+- Forward: Lec 17 (AutoML; gradient boosting deepens tree ideas)
+- ORIE 4741: trees material
+
+**Surprise moment:** A single deep tree gets perfect training R² but terrible test R². Average 100 of them and test R² beats everything.
 
 ---
 
@@ -685,13 +703,13 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Objectives addressed:** 3 (evaluate AI analyses), 19 (AI coding assistants), 20 (AI failure modes), 21 (prompt decomposition)
 
 **Key concepts:**
-- **How trees and forests work** (deepening the practical introduction from Lec 7) — Students have been using random forests since Lec 7 — now they learn *why* they work:
+- **How trees and forests work** (deepening the practical introduction from Lec 13) — Students learned trees and forests in Lec 13 — now they see the bigger picture:
   - Decision trees: recursive partitioning of feature space (split on one feature at a time)
   - Why trees handle missing values naturally (can split on "is this value missing?")
   - Why trees handle nonlinearities without feature engineering
   - Overfitting: deep trees memorize; shallow trees underfit
   - Random forests: grow many trees on bootstrap samples, average predictions → reduces variance
-  - Gradient boosting: train weak learners sequentially, each correcting the previous one's errors (connects to gradient descent from Lec 13)
+  - Gradient boosting: train weak learners sequentially, each correcting the previous one's errors (connects to gradient descent from Lec 7)
 - AutoML: automated model selection and hyperparameter tuning
 - What AutoML does well (trying many models, cross-validation) and what it cannot do (framing the question, evaluating assumptions, causal reasoning)
 - LLM-generated data analyses: impressive but systematically flawed
@@ -708,10 +726,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Selection bias
 - LLM (Large Language Model)
 
-**Prerequisites:** All prior lectures (this is the synthesis); Lec 7 (used forests as black box), Lec 13 (gradient descent)
+**Prerequisites:** All prior lectures (this is the synthesis); Lec 7 (gradient descent), Lec 13 (trees and forests)
 
 **Connections:**
-- Backward: **Lec 7 (students have been using forests since week 4 — now they learn how they work)**, Lec 3 (AI gotchas established early), Lec 13 (gradient descent → gradient boosting)
+- Backward: **Lec 13 (trees and forests — now students see the deeper mechanics)**, Lec 3 (AI gotchas established early), Lec 7 (gradient descent → gradient boosting)
 - Ties a bow on the AI theme threaded throughout the course
 - ORIE 4741: trees.tex — decision trees, bagging, random forests, gradient boosting, feature importance
 
@@ -807,8 +825,8 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 | 9 | Multiple testing (Bonferroni, FDR) | **Lec 11** | |
 | 10 | Regression coefficient inference (t-tests) | **Lec 12** | |
 | 11 | Train/test/validate model selection | **Lec 6** | Lec 12, 16 |
-| 12 | Feature engineering, trees | **Lec 5, 7** | Lec 6, 16 |
-| 13 | Logistic regression, classification metrics | **Lec 13** | |
+| 12 | Feature engineering, trees | **Lec 5, 13** | Lec 6, 16 |
+| 13 | Logistic regression, classification metrics | **Lec 7** | |
 | 14 | PCA, interpret PCs | **Lec 14** | |
 | 15 | K-means, cluster quality | **Lec 15** | |
 | 16 | DAGs, confounders, colliders | **Lec 18** | |
@@ -817,7 +835,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 | 19 | AI coding assistants | **Lec 17** | |
 | 20 | AI failure modes | **Lec 17** | Lec 1, 3 |
 | 21 | Prompt decomposition | **Lec 17** | |
-| 22 | Reports with visualizations | **Lec 2** | Lec 7 |
+| 22 | Reports with visualizations | **Lec 2** | Lec 13 |
 | 23 | Present/defend findings | *Not in lectures — addressed via HW review sessions and project* | |
 
 ### Gaps and notes
@@ -827,19 +845,19 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - **Colliders** (Objective 16) should be explicitly introduced in Lec 18 — verify in draft.
 - **Objective 22** (reports with visualizations) is lightly addressed. Consider whether Lec 2 or the project guidelines should do more.
 - **Chi-squared tests** — added to Lec 10 for categorical data (goodness of fit, independence).
-- **Gradient descent** — added to Lec 13 with hiking/landscape metaphor. Good HW problem candidate.
+- **Gradient descent** — added to Lec 7 with hiking/landscape metaphor. Good HW problem candidate.
 
 ### Editorial decisions (2026-03-17)
 
 **Imported from prior offerings:**
 - ✅ **Estimand / estimator / estimate** vocabulary → Lec 8
-- ✅ **Odds ratios** (exp(β) interpretation) → Lec 13
-- ✅ **Gradient descent** (metaphorical + computational, hiking/landscape, convex vs non-convex) → Lec 13; HW problem candidate
+- ✅ **Odds ratios** (exp(β) interpretation) → Lec 7
+- ✅ **Gradient descent** (metaphorical + computational, hiking/landscape, convex vs non-convex) → Lec 7; HW problem candidate
 - ✅ **Chi-squared tests** (goodness of fit, independence) → Lec 10
 - ✅ **Lasso** → Lec 6, alongside bias-variance tradeoff and model complexity control
 - ✅ **VIF** → Lec 6 "further reading" only (too technical for lecture)
-- ✅ **Random forests as black-box benchmark** → Lec 7 (practical tree intro); how trees work → Lec 17
-- ✅ **Trees handle missing values** → forward-referenced from Lec 3 to Lec 7
+- ✅ **Random forests as black-box benchmark** → Lec 13 (practical tree intro); how trees work → Lec 17
+- ✅ **Trees handle missing values** → forward-referenced from Lec 3 to Lec 13
 - ✅ **Power analysis** → Lec 10 (conceptual + computational via simulation/statsmodels, not formula derivation); HW problem candidate
 - ✅ **Statistical aphorisms** → distributed across lectures (see aphorisms table)
 - ✅ **Study guide sections** → structural requirement for every lecture .qmd
@@ -849,7 +867,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - ❌ **Additive models / splines / NAMs** — cut from 2026; may mention briefly in Lec 17
 
 **Still to import (from ORIE 4741):**
-- **"The loss function determines what the model finds"** (L2→mean, L1→median) — natural fit for Lec 5 or 13
+- **"The loss function determines what the model finds"** (L2→mean, L1→median) — natural fit for Lec 5 or 7
 - **PCA as "regression onto optimal covariates"** — for Lec 14
 - **K-means as GLRM special case** — may be too advanced, but PCA↔k-means connection is valuable for Lec 15
 - **Informative vs. uninformative missingness** (ambulance heart rate example) — for Lec 3
