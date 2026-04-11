@@ -222,23 +222,31 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Objectives addressed:** 11 (train/test/validate model selection)
 
 **Key concepts:**
-- Distribution shift: training data ≠ deployment data
-- Train/test split: evaluate on data the model hasn't seen
+- Distribution shift: training data ≠ deployment data (covariate, temporal, label shift)
+- Train/test split: evaluate on held-out data that simulates new observations from the same distribution
+- Train R² vs test R²: fit vs generalization; the gap reveals overfitting
+- Three-way split: train (fit) / validation (choose complexity) / test (report final performance)
 - Cross-validation (k-fold): rotate the held-out fold for stable estimates
 - Overfitting: training performance improves but test performance degrades
 - Bias-variance tradeoff:
+  - **Mathematical:** Bias(x) = E[f̂(x)] - f(x); Variance(x) = E[(f̂(x) - E[f̂(x)])²]; MSE = Bias² + Variance + σ²
   - **Classical (primary):** More complexity → eventually overfitting. The U-shaped test error curve.
   - **Modern (trees/bagging):** Averaging many overfit trees reduces variance. More trees never hurts.
   - **Punchline:** "Regularize and cross-validate" is more right than ever.
+- Synthetic demo: line (high bias, low variance) vs degree-4 polynomial (low bias, high variance) on quadratic data
 - Lasso (L1 regularization): automatic feature selection by shrinking coefficients to zero
+- Ridge (L2 regularization): shrinks all coefficients but keeps them nonzero
 
 **Key vocabulary:**
-- Distribution shift
-- Train/test split, validation set
+- Distribution shift (covariate, temporal, label)
+- Train/test split, train R², test R²
+- Three-way split (train/validation/test)
 - Cross-validation (k-fold)
 - Overfitting, underfitting
+- f(x) (true function), f̂(x) (model prediction)
+- Bias, variance, irreducible noise (σ²)
 - Bias-variance tradeoff
-- Lasso, regularization
+- Lasso, Ridge, regularization
 
 **Prerequisites:** Lec 5 (feature engineering, polynomial overfitting)
 
@@ -248,9 +256,9 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Aphorisms:** "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk" (von Neumann); "All models are wrong, but some are useful" (Box)
 
-**Surprise moment:** The most complex polynomial model performs worst on test data — negative R² on the test set, worse than predicting the mean.
+**Surprise moment:** The most complex model (degree-5 polynomial interactions, 1286 features for 300 training points) achieves test R² of -3.4, dramatically worse than predicting the mean.
 
-**Study guide scope:** Students are responsible for classical bias-variance (the U-shape), overfitting concept, train/test split, cross-validation, Lasso concept. They should understand *that* averaging overfit trees works but are NOT responsible for the mathematical details of why.
+**Study guide scope:** Students are responsible for classical bias-variance (the U-shape and the decomposition formula), overfitting concept, train/test split (what it simulates, when it breaks), three-way split (why validation is separate from test), cross-validation, Lasso and Ridge concepts. They should understand *that* averaging overfit trees works but are NOT responsible for the mathematical details of why.
 
 ---
 
