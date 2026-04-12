@@ -935,7 +935,7 @@ plt.tight_layout(w_pad=3)
 plt.show()
 ```
 
-When feature vectors point in nearly the same direction, adding the second one barely expands the span. The phenomenon is called **multicollinearity**. Coefficients of collinear features can become large, opposite in sign, and unstable — small changes in the data produce large swings in the estimated coefficients. The predictions may still be fine, but individual coefficients become uninterpretable.
+When two feature vectors point in nearly the same direction, adding the second one barely expands the span — a phenomenon with a name.
 
 :::{.callout-important}
 ## Definition: Multicollinearity
@@ -967,7 +967,7 @@ Watch what happens to the coefficients. Without beds, bedrooms gets about \$46 a
 
 ## Residual diagnostics
 
-The normal equations guarantee $X^T \epsilon = 0$ — no linear pattern remains between the included features and the residuals. But patterns can still lurk. A scatter plot of residuals vs. predicted values reveals common problems: fan shapes (heteroscedasticity), curves (missing nonlinearity), and clusters (missing categorical features).
+The normal equations guarantee $X^T \epsilon = 0$ — no linear pattern remains between features and residuals. Patterns can still lurk. A scatter plot of residuals vs. predicted values reveals them: fan shapes, curves, or clusters.
 
 ```{python}
 y_hat_full = model_full.predict(X_full)
@@ -1000,7 +1000,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The distribution is right-skewed: the mean sits noticeably above the median, the tell-tale sign of a long upper tail. The model underpredicts some expensive listings by hundreds of dollars while most residuals cluster near zero. That asymmetry hints at a second problem we'll see explicitly below — the *spread* of residuals is not constant across the range of fitted values.
+The distribution is right-skewed — the mean sits above the median, the sign of a long upper tail. The asymmetry hints at a second problem we'll see below: the *spread* of residuals is not constant across fitted values.
 
 ## Heteroscedasticity
 
@@ -1048,7 +1048,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The log-transformed model produces residuals with more uniform spread — the fan shape is reduced. The log transform is appropriate whenever the response is positive, right-skewed, and grows multiplicatively.
+The log-transformed model produces residuals with more uniform spread — the fan shape is reduced.
 
 # Recap: the regression toolkit
 
