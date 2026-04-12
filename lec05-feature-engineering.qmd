@@ -92,10 +92,6 @@ $$\hat{y} = X\beta,$$
 where $\beta \in \mathbb{R}^p$ is a vector of coefficients, one per column of $X$. By convention we include a column of ones in $X$ so that $\beta_0$ (the intercept) sits alongside the other coefficients.
 :::
 
-The matrix–vector product $X\beta$ is just a compact way to write out all $n$ predictions at once. Entry by entry,
-$$\hat{y}_i = \sum_{j=1}^p X_{ij}\,\beta_j = \beta_1 X_{i1} + \beta_2 X_{i2} + \cdots + \beta_p X_{ip}.$$
-Each prediction $\hat{y}_i$ is the inner product of row $i$ of $X$ with $\beta$ — listing $i$'s feature values weighted by the coefficients. Writing $\hat{y} = X\beta$ bundles those $n$ sums into one compact expression and produces the full prediction vector in a single stroke.
-
 For the two-feature model above, $X$ has three columns: the all-ones column, `bedrooms`, and `bathrooms`. The prediction for listing $i$ is
 $$\hat{y}_i = \beta_0 \cdot 1 + \beta_1 \cdot \text{bedrooms}_i + \beta_2 \cdot \text{bathrooms}_i,$$
 and stacking those $n$ predictions gives $\hat{y} = X\beta$.
@@ -168,9 +164,7 @@ print(f"Multiple regression: bedrooms coefficient = ${model_two.coef_[0]:.0f}")
 print(f"                     bathrooms coefficient = ${model_two.coef_[1]:.0f}")
 ```
 
-Bedrooms and bathrooms travel together: apartments with more bedrooms tend to have more bathrooms too. Picture a 1-bedroom studio next to a 3-bedroom family apartment. The larger unit has more of both, and the price jump from studio to family unit reflects the extra bathrooms as much as the extra bedrooms. Simple regression on bedrooms alone has no way to split the gain. It hands all the price difference to the bedrooms variable, since that's the only variable it can see. Multiple regression asks a sharper question: *among listings with the same number of bathrooms, how does price change with bedrooms?* Exactly that comparison is what "holding bathrooms constant" means.
-
-The two features are **correlated** — apartments with more bedrooms tend to have more bathrooms — so in simple regression the bedrooms coefficient absorbs everything correlated with bedrooms, bathrooms included. Multiple regression separates the two: the coefficient on bedrooms now measures the association between bedrooms and price **holding bathrooms constant**.
+Bedrooms and bathrooms travel together: apartments with more bedrooms tend to have more bathrooms too. Simple regression on bedrooms alone has no way to split the gain — it hands all the price difference to bedrooms, since that is the only variable it can see, and the coefficient absorbs everything **correlated** with bedrooms, bathrooms included. Multiple regression asks a sharper question: *among listings with the same number of bathrooms, how does price change with bedrooms?* That comparison is what "holding bathrooms constant" means.
 
 :::{.callout-tip}
 ## Think About It
@@ -363,8 +357,6 @@ The coefficient on `number_of_reviews` is *negative*. The association is real: l
 - **Omitted variables** — listing age, host activity, and segment (budget vs. luxury) drive both review counts *and* prices for reasons that have nothing to do with a price-to-reviews link. Old, casual, lower-end listings accumulate more reviews and charge less; neither direction is a causal channel between the two.
 
 The regression faithfully reports the downward association but has no window into which of these stories is generating it. An analyst who stops at the coefficient — or worse, recommends a host strategy based on it — has confused association with causation.
-
-A second reason to ignore the coefficient: the feature isn't earning its place in the model. It doesn't meaningfully improve predictions, *and* its causal interpretation is broken. A feature that carries neither predictive nor causal weight has no business influencing decisions.
 
 :::{.callout-tip}
 ## Think About It
