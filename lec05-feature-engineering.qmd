@@ -120,8 +120,6 @@ $$\beta = (X^T X)^{-1} X^T y.$$
 The **normal equations** $X^TX\beta = X^Ty$ give the least squares coefficients. Each row of $X^T \epsilon = 0$ says "the residual has zero inner product with one column of $X$" — orthogonality to every feature simultaneously.
 :::
 
-Let's verify that the normal equations and `LinearRegression()` give the same answer.
-
 ```{python}
 # Build design matrix with intercept
 X_manual = np.column_stack([
@@ -261,8 +259,6 @@ cat_features = pd.get_dummies(df[['room_type']], drop_first=True)
 X_full = pd.concat([num_features, cat_features], axis=1).astype(float)
 ```
 
-With the design matrix assembled, fitting is one line of scikit-learn.
-
 ```{python}
 # Fit the full model and collect coefficients
 model_full = LinearRegression().fit(X_full, prices)
@@ -343,7 +339,7 @@ print(f"With reviews:    R² = {r2_reviews:.4f}")
 print(f"Improvement:     {r2_reviews - r2_base_reviews:+.5f}")
 ```
 
-The R² is essentially identical to four decimal places — adding reviews buys us nothing in predictive accuracy. Now the coefficient:
+The R² is essentially identical to four decimal places — adding reviews buys us nothing in predictive accuracy.
 
 ```{python}
 print("Coefficients with reviews included:")
@@ -406,8 +402,6 @@ print("Sample rows:")
 print(df[['cleaning_fee', 'cleaning_fee_imputed', 'fee_missing']].head(10))
 ```
 
-With the imputed column and indicator in place, we can verify the invariance claim directly: fit with two different imputation constants and check that the predictions agree row by row.
-
 ```{python}
 # Verify: imputing with c=0 vs c=50 gives identical predictions
 fee_0  = df['cleaning_fee'].fillna(0)
@@ -429,7 +423,7 @@ print(f"Shift: β_missing changed by {m50.coef_[-1] - m0.coef_[-1]:+.2f}  "
 
 The coefficients shift but the predictions are identical — the column space is the same. With zero imputation, $\hat\beta_{\text{missing}}$ reads directly as the price premium for a missing-fee listing.
 
-Does the indicator carry its own weight, beyond the imputed value? Fit three models and compare.
+Does the indicator carry its own weight, beyond the imputed value?
 
 ```{python}
 # Baseline: the full model without any cleaning-fee information
@@ -601,8 +595,6 @@ Is an extra bedroom associated with the same price increase in Manhattan and the
 $$\hat{y} = \beta_0 + \beta_1 \cdot \text{bedrooms} + \beta_2 \cdot \mathbb{1}_{\text{Manhattan}} + \beta_3 \cdot (\text{bedrooms} \times \mathbb{1}_{\text{Manhattan}})$$
 
 The coefficient $\beta_3$ captures how much *more* (or less) a bedroom is worth in Manhattan compared to the reference borough.
-
-Fit both models first — a pooled model that forces one shared bedroom slope across boroughs, and an interaction model that lets the slope vary by borough.
 
 ```{python}
 # Pooled model: bedrooms + borough dummies (shared slope, borough-specific intercepts)
@@ -1052,13 +1044,7 @@ The log-transformed model produces residuals with more uniform spread — the fa
 
 # Recap: the regression toolkit
 
-This chapter extended the regression framework from Chapter 4 in three directions:
-
-- **Multiple regression** with numeric features: more features expand the span of reachable predictions, and the normal equations $X^TX\beta = X^Ty$ give the coefficients in closed form.
-- **One-hot encoding** brings categorical variables into the model. The reference level is absorbed into the intercept; other coefficients measure differences relative to it.
-- **Feature engineering** — polynomials, interactions, missingness indicators, log transforms — expands what "linear in parameters" can express.
-
-The R² progression tells the story: bedrooms alone explains a fraction of the variance; adding bathrooms, room type, and borough progressively narrows the gap between predicted and actual prices. Feature engineering is where domain knowledge meets statistics — knowing that location affects the value of space is domain knowledge; encoding the interaction between bedrooms and borough is statistics.
+This chapter extended the regression framework from Chapter 4 in three directions: multiple regression with numeric features, one-hot encoding for categorical variables, and feature engineering — polynomials, interactions, missingness indicators, and log transforms. Each move expands what "linear in parameters" can express. The $R^2$ progression from bedrooms alone through borough interactions shows how much pricing signal each move unlocks.
 
 As George Box put it, *"All models are wrong, but some are useful."* The models in this chapter are all wrong in specific, diagnosable ways — fan-shaped residuals, polynomial extrapolation, omitted variables. The question is whether they're useful enough to guide decisions.
 
