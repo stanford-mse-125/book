@@ -726,7 +726,7 @@ print(f"\nShared multiplier per bedroom (log model): e^{model_loglevel.coef_[0]:
       f" = {np.exp(model_loglevel.coef_[0]):.3f}")
 ```
 
-The two $R^2$ values measure different things — one fits price, the other fits log price — so the bare comparison isn't decisive. What *is* decisive is the visual: on a log-scaled y-axis, the same curvy cloud straightens out.
+The two $R^2$ values measure different things (one fits price, one fits log price) so the bare comparison is not decisive. The visual is: on a log-scaled y-axis, the curvy cloud straightens out.
 
 ```{python}
 # Visualize the log transform's effect using a semilogy y-axis
@@ -799,8 +799,6 @@ A bedroom in Manhattan adds many more dollars than a bedroom in the Bronx, even 
 
 ## Log transform on the response
 
-Regressing $\log(\text{price})$ on bedrooms changes what the coefficient means. Instead of "each bedroom adds \$X," the coefficient measures a percentage change.
-
 ```{python}
 beta1_log = model_log_simple.coef_[0]
 multiplier_simple = np.exp(beta1_log)
@@ -811,7 +809,7 @@ print(f"Each bedroom multiplies price by e^{beta1_log:.4f} = {multiplier_simple:
 print(f"That corresponds to a {pct_change:.1f}% increase per bedroom.")
 ```
 
-On the log scale, a one-unit increase in bedrooms multiplies the predicted price by $e^{\beta_1}$. The multiplicative structure encodes the super-linear bedroom premium: the *dollar* response to one more bedroom grows with the base size, but the *proportional* response stays fixed.
+On the log scale, a one-unit increase in bedrooms multiplies the predicted price by $e^{\beta_1}$ — a fixed proportional jump, which becomes a larger dollar jump off a larger base.
 
 ## The four transform combinations
 
@@ -837,8 +835,6 @@ The first row is the standard linear model we've been using. The second row is t
 
 The coefficient on a log-log model is an **elasticity**: the percentage change in $y$ associated with a one-percent change in $x$. Elasticities are dimensionless, which makes them comparable across features on wildly different scales. Economists use them constantly — price elasticity of demand, income elasticity, wage elasticity — because "how much does revenue shift when price rises 1%" is a question that matters whether the price is \$5 or \$500.
 :::
-
-Let's fit a log-log model on our data so the bottom rows of the table aren't abstract. Use `accommodates` (the listing's sleeping capacity) — a feature where "10% more" is a meaningful quantity.
 
 ```{python}
 # Log-log model: log(price) ~ log(accommodates)
@@ -889,7 +885,7 @@ for name, (r2, k) in models_summary.items():
     print(f"{name:<30s}  {r2:>.4f}  {adjusted_r2(r2, n, k):>.4f}  {k:>3d}")
 ```
 
-Adjusted $R^2$ rises more slowly than $R^2$ and can decline if the added features don't carry enough signal to justify their complexity. In [Chapter 6](lec06-validation.qmd), we'll use held-out test data for a more reliable assessment of model quality.
+For a more reliable assessment of model quality, we'll use held-out test data in [Chapter 6](lec06-validation.qmd).
 
 ## Multicollinearity
 
