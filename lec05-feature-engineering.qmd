@@ -368,11 +368,9 @@ When a coefficient surprises you, ask: *could the response plausibly influence t
 
 ## The big idea
 
-Every model we've fit so far is $\hat{y} = X\beta$ — linear in the parameters $\beta$. The features $X$ can be anything: raw columns, squared columns, products of columns, or columns derived from text. The regression machinery doesn't change; only the inputs do.
+Every model we've fit so far is $\hat{y} = X\beta$ — linear in the parameters $\beta$. The features $X$ can be anything: raw columns, squared columns, products of columns, or columns derived from text. The mantra captures the point: **"linear in parameters, not in features."** The creative work happens *before* the fit, in the choice of which columns to build.
 
-The mantra of feature engineering captures the point: **"linear in parameters, not in features."** The regression fits a straight-line combination of whatever columns you hand it, so the creative work happens *before* the fit — in the choice of which columns to build. A well-chosen transformation of the raw data lets a linear model capture curvature, heterogeneity, and scale in ways its mechanical simplicity would otherwise rule out.
-
-This section works through four moves, from simple to elaborate. We start with missing values — a one-column trick that turns an awkward data-cleaning problem into a feature. Then polynomials let the slope bend. Interactions let the slope depend on another variable. And in the next section, log transforms reshape the response itself.
+This section works through three moves. **Interaction terms** let the slope depend on another variable. **Polynomial features** let the slope bend. **Missing-value indicators** turn an awkward data-cleaning problem into a feature. The next section then reshapes the response with a log transform.
 
 ## Missing values as features
 
@@ -568,7 +566,7 @@ plt.show()
 
 Low-degree polynomials produce reasonable curves. High-degree polynomials oscillate at the edges of the observed range and extrapolate nonsensically beyond it. Inside the observed data the degree-6 curve already wobbles noticeably, and inside the shaded extrapolation region its predictions swing into territory no sensible host would accept. Polynomial features fit training data well but extrapolate according to their mathematical form, not the underlying phenomenon.
 
-Meanwhile, training $R^2$ keeps inching up at every step — from about 0.16 at degree 1 to about 0.27 at degree 6. Each additional degree buys less and less: the last few steps add barely 0.001 per degree, and degrees beyond 6 add essentially nothing to training $R^2$ while making the extrapolation even wilder.
+Meanwhile, training $R^2$ keeps inching up — from about 0.16 at degree 1 to 0.27 at degree 6 — while each additional degree buys less and less. Degrees beyond 6 add essentially nothing to training $R^2$ while making the extrapolation wilder. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
 
 ```{python}
 # Predictions at specific bedroom counts
@@ -589,12 +587,6 @@ for beds in [1, 3, 5, 7, 9]:
         print(f"      ${pred:>5.0f}", end='')
     print()
 ```
-
-:::{.callout-tip}
-## Think About It
-
-Training $R^2$ keeps rising with degree. Do you agree that higher degree is "better"? Split the question in two. *In-sample:* for a new 3-bedroom listing (well inside the observed data), would the degree-6 prediction be reasonable? *Out-of-sample:* for a new 9-bedroom listing (outside the observed range), would you trust it? Training $R^2$ always increases with more features — a property of projection onto a larger span — but the model's predictions can become worse everywhere the data is thin. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
-:::
 
 :::{.callout-note}
 ## Parametric extrapolation in the real world
