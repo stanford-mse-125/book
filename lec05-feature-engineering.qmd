@@ -40,6 +40,7 @@ listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'beds',
         'room_type', 'neighbourhood_group_cleansed', 'accommodates',
         'number_of_reviews', 'cleaning_fee']
+n_raw = len(listings)
 df = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
@@ -48,7 +49,9 @@ df['price'] = pd.to_numeric(df['price'], errors='coerce')
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
 prices = df['price']
 
-print(f"Working with {len(df):,} listings")
+print(f"Raw listings:                 {n_raw:,}")
+print(f"After dropping missing price/bedrooms/bathrooms and clipping price to $10–$500:")
+print(f"  Working with {len(df):,} listings ({n_raw - len(df):,} dropped)")
 df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 ```
 
@@ -82,9 +85,9 @@ Chapter 4 worked with one feature at a time — a single column vector $x$ of be
 You already know what a feature matrix looks like: it is the numeric part of a pandas DataFrame. Each row is one listing, each column is one feature, and each cell holds a number. Calling `df[['bedrooms', 'bathrooms']].values` converts that chunk of the DataFrame into a NumPy matrix — that matrix *is* $X$, just with a mathematical name.
 
 :::{.callout-important}
-## Definition: Feature matrix
+## Definition: Feature matrix (design matrix)
 
-With $p$ features measured on $n$ listings, stack the feature vectors as columns of an $n \times p$ **feature matrix** $X$. Each *row* of $X$ is one listing's features; each *column* is one feature across all listings. A linear model with this matrix is
+With $p$ features measured on $n$ listings, stack the feature vectors as columns of an $n \times p$ **feature matrix** $X$ (statistics textbooks call the same object the **design matrix**; we use the terms interchangeably). Each *row* of $X$ is one listing's features; each *column* is one feature across all listings. A linear model with this matrix is
 $$\hat{y} = X\beta,$$
 where $\beta \in \mathbb{R}^p$ is a vector of coefficients, one per column of $X$. By convention we include a column of ones in $X$ so that $\beta_0$ (the intercept) sits alongside the other coefficients.
 :::
@@ -105,11 +108,15 @@ The key insight carries over from Chapter 4: $\hat{y}$ sits as close to $y$ as t
 
 Write $X$ for the $n \times p$ feature matrix (including the intercept column of ones). The orthogonality conditions become:
 
-$$X^T \epsilon = 0 \quad \text{where } \epsilon = y - X\beta$$
+$$X^T \epsilon = 0 \quad \text{where } \epsilon = y - X\beta.$$
 
-Rearranging:
+Substitute $\epsilon = y - X\beta$ and distribute:
 
-$$X^T X \beta = X^T y \qquad \Longrightarrow \qquad \beta = (X^T X)^{-1} X^T y \quad \text{(when } X \text{ has linearly independent columns)}$$
+$$X^T(y - X\beta) = 0 \;\Longrightarrow\; X^T y - X^T X \beta = 0 \;\Longrightarrow\; X^T X \beta = X^T y.$$
+
+When $X$ has linearly independent columns, $X^T X$ is invertible and we can solve for $\beta$:
+
+$$\beta = (X^T X)^{-1} X^T y.$$
 
 :::{.callout-important}
 ## Definition: Normal equations
@@ -163,7 +170,7 @@ print(f"                     bathrooms coefficient = ${model_two.coef_[1]:.0f}")
 
 Bedrooms and bathrooms travel together: apartments with more bedrooms tend to have more bathrooms too. Picture a 1-bedroom studio next to a 3-bedroom family apartment. The larger unit has more of both, and the price jump from studio to family unit reflects the extra bathrooms as much as the extra bedrooms. Simple regression on bedrooms alone has no way to split the gain. It hands all the price difference to the bedrooms variable, since that's the only variable it can see. Multiple regression asks a sharper question: *among listings with the same number of bathrooms, how does price change with bedrooms?* Exactly that comparison is what "holding bathrooms constant" means.
 
-We call this situation **confounding**: two features are correlated, so their individual roles in the prediction get tangled. In simple regression, the bedrooms coefficient absorbs everything correlated with bedrooms, bathrooms included. Multiple regression separates the two: the coefficient on bedrooms now measures the association between bedrooms and price **holding bathrooms constant**.
+The two features are **correlated** — apartments with more bedrooms tend to have more bathrooms — so in simple regression the bedrooms coefficient absorbs everything correlated with bedrooms, bathrooms included. Multiple regression separates the two: the coefficient on bedrooms now measures the association between bedrooms and price **holding bathrooms constant**.
 
 :::{.callout-tip}
 ## Think About It
@@ -284,7 +291,17 @@ To see the coefficients at a glance, we plot them as a horizontal bar chart with
 ```{python}
 # Visualize coefficients with dollar labels
 fig, ax = plt.subplots(figsize=(8, 4))
-coef_sorted = coef_table.sort_values('coefficient')
+coef_sorted = coef_table.sort_values('coefficient').copy()
+
+# Rename the raw pandas dummy names to human-readable labels
+label_map = {
+    'bedrooms': 'Bedrooms',
+    'bathrooms': 'Bathrooms',
+    'room_type_Private room': 'Private room\n(vs. entire home)',
+    'room_type_Shared room': 'Shared room\n(vs. entire home)',
+}
+coef_sorted['feature'] = coef_sorted['feature'].map(lambda s: label_map.get(s, s))
+
 colors = ['#d62728' if c < 0 else '#2171b5' for c in coef_sorted['coefficient']]
 bars = ax.barh(coef_sorted['feature'], coef_sorted['coefficient'],
                color=colors, edgecolor='white')
@@ -340,9 +357,14 @@ for name, coef in zip(X_reviews.columns, model_reviews.coef_):
     print(f"  {name:30s}  {coef:+.2f}")
 ```
 
-The coefficient on `number_of_reviews` is *negative*. The association is real: listings with more reviews do tend to have lower prices in this data, holding other features constant. But reading it as a recommendation — "get more reviews to lower your price" — is wrong. This is **reverse causation**: price influences how often a listing sells, bookings drive review counts, so reviews sit downstream of price. A \$60/night studio might host 200 guests a year; a \$350/night loft might host 30. More guests means more reviews. The regression faithfully reports the backward flow but has no window into the direction of influence. An analyst who stops at the coefficient — or worse, recommends a host strategy based on it — has confused association with causation.
+The coefficient on `number_of_reviews` is *negative*. The association is real: listings with more reviews do tend to have lower prices in this data, holding other features constant. But reading it as a recommendation — "get more reviews to lower your price" — is wrong. Two mechanisms work together to produce the negative sign, and neither is a causal effect of reviews on price:
 
-A second reason to ignore the coefficient: the feature isn't earning its place in the model. It doesn't meaningfully improve predictions, *and* its causal interpretation is confounded. A feature that carries neither predictive nor causal weight has no business influencing decisions.
+- **Reverse causation** — the response $y$ is influencing the feature $x$, not the other way around. Price influences how often a listing sells, bookings drive review counts, so reviews sit downstream of price. A \$60/night studio might host 200 guests a year; a \$350/night loft might host 30. More guests means more reviews.
+- **Omitted variables** — listing age, host activity, and segment (budget vs. luxury) drive both review counts *and* prices for reasons that have nothing to do with a price-to-reviews link. Old, casual, lower-end listings accumulate more reviews and charge less; neither direction is a causal channel between the two.
+
+The regression faithfully reports the downward association but has no window into which of these stories is generating it. An analyst who stops at the coefficient — or worse, recommends a host strategy based on it — has confused association with causation.
+
+A second reason to ignore the coefficient: the feature isn't earning its place in the model. It doesn't meaningfully improve predictions, *and* its causal interpretation is broken. A feature that carries neither predictive nor causal weight has no business influencing decisions.
 
 :::{.callout-tip}
 ## Think About It
@@ -393,6 +415,8 @@ df['fee_missing'] = df['cleaning_fee'].isna().astype(int)
 print("Sample rows:")
 print(df[['cleaning_fee', 'cleaning_fee_imputed', 'fee_missing']].head(10))
 ```
+
+With the imputed column and indicator in place, we can verify the invariance claim directly: fit with two different imputation constants and check that the predictions agree row by row.
 
 ```{python}
 # Verify: imputing with c=0 vs c=50 gives identical predictions
@@ -487,6 +511,12 @@ The degree-2 model captures a gentle price plateau at higher bedroom counts. But
 ## The polynomial overfitting parade
 
 Let's fit polynomials from degree 1 through 6 and see what each predicts across the range of observed listings.
+
+:::{.callout-tip}
+## Think About It (before looking at the plot)
+
+Degree 1 is a straight line. Degree 2 above already bent into a gentle plateau. Before fitting degrees 3–6: commit to a prediction. Will training $R^2$ keep climbing? What will a degree-6 fit look like *inside* the observed range (0–5 bedrooms)? What about at 9 bedrooms, beyond anything the data covers? Write down your guess, then check it against the plot below.
+:::
 
 ```{python}
 MAX_DEGREE = 6
@@ -642,7 +672,7 @@ for ax, title, kind in [
 ]:
     for borough, group in df.groupby('borough'):
         color = color_map[borough]
-        ax.scatter(group['bedrooms'], group['price'], alpha=0.02, s=3, color=color)
+        ax.scatter(group['bedrooms'], group['price'], alpha=0.07, s=6, color=color)
         if len(group) > 50:
             x_range = np.array([0.0, group['bedrooms'].max()])
             if kind == 'pooled':
@@ -806,17 +836,38 @@ Depending on whether you log-transform $y$, $x$, or both, the coefficient takes 
 :::{.callout-important}
 ## Interpreting coefficients with log transforms
 
-| Model | Coefficient $\beta_1$ means | Example |
-|-------|---------------------------|---------|
-| $y \sim x$ | 1-unit increase in $x$ → $\beta_1$ change in $y$ | each bedroom adds roughly \$49 |
-| $\log(y) \sim x$ | 1-unit increase in $x$ → multiply $y$ by $e^{\beta_1}$ | each bedroom multiplies price by about 1.33 |
-| $y \sim \log(x)$ | 1% increase in $x$ → $\beta_1/100$ change in $y$ | 10% more sqft → \$5 higher price |
-| $\log(y) \sim \log(x)$ | 1% increase in $x$ → $\beta_1$% change in $y$ (elasticity) | 10% more sqft → 5% higher price |
+| Model | Coefficient $\beta_1$ means |
+|-------|---------------------------|
+| $y \sim x$ | a 1-unit increase in $x$ adds $\beta_1$ to $y$ |
+| $\log(y) \sim x$ | a 1-unit increase in $x$ multiplies $y$ by $e^{\beta_1}$ |
+| $y \sim \log(x)$ | a 1% increase in $x$ adds about $\beta_1/100$ to $y$ |
+| $\log(y) \sim \log(x)$ | a 1% increase in $x$ gives about a $\beta_1$% change in $y$ |
 
 : {.striped .hover}
 :::
 
-The first row is the standard linear model. The second row is the log-level model we just fit. The fourth row — log-log — gives an **elasticity**: the percentage change in $y$ per percentage change in $x$, a quantity economists use constantly.
+The first row is the standard linear model we've been using. The second row is the log-level model we just fit: each extra bedroom multiplies price by about $e^{0.29} \approx 1.33$. The bottom two rows — where $x$ itself appears on the log scale — are meant for features that span many orders of magnitude, so a *percentage* change is the natural unit (square footage, income, population, or in our data `accommodates`, which ranges over an order of magnitude).
+
+:::{.callout-important}
+## Definition: Elasticity
+
+The coefficient on a log-log model is an **elasticity**: the percentage change in $y$ associated with a one-percent change in $x$. Elasticities are dimensionless, which makes them comparable across features on wildly different scales. Economists use them constantly — price elasticity of demand, income elasticity, wage elasticity — because "how much does revenue shift when price rises 1%" is a question that matters whether the price is \$5 or \$500.
+:::
+
+Let's fit a log-log model on our data so the bottom rows of the table aren't abstract. Use `accommodates` (the listing's sleeping capacity) — a feature where "10% more" is a meaningful quantity.
+
+```{python}
+# Log-log model: log(price) ~ log(accommodates)
+log_accom = np.log(df['accommodates'])
+model_loglog = LinearRegression().fit(log_accom.values.reshape(-1, 1), log_prices)
+beta_loglog = model_loglog.coef_[0]
+
+print(f"log(price) ~ log(accommodates):  β₁ = {beta_loglog:.3f}")
+print(f"Elasticity: a 1% increase in accommodates → about {beta_loglog:.2f}% increase in price")
+print(f"            a 10% larger listing → about {10 * beta_loglog:.1f}% higher price")
+```
+
+The elasticity lets us compare the "bedroom premium" to the "capacity premium" without worrying about whether one is measured in integers and the other in people — they live on the same percentage scale.
 
 :::{.callout-tip}
 ## Think About It
@@ -868,6 +919,8 @@ corr_bath = df_mc['bedrooms'].corr(df_mc['bathrooms'])
 print(f"Correlation between bedrooms and beds:      {corr_beds:.3f}")
 print(f"Correlation between bedrooms and bathrooms:  {corr_bath:.3f}")
 ```
+
+A correlation of 0.9 between `bedrooms` and `beds` is enormous — these two columns carry almost the same information. The correlation between `bedrooms` and `bathrooms` is far weaker by comparison. Plotting the `bedrooms`/`beds` cloud and the three-way correlation matrix makes the near-duplication visible.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.2),
@@ -953,34 +1006,25 @@ def rolling_envelope(x, r, n_bins=25):
             bands.append(2 * r_sorted[mask].std())
     return np.array(centers), np.array(bands)
 
-fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
-
-# Residuals vs fitted, with ±2σ envelope to make the fan visible
-axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
-axes[0].axhline(0, color='red', lw=1.5)
-c, b = rolling_envelope(y_hat_full, residuals_full)
-axes[0].plot(c, b, color='red', lw=1.5, label='±2σ envelope')
-axes[0].plot(c, -b, color='red', lw=1.5)
-axes[0].legend(loc='upper left', fontsize=9)
-axes[0].set_xlabel('Predicted price ($)')
-axes[0].set_ylabel('Residual ($)')
-axes[0].set_title('Residuals vs predicted values')
-
-# Histogram of residuals
-axes[1].hist(residuals_full, bins=60, edgecolor='white', alpha=0.7)
-axes[1].set_xlabel('Residual ($)')
-axes[1].set_ylabel('Count')
-axes[1].set_title('Distribution of residuals')
-
+fig, ax = plt.subplots(figsize=(7, 4))
+mean_r = residuals_full.mean()
+median_r = np.median(residuals_full)
+ax.hist(residuals_full, bins=60, edgecolor='white', alpha=0.7)
+ax.axvline(median_r, color='#2171b5', lw=2, ls='--', label=f'median ≈ {median_r:.0f}')
+ax.axvline(mean_r, color='#d62728', lw=2, ls='--', label=f'mean ≈ {mean_r:.0f}')
+ax.set_xlabel('Residual ($)')
+ax.set_ylabel('Count')
+ax.set_title('Distribution of residuals (right-skewed)')
+ax.legend(loc='upper right', fontsize=9)
 plt.tight_layout()
 plt.show()
 ```
 
-Two patterns stand out. First, the red envelope on the left panel — ±2 standard deviations of the residuals, computed in bins along the x-axis — widens as predicted prices grow. The cloud of residuals "fans out": cheap listings mispredict by tens of dollars, expensive listings mispredict by hundreds. This megaphone shape is what a *fan-shaped* residual plot looks like: flat on the left, flaring on the right. Second, the residual distribution is right-skewed, with a heavy upper tail.
+The distribution is right-skewed: the mean sits noticeably above the median, the tell-tale sign of a long upper tail. The model underpredicts some expensive listings by hundreds of dollars while most residuals cluster near zero. That asymmetry hints at a second problem we'll see explicitly below — the *spread* of residuals is not constant across the range of fitted values.
 
 ## Heteroscedasticity
 
-When the variance of the residuals changes with the predicted value, we have **heteroscedasticity** (from the Greek: "different scatter"). The fan-shaped residual plot above is a classic signal: if you trace the outer edge of the residual cloud from left to right, it looks like a megaphone opening up — narrow where predictions are small, wide where they're large.
+When the variance of the residuals changes with the predicted value, we have **heteroscedasticity** (from the Greek: "different scatter"). A *fan-shaped* residual plot is the classic signal: if you trace the outer edge of the residual cloud from left to right, it looks like a megaphone opening up — narrow where predictions are small, wide where they're large.
 
 :::{.callout-important}
 ## Definition: Heteroscedasticity
@@ -999,8 +1043,9 @@ fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
 axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
 axes[0].axhline(0, color='red', lw=1.5)
 c, b = rolling_envelope(y_hat_full, residuals_full)
-axes[0].plot(c, b, color='red', lw=1.5)
+axes[0].plot(c, b, color='red', lw=1.5, label='±2σ envelope')
 axes[0].plot(c, -b, color='red', lw=1.5)
+axes[0].legend(loc='upper left', fontsize=9)
 axes[0].set_xlabel('Predicted price ($)')
 axes[0].set_ylabel('Residual ($)')
 axes[0].set_title('Level model: fan-shaped residuals')
@@ -1012,8 +1057,9 @@ log_fitted = model_log_full.predict(X_full)
 axes[1].scatter(log_fitted, log_resid, alpha=0.05, s=5)
 axes[1].axhline(0, color='red', lw=1.5)
 c_log, b_log = rolling_envelope(log_fitted, log_resid)
-axes[1].plot(c_log, b_log, color='red', lw=1.5)
+axes[1].plot(c_log, b_log, color='red', lw=1.5, label='±2σ envelope')
 axes[1].plot(c_log, -b_log, color='red', lw=1.5)
+axes[1].legend(loc='upper left', fontsize=9)
 axes[1].set_xlabel('Predicted log(price)')
 axes[1].set_ylabel('Residual')
 axes[1].set_title('Log model: more uniform spread')
@@ -1049,7 +1095,7 @@ Three questions remain open:
 ### Key ideas
 
 - **Normal equations** — $X^TX\beta = X^Ty$. The algebraic form of "the residual is orthogonal to every feature." Derived by stacking the orthogonality conditions. More independent feature columns means a larger span and a closer projection of $y$.
-- **Coefficient interpretation** — in multiple regression, each coefficient measures the association between a feature and the response **holding all other features constant**. Coefficients change between simple and multiple regression because of confounding among features.
+- **Coefficient interpretation** — in multiple regression, each coefficient measures the association between a feature and the response **holding all other features constant**. Coefficients change between simple and multiple regression when the features are correlated.
 - **One-hot encoding** — converts a categorical variable with $k$ categories into $k-1$ binary columns. The dropped category is the **reference level**, absorbed into the intercept.
 - **Feature engineering** — creating new input columns (polynomials, interactions, indicators) so a linear model can capture nonlinear patterns. The model stays linear in $\beta$.
 - **Polynomial features** — powers of a variable ($x^2, x^3, \ldots$) that capture curvature. High-degree polynomials overfit and extrapolate wildly.
