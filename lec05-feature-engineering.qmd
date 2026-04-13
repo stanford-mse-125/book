@@ -696,6 +696,35 @@ Imputation replaces missing values with plausible substitutes. Without a missing
 
 # Log transforms: transforming y
 
+## A hint hiding in the interaction coefficients
+
+Before we fit anything new, look more carefully at what the bedrooms × borough interaction model already told us. Each borough has its own bedroom slope — but those slopes are only *dollar* changes per bedroom. Translating them into *percentages* reveals something we haven't yet noticed.
+
+```{python}
+# Per-borough bedroom premium, now showing dollars AND percentages side-by-side.
+# Uses model_interact_only and the borough_line_interact helper from §Interaction terms.
+hint_rows = []
+for b in [ref_borough] + list(borough_dummies.columns):
+    intercept, slope = borough_line_interact(b)
+    p1 = intercept + slope          # fitted 1-BR price
+    p2 = intercept + slope * 2      # fitted 2-BR price
+    pct_per_bedroom = (p2 / p1 - 1) * 100
+    hint_rows.append((b, p1, p2, slope, pct_per_bedroom))
+
+hint_table = pd.DataFrame(
+    hint_rows,
+    columns=['borough', '1-BR fit', '2-BR fit', '$ per bedroom', '% per bedroom']
+).sort_values('$ per bedroom', ascending=False)
+
+print(hint_table.round(0).to_string(index=False))
+```
+
+Dollar premiums span a 5× range: from $16 in the Bronx to $81 in Manhattan. The interaction model needed a separate slope for every borough to fit that spread.
+
+Percentages tell a different story. Four of the five boroughs land between 51% and 80% per bedroom. Still a real range — but meaningfully closer to "one shared number" than the dollar column is. The Bronx remains an outlier either way: 23% per bedroom against its small base price.
+
+So the question is: can we replace five separate bedroom-slope interaction terms with one proportional coefficient? For four of the five boroughs, approximately yes. For the Bronx, no — Bronx is genuinely a different market. That trade-off is exactly what the log transform offers.
+
 ## From additive to multiplicative
 
 The polynomial parade tried to capture curvature by piling on higher-order terms — and extrapolated into absurdity. The problem was the model's additive structure: each new term adds a correction, and nothing in the math keeps predictions positive or prevents them from swinging below zero.
