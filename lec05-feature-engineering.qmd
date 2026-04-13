@@ -46,11 +46,11 @@ df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 
 # Price is already a clean integer column (no $ signs); filter to reasonable range
 df['price'] = pd.to_numeric(df['price'], errors='coerce')
-df = df[df['price'].between(10, 500)].reset_index(drop=True)
+df = df[df['price'].between(10, 999)].reset_index(drop=True)
 prices = df['price']
 
 print(f"Raw listings:                 {n_raw:,}")
-print(f"After dropping missing price/bedrooms/bathrooms and clipping price to $10–$500:")
+print(f"After dropping missing price/bedrooms/bathrooms and clipping price to $10–$999:")
 print(f"  Working with {len(df):,} listings ({n_raw - len(df):,} dropped)")
 df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 ```
@@ -167,7 +167,7 @@ Bedrooms and bathrooms travel together: apartments with more bedrooms tend to ha
 :::{.callout-tip}
 ## Think About It
 
-When you compare two listings with the same number of bathrooms, the one with an extra bedroom costs about \$46 more (according to the two-feature model). When you compare two listings with the same number of bedrooms, the one with an extra bathroom costs about \$12 more. Notice that the simple regression said each bedroom was worth \$49 — the coefficient dropped when we controlled for bathrooms. These coefficients measure **association**, not causation — we'll revisit that distinction in [Chapter 18](lec18-causal.qmd).
+When you compare two listings with the same number of bathrooms, the one with an extra bedroom costs about \$58 more (according to the two-feature model). When you compare two listings with the same number of bedrooms, the one with an extra bathroom costs about \$34 more. Notice that the simple regression said each bedroom was worth \$66 — the coefficient dropped when we controlled for bathrooms. These coefficients measure **association**, not causation — we'll revisit that distinction in [Chapter 18](lec18-causal.qmd).
 :::
 
 # One-hot encoding and categorical features
@@ -274,7 +274,7 @@ print(f"Intercept: ${model_full.intercept_:.2f}\n")
 print(coef_table.to_string(index=False))
 ```
 
-The model finally answers the opening question: a bathroom is associated with roughly \$22 more per night, holding bedrooms and room type constant. An extra bedroom, once bathrooms and room type are controlled for, is associated with about \$33 more. Private rooms cost substantially less than entire homes, even after adjusting for size, and shared rooms less still.
+The model finally answers the opening question: a bathroom is associated with roughly \$43 more per night, holding bedrooms and room type constant. An extra bedroom, once bathrooms and room type are controlled for, is associated with about \$44 more. Private rooms cost substantially less than entire homes, even after adjusting for size, and shared rooms less still.
 
 To see the coefficients at a glance, we plot them as a horizontal bar chart with dollar labels on each bar.
 
@@ -564,7 +564,7 @@ plt.show()
 
 Low-degree polynomials produce reasonable curves. High-degree polynomials oscillate at the edges of the observed range and extrapolate nonsensically beyond it. Inside the observed data the degree-6 curve already wobbles noticeably, and inside the shaded extrapolation region its predictions swing into territory no sensible host would accept. Polynomial features fit training data well but extrapolate according to their mathematical form, not the underlying phenomenon.
 
-Meanwhile, training $R^2$ keeps inching up — from about 0.16 at degree 1 to 0.27 at degree 6 — while each additional degree buys less and less. Degrees beyond 6 add essentially nothing to training $R^2$ while making the extrapolation wilder. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
+Meanwhile, training $R^2$ keeps inching up — from about 0.21 at degree 1 to 0.31 at degree 6 — while each additional degree buys less and less. Degrees beyond 6 add essentially nothing to training $R^2$ while making the extrapolation wilder. We'll develop formal tools to detect overfitting in [Chapter 6](lec06-validation.qmd).
 
 ```{python}
 # Predictions at specific bedroom counts
@@ -682,10 +682,10 @@ print(f"Fee contribution for a missing-fee listing: ${beta_missing:+.2f}")
 
 The imputed fee pushes $R^2$ up sharply — the fee itself is a strong price signal. Adding the `fee_missing` indicator contributes a smaller additional bump. Now the key move: read the **total contribution** each row gets from the two new columns.
 
-- A listing with a missing fee has `cleaning_fee_imputed = 0` and `fee_missing = 1`, so its combined contribution is $\hat{\beta}_{\text{fee}} \cdot 0 + \hat{\beta}_{\text{missing}} \cdot 1 = \hat{\beta}_{\text{missing}} \approx \$25.87$.
-- A listing with the median observed fee ($50) has `cleaning_fee_imputed = 50` and `fee_missing = 0`, so its combined contribution is $\hat{\beta}_{\text{fee}} \cdot 50 \approx \$31.53$.
+- A listing with a missing fee has `cleaning_fee_imputed = 0` and `fee_missing = 1`, so its combined contribution is $\hat{\beta}_{\text{fee}} \cdot 0 + \hat{\beta}_{\text{missing}} \cdot 1 = \hat{\beta}_{\text{missing}} \approx \$35.71$.
+- A listing with the median observed fee ($50) has `cleaning_fee_imputed = 50` and `fee_missing = 0`, so its combined contribution is $\hat{\beta}_{\text{fee}} \cdot 50 \approx \$40.04$.
 
-The missing-fee listings are predicted about \$5–6 cheaper than a typical-fee listing, holding bedrooms, bathrooms, and room type fixed. That gap is the "missing carries information" signal: the model has learned something from the *pattern* of missingness that raw imputation alone can't capture.
+The missing-fee listings are predicted about \$4 cheaper than a typical-fee listing, holding bedrooms, bathrooms, and room type fixed. That gap is the "missing carries information" signal: the model has learned something from the *pattern* of missingness that raw imputation alone can't capture.
 
 :::{.callout-warning}
 ## Don't impute blindly
@@ -823,7 +823,7 @@ Depending on whether you log-transform $y$, $x$, or both, the coefficient takes 
 : {.striped .hover}
 :::
 
-The first row is the standard linear model we've been using. The second row is the log-level model we just fit: each extra bedroom multiplies price by about $e^{0.29} \approx 1.33$. The bottom two rows — where $x$ itself appears on the log scale — are meant for features that span many orders of magnitude, so a *percentage* change is the natural unit (square footage, income, population, or in our data `accommodates`, which ranges over an order of magnitude).
+The first row is the standard linear model we've been using. The second row is the log-level model we just fit: each extra bedroom multiplies price by about $e^{0.33} \approx 1.38$. The bottom two rows — where $x$ itself appears on the log scale — are meant for features that span many orders of magnitude, so a *percentage* change is the natural unit (square footage, income, population, or in our data `accommodates`, which ranges over an order of magnitude).
 
 :::{.callout-important}
 ## Definition: Elasticity
@@ -958,7 +958,7 @@ for name, coef in zip(X_with_beds.columns, m_with.coef_):
 print(f"  R² = {m_with.score(X_with_beds, y_mc):.4f}")
 ```
 
-Watch what happens to the coefficients. Without beds, bedrooms gets about \$46 and bathrooms about \$12. Once beds enters, bedrooms drops to roughly \$20, bathrooms drops to about \$5, and beds picks up around \$29. $R^2$ improves, but the bedrooms coefficient has been cut by more than half — the model is redistributing credit among correlated features, and the individual numbers have lost their stable meaning. Predictions remain serviceable; interpretations do not.
+Watch what happens to the coefficients. Without beds, bedrooms gets about \$58 and bathrooms about \$34. Once beds enters, bedrooms drops to roughly \$28, bathrooms drops to about \$26, and beds picks up around \$31. $R^2$ improves, but the bedrooms coefficient has been cut in half — the model is redistributing credit among correlated features, and the individual numbers have lost their stable meaning. Predictions remain serviceable; interpretations do not.
 
 ## Residual diagnostics
 
@@ -1053,7 +1053,7 @@ This chapter extended the regression framework from Chapter 4 in three direction
 
 Three questions remain open:
 
-1. **Is the coefficient real or noise?** The bathrooms coefficient is about \$22, but with a different sample it might be \$18 or \$26. We'll quantify the uncertainty with confidence intervals in [Chapter 12](lec12-regression-inference.qmd).
+1. **Is the coefficient real or noise?** The bathrooms coefficient is about \$43, but with a different sample it might be \$39 or \$47. We'll quantify the uncertainty with confidence intervals in [Chapter 12](lec12-regression-inference.qmd).
 2. **Does the model generalize to new data?** Training $R^2$ always increases with more features, even noise features. We'll develop train-test splits and cross-validation in [Chapter 6](lec06-validation.qmd).
 3. **Does adding a bathroom *cause* higher prices?** Regression coefficients measure association. Causation requires a different framework — [Chapter 18](lec18-causal.qmd).
 
