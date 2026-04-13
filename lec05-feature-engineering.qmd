@@ -821,6 +821,112 @@ print(dollar_table.round(0).to_string(index=False))
 
 A bedroom in Manhattan adds many more dollars than a bedroom in the Bronx, even though both boroughs share the same *proportional* increase in the log model. That single multiplier captures four of the five boroughs approximately — Manhattan, Brooklyn, Queens, and Staten Island all sat in the 51-80% range in the interaction coefficients. The Bronx remains the real outlier at 23%; no single shared percentage will fix that. The log transform has traded five interaction coefficients for one number, at the cost of mis-predicting the one borough that genuinely behaves differently.
 
+## Why least squares fights the wrong battle
+
+The interaction-coefficient hint is one reason the log transform was the right move. There is a second, independent reason, and it is baked into the least-squares objective itself.
+
+Start with the raw price distribution.
+
+```{python}
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.hist(prices, bins=60, edgecolor='white', alpha=0.85, color='#4c72b0')
+ax.axvline(prices.median(), color='#d62728', lw=2, ls='--',
+           label=f'median ${prices.median():.0f}')
+ax.axvline(np.percentile(prices, 90), color='#ff7f0e', lw=2, ls='--',
+           label=f'90th percentile ${np.percentile(prices, 90):.0f}')
+ax.set_xlabel('Price per night ($)')
+ax.set_ylabel('Number of listings')
+ax.set_title('Airbnb prices are heavily right-skewed')
+ax.legend(loc='upper right', fontsize=9)
+plt.tight_layout()
+plt.show()
+```
+
+The median listing costs $100 per night, but the distribution runs all the way out to $999 — a fat right tail of expensive listings an order of magnitude above the center. When the level model minimizes squared error in dollars, that tail is where most of its error budget ends up.
+
+```{python}
+# How much of the level-model's squared error comes from the most expensive listings?
+resid_level_b = prices.values - model_level_b.predict(X_level_b)
+sse_level_b = resid_level_b ** 2
+
+order = np.argsort(-prices.values)  # sort listings from most to least expensive
+sse_sorted = sse_level_b[order]
+total_sse = sse_level_b.sum()
+
+for pct in [5, 10, 20]:
+    n = int(len(prices) * pct / 100)
+    share = sse_sorted[:n].sum() / total_sse * 100
+    print(f"Top {pct:2d}% most expensive listings: {share:.1f}% of total squared error")
+```
+
+The top 5% of listings — roughly 1,500 out of 29,000 — account for nearly half of the level model's total squared error. The model is spending most of its coefficient budget fighting to fit the expensive tail.
+
+Does that fight pay off? We can answer by breaking the data into price deciles and computing the mean absolute error within each decile, for both the level model and the log model (with a Duan smearing correction to backtransform log predictions into dollars honestly).
+
+```{python}
+# Precompute predictions once.
+yhat_level_b = model_level_b.predict(X_level_b)
+
+# Duan smearing correction: mean(exp(log residuals)) fixes the Jensen bias
+# introduced by naive exp() of log-model predictions.
+log_pred_b = model_loglevel.predict(X_level_b)
+log_resid_b = log_prices - log_pred_b
+smearing = np.mean(np.exp(log_resid_b))
+yhat_log_dollars = np.exp(log_pred_b) * smearing
+
+# Per-decile MAE for both models.
+deciles = pd.qcut(prices, 10, labels=False, duplicates='drop')
+decile_rows = []
+for d in range(10):
+    mask = deciles == d
+    lo, hi = int(prices[mask].min()), int(prices[mask].max())
+    level_mae = np.mean(np.abs(prices.values[mask] - yhat_level_b[mask]))
+    log_mae = np.mean(np.abs(prices.values[mask] - yhat_log_dollars[mask]))
+    decile_rows.append((d + 1, f'${lo}-${hi}', level_mae, log_mae))
+
+decile_df = pd.DataFrame(decile_rows, columns=['decile', 'price range', 'level MAE', 'log MAE'])
+```
+
+```{python}
+# Horizontal bar chart, two bars per decile
+fig, ax = plt.subplots(figsize=(8, 5.5))
+y_pos = np.arange(len(decile_df))
+bar_height = 0.38
+
+bars_level = ax.barh(y_pos - bar_height/2, decile_df['level MAE'], bar_height,
+                     color='#d62728', label='level model', edgecolor='white')
+bars_log = ax.barh(y_pos + bar_height/2, decile_df['log MAE'], bar_height,
+                   color='#2171b5', label='log model', edgecolor='white')
+
+for bar, val in zip(bars_level, decile_df['level MAE']):
+    ax.text(val + 2, bar.get_y() + bar.get_height()/2, f'${val:.0f}',
+            va='center', ha='left', fontsize=9, color='#d62728')
+for bar, val in zip(bars_log, decile_df['log MAE']):
+    ax.text(val + 2, bar.get_y() + bar.get_height()/2, f'${val:.0f}',
+            va='center', ha='left', fontsize=9, color='#2171b5')
+
+ax.set_yticks(y_pos)
+ax.set_yticklabels([f"D{r['decile']} ({r['price range']})" for _, r in decile_df.iterrows()],
+                   fontsize=9)
+ax.invert_yaxis()  # decile 1 (cheapest) at top
+ax.set_xlabel('Mean absolute error ($)')
+ax.set_title('Per-decile prediction error: where each model wins')
+ax.legend(loc='lower right', fontsize=10)
+ax.set_xlim(0, decile_df[['level MAE', 'log MAE']].values.max() * 1.18)
+plt.tight_layout()
+plt.show()
+```
+
+Two patterns stand out. First, the top decile ($251-$999) has about $170 MAE under *either* model — the expensive tail is essentially unfittable with these features, regardless of the transformation. The level model's focus on that tail buys it nothing. Second, in deciles 5-7 (roughly $90-$150 per night, where most listings live) the log model's MAE is 75-81% of the level model's. That is a real improvement of about $10 per listing in the middle of the distribution.
+
+The mechanism is straightforward. Squared-dollar error treats a $50 miss on a $100 listing (50% off — a disaster) the same as a $50 miss on a $500 listing (10% off — mild). The level model cannot distinguish these, so it distributes its attention by *absolute* dollars, which means the expensive tail dominates. The log transform puts errors on a proportional scale — a 50% miss is a 50% miss whether the listing is $100 or $500 — which matches how we actually judge prediction quality.
+
+:::{.callout-tip}
+## Think About It
+
+Ordinary least squares minimizes the mean squared error. So how can the log transform *improve* the mean squared error? Hint: among which functions is the level model's MSE the minimum? Is $\exp(x^T\beta)$ one of them?
+:::
+
 ## Log transform on the response
 
 ```{python}
