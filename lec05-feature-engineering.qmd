@@ -727,7 +727,7 @@ So the question is: can we replace five separate bedroom-slope interaction terms
 
 ## From additive to multiplicative
 
-The polynomial parade tried to capture curvature by piling on higher-order terms — and extrapolated into absurdity. The problem was the model's additive structure: each new term adds a correction, and nothing in the math keeps predictions positive or prevents them from swinging below zero.
+The percentage clue from the interaction coefficients points the way. A single shared "proportional bedroom premium" would need a model that thinks in multiplications, not additions. The polynomial parade of the previous section tried to capture curvature by piling on higher-order terms in the additive structure — and extrapolated into absurdity. The problem was the additivity itself: each new term adds a correction, and nothing in the math keeps predictions positive or prevents them from swinging below zero.
 
 A **log transform** attacks the same curvature from a different angle. Instead of letting $X$ grow into more columns, it reshapes $y$. The motivation is a simple observation about the bedroom premium: adding a bedroom to a luxury apartment is worth more in absolute dollars than adding a bedroom to a rundown studio. Large Airbnbs are scarce; the handful that can host a family reunion or a bachelor party command a disproportionate premium over the many cramped studios. The dollar response to "one more bedroom" *grows* with the base size, which is exactly the super-linear pattern a straight-line fit cannot match.
 
@@ -792,7 +792,7 @@ On a log-scaled y-axis, the log-level fit is a straight line and the level fit v
 
 ## Dollar increases differ by borough, percentage increases don't
 
-The log-with-borough fit makes the Manhattan-vs-Bronx story numerical. Every borough gets the same multiplier per bedroom, but that multiplier applies to different base prices — so the *dollar* increase per bedroom ends up much larger in expensive boroughs.
+This is the confirmation of the clue we spotted in the interaction coefficients. With one shared multiplier, the log-with-borough model produces a different dollar increase per bedroom in each borough — small in the Bronx, large in Manhattan — but the *percentage* increase is the same everywhere. The interaction coefficients were hinting at this structure all along; the log transform is what made it expressible in a single number.
 
 ```{python}
 # Translate the log-level coefficients back into dollar increases per bedroom
@@ -819,7 +819,7 @@ print()
 print(dollar_table.round(0).to_string(index=False))
 ```
 
-A bedroom in Manhattan adds many more dollars than a bedroom in the Bronx, even though both boroughs share the same *proportional* increase. The log model expresses that heterogeneity with a single extra coefficient instead of a fleet of interaction terms.
+A bedroom in Manhattan adds many more dollars than a bedroom in the Bronx, even though both boroughs share the same *proportional* increase in the log model. That single multiplier captures four of the five boroughs approximately — Manhattan, Brooklyn, Queens, and Staten Island all sat in the 51-80% range in the interaction coefficients. The Bronx remains the real outlier at 23%; no single shared percentage will fix that. The log transform has traded five interaction coefficients for one number, at the cost of mis-predicting the one borough that genuinely behaves differently.
 
 ## Log transform on the response
 
