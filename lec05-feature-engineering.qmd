@@ -615,7 +615,7 @@ print(f"Median price when cleaning fee is present: ${median_present:.0f}")
 
 Listings with a missing cleaning fee are noticeably cheaper on average — the missingness isn't random noise, it's tracking something real about the listing. The approach: impute the missing numeric value with *any* constant, then add a binary `fee_missing` column. The model can then learn whether "missing" predicts a different price from any observed fee.
 
-The choice of imputation constant does not affect predictions. Imputing with $c$ instead of zero shifts $\hat\beta_{\text{missing}}$ by exactly $-c \cdot \hat\beta_{\text{fee}}$, leaving $\hat y$ unchanged for every row. To see why: the imputed-with-$c$ column equals the imputed-with-zero column plus $c$ times the indicator, so the two designs span the same column space and produce the same projection. We pick **zero** because it gives the indicator coefficient a clean interpretation — $\hat\beta_{\text{missing}}$ directly measures the total contribution from a missing-fee listing, with no $\hat\beta_{\text{fee}} \cdot c$ offset to unwind.
+The choice of imputation constant does not affect predictions. Imputing with $c$ instead of zero shifts $\hat{\beta}_{\text{missing}}$ by exactly $-c \cdot \hat{\beta}_{\text{fee}}$, leaving $\hat{y}$ unchanged for every row. To see why: the imputed-with-$c$ column equals the imputed-with-zero column plus $c$ times the indicator, so the two designs span the same column space and produce the same projection. We pick **zero** because it gives the indicator coefficient a clean interpretation — $\hat{\beta}_{\text{missing}}$ directly measures the total contribution from a missing-fee listing, with no $\hat{\beta}_{\text{fee}} \cdot c$ offset to unwind.
 
 ```{python}
 # Impute the cleaning fee with zero and record which rows were filled in.
@@ -645,7 +645,7 @@ print(f"Shift: β_missing changed by {m50.coef_[-1] - m0.coef_[-1]:+.2f}  "
       f"= -50 × β_fee = {-50 * m0.coef_[-2]:+.2f}")
 ```
 
-The coefficients shift but the predictions are identical — the column space is the same. With zero imputation, $\hat\beta_{\text{missing}}$ reads directly as the price premium for a missing-fee listing.
+The coefficients shift but the predictions are identical — the column space is the same. With zero imputation, $\hat{\beta}_{\text{missing}}$ reads directly as the price premium for a missing-fee listing.
 
 Does the indicator carry its own weight, beyond the imputed value?
 
@@ -682,8 +682,8 @@ print(f"Fee contribution for a missing-fee listing: ${beta_missing:+.2f}")
 
 The imputed fee pushes $R^2$ up sharply — the fee itself is a strong price signal. Adding the `fee_missing` indicator contributes a smaller additional bump. Now the key move: read the **total contribution** each row gets from the two new columns.
 
-- A listing with a missing fee has `cleaning_fee_imputed = 0` and `fee_missing = 1`, so its combined contribution is $\hat\beta_{\text{fee}} \cdot 0 + \hat\beta_{\text{missing}} \cdot 1 = \hat\beta_{\text{missing}} \approx \$25.87$.
-- A listing with the median observed fee ($50) has `cleaning_fee_imputed = 50` and `fee_missing = 0`, so its combined contribution is $\hat\beta_{\text{fee}} \cdot 50 \approx \$31.53$.
+- A listing with a missing fee has `cleaning_fee_imputed = 0` and `fee_missing = 1`, so its combined contribution is $\hat{\beta}_{\text{fee}} \cdot 0 + \hat{\beta}_{\text{missing}} \cdot 1 = \hat{\beta}_{\text{missing}} \approx \$25.87$.
+- A listing with the median observed fee ($50) has `cleaning_fee_imputed = 50` and `fee_missing = 0`, so its combined contribution is $\hat{\beta}_{\text{fee}} \cdot 50 \approx \$31.53$.
 
 The missing-fee listings are predicted about \$5–6 cheaper than a typical-fee listing, holding bedrooms, bathrooms, and room type fixed. That gap is the "missing carries information" signal: the model has learned something from the *pattern* of missingness that raw imputation alone can't capture.
 
@@ -1048,8 +1048,6 @@ The log-transformed model produces residuals with more uniform spread — the fa
 # Recap: the regression toolkit
 
 This chapter extended the regression framework from Chapter 4 in three directions: multiple regression with numeric features, one-hot encoding for categorical variables, and feature engineering — polynomials, interactions, missingness indicators, and log transforms. Each move expands what "linear in parameters" can express. The $R^2$ progression from bedrooms alone through borough interactions shows how much pricing signal each move unlocks.
-
-As George Box put it, *"All models are wrong, but some are useful."* The models in this chapter are all wrong in specific, diagnosable ways — fan-shaped residuals, polynomial extrapolation, omitted variables. The question is whether they're useful enough to guide decisions.
 
 ## What we still can't answer
 
