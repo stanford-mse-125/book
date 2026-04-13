@@ -927,20 +927,6 @@ The mechanism is straightforward. Squared-dollar error treats a $50 miss on a $1
 Ordinary least squares minimizes the mean squared error. So how can the log transform *improve* the mean squared error? Hint: among which functions is the level model's MSE the minimum? Is $\exp(x^T\beta)$ one of them?
 :::
 
-## Log transform on the response
-
-```{python}
-beta1_log = model_log_simple.coef_[0]
-multiplier_simple = np.exp(beta1_log)
-pct_change = (multiplier_simple - 1) * 100
-
-print(f"log(price) ~ bedrooms:  β₁ = {beta1_log:.4f}")
-print(f"Each bedroom multiplies price by e^{beta1_log:.4f} = {multiplier_simple:.3f}")
-print(f"That corresponds to a {pct_change:.1f}% increase per bedroom.")
-```
-
-On the log scale, a one-unit increase in bedrooms multiplies the predicted price by $e^{\beta_1}$ — a fixed proportional jump, which becomes a larger dollar jump off a larger base.
-
 ## The four transform combinations
 
 Depending on whether you log-transform $y$, $x$, or both, the coefficient takes on a different interpretation.
@@ -957,6 +943,18 @@ Depending on whether you log-transform $y$, $x$, or both, the coefficient takes 
 
 : {.striped .hover}
 :::
+
+```{python}
+beta1_log = model_log_simple.coef_[0]
+multiplier_simple = np.exp(beta1_log)
+pct_change = (multiplier_simple - 1) * 100
+
+print(f"log(price) ~ bedrooms:  β₁ = {beta1_log:.4f}")
+print(f"Each bedroom multiplies price by e^{beta1_log:.4f} = {multiplier_simple:.3f}")
+print(f"That corresponds to a {pct_change:.1f}% increase per bedroom.")
+```
+
+On the log scale, a one-unit increase in bedrooms multiplies the predicted price by $e^{\beta_1}$ — a fixed proportional jump, which becomes a larger dollar jump off a larger base.
 
 The first row is the standard linear model we've been using. The second row is the log-level model we just fit: each extra bedroom multiplies price by about $e^{0.33} \approx 1.38$. The bottom two rows — where $x$ itself appears on the log scale — are meant for features that span many orders of magnitude, so a *percentage* change is the natural unit (square footage, income, population, or in our data `accommodates`, which ranges over an order of magnitude).
 
