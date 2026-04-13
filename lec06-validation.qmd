@@ -5,9 +5,11 @@ execute:
 jupyter: python3
 ---
 
-A hospital is considering an AI system that predicts which patients will develop sepsis — a life-threatening condition where early intervention is critical. The vendor, Epic Systems, reports high accuracy.^[Specifically, the vendor reported an AUC (area under the ROC curve) of 0.76–0.83. We define AUC and other classification metrics in [Chapter 7](lec07-classification.qmd).] The hospital buys the system and deploys it. What questions should they have asked?
+A hospital is considering an AI system that predicts which patients will develop sepsis — a life-threatening condition where early intervention is critical. The vendor, Epic Systems, reports high accuracy on internal evaluations. The hospital buys the system and deploys it. What questions should they have asked?
 
-When researchers at Michigan Medicine independently evaluated the model on 27,697 hospitalized patients, it missed 67% of sepsis cases while firing false alerts on 18% of all hospitalizations — drowning nurses in alarms for patients who were fine.^[Wong et al., "External Validation of a Widely Implemented Proprietary Sepsis Prediction Model in Hospitalized Patients," *JAMA Internal Medicine*, 2021. <https://pmc.ncbi.nlm.nih.gov/articles/PMC8218233/>] The root cause: Epic evaluated the model on data similar to its training data, not on an independent external test set. The model had learned patterns specific to one hospital system's patient population and coding practices. Those patterns didn't generalize.
+When researchers at Michigan Medicine independently evaluated the model on 27,697 hospitalized patients, it missed 67% of sepsis cases while firing false alerts on 18% of all hospitalizations.^[Wong et al., "External Validation of a Widely Implemented Proprietary Sepsis Prediction Model in Hospitalized Patients," *JAMA Internal Medicine*, 2021. <https://pmc.ncbi.nlm.nih.gov/articles/PMC8218233/>]
+
+The root cause: Epic evaluated the model on data similar to its training data, not on an independent external test set. The model had learned patterns specific to one hospital system's patient population and coding practices. Those patterns didn't generalize.
 
 The Epic sepsis model is not an isolated failure. Dermatology AI systems have reported 90%+ accuracy on light skin tones but as low as 17% on dark skin, because the test sets didn't reflect the diversity of the deployment population.^[Daneshjou et al., "Disparities in Dermatology AI Performance on a Diverse, Curated Clinical Image Set," *Science Advances*, 2022.] Amazon built an AI recruiting tool that achieved high accuracy but systematically penalized resumes containing the word "women's" — the model had learned to replicate historical hiring bias embedded in its training data, and the company scrapped it.^[Dastin, "Amazon scraps secret AI recruiting tool that showed bias against women," *Reuters*, 2018.] In each case, the model looked good on data it had already seen but failed on the data that mattered.
 
@@ -32,14 +34,16 @@ Every model simplifies reality. The question is never *whether* a model is exact
 :::
 
 ```{python}
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import seaborn as sns
-from sklearn.linear_model import LinearRegression, Lasso, LassoCV, Ridge
+from sklearn.linear_model import LinearRegression, Lasso, LassoCV, Ridge, lasso_path
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.model_selection import cross_val_score, train_test_split, KFold
-from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.metrics import r2_score
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
@@ -47,7 +51,65 @@ plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
 DATA_DIR = 'data'
+
+# Also save key figures to the slide assets directory so slides can reuse them.
+SLIDE_IMG_DIR = '../slides/images/lec06'
+os.makedirs(SLIDE_IMG_DIR, exist_ok=True)
+
+def save_for_slides(name):
+    """Save the current figure as a PNG in the Lec 6 slide assets directory."""
+    plt.savefig(f'{SLIDE_IMG_DIR}/{name}.png', dpi=150, bbox_inches='tight')
 ```
+
+Each of the three shift types looks different on paper:
+
+```{python}
+#| label: fig-distribution-shift
+fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+x_grid = np.linspace(0, 10, 400)
+
+def gaussian(x, mu, sigma):
+    return np.exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * np.sqrt(2 * np.pi))
+
+# Covariate shift: feature distribution changes
+axes[0].fill_between(x_grid, gaussian(x_grid, 3.5, 1.1), alpha=0.45,
+                     color='steelblue', label='Training')
+axes[0].fill_between(x_grid, gaussian(x_grid, 6.5, 1.1), alpha=0.45,
+                     color='orangered', label='Deployment')
+axes[0].set_title('Covariate shift\ninput distribution changes')
+axes[0].set_xlabel('Feature (e.g., patient age)')
+axes[0].set_ylabel('Density')
+axes[0].set_yticks([])
+axes[0].legend(fontsize=9, loc='upper right')
+
+# Temporal shift: the world moves
+axes[1].fill_between(x_grid, gaussian(x_grid, 4.0, 1.4), alpha=0.45,
+                     color='steelblue', label='Pre-pandemic')
+axes[1].fill_between(x_grid, gaussian(x_grid, 6.0, 2.0), alpha=0.45,
+                     color='orangered', label='Post-pandemic')
+axes[1].set_title('Temporal shift\nthe world changes over time')
+axes[1].set_xlabel('Feature (e.g., weekly spending)')
+axes[1].set_yticks([])
+axes[1].legend(fontsize=9, loc='upper right')
+
+# Label shift: base rate changes
+categories = ['Training\n(referral clinic)', 'Deployment\n(routine screening)']
+rates = [0.05, 0.003]
+bars = axes[2].bar(categories, rates, color=['steelblue', 'orangered'], alpha=0.7,
+                   edgecolor='black', linewidth=0.8)
+axes[2].set_title('Label shift\noutcome base rate changes')
+axes[2].set_ylabel('P(positive case)')
+axes[2].set_ylim(0, 0.065)
+for bar, rate in zip(bars, rates):
+    axes[2].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.002,
+                 f'{rate:.1%}', ha='center', fontsize=11, fontweight='bold')
+
+plt.tight_layout()
+save_for_slides('distribution-shift-panels')
+plt.show()
+```
+
+Each example in the opening vignette lands in one of these panels: Epic sepsis (different hospital population) is covariate shift; Amazon hiring (historical bias encoded in training data) is a label-shift-style problem once deployed on an intentionally debiased pipeline; any model trained pre-pandemic and deployed post-pandemic hits temporal shift. A random train/test split sees none of them.
 
 ## Evaluating on new data
 
@@ -81,24 +143,26 @@ More generally, the **train version** of a metric (accuracy, MSE, etc.) measures
 
 In [Chapter 5](lec05-feature-engineering.qmd), adding features always improved $R^2$. But that was $R^2$ on the training data. Now that we can measure performance on held-out data, we can ask the real question: does adding features improve predictions on *new* data?
 
-We'll build feature matrices at increasing complexity — from two raw numeric features up through high-order polynomial interactions — and track both train and test $R^2$.  We use a subsample of 500 listings so the dynamics of overfitting play out clearly. (With 20,000+ listings, you'd need thousands of features before overfitting bites — good news for practitioners with abundant data, but hard to see the pattern.)
+We'll build feature matrices at increasing complexity — from two raw numeric features up through high-order polynomial interactions — and track both train and test $R^2$. We deliberately use a subsample of 500 listings: with roughly 1,000 engineered features possible at the highest complexity level, we want to land in the regime where the number of parameters approaches the number of training observations. That's where overfitting is easiest to see. (With 20,000+ listings, you'd need tens of thousands of features before overfitting bites — good news for practitioners with abundant data, but hard to see the pattern.)
 
 ```{python}
 # Load Airbnb data (same setup as Chapter 5)
 listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
 
 cols = ['price', 'bedrooms', 'bathrooms', 'room_type', 'neighbourhood_group_cleansed']
-df = listings[cols].dropna().copy()
+df = listings[cols].copy()
+n_before = len(df)
+df = df.dropna()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
-df['price'] = pd.to_numeric(df['price'].astype(str).str.replace('[$,]', '', regex=True), errors='coerce')
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
+print(f"Dropped {n_before - len(df):,} rows with missing values or extreme prices")
 
-# Subsample for clearer overfitting dynamics
-np.random.seed(42)
+# Subsample: with ~1000 engineered features and only a few hundred training points,
+# overfitting will be dramatic and easy to see.
 df_sub = df.sample(500, random_state=42).reset_index(drop=True)
 y_sub = df_sub['price']
 
-print(f"Full dataset: {len(df):,} listings")
+print(f"Full dataset: {n_before:,} listings")
 print(f"Subsample: {len(df_sub):,} listings")
 ```
 
@@ -127,6 +191,8 @@ print(f"Base features: {list(base.columns)}")
 print(f"Number of base features: {base.shape[1]}")
 ```
 
+Next, we define a function that builds feature matrices at each complexity level. Levels 1–4 select columns by hand; levels 5–8 generate all polynomial terms of increasing degree.
+
 ```{python}
 def build_features(base_df, level):
     """Build feature matrices at increasing complexity.
@@ -153,23 +219,32 @@ def build_features(base_df, level):
     # Levels 5-8: polynomial features of degree (level - 3) on all base features
     degree = level - 3
     poly = PolynomialFeatures(degree=degree, include_bias=False)
-    return pd.DataFrame(poly.fit_transform(base_df), index=base_df.index)
+    return pd.DataFrame(
+        poly.fit_transform(base_df),
+        index=base_df.index,
+        columns=poly.get_feature_names_out(base_df.columns),
+    )
 ```
 
 We split the data before fitting any models. We train on 60% and evaluate on the held-out 40%.
 
 ```{python}
 # Split: 60% train, 40% test
-train_idx, test_idx = train_test_split(
-    range(len(df_sub)), test_size=0.4, random_state=42
-)
-base_train = base.iloc[train_idx].reset_index(drop=True)
-base_test = base.iloc[test_idx].reset_index(drop=True)
-y_train = y_sub.iloc[train_idx].reset_index(drop=True)
-y_test = y_sub.iloc[test_idx].reset_index(drop=True)
+indices = np.arange(len(df_sub))
+idx_train, idx_test = train_test_split(indices, test_size=0.4, random_state=42)
+
+base_train = base.iloc[idx_train].reset_index(drop=True)
+base_test = base.iloc[idx_test].reset_index(drop=True)
+y_train = y_sub.iloc[idx_train].reset_index(drop=True)
+y_test = y_sub.iloc[idx_test].reset_index(drop=True)
 
 print(f"Train: {len(y_train):,}  |  Test: {len(y_test):,}")
 ```
+
+:::{.callout-tip}
+## Think About It
+Before we run the experiment: which level do you think will have the highest *test* $R^2$? Sketch what you expect the train and test $R^2$ curves to look like across the eight levels.
+:::
 
 Now we fit a `LinearRegression` at each complexity level and record both training and test $R^2$.
 
@@ -193,9 +268,9 @@ for level in range(1, 9):
     X_tr = build_features(base_train, level)
     X_te = build_features(base_test, level)
 
-    m = LinearRegression().fit(X_tr, y_train)
-    train_r2s.append(m.score(X_tr, y_train))
-    test_r2s.append(r2_score(y_test, m.predict(X_te)))
+    model = LinearRegression().fit(X_tr, y_train)
+    train_r2s.append(model.score(X_tr, y_train))
+    test_r2s.append(r2_score(y_test, model.predict(X_te)))
     n_features_list.append(X_tr.shape[1])
 
 results = pd.DataFrame({
@@ -207,32 +282,45 @@ results = pd.DataFrame({
 print(results.to_string(index=False))
 ```
 
-Training $R^2$ increases monotonically, as guaranteed: adding features can only help fit the training data (in the worst case, the model sets a coefficient to zero). Test $R^2$ tells a different story.
+Training $R^2$ increases monotonically across these levels: because each level's feature set contains the previous level's (the levels are *nested*), adding features can only help fit the training data — in the worst case, the new coefficients are set to zero. Test $R^2$ tells a different story.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(11, 6))
 
-x_pos = range(len(level_names))
+x_pos = np.arange(len(level_names))
 ax.plot(x_pos, train_r2s, 'o-', color='steelblue', linewidth=2.5, markersize=9,
         label='Train R²', zorder=3)
 ax.plot(x_pos, test_r2s, 's-', color='orangered', linewidth=2.5, markersize=9,
         label='Test R²', zorder=3)
 
 # Shade the overfitting region (after test R² peaks)
-best_test_idx = np.argmax(test_r2s)
+best_test_idx = int(np.argmax(test_r2s))
 if best_test_idx < len(level_names) - 1:
-    ax.axvspan(best_test_idx + 0.5, len(level_names) - 0.5, alpha=0.08, color='red',
+    ax.axvspan(best_test_idx + 0.5, len(level_names) - 0.5, alpha=0.15, color='red',
                label='Overfitting zone')
 
+# Clip y-axis to the interesting range; annotate the off-chart degree-5 collapse
+ax.set_ylim(-0.25, 0.75)
 ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+
+if test_r2s[-1] < -0.25:
+    ax.annotate(
+        f'Level 8: test R² = {test_r2s[-1]:.2f}\n(off chart)',
+        xy=(len(level_names) - 1, -0.22),
+        xytext=(len(level_names) - 2.2, -0.05),
+        fontsize=10, color='darkred',
+        arrowprops=dict(arrowstyle='->', color='darkred', lw=1.2),
+    )
+
 ax.set_xticks(x_pos)
 ax.set_xticklabels([f'{n}\n({nf} feat)' for n, nf in zip(
     ['bed+bath', '+room', '+boro', '+bed×boro',
      'deg 2', 'deg 3', 'deg 4', 'deg 5'],
     n_features_list)], fontsize=9)
-ax.set_ylabel('R²')
-ax.set_title('Train R² keeps climbing; test R² rises, peaks, then collapses')
-ax.legend(fontsize=11)
+ax.set_xlabel('Model complexity (features added)')
+ax.set_ylabel('Prediction R² (train vs. test)')
+ax.set_title('Training and test R² across eight models')
+ax.legend(fontsize=11, loc='lower left')
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
@@ -244,13 +332,22 @@ The experiment reveals three phases:
 
 2. **Diminishing returns** (Levels 4–5). The bedroom × borough interactions and degree-2 polynomial terms add modest value. Train $R^2$ keeps climbing, but test $R^2$ plateaus or dips slightly. The widening gap signals that some of the "improvement" is fitting noise.
 
-3. **Collapse** (Levels 6–8). The model has hundreds or thousands of features for only a few hundred training observations. Train $R^2$ approaches 1 — the model memorizes the training data. Test $R^2$ plummets, eventually going *negative*: the model's predictions on new data are worse than simply predicting the mean price every time.
+3. **Collapse** (Levels 6–8). The model has hundreds or thousands of features for only a few hundred training observations. Train $R^2$ approaches 1 — the model memorizes the training data. Test $R^2$ plummets.
+
+```{python}
+#| echo: false
+print(f"Level 8: test R² = {test_r2s[-1]:.2f}")
+print(f"         {n_features_list[-1]:,} features, {len(y_train):,} training observations "
+      f"({n_features_list[-1] / len(y_train):.1f}× more knobs than data points)")
+```
+
+**The surprise:** a negative test $R^2$ means the model's predictions on held-out listings are *worse than simply predicting the mean price every time.* We added features, and the model became useless.
 
 :::{.callout-note}
 ## Aphorism
 "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk." — John von Neumann
 
-The degree-5 model has over a thousand parameters. It can memorize anything — but memorization is the opposite of understanding.
+A Level-8 model with more parameters than training points can memorize anything — but memorization is the opposite of understanding.
 :::
 
 :::{.callout-tip}
@@ -281,24 +378,11 @@ Two sources of prediction error:
 | **Variance** | Low | Low | High (overfitting) |
 | **Test error** | High | **Low** | High |
 
-### The decomposition
-
-To make bias and variance precise, we need some notation. Let $f(x)$ denote the true relationship between features and outcome — the signal without noise. We never observe $f$ directly; we only see noisy outcomes $y = f(x) + \varepsilon$. A model trained on data produces a prediction function $\hat{f}(x)$ — its best guess at $f(x)$.
-
-Now imagine repeating the experiment: draw a fresh training set from the data distribution, fit the model, and predict at a fixed test point $x$. Different training sets give different $\hat{f}(x)$. Bias measures how far the *average* prediction is from the truth; variance measures how much individual predictions scatter around that average.
-
-$$\text{Bias}(x) = \mathbb{E}[\hat{f}(x)] - f(x)$$
-$$\text{Variance}(x) = \mathbb{E}\bigl[(\hat{f}(x) - \mathbb{E}[\hat{f}(x)])^2\bigr]$$
-
-For a test point with outcome $y = f(x) + \varepsilon$ where $\varepsilon$ has mean zero and variance $\sigma^2$:
-
-$$\mathbb{E}[(y - \hat{f}(x))^2] = \text{Bias}^2(x) + \text{Variance}(x) + \sigma^2$$
-
-The first two terms depend on the model. The third, $\sigma^2$, is the **irreducible noise** — randomness that no model can explain. Simple models have high bias and low variance. Complex models have low bias and high variance. The best model minimizes the sum of the first two; $\sigma^2$ sets the floor.
-
 ### Seeing bias and variance directly
 
-To make this concrete, we'll use a synthetic dataset where we know the true function and can repeat the experiment many times. The true relationship is a quadratic:
+The Airbnb experiment showed the pattern. But to *measure* bias and variance, we need something the Airbnb data can't give us: the true price function $f$. Without it, we can't tell whether the average of many fits is close to the truth (low bias) or systematically off (high bias). So for one section we leave Airbnb and work with a synthetic dataset where we *know* the truth.
+
+The true relationship is a quadratic:
 
 $$f(x) = 2x^2 - x + 0.5$$
 
@@ -306,7 +390,11 @@ We add Gaussian noise with $\sigma = 0.3$, draw 200 different training sets of 5
 
 ```{python}
 np.random.seed(0)
-true_fn = lambda x: 2 * x**2 - x + 0.5
+
+def true_fn(x):
+    """The true function we are trying to learn."""
+    return 2 * x**2 - x + 0.5
+
 sigma_noise = 0.3
 n_train_pts = 50
 n_repeats = 200
@@ -332,6 +420,8 @@ for i in range(n_repeats):
     preds_poly4[i] = np.polyval(coef_p4, x_grid)
 ```
 
+Overlaying the 20 fits reveals each source of error directly.
+
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
 
@@ -341,9 +431,13 @@ for i in range(n_plot):
 axes[0].plot(x_grid, f_true, 'k--', linewidth=2.5, label='True function $f(x)$')
 axes[0].plot(x_grid, preds_linear.mean(axis=0), color='steelblue', linewidth=2.5,
              label='Average prediction')
+axes[0].annotate('Systematic miss:\naverage differs from truth',
+                 xy=(0.15, true_fn(0.15)), xytext=(0.3, 1.35),
+                 fontsize=10, color='darkblue',
+                 arrowprops=dict(arrowstyle='->', color='darkblue', lw=1))
 axes[0].set_title('Line (degree 1): high bias, low variance', fontsize=12)
-axes[0].set_xlabel('x')
-axes[0].set_ylabel('y')
+axes[0].set_xlabel('Input $x$')
+axes[0].set_ylabel('Outcome $y = 2x^2 - x + 0.5 + $ noise')
 axes[0].legend(fontsize=10, loc='upper left')
 
 # Right: degree-4 polynomial (low bias, high variance)
@@ -352,8 +446,12 @@ for i in range(n_plot):
 axes[1].plot(x_grid, f_true, 'k--', linewidth=2.5, label='True function $f(x)$')
 axes[1].plot(x_grid, preds_poly4.mean(axis=0), color='orangered', linewidth=2.5,
              label='Average prediction')
+axes[1].annotate('Wider scatter at edges',
+                 xy=(0.96, 1.35), xytext=(0.55, 1.7),
+                 fontsize=10, color='darkred',
+                 arrowprops=dict(arrowstyle='->', color='darkred', lw=1))
 axes[1].set_title('Degree-4 polynomial: low bias, high variance', fontsize=12)
-axes[1].set_xlabel('x')
+axes[1].set_xlabel('Input $x$')
 axes[1].legend(fontsize=10, loc='upper left')
 
 plt.tight_layout()
@@ -362,15 +460,37 @@ plt.show()
 
 The left panel shows 20 linear fits overlaid. They cluster tightly together (low variance) but *systematically miss the curvature* — they're all wrong in the same direction (high bias). The right panel shows 20 degree-4 polynomial fits. Their average (solid line) closely tracks the true function (low bias), but individual fits scatter widely (high variance), especially near the edges of the data.
 
+### The decomposition
+
+Now that we have seen the pattern, we can name it. Let $f(x)$ denote the true relationship between features and outcome — the signal without noise. We never observe $f$ directly; we only see noisy outcomes $y = f(x) + \varepsilon$ where $\varepsilon$ has mean zero and variance $\sigma^2$. A model fit to a random training set $\mathcal{D}$ produces a prediction function $\hat{f}_{\mathcal{D}}(x)$ — its best guess at $f(x)$.
+
+Think of the synthetic experiment above: each of the 200 runs drew a new $\mathcal{D}$, fit a model, and produced one $\hat{f}_{\mathcal{D}}$. At a fixed test point $x$, the 200 predictions have an average and a spread. Bias measures how far that *average* is from the truth; variance measures how much individual predictions scatter around the average. The expectation is taken over the random draw of the training set $\mathcal{D}$ — for a linear model, this is the cloud of blue lines in the left panel; for the degree-4 polynomial, the cloud of orange curves in the right.
+
+$$\text{Bias}(x) = \mathbb{E}_{\mathcal{D}}[\hat{f}_{\mathcal{D}}(x)] - f(x)$$
+$$\text{Variance}(x) = \mathbb{E}_{\mathcal{D}}\bigl[(\hat{f}_{\mathcal{D}}(x) - \mathbb{E}_{\mathcal{D}}[\hat{f}_{\mathcal{D}}(x)])^2\bigr]$$
+
+For a fresh test observation $y = f(x) + \varepsilon$ with $\varepsilon$ independent of the training data, the expected squared prediction error decomposes into three pieces:
+
+$$\mathbb{E}\bigl[(y - \hat{f}_{\mathcal{D}}(x))^2\bigr] = \text{Bias}^2(x) + \text{Variance}(x) + \sigma^2$$
+
+:::{.callout-note}
+## Where does the decomposition come from?
+Add and subtract $\mathbb{E}_{\mathcal{D}}[\hat f_{\mathcal{D}}(x)]$ inside the squared error, expand, and note that the cross-term vanishes (the test-point noise $\varepsilon$ is independent of the training data, and $\hat f_{\mathcal{D}}(x) - \mathbb{E}_{\mathcal{D}}[\hat f_{\mathcal{D}}(x)]$ has mean zero under $\mathbb{E}_{\mathcal{D}}$). Three independent sources of error add up.
+:::
+
+The first two terms depend on the model. The third, $\sigma^2$, is the **irreducible noise** — randomness no model can explain. Simple models have high bias and low variance; complex models have low bias and high variance. The best model minimizes the sum of the first two; $\sigma^2$ sets the floor.
+
+Now we can make the decomposition numerical for the synthetic experiment, averaging across a uniform grid of test points:
+
 ```{python}
-# Compute the bias-variance decomposition
+# Compute the bias-variance decomposition on the x_grid
 bias_linear = preds_linear.mean(axis=0) - f_true
 var_linear = preds_linear.var(axis=0)
 bias_poly4 = preds_poly4.mean(axis=0) - f_true
 var_poly4 = preds_poly4.var(axis=0)
 
-print("Bias-variance decomposition (averaged over test points)")
-print("=" * 55)
+print("Bias-variance decomposition (averaged uniformly over x in [0, 1])")
+print("=" * 65)
 print(f"{'':20s} {'Bias²':>8s} {'Variance':>10s} {'σ²':>8s} {'Total MSE':>10s}")
 print(f"{'Line (degree 1)':20s} {(bias_linear**2).mean():8.4f} {var_linear.mean():10.4f} "
       f"{sigma_noise**2:8.4f} {(bias_linear**2).mean() + var_linear.mean() + sigma_noise**2:10.4f}")
@@ -379,6 +499,53 @@ print(f"{'Poly (degree 4)':20s} {(bias_poly4**2).mean():8.4f} {var_poly4.mean():
 ```
 
 The line has high bias (it can't capture the curvature) but low variance. The degree-4 polynomial has near-zero bias but higher variance. The polynomial wins on total expected error because its bias reduction outweighs the variance increase. The $\sigma^2 = 0.09$ noise floor is the same for both — no model can reduce it.
+
+### The U-curve
+
+Now turn the knob: imagine running the synthetic experiment at every polynomial degree from 1 to 10 and plotting bias$^2$, variance, and total expected error against degree. Bias$^2$ drops as the model becomes flexible enough to capture the truth. Variance rises as the flexibility starts fitting noise. Their sum — the total expected error — is U-shaped, with the irreducible noise $\sigma^2$ as a floor no model can cross.
+
+```{python}
+#| label: fig-bias-variance-ucurve
+complexity = np.linspace(0.2, 10, 400)
+bias_sq_curve = 1.4 * np.exp(-0.55 * complexity) + 0.04
+variance_curve = 0.04 * np.exp(0.38 * complexity) + 0.02
+sigma_sq_floor = np.full_like(complexity, 0.15)
+total_error = bias_sq_curve + variance_curve + sigma_sq_floor
+
+fig, ax = plt.subplots(figsize=(9, 5.5))
+ax.plot(complexity, bias_sq_curve, label='Bias²', color='steelblue', linewidth=2.5)
+ax.plot(complexity, variance_curve, label='Variance', color='orangered', linewidth=2.5)
+ax.plot(complexity, sigma_sq_floor, label='σ² (irreducible)',
+        color='gray', linewidth=2, linestyle='--')
+ax.plot(complexity, total_error, label='Total expected error',
+        color='black', linewidth=3)
+
+sweet_idx = int(np.argmin(total_error))
+ax.axvline(complexity[sweet_idx], color='seagreen', linestyle=':', alpha=0.8)
+ax.annotate('sweet spot',
+            xy=(complexity[sweet_idx], total_error[sweet_idx]),
+            xytext=(complexity[sweet_idx] + 1.3, total_error[sweet_idx] + 0.35),
+            fontsize=12, color='seagreen', fontweight='bold',
+            arrowprops=dict(arrowstyle='->', color='seagreen', lw=1.5))
+
+ax.text(0.8, 1.55, 'underfit\n(high bias)', fontsize=11, color='steelblue',
+        style='italic', ha='left')
+ax.text(9.5, 1.55, 'overfit\n(high variance)', fontsize=11, color='orangered',
+        style='italic', ha='right')
+
+ax.set_xlabel('Model complexity →')
+ax.set_ylabel('Error')
+ax.set_title('The bias-variance U-curve')
+ax.legend(fontsize=11, loc='upper center')
+ax.set_xticks([])
+ax.set_ylim(0, 2.0)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+save_for_slides('bias-variance-ucurve')
+plt.show()
+```
+
+The synthetic experiment visited two points on this curve — the line (far left, dominated by bias) and the degree-4 polynomial (mid-way, near the valley). The Airbnb 8-level experiment walked the same curve, just with a different x-axis: going from bedrooms+bathrooms (underfit) through polynomial interactions (overfit) and passing through a sweet spot around Level 3–4.
 
 :::{.callout-tip}
 ## Think About It
@@ -407,23 +574,20 @@ We split our 500 Airbnb listings into three groups: 60% for training (300 listin
 
 ```{python}
 # Three-way split: 60% train, 20% validate, 20% test
-train_i, temp_i = train_test_split(range(len(df_sub)), test_size=0.4, random_state=42)
-val_i, test_i_3way = train_test_split(temp_i, test_size=0.5, random_state=42)
+idx_train_3, idx_temp = train_test_split(indices, test_size=0.4, random_state=42)
+idx_val_3, idx_test_3 = train_test_split(idx_temp, test_size=0.5, random_state=42)
 
-print(f"Train: {len(train_i)}  |  Validate: {len(val_i)}  |  Test: {len(test_i_3way)}")
+print(f"Train: {len(idx_train_3)}  |  Validate: {len(idx_val_3)}  |  Test: {len(idx_test_3)}")
 ```
 
 Visualizing the split — each row of the dataset is assigned one role:
 
 ```{python}
-# Pick example rows from each split
-train_ex = sorted(train_i[:5])
-val_ex = sorted(val_i[:3])
-test_ex = sorted(test_i_3way[:3])
-example_rows = train_ex + val_ex + test_ex
+# Pick a few example rows from each split
+example_rows = sorted(idx_train_3[:5]) + sorted(idx_val_3[:3]) + sorted(idx_test_3[:3])
+roles = ['Train'] * 5 + ['Validate'] * 3 + ['Test'] * 3
 
 example = df_sub.iloc[example_rows][['bedrooms', 'bathrooms', 'room_type', 'borough', 'price']].copy()
-roles = ['Train'] * 5 + ['Validate'] * 3 + ['Test'] * 3
 
 # Display as a colored table
 fig, ax = plt.subplots(figsize=(12, 4.5))
@@ -431,13 +595,12 @@ ax.axis('off')
 
 colors_map = {'Train': '#d4e6f1', 'Validate': '#fef9e7', 'Test': '#fadbd8'}
 cell_colors = [[colors_map[r]] * 6 for r in roles]
-header_colors = [['#e8e8e8'] * 6]
 
 display_vals = []
-for role, (_, row) in zip(roles, example.iterrows()):
+for role, row in zip(roles, example.itertuples(index=False)):
     display_vals.append([
-        role, f"{row['bedrooms']:.0f}", f"{row['bathrooms']:.1f}",
-        row['room_type'], row['borough'], f"${row['price']:.0f}"
+        role, f"{row.bedrooms:.0f}", f"{row.bathrooms:.1f}",
+        row.room_type, row.borough, f"${row.price:.0f}"
     ])
 
 table = ax.table(
@@ -461,32 +624,32 @@ The workflow: fit each candidate model on the **blue rows** (training set). Eval
 
 ```{python}
 # Demonstrate the three-way workflow
-base_train_3 = base.iloc[train_i].reset_index(drop=True)
-base_val_3 = base.iloc[val_i].reset_index(drop=True)
-base_test_3 = base.iloc[test_i_3way].reset_index(drop=True)
-y_train_3 = y_sub.iloc[train_i].reset_index(drop=True)
-y_val_3 = y_sub.iloc[val_i].reset_index(drop=True)
-y_test_3 = y_sub.iloc[test_i_3way].reset_index(drop=True)
+base_train_3 = base.iloc[idx_train_3].reset_index(drop=True)
+base_val_3 = base.iloc[idx_val_3].reset_index(drop=True)
+base_test_3 = base.iloc[idx_test_3].reset_index(drop=True)
+y_train_3 = y_sub.iloc[idx_train_3].reset_index(drop=True)
+y_val_3 = y_sub.iloc[idx_val_3].reset_index(drop=True)
+y_test_3 = y_sub.iloc[idx_test_3].reset_index(drop=True)
 
 # Fit on train, evaluate on validation
 val_r2s = []
 for level in range(1, 9):
     X_tr = build_features(base_train_3, level)
     X_val = build_features(base_val_3, level)
-    m = LinearRegression().fit(X_tr, y_train_3)
-    val_r2s.append(r2_score(y_val_3, m.predict(X_val)))
+    model = LinearRegression().fit(X_tr, y_train_3)
+    val_r2s.append(r2_score(y_val_3, model.predict(X_val)))
 
-best_level = np.argmax(val_r2s) + 1
+best_level = int(np.argmax(val_r2s)) + 1
 print("Validation R² by level:")
-for lev, (name, vr2) in enumerate(zip(level_names, val_r2s), 1):
-    marker = " ← best" if lev == best_level else ""
+for level, (name, vr2) in enumerate(zip(level_names, val_r2s), start=1):
+    marker = " ← best" if level == best_level else ""
     print(f"  {name}: {vr2:.4f}{marker}")
 
 # Final evaluation: refit best model on train, score on test
 X_tr_best = build_features(base_train_3, best_level)
 X_te_best = build_features(base_test_3, best_level)
-m_best = LinearRegression().fit(X_tr_best, y_train_3)
-final_test_r2 = r2_score(y_test_3, m_best.predict(X_te_best))
+best_model = LinearRegression().fit(X_tr_best, y_train_3)
+final_test_r2 = r2_score(y_test_3, best_model.predict(X_te_best))
 print(f"\nBest model (Level {best_level}) — Test R²: {final_test_r2:.4f}")
 ```
 
@@ -516,7 +679,12 @@ Fold 5:  [train]  [train]  [train]  [train]  [TEST ]   → score_5
                                                   Average → CV score
 ```
 
-Every observation is in the test set exactly once. The average of 5 scores is much more stable than any single train/test split. (The extreme case is **leave-one-out CV** (LOO-CV), where $k = n$ — every observation gets its own fold. LOO-CV is approximately unbiased as an estimate of test error, but is a noisier estimator across samples because the $n$ training sets are nearly identical and don't provide independent information. It is also computationally expensive. Five or ten folds is the usual practical choice.)
+Every observation is in the test set exactly once. Averaging over 5 folds typically reduces the noise of any single split. (The 5 scores are not independent — the training sets overlap in 3/4 of their observations — so the reduction is weaker than averaging 5 truly independent estimates would give.) The extreme case is **leave-one-out CV** (LOO-CV), where $k = n$ and every observation gets its own fold. LOO-CV is approximately unbiased as an estimate of test error, but its $n$ training sets differ by only one observation each, so the fold-wise errors are highly correlated and the average's variance shrinks less than $1/n$. LOO-CV is also computationally expensive. Five or ten folds is the usual practical choice.
+
+:::{.callout-tip}
+## Think About It
+With 5-fold CV, each observation sits in the held-out fold exactly once. How does this differ from running five independent 80/20 random splits? Which approach gives a more reliable performance estimate?
+:::
 
 Let's apply 5-fold CV to our complexity levels. We omit Level 8 (degree-5 polynomials) — its CV score is so catastrophically negative that it would compress the rest of the plot into an unreadable sliver.
 
@@ -541,6 +709,8 @@ for level in range(1, 8):
 cv_df = pd.DataFrame(cv_results)
 ```
 
+The CV scores give a more stable comparison than the single train/test split. Let's visualize them with error bars showing the standard deviation across folds.
+
 ```{python}
 fig, ax = plt.subplots(figsize=(11, 5))
 ax.bar(range(len(cv_df)), cv_df['cv_mean'], yerr=cv_df['cv_std'],
@@ -561,27 +731,101 @@ print(f"\nBest model by CV: {best['model']} (CV R² = {best['cv_mean']:.4f})")
 Cross-validation confirms the pattern from the single train/test split: performance improves through the first few levels, then declines as polynomial degree increases. The error bars (standard deviations across folds) quantify uncertainty — overlapping error bars suggest the difference between models is not reliable.
 
 :::{.callout-warning}
-## CV Assumes Exchangeable Data
+## CV Assumes the Data Can Be Shuffled
 CV relies on the assumption that we can shuffle the data randomly — each fold is representative of the whole. The assumption breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Chapter 16](lec16-backtesting.qmd).
 :::
 
 ## Lasso (regularization)
 
-Cross-validation tells us *which* model to pick from a short list, but it doesn't help when we have hundreds of candidate features and no obvious way to narrow them down. **Lasso** (Least Absolute Shrinkage and Selection Operator) takes a different approach: instead of choosing features by hand and comparing with CV, let the model zero out unimportant features automatically.
+Imagine you are building a cardiovascular risk score from 200 candidate blood markers. A model that uses all 200 is useless — no clinic will draw 200 vials to screen a patient. A deployable screen uses maybe 5 to 10 tests. How do you pick which ones?
+
+Cross-validation is not a practical answer. With 200 features, just checking every subset of size 5 means $\binom{200}{5} \approx 2.5$ billion candidate models, and you still haven't considered sizes 6, 7, or 8. You need a method that picks features *automatically* — one that tells the model "use as many features as you need, but only the ones that actually help."
+
+**Lasso** (Least Absolute Shrinkage and Selection Operator) does exactly this. Instead of enumerating subsets, it fits a single regression with a penalty that drives most coefficients to exactly zero. The features Lasso keeps are the ones it thinks matter; the rest are ignored.
 
 Ordinary least squares (**OLS**) — the unregularized `LinearRegression` we've used so far — minimizes the sum of squared residuals with no constraints on the coefficients. Lasso adds an L1 penalty:
 
 $$\min_{\beta_0, \beta} \sum_{i=1}^n (y_i - \beta_0 - x_i^T \beta)^2 + \alpha \sum_{j=1}^p |\beta_j|$$
 
-Here $x_i \in \mathbb{R}^p$ is the vector of features for listing $i$, and the intercept $\beta_0$ is not penalized. The L1 penalty drives some coefficients to exactly zero, selecting features automatically.
+Here $x_i \in \mathbb{R}^p$ is the vector of features for listing $i$, and the intercept $\beta_0$ is not penalized. A close relative is **ridge regression** (L2 regularization), which penalizes $\alpha \sum \beta_j^2$ instead. Ridge shrinks all coefficients toward zero but generally does not set them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features each contribute a small amount (ridge) or only a handful of features carry real signal (lasso).
 
-A close relative is **ridge regression** (L2 regularization), which penalizes $\alpha \sum \beta_j^2$ instead. Ridge shrinks all coefficients toward zero but generally does not set them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features contribute small effects (ridge) or only a few features matter (lasso).
+:::{.callout-note}
+## Why L1 creates sparsity and L2 does not
+Geometrically, fitting Lasso is the same as minimizing the squared-error loss subject to $\sum_j |\beta_j| \leq t$. The L1 constraint region is a diamond with sharp corners along the coordinate axes, and the optimum often lands exactly on a corner — which is another way of saying some coefficients are exactly zero. The L2 constraint region $\sum_j \beta_j^2 \leq t$ is a smooth ball, and smooth balls have no corners, so the optimum almost never zeros out a coefficient. That geometric difference is the whole story.
+:::
 
-Consider a medical screening tool. A model that requires 200 blood tests is impractical — expensive, slow, and fatiguing for patients. A model that needs 5 blood tests can actually be deployed in a clinic. Lasso finds the parsimonious model automatically.
+```{python}
+#| label: fig-l1-l2-geometry
+# Two-feature cartoon of the L1 and L2 constraint regions
+beta1_mesh, beta2_mesh = np.meshgrid(np.linspace(-2, 2.5, 400),
+                                     np.linspace(-2, 2.5, 400))
+ols_loss = (2.0 * (beta1_mesh - 1.3) ** 2
+            + 1.1 * (beta2_mesh - 0.8) ** 2
+            + 0.6 * (beta1_mesh - 1.3) * (beta2_mesh - 0.8))
+contour_levels = [0.25, 0.6, 1.1, 1.8, 2.8, 4.0]
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
+t_budget = 0.9
+
+# Left: L1 diamond (Lasso)
+ax = axes[0]
+ax.contour(beta1_mesh, beta2_mesh, ols_loss, levels=contour_levels,
+           colors='gray', alpha=0.6, linewidths=1)
+diamond = patches.Polygon(
+    [(t_budget, 0), (0, t_budget), (-t_budget, 0), (0, -t_budget)],
+    closed=True, facecolor='steelblue', alpha=0.25, edgecolor='steelblue', linewidth=2)
+ax.add_patch(diamond)
+ax.plot(1.3, 0.8, 'x', color='black', markersize=12, markeredgewidth=2.5)
+ax.annotate(r'$\hat\beta_{OLS}$', xy=(1.3, 0.8), xytext=(1.45, 0.95), fontsize=13)
+ax.plot(t_budget, 0, 'o', color='orangered', markersize=13, zorder=5)
+ax.annotate('Lasso optimum\nlands on a corner\n($\\beta_2 = 0$)',
+            xy=(t_budget, 0), xytext=(t_budget + 0.1, -1.5),
+            fontsize=10, color='orangered',
+            arrowprops=dict(arrowstyle='->', color='orangered', lw=1.3))
+ax.axhline(0, color='black', linewidth=0.5)
+ax.axvline(0, color='black', linewidth=0.5)
+ax.set_xlim(-1.8, 2.4)
+ax.set_ylim(-1.8, 2.4)
+ax.set_xlabel(r'$\beta_1$')
+ax.set_ylabel(r'$\beta_2$')
+ax.set_title('L1 constraint: diamond with corners on the axes')
+ax.set_aspect('equal')
+
+# Right: L2 ball (Ridge)
+ax = axes[1]
+ax.contour(beta1_mesh, beta2_mesh, ols_loss, levels=contour_levels,
+           colors='gray', alpha=0.6, linewidths=1)
+theta = np.linspace(0, 2 * np.pi, 200)
+ax.fill(t_budget * np.cos(theta), t_budget * np.sin(theta),
+        color='seagreen', alpha=0.25, edgecolor='seagreen', linewidth=2)
+ax.plot(1.3, 0.8, 'x', color='black', markersize=12, markeredgewidth=2.5)
+ax.annotate(r'$\hat\beta_{OLS}$', xy=(1.3, 0.8), xytext=(1.45, 0.95), fontsize=13)
+sol_angle = np.arctan2(0.55, 0.95)
+sol_x = t_budget * np.cos(sol_angle)
+sol_y = t_budget * np.sin(sol_angle)
+ax.plot(sol_x, sol_y, 'o', color='orangered', markersize=13, zorder=5)
+ax.annotate('Ridge optimum\nis in the interior\n(both nonzero)',
+            xy=(sol_x, sol_y), xytext=(sol_x + 0.3, sol_y - 1.8),
+            fontsize=10, color='orangered',
+            arrowprops=dict(arrowstyle='->', color='orangered', lw=1.3))
+ax.axhline(0, color='black', linewidth=0.5)
+ax.axvline(0, color='black', linewidth=0.5)
+ax.set_xlim(-1.8, 2.4)
+ax.set_ylim(-1.8, 2.4)
+ax.set_xlabel(r'$\beta_1$')
+ax.set_title('L2 constraint: smooth ball, no corners')
+ax.set_aspect('equal')
+
+plt.tight_layout()
+save_for_slides('l1-l2-geometry')
+plt.show()
+```
+
+The gray contours show the unconstrained OLS squared-error loss, centered on $\hat\beta_{OLS}$. Fitting Lasso or Ridge means moving along the smallest loss contour that still touches the blue (L1) or green (L2) constraint region. On the L1 diamond, the first contact is almost always a corner on an axis, so one coefficient snaps to zero. On the L2 ball, the first contact is almost always in the interior of an edge, so both coefficients stay nonzero. This generalizes to $p$ dimensions — the L1 constraint has corners along every coordinate axis, and those corners are where Lasso's sparsity comes from.
 
 ### Standardize before regularizing
 
-The penalty $\alpha \sum |\beta_j|$ treats every coefficient on the same scale. But if bedrooms ranges from 0 to 5 while price ranges from 10 to 500, a one-unit change in bedrooms corresponds to a much larger swing in prediction than a one-unit change in a price-derived feature. Without standardization, the penalty effectively penalizes some features more than others — not because they matter less, but because they happen to use different units.
+The penalty $\alpha \sum |\beta_j|$ treats every coefficient on the same scale. But the *coefficients* depend on the feature's units. A feature with a small range — bedrooms, which varies from 0 to 5 — needs a *large* coefficient to move $\hat{y}$ by the same amount as a feature with a 0-to-500 range. Since L1 treats all coefficients equally, the penalty falls disproportionately on the small-range feature: it gets punished for its units, not for being less useful. Put differently: OLS is scale-invariant (if you rescale a feature, the coefficient rescales to compensate and predictions are unchanged), but ridge and lasso are *not* — rescaling changes what the penalty "sees." Standardization restores the symmetry.
 
 **Standardization** rescales each feature to have mean zero and standard deviation one:
 
@@ -594,51 +838,51 @@ Scikit-learn's `StandardScaler` handles this. Fit the scaler on the training dat
 ```{python}
 # Use degree-3 polynomial features on our 500-listing subsample
 # (enough features to overfit, but not so many that the comparison is trivial)
-X_ks = build_features(base, 6)  # Level 6 = degree-3 polynomial features
-X_ks_tr = X_ks.iloc[train_idx].reset_index(drop=True)
-X_ks_te = X_ks.iloc[test_idx].reset_index(drop=True)
+X_deg3 = build_features(base, 6)  # Level 6 = degree-3 polynomial features
+X_deg3_train = X_deg3.iloc[idx_train].reset_index(drop=True)
+X_deg3_test = X_deg3.iloc[idx_test].reset_index(drop=True)
 
 # Standardize: fit on train, transform both
 scaler = StandardScaler()
-X_ks_tr_s = scaler.fit_transform(X_ks_tr)
-X_ks_te_s = scaler.transform(X_ks_te)
+X_deg3_train_std = scaler.fit_transform(X_deg3_train)
+X_deg3_test_std = scaler.transform(X_deg3_test)
 
 # OLS on the same features (for comparison — unaffected by scaling)
-ols_ks = LinearRegression().fit(X_ks_tr_s, y_train)
+ols_model = LinearRegression().fit(X_deg3_train_std, y_train)
 
 # Ridge shrinks all coefficients but keeps them all
-ridge = Ridge(alpha=1.0).fit(X_ks_tr_s, y_train)
+ridge_model = Ridge(alpha=1.0).fit(X_deg3_train_std, y_train)
 
 # Lasso automatically shrinks/eliminates features
-lasso = Lasso(alpha=1.0, random_state=42).fit(X_ks_tr_s, y_train)
+lasso_model = Lasso(alpha=1.0).fit(X_deg3_train_std, y_train)
 
-n_total = X_ks.shape[1]
-n_nonzero_lasso = (lasso.coef_ != 0).sum()
+n_total = X_deg3.shape[1]
+n_nonzero_lasso = int((lasso_model.coef_ != 0).sum())
 
 print(f"Degree-3 polynomial features: {n_total}")
 print(f"Ridge: all {n_total} coefficients nonzero (shrunk, not eliminated)")
 print(f"Lasso: {n_nonzero_lasso} nonzero (zeroed out {n_total - n_nonzero_lasso})")
 print()
-print(f"OLS   — Train R²: {ols_ks.score(X_ks_tr_s, y_train):.3f}  Test R²: {r2_score(y_test, ols_ks.predict(X_ks_te_s)):.3f}")
-print(f"Ridge — Train R²: {ridge.score(X_ks_tr_s, y_train):.3f}  Test R²: {r2_score(y_test, ridge.predict(X_ks_te_s)):.3f}")
-print(f"Lasso — Train R²: {lasso.score(X_ks_tr_s, y_train):.3f}  Test R²: {r2_score(y_test, lasso.predict(X_ks_te_s)):.3f}")
+print(f"OLS   — Train R²: {ols_model.score(X_deg3_train_std, y_train):.3f}  Test R²: {r2_score(y_test, ols_model.predict(X_deg3_test_std)):.3f}")
+print(f"Ridge — Train R²: {ridge_model.score(X_deg3_train_std, y_train):.3f}  Test R²: {r2_score(y_test, ridge_model.predict(X_deg3_test_std)):.3f}")
+print(f"Lasso — Train R²: {lasso_model.score(X_deg3_train_std, y_train):.3f}  Test R²: {r2_score(y_test, lasso_model.predict(X_deg3_test_std)):.3f}")
 ```
 
-Both Ridge and Lasso beat OLS on the same features. The coefficient plots below reveal the mechanism.
+On this split, both Ridge and Lasso beat OLS on the same features. The coefficient plots below reveal the mechanism. We plot all three on a shared y-axis so the shrinkage from OLS to Ridge to Lasso is visible at a glance.
 
 ```{python}
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
 
-axes[0].stem(range(len(ols_ks.coef_)), ols_ks.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
+axes[0].stem(range(len(ols_model.coef_)), ols_model.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
 axes[0].set_title(f'OLS ({n_total} features, all nonzero)')
 axes[0].set_xlabel('Feature index')
-axes[0].set_ylabel('Coefficient')
+axes[0].set_ylabel('Coefficient (standardized features)')
 
-axes[1].stem(range(len(ridge.coef_)), ridge.coef_, linefmt='seagreen', markerfmt='o', basefmt='gray')
+axes[1].stem(range(len(ridge_model.coef_)), ridge_model.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
 axes[1].set_title(f'Ridge (all {n_total} nonzero, but shrunk)')
 axes[1].set_xlabel('Feature index')
 
-axes[2].stem(range(len(lasso.coef_)), lasso.coef_, linefmt='orangered', markerfmt='o', basefmt='gray')
+axes[2].stem(range(len(lasso_model.coef_)), lasso_model.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
 axes[2].set_title(f'Lasso ({n_nonzero_lasso} nonzero out of {n_total})')
 axes[2].set_xlabel('Feature index')
 
@@ -646,7 +890,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-OLS spreads weight across all features, many of which are noise. Ridge shrinks every coefficient toward zero but keeps them all — dampened but present. Lasso goes further, zeroing out most coefficients entirely and keeping only the features that genuinely help prediction. The visual contrast captures the key difference: ridge says "everything matters a little"; lasso says "only a few things matter." Both regularizers resolve overfitting automatically — the penalty does the selection instead of the modeler.
+With shared axes, the shrinkage story is visible: OLS coefficients span hundreds, Ridge pulls them down by roughly an order of magnitude, and Lasso zeros out most features entirely. Both regularizers resolve overfitting automatically — the penalty does the selection instead of the modeler. Ridge says "every feature contributes a little"; Lasso says "only a few features carry the signal."
 
 :::{.callout-tip}
 ## Think About It
@@ -658,13 +902,75 @@ The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff. Large $
 How do we pick the right $\alpha$? Scikit-learn's `LassoCV` automates the search: it fits lasso at many $\alpha$ values, scores each by cross-validation, and selects the $\alpha$ with the best CV performance.
 
 ```{python}
-lasso_cv = LassoCV(cv=5, random_state=42, max_iter=10000).fit(X_ks_tr_s, y_train)
+# Raise max_iter so sklearn's coordinate-descent solver has room to converge on this problem.
+lasso_cv = LassoCV(cv=5, random_state=42, max_iter=10000).fit(X_deg3_train_std, y_train)
 
 print(f"Best alpha: {lasso_cv.alpha_:.4f}")
 print(f"Nonzero coefficients: {(lasso_cv.coef_ != 0).sum()} out of {len(lasso_cv.coef_)}")
-print(f"Train R²: {lasso_cv.score(X_ks_tr_s, y_train):.3f}")
-print(f"Test R²:  {r2_score(y_test, lasso_cv.predict(X_ks_te_s)):.3f}")
+print(f"Train R²: {lasso_cv.score(X_deg3_train_std, y_train):.3f}")
+print(f"Test R²:  {r2_score(y_test, lasso_cv.predict(X_deg3_test_std)):.3f}")
 ```
+
+Which features did Lasso keep? Because we gave `PolynomialFeatures` human-readable column names, we can ask it directly:
+
+```{python}
+# Print the top surviving features by coefficient magnitude
+feature_names = X_deg3.columns
+nonzero_mask = lasso_cv.coef_ != 0
+top_features = (
+    pd.DataFrame({
+        'feature': feature_names[nonzero_mask],
+        'coefficient': lasso_cv.coef_[nonzero_mask],
+    })
+    .assign(abs_coef=lambda d: d['coefficient'].abs())
+    .sort_values('abs_coef', ascending=False)
+    .drop(columns='abs_coef')
+    .head(10)
+    .reset_index(drop=True)
+)
+print("Top 10 features kept by LassoCV (standardized coefficients):")
+print(top_features.to_string(index=False))
+```
+
+The surviving features are a readable, targeted subset — `bedrooms`, room-type and borough dummies, a handful of interaction terms. Lasso decided these matter most and threw away the rest.
+
+### The coefficient path
+
+The stem plots showed a snapshot at one value of $\alpha$. But Lasso actually traces a whole *path*: as $\alpha$ decreases from a very large value (where every coefficient is zero) toward zero (where the solution is just OLS), features enter the model one at a time. Plotting the coefficients against $\log \alpha$ gives a direct view of that process.
+
+```{python}
+#| label: fig-lasso-path
+alphas_path = np.logspace(-2, 2, 100)
+_, coefs_path, _ = lasso_path(X_deg3_train_std, y_train, alphas=alphas_path)
+
+# Highlight features that are nonzero at the CV-optimal alpha
+optimal_alpha = lasso_cv.alpha_
+optimal_idx = int(np.argmin(np.abs(alphas_path - optimal_alpha)))
+nonzero_at_optimum = np.abs(coefs_path[:, optimal_idx]) > 1e-8
+
+fig, ax = plt.subplots(figsize=(10, 5.5))
+for j in range(coefs_path.shape[0]):
+    if nonzero_at_optimum[j]:
+        ax.plot(alphas_path, coefs_path[j, :], color='steelblue', linewidth=1.4, alpha=0.8)
+    else:
+        ax.plot(alphas_path, coefs_path[j, :], color='lightgray', linewidth=0.8, alpha=0.5)
+
+ax.axvline(optimal_alpha, color='orangered', linestyle='--', linewidth=2,
+           label=f'CV-optimal α = {optimal_alpha:.3f}')
+ax.axhline(0, color='black', linewidth=0.5)
+ax.set_xscale('log')
+ax.invert_xaxis()
+ax.set_xlabel(r'Regularization strength $\alpha$   (left: more penalty, right: less)')
+ax.set_ylabel('Coefficient value (standardized features)')
+ax.set_title('Lasso coefficient path: features enter one at a time as α decreases')
+ax.legend(fontsize=11, loc='upper left')
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+save_for_slides('lasso-path')
+plt.show()
+```
+
+Read the figure right to left: at very large $\alpha$ (left edge) every coefficient is exactly zero. As $\alpha$ decreases, the penalty eases and features "enter" the model one at a time. The blue lines are the features Lasso keeps at the CV-optimal $\alpha$ (marked by the dashed red line); the gray lines are features that were still on the path elsewhere but end up zeroed out at the optimum.
 
 We can see the tradeoff directly by plotting cross-validated error against $\alpha$.
 
@@ -691,29 +997,31 @@ plt.show()
 
 The U-shaped CV curve confirms the bias-variance tradeoff. Too small an $\alpha$ (left side of the plot) gives insufficient regularization — the model overfits. Too large an $\alpha$ (right side) penalizes too aggressively — the model underfits. `LassoCV` finds the valley automatically.
 
+:::{.callout-note}
+## Beyond the classical tradeoff
+
+The U-shaped test error curve predicts that complex models eventually overfit. This is true for individual models — but not always for *averages* of models. If you train many different overfit models and average their predictions, the average inherits the low bias of a complex model while reducing variance, as long as the models' errors are sufficiently uncorrelated. [Chapter 13](lec13-trees.qmd) puts this into practice with **random forests**, which combine many overfit decision trees to achieve low bias *and* low variance — escaping the classical U-curve entirely. The punchline to hold on to: "regularize and cross-validate" is still the right default, but averaging uncorrelated overfit models is the one known way past it.
+:::
+
 
 ## Key takeaways
 
-- **Train/test split simulates future data.** Training $R^2$ measures memory, not understanding. Hold out data the model never sees; CV averages over multiple splits for stability.
+- **Hold out data before you touch the model.** Training $R^2$ measures memory, not generalization. Random train/test splits check whether a model generalizes *in distribution* — they cannot detect the covariate, temporal, or label shift that killed the Epic sepsis model.
 
-- **More complexity eventually hurts.** Adding meaningful features improves predictions. But pushing past the useful features — polynomial interactions, kitchen-sink terms — leads to overfitting, where training performance improves while test performance collapses.
+- **More complexity eventually hurts — the bias-variance tradeoff explains why.** Expected test error = bias$^2$ + variance + $\sigma^2$. Simple models underfit (high bias); complex models overfit (high variance); the irreducible noise $\sigma^2$ sets the floor no model can cross.
 
-- **Bias-variance tradeoff: simple models underfit, complex models overfit.** Expected test error = bias$^2$ + variance + $\sigma^2$. The goal is to minimize the first two terms; $\sigma^2$ is the irreducible noise floor.
+- **Three-way splits and cross-validation keep the test set honest.** Train fits the model; validation (or CV) picks its complexity; the test set is touched exactly once at the end.
 
-- **Three-way split keeps the test set honest.** Training data for fitting, validation data for choosing model complexity, test data for final evaluation. Using the test set for model selection contaminates the performance estimate.
+- **Regularization resolves overfitting automatically.** Lasso (L1) zeros out unimportant features; ridge (L2) shrinks all coefficients; standardize first so the penalty sees every feature on the same scale; pick $\alpha$ by cross-validation.
 
-- **Regularization resolves overfitting automatically.** Lasso (L1) shrinks coefficients to zero, performing feature selection. Ridge (L2) shrinks all coefficients but keeps them. Choose the penalty strength $\alpha$ by cross-validation.
-
-- **Distribution shift is the root cause of many model failures.** A random train/test split tests in-distribution generalization; it cannot detect the kind of covariate or temporal shift that killed the Epic sepsis model.
-
-Where this leads: [Chapter 7](lec07-classification.qmd) (classification), [Chapter 8](lec08-sampling.qmd) (bootstrap), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 13](lec13-trees.qmd) (decision trees and random forests), [Chapter 16](lec16-backtesting.qmd) (temporal validation).
+Where this leads: [Chapter 7](lec07-classification.qmd) (classification metrics), [Chapter 8](lec08-sampling.qmd) (bootstrap uncertainty), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 13](lec13-trees.qmd) (decision trees and random forests — averaging past the classical tradeoff), [Chapter 16](lec16-backtesting.qmd) (temporal validation).
 
 
 ## Study guide
 
 ### Key definitions
 
-- **Distribution shift** — when deployment data differs systematically from training data (covariate shift, temporal shift, label shift).
+- **Distribution shift** — when deployment data differs systematically from training data. Three subtypes: **covariate shift** (input distribution changes), **temporal shift** (the world changes over time), **label shift** (the base rate of the outcome changes).
 - **Train/test split** — holding out part of the data to evaluate model performance on unseen observations.
 - **Train $R^2$ / test $R^2$** — $R^2$ computed on training data (measures fit) vs. held-out data (measures generalization). The gap reveals overfitting.
 - **Validation set** — data used to choose model complexity (distinct from the final test set).
@@ -721,24 +1029,37 @@ Where this leads: [Chapter 7](lec07-classification.qmd) (classification), [Chapt
 - **Cross-validation (k-fold)** — rotating which of $k$ folds is held out, averaging test scores for a more stable performance estimate.
 - **Overfitting** — the model memorizes training data (including noise) and performs poorly on new data. Signaled by training $R^2$ rising while test $R^2$ falls.
 - **Underfitting** — the model is too simple to capture the real pattern in the data.
-- **Bias** — expected prediction error from oversimplifying: $\text{Bias}(x) = \mathbb{E}[\hat{f}(x)] - f(x)$.
-- **Variance** — expected prediction error from over-sensitivity to the training set: $\text{Var}(x) = \mathbb{E}[(\hat{f}(x) - \mathbb{E}[\hat{f}(x)])^2]$.
+- **Bias** — expected prediction error from oversimplifying: $\text{Bias}(x) = \mathbb{E}_{\mathcal{D}}[\hat{f}_{\mathcal{D}}(x)] - f(x)$.
+- **Variance** — expected prediction error from over-sensitivity to the training set: $\text{Var}(x) = \mathbb{E}_{\mathcal{D}}[(\hat{f}_{\mathcal{D}}(x) - \mathbb{E}_{\mathcal{D}}[\hat{f}_{\mathcal{D}}(x)])^2]$. The expectation is taken over random draws of the training set.
 - **Bias-variance tradeoff** — expected test error = bias$^2$ + variance + $\sigma^2$. Simple models have high bias and low variance; complex models have low bias and high variance.
 - **Irreducible noise ($\sigma^2$)** — randomness in the outcome that no model can explain.
+- **OLS (ordinary least squares)** — unregularized linear regression; minimizes the sum of squared residuals with no penalty on coefficients.
 - **Lasso (L1 regularization)** — adds a penalty $\alpha \sum |\beta_j|$ that shrinks some coefficients to exactly zero, performing automatic feature selection.
 - **Ridge (L2 regularization)** — adds a penalty $\alpha \sum \beta_j^2$ that shrinks coefficients toward zero but does not set them exactly to zero.
 - **Standardization** — rescaling each feature to mean zero and standard deviation one before regularization, so the penalty treats all coefficients on the same scale.
-- **OLS (ordinary least squares)** — unregularized linear regression; minimizes the sum of squared residuals with no penalty on coefficients.
+
+### Key ideas
+
+- **Training error measures memory, not generalization.** A model that has seen the data will score well on it; only held-out data tells you whether it learned the pattern.
+- **Adding features can only lower training error, but test error eventually rises.** The transition from "help" to "harm" is the signature of overfitting.
+- **Expected test error decomposes into three parts.** Bias$^2$ + variance + $\sigma^2$; the first two shrink or grow with model complexity, and $\sigma^2$ is the floor no model can cross.
+- **A three-way split (or CV + held-out test) keeps the test set honest.** Any decision made against the test set contaminates it — the test estimate is no longer the final word.
+- **Regularization trades bias for variance, and cross-validation picks the tradeoff.** Lasso and ridge shrink coefficients automatically; the regularization strength $\alpha$ is itself a hyperparameter chosen by CV.
+- **Random splits cannot detect distribution shift.** If deployment data comes from a different population, era, or base-rate regime, test-set performance can still look great right up to the moment the model fails in production.
+- **Averaging uncorrelated overfit models is the one known escape from the classical U-curve.** Random forests (Chapter 13) exploit this; for single models, "regularize and cross-validate" remains the right default.
 
 ### Computational tools
 
-- `train_test_split(X, y, test_size=0.3)` — splits data into training and test sets
-- `cross_val_score(model, X, y, cv=5)` — performs 5-fold cross-validation and returns scores per fold
-- `r2_score(y_true, y_pred)` — computes $R^2$ on any set of true/predicted values
-- `StandardScaler().fit_transform(X_train)` — standardizes features to mean 0, std 1; use `.transform(X_test)` on test data
-- `Lasso(alpha=1.0).fit(X, y)` — fits a Lasso regression with regularization strength `alpha`
-- `LassoCV(cv=5).fit(X, y)` — searches over `alpha` values by cross-validation, selects the best
-- `PolynomialFeatures(degree=d)` — generates all polynomial terms up to degree $d$
+- `train_test_split(X, y, test_size=0.3)` — splits data into training and test sets.
+- `LinearRegression().fit(X, y)` — ordinary least squares (OLS).
+- `Ridge(alpha=1.0).fit(X, y)` — L2-regularized linear regression.
+- `Lasso(alpha=1.0).fit(X, y)` — L1-regularized linear regression.
+- `LassoCV(cv=5).fit(X, y)` — fits Lasso at many $\alpha$ values and selects the best by cross-validation.
+- `KFold(n_splits=5, shuffle=True, random_state=...)` — cross-validation splitter; use with `cross_val_score`.
+- `cross_val_score(model, X, y, cv=5)` — returns $k$ fold-wise scores for averaging.
+- `r2_score(y_true, y_pred)` — computes $R^2$ on any set of true/predicted values.
+- `StandardScaler().fit_transform(X_train)` — standardizes features to mean 0, std 1; use `.transform(X_test)` on test data.
+- `PolynomialFeatures(degree=d)` — generates all polynomial terms up to degree $d$.
 
 ### For the quiz
 

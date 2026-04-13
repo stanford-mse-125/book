@@ -447,6 +447,12 @@ plt.show()
 
 No U-shape! The test R² increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial and tree-depth experiments in [Chapter 6](lec06-validation.qmd), where more complexity eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in [Chapter 17](lec17-automl-llms.qmd), adding too many trees *can* overfit.)
 
+:::{.callout-note}
+## Escaping the classical U-curve
+
+This is the "one known escape" that [Chapter 6](lec06-validation.qmd) promised in its *Beyond the classical tradeoff* callout. The classical bias-variance curve says test error is U-shaped in model complexity: simple models underfit, complex models overfit, and you have to choose the sweet spot by cross-validation. That story assumes you are fitting a *single* model. The forest is not a single model — it is an average over hundreds of them. Averaging changes the rules: as long as individual trees' errors are sufficiently uncorrelated, adding more trees drives variance down without pushing bias up. There is no sweet spot to find on the `n_estimators` axis — "more" is monotonically at-least-as-good. The U-curve you saw for polynomial degree in Chapter 6 has been replaced by a one-sided staircase.
+:::
+
 
 ### Individual trees are overfit; their average is smooth
 
@@ -497,6 +503,14 @@ plt.show()
 Each individual tree (thin colored lines) is wiggly and overfit — it has memorized the quirks of its particular bootstrap sample. But their *errors point in different directions*. One tree might predict too high for 3-bedroom listings while another predicts too low. When we average them, the noise cancels out, and what remains is the genuine signal.
 
 The core insight of **bagging** (bootstrap aggregating): averaging many overfit models reduces variance without increasing bias. It's the same principle behind asking 100 people to estimate the weight of a cow at a county fair — individual guesses vary wildly, but the average is remarkably accurate.
+
+:::{.callout-note}
+## The bias-variance decomposition, revisited
+
+[Chapter 6](lec06-validation.qmd) wrote expected test error as $\text{bias}^2 + \text{variance} + \sigma^2$. A single deep tree is a *low-bias, high-variance* estimator: given enough depth, it can approximate any function (low bias), but it is exquisitely sensitive to the particular training sample (high variance). Regularizing a single tree — pruning it, capping its depth — lowers variance at the cost of raising bias, and that is the tradeoff Chapter 6 taught us to navigate with cross-validation.
+
+A random forest does something structurally different. It keeps every tree deep (bias stays low) and reduces variance by *averaging*. If the individual trees had perfectly correlated errors, averaging would do nothing. The bootstrap sampling and feature subsampling are there precisely to de-correlate their mistakes, so that averaging can work. The net effect: the forest inherits the low bias of a deep tree and the low variance of a stable estimator, without paying bias to get there. This is why random forests are a go-to benchmark — they sidestep the tuning dance that individual models require, and they do it by engineering a favorable bias-variance decomposition, not by finding a sweet spot on a U-curve.
+:::
 
 
 ## Random forest as benchmark
