@@ -844,12 +844,6 @@ print(f"            a 10% larger listing → about {10 * beta_loglog:.1f}% highe
 
 The elasticity lets us compare the "bedroom premium" to the "capacity premium" without worrying about whether one is measured in integers and the other in people — they live on the same percentage scale.
 
-:::{.callout-tip}
-## Think About It
-
-When should the response be on a log scale? Prices, incomes, and populations are classic candidates — they grow multiplicatively, are bounded below by zero, and have right-skewed distributions. The log transform compresses the right tail and makes the distribution more symmetric, which also helps with heteroscedasticity (the fan-shaped residual pattern we examine in the diagnostics section below).
-:::
-
 # Diagnostics and dangers
 
 With this many modeling choices at our disposal, we need tools to tell us when we've gone too far. Three diagnostics help: adjusted $R^2$ checks whether added features earn their place, multicollinearity warns when features duplicate each other, and residual plots reveal patterns the model missed.
@@ -997,54 +991,6 @@ plt.show()
 
 The distribution is right-skewed — the mean sits above the median, the sign of a long upper tail. The asymmetry hints at a second problem we'll see below: the *spread* of residuals is not constant across fitted values.
 
-## Heteroscedasticity
-
-When the variance of the residuals changes with the predicted value, we have **heteroscedasticity** (from the Greek: "different scatter"). A *fan-shaped* residual plot is the classic signal: if you trace the outer edge of the residual cloud from left to right, it looks like a megaphone opening up — narrow where predictions are small, wide where they're large.
-
-:::{.callout-important}
-## Definition: Heteroscedasticity
-
-**Heteroscedasticity** means the spread of residuals is not constant across the range of predictions. A fan-shaped residual plot is the telltale sign. Coefficient estimates remain unbiased, but standard errors (and therefore confidence intervals and p-values) become unreliable under heteroscedasticity.
-:::
-
-The log transform often helps: by compressing the right tail of the price distribution, it stabilizes the variance of the residuals.
-
-```{python}
-# Compare residual plots: level vs log. Both panels get the ±2σ envelope
-# so the "fan" is visible rather than inferred.
-fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
-
-# Level model
-axes[0].scatter(y_hat_full, residuals_full, alpha=0.05, s=5)
-axes[0].axhline(0, color='red', lw=1.5)
-c, b = rolling_envelope(y_hat_full, residuals_full)
-axes[0].plot(c, b, color='red', lw=1.5, label='±2σ envelope')
-axes[0].plot(c, -b, color='red', lw=1.5)
-axes[0].legend(loc='upper left', fontsize=9)
-axes[0].set_xlabel('Predicted price ($)')
-axes[0].set_ylabel('Residual ($)')
-axes[0].set_title('Level model: fan-shaped residuals')
-
-# Log model
-model_log_full = LinearRegression().fit(X_full, np.log(prices))
-log_resid = np.log(prices.values) - model_log_full.predict(X_full)
-log_fitted = model_log_full.predict(X_full)
-axes[1].scatter(log_fitted, log_resid, alpha=0.05, s=5)
-axes[1].axhline(0, color='red', lw=1.5)
-c_log, b_log = rolling_envelope(log_fitted, log_resid)
-axes[1].plot(c_log, b_log, color='red', lw=1.5, label='±2σ envelope')
-axes[1].plot(c_log, -b_log, color='red', lw=1.5)
-axes[1].legend(loc='upper left', fontsize=9)
-axes[1].set_xlabel('Predicted log(price)')
-axes[1].set_ylabel('Residual')
-axes[1].set_title('Log model: more uniform spread')
-
-plt.tight_layout()
-plt.show()
-```
-
-The log-transformed model produces residuals with more uniform spread — the fan shape is reduced.
-
 # Recap: the regression toolkit
 
 This chapter extended the regression framework from Chapter 4 in three directions: multiple regression with numeric features, one-hot encoding for categorical variables, and feature engineering — polynomials, interactions, missingness indicators, and log transforms. Each move expands what "linear in parameters" can express. The $R^2$ progression from bedrooms alone through borough interactions shows how much pricing signal each move unlocks.
@@ -1070,7 +1016,6 @@ Three questions remain open:
 - **Log transform** — regressing $\log(y)$ on $x$ gives multiplicative coefficients (percentage changes per unit increase in $x$). Appropriate for positive, right-skewed responses.
 - **Adjusted $R^2$** — penalizes for the number of features, preventing $R^2$ from rewarding useless predictors.
 - **Multicollinearity** — when feature columns are highly correlated, the span barely grows. Coefficients become unstable and hard to interpret.
-- **Heteroscedasticity** — non-constant residual variance (fan-shaped residual plots). Coefficients remain unbiased but standard errors become unreliable.
 - **Missing values as features** — pair imputed values with a binary missingness indicator to let the model learn from informative missingness.
 
 ### Key formulas
@@ -1098,4 +1043,4 @@ Three questions remain open:
 - Explain why the bedrooms coefficient changes between simple and multiple regression.
 - Know what polynomial overfitting looks like and why training $R^2$ is misleading.
 - Interpret a coefficient from a log-transformed model (percentage change vs. dollar change).
-- Identify heteroscedasticity from a residual plot and suggest a remedy.
+- Read a residual-vs-fitted plot for signs of missing structure (fan shapes, curves, clusters).
