@@ -981,13 +981,13 @@ With this many modeling choices at our disposal, we need tools to tell us when w
 
 Training $R^2$ never decreases when you add a feature — even a column of random noise. **Adjusted $R^2$** penalizes for the number of features:
 
-$$R^2_{\text{adj}} = 1 - \frac{(1 - R^2)(n - 1)}{n - k - 1}$$
+$$R^2_{\text{adj}} = 1 - \frac{(1 - R^2)(n - 1)}{n - p - 1}$$
 
-where $n$ is the number of observations and $k$ is the number of predictors. A useless feature increases $k$ without sufficiently reducing residual variance, so adjusted $R^2$ drops.
+where $n$ is the number of observations and $p$ is the number of predictors. A useless feature increases $p$ without sufficiently reducing residual variance, so adjusted $R^2$ drops.
 
 ```{python}
-def adjusted_r2(r2, n, k):
-    return 1 - (1 - r2) * (n - 1) / (n - k - 1)
+def adjusted_r2(r2, n, p):
+    return 1 - (1 - r2) * (n - 1) / (n - p - 1)
 
 n = len(prices)
 models_summary = {
@@ -997,10 +997,10 @@ models_summary = {
     '+ borough + interactions': (r2_interact_full, X_interact_full.shape[1]),
 }
 
-print(f"{'Model':<30s}  {'R²':>6s}  {'Adj R²':>7s}  {'k':>3s}")
+print(f"{'Model':<30s}  {'R²':>6s}  {'Adj R²':>7s}  {'p':>3s}")
 print("-" * 52)
-for name, (r2, k) in models_summary.items():
-    print(f"{name:<30s}  {r2:>.4f}  {adjusted_r2(r2, n, k):>.4f}  {k:>3d}")
+for name, (r2, p) in models_summary.items():
+    print(f"{name:<30s}  {r2:>.4f}  {adjusted_r2(r2, n, p):>.4f}  {p:>3d}")
 ```
 
 For a more reliable assessment of model quality, we'll use held-out test data in [Chapter 6](lec06-validation.qmd).
@@ -1248,7 +1248,7 @@ Three questions remain open:
 
 - **Normal equations**: $X^T X \beta = X^T y$, with closed-form solution $\beta = (X^T X)^{-1} X^T y$ when $X^T X$ is invertible.
 - **Orthogonality of residuals**: $X^T \epsilon = 0$ where $\epsilon = y - X\beta$.
-- **Adjusted $R^2$**: $R^2_{\text{adj}} = 1 - \dfrac{(1 - R^2)(n - 1)}{n - k - 1}$, where $n$ is the sample size and $k$ is the number of predictors.
+- **Adjusted $R^2$**: $R^2_{\text{adj}} = 1 - \dfrac{(1 - R^2)(n - 1)}{n - p - 1}$, where $n$ is the sample size and $p$ is the number of predictors.
 - **Log-level coefficient**: if $\log y = \beta_0 + \beta_1 x$, then a one-unit change in $x$ multiplies predicted $y$ by $e^{\beta_1}$.
 
 ### Computational tools
