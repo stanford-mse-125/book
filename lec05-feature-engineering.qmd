@@ -6,6 +6,7 @@ jupyter: python3
 ---
 
 ```{python}
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -21,6 +22,14 @@ plt.rcParams['font.size'] = 12
 
 # Load data
 DATA_DIR = 'data'
+
+# Also save key figures to the slide assets directory so slides can reuse them.
+SLIDE_IMG_DIR = '../slides/images/lec05'
+os.makedirs(SLIDE_IMG_DIR, exist_ok=True)
+
+def save_for_slides(name):
+    """Save the current figure as a PNG in the Lec 5 slide assets directory."""
+    plt.savefig(f'{SLIDE_IMG_DIR}/{name}.png', dpi=150, bbox_inches='tight')
 ```
 
 ## How much is a bathroom worth?
@@ -307,6 +316,7 @@ for bar, val in zip(bars, coef_sorted['coefficient']):
 
 ax.margins(x=0.15)
 plt.tight_layout()
+save_for_slides('coefficient-bars')
 plt.show()
 ```
 
@@ -443,6 +453,7 @@ for ax, title, kind in [
     ax.set_ylim(0, 500)
 
 plt.tight_layout()
+save_for_slides('borough-interactions')
 plt.show()
 ```
 
@@ -613,6 +624,7 @@ ax.set_ylabel('Number of listings')
 ax.set_title('Airbnb prices are heavily right-skewed')
 ax.legend(loc='upper right', fontsize=9)
 plt.tight_layout()
+save_for_slides('price-histogram')
 plt.show()
 ```
 
@@ -698,6 +710,7 @@ ax.yaxis.set_major_formatter(mticker.ScalarFormatter())
 ax.legend(fontsize=9, loc='upper left')
 
 plt.tight_layout()
+save_for_slides('log-transform')
 plt.show()
 ```
 
@@ -928,6 +941,7 @@ sns.heatmap(corr, annot=True, fmt='.2f', cmap='RdBu_r',
 axes[1].set_title('Feature correlations')
 
 plt.tight_layout(w_pad=3)
+save_for_slides('multicollinearity')
 plt.show()
 ```
 
@@ -1027,6 +1041,7 @@ axes[1, 1].set_xlabel('Fitted value')
 axes[1, 1].set_ylabel('Residual')
 
 plt.tight_layout()
+save_for_slides('residual-patterns')
 plt.show()
 ```
 
@@ -1088,6 +1103,7 @@ axes[1].set_title('Log model — uniform spread')
 axes[1].legend(loc='upper left', fontsize=9)
 
 plt.tight_layout()
+save_for_slides('log-vs-level-residuals')
 plt.show()
 ```
 

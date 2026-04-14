@@ -393,6 +393,7 @@ ax.text(5.5, -0.46, 'polynomial explosion', ha='center', va='top',
         transform=ax.get_xaxis_transform())
 
 plt.tight_layout()
+save_for_slides('eight-level-traintest')
 plt.show()
 ```
 
@@ -1074,6 +1075,7 @@ axes[2].set_ylabel('Coefficient')
 axes[2].axhline(0, color='black', linewidth=0.5)
 
 plt.tight_layout()
+save_for_slides('ols-ridge-lasso-stems')
 plt.show()
 ```
 
