@@ -512,11 +512,11 @@ print("distribution would predict. This pattern is common in sports data.")
 
 ### Reading a Q-Q plot: a visual gallery
 
-The NBA Q-Q plot above shows heavy tails — but what do other departures from normality look like? The gallery below shows five common patterns alongside the ideal (normal) case. Each panel uses simulated data so the pattern is unmistakable.
+The NBA Q-Q plot above shows heavy tails — but what do other departures from normality look like? The gallery below pairs each residual distribution (top row of each block) with its Q-Q plot (bottom row), so you can read directly from distribution shape to Q-Q shape.
 
 ```{python}
 #| label: fig-qq-gallery
-#| fig-cap: "Q-Q plot gallery: six patterns and what they reveal about the residual distribution."
+#| fig-cap: "Q-Q plot gallery: six residual distributions paired with their Q-Q plots. The top row of each block shows the distribution; the bottom row shows the corresponding Q-Q plot."
 
 from scipy.stats import probplot, skewnorm, t as t_dist, uniform
 
@@ -536,9 +536,6 @@ sim_data = {
     ]),
 }
 
-fig, axes = plt.subplots(2, 3, figsize=(14, 9))
-
-# Annotations to overlay on each panel — help students connect Q-Q shape to distribution shape
 annotations = {
     'Normal\n(assumptions met)': None,
     'Left-skewed\n(concave / bows down)': {'text': 'left tail too\nspread out', 'xy_frac': (0.15, 0.10), 'arrow_frac': (0.12, 0.22)},
@@ -548,31 +545,55 @@ annotations = {
     'Bimodal\n(two clusters)': {'text': 'gap = two\nsubgroups', 'xy_frac': (0.35, 0.55), 'arrow_frac': (0.50, 0.50)},
 }
 
-for ax, (label, data) in zip(axes.flat, sim_data.items()):
-    (tq, sq), (slope, intercept, _) = probplot(data, dist='norm')
-    ax.scatter(tq, sq, s=10, alpha=0.5, color='steelblue')
-    ref_x = np.array([tq.min(), tq.max()])
-    ax.plot(ref_x, intercept + slope * ref_x, 'r-', linewidth=1.5)
-    ax.set_title(label, fontsize=11)
-    ax.set_xlabel('')
-    ax.set_ylabel('')
+# Lay out the six distributions in two blocks of three columns.
+# Each block: top row = density, bottom row = Q-Q plot.
+row_layouts = [
+    ['Normal\n(assumptions met)', 'Left-skewed\n(concave / bows down)', 'Right-skewed\n(convex / bows up)'],
+    ['Heavy-tailed\n(S-shaped)', 'Light-tailed\n(reverse-S)', 'Bimodal\n(two clusters)'],
+]
 
-    # Add annotation arrow if defined for this panel
-    ann = annotations.get(label)
-    if ann is not None:
-        xlim, ylim = ax.get_xlim(), ax.get_ylim()
-        xy = (xlim[0] + ann['arrow_frac'][0] * (xlim[1] - xlim[0]),
-              ylim[0] + ann['arrow_frac'][1] * (ylim[1] - ylim[0]))
-        xytext = (xlim[0] + ann['xy_frac'][0] * (xlim[1] - xlim[0]),
-                  ylim[0] + ann['xy_frac'][1] * (ylim[1] - ylim[0]))
-        ax.annotate(ann['text'], xy=xy, xytext=xytext, fontsize=8,
-                    color='#e74c3c', fontweight='bold',
-                    arrowprops=dict(arrowstyle='->', color='#e74c3c', lw=1.5),
-                    ha='center', va='center')
+fig, axes = plt.subplots(4, 3, figsize=(14, 12),
+                         gridspec_kw={'height_ratios': [1, 1.4, 1, 1.4]})
 
-# Shared axis labels
-fig.supxlabel('Theoretical Quantiles (Normal)', fontsize=12)
-fig.supylabel('Sample Quantiles', fontsize=12)
+for block_idx, labels in enumerate(row_layouts):
+    density_row = block_idx * 2
+    qq_row = block_idx * 2 + 1
+    for col, label in enumerate(labels):
+        data = sim_data[label]
+
+        # Density (top of this block)
+        ax_d = axes[density_row, col]
+        ax_d.hist(data, bins=40, density=True, color='lightsteelblue', edgecolor='white')
+        ax_d.set_title(label, fontsize=11)
+        ax_d.set_yticks([])
+        ax_d.set_xlabel('')
+        if col == 0:
+            ax_d.set_ylabel('density', fontsize=10)
+
+        # Q-Q plot (bottom of this block)
+        ax_q = axes[qq_row, col]
+        (tq, sq), (slope, intercept, _) = probplot(data, dist='norm')
+        ax_q.scatter(tq, sq, s=10, alpha=0.5, color='steelblue')
+        ref_x = np.array([tq.min(), tq.max()])
+        ax_q.plot(ref_x, intercept + slope * ref_x, 'r-', linewidth=1.5)
+        if block_idx == len(row_layouts) - 1:
+            ax_q.set_xlabel('Theoretical Quantiles (Normal)', fontsize=10)
+        if col == 0:
+            ax_q.set_ylabel('Sample Quantiles', fontsize=10)
+
+        # Annotation arrow linking the Q-Q shape to the failure mode
+        ann = annotations.get(label)
+        if ann is not None:
+            xlim, ylim = ax_q.get_xlim(), ax_q.get_ylim()
+            xy = (xlim[0] + ann['arrow_frac'][0] * (xlim[1] - xlim[0]),
+                  ylim[0] + ann['arrow_frac'][1] * (ylim[1] - ylim[0]))
+            xytext = (xlim[0] + ann['xy_frac'][0] * (xlim[1] - xlim[0]),
+                      ylim[0] + ann['xy_frac'][1] * (ylim[1] - ylim[0]))
+            ax_q.annotate(ann['text'], xy=xy, xytext=xytext, fontsize=8,
+                          color='#e74c3c', fontweight='bold',
+                          arrowprops=dict(arrowstyle='->', color='#e74c3c', lw=1.5),
+                          ha='center', va='center')
+
 plt.tight_layout()
 plt.show()
 ```
