@@ -719,15 +719,52 @@ hint_table = pd.DataFrame(
 print(hint_table.round(0).to_string(index=False))
 ```
 
-Dollar premiums span a 5× range: from $16 in the Bronx to $81 in Manhattan. The interaction model needed a separate slope for every borough to fit that spread.
+Dollar premiums span a 5× range, from \$16 in the Bronx to \$81 in Manhattan — the interaction model needs a separate slope for each borough. Percentages tell a different story: four of the five boroughs cluster between 51% and 80% per bedroom. That's meaningfully closer to "one shared number" than the dollar column is. Only the Bronx fits neither picture (23% per bedroom, \$16 per bedroom), and it will be the outlier we accept as the price of simplification. If we can find a model that speaks in percentages, one coefficient can do what five interaction terms were doing. The log transform is that model.
 
-Percentages tell a different story. Four of the five boroughs land between 51% and 80% per bedroom. Still a real range — but meaningfully closer to "one shared number" than the dollar column is. The Bronx is the one borough that doesn't fit either picture: 23% per bedroom, \$16 per bedroom, against a small base price.
+## A second clue: the fat right tail
 
-So the question is: can we replace five separate bedroom-slope interaction terms with a single proportional coefficient? For four of the five boroughs, approximately yes — they're close enough to a shared percentage that one number can summarize them. The Bronx will be left under-fit as the price of that simplification. The log transform is the tool that makes this trade available.
+The interaction-coefficient hint is one reason the log transform was the right move. There is a second, independent reason, and it's visible in the price distribution itself.
+
+```{python}
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.hist(prices, bins=60, edgecolor='white', alpha=0.85, color='#4c72b0')
+ax.axvline(prices.median(), color='#d62728', lw=2, ls='--',
+           label=f'median ${prices.median():.0f}')
+ax.axvline(np.percentile(prices, 90), color='#ff7f0e', lw=2, ls='--',
+           label=f'90th percentile ${np.percentile(prices, 90):.0f}')
+ax.set_xlabel('Price per night ($)')
+ax.set_ylabel('Number of listings')
+ax.set_title('Airbnb prices are heavily right-skewed')
+ax.legend(loc='upper right', fontsize=9)
+plt.tight_layout()
+plt.show()
+```
+
+The median listing costs \$100 per night, but the distribution runs all the way to \$999 — a fat right tail of expensive listings an order of magnitude above the center. When any level model fits by minimizing squared error in dollars, that tail is where the error budget ends up. We can measure how much, using the pooled model `model_pooled` we fit back in the interaction-terms section.
+
+```{python}
+# How much of the pooled level-model's squared error comes from the most expensive listings?
+resid_pooled = prices.values - model_pooled.predict(X_pooled)
+sse_pooled = resid_pooled ** 2
+
+order = np.argsort(-prices.values)  # listings sorted from most to least expensive
+sse_sorted = sse_pooled[order]
+
+for pct in [5, 10, 20]:
+    n = int(len(prices) * pct / 100)
+    share = sse_sorted[:n].sum() / sse_pooled.sum() * 100
+    print(f"Top {pct:2d}% most expensive listings: {share:.1f}% of total squared error")
+```
+
+If every listing contributed equally, the top 5% would account for 5% of the squared error. Instead they account for nearly half — almost ten times their fair share. The reason is the squared-dollar objective: a \$50 miss on a \$100 listing (50% off — a disaster) and a \$50 miss on a \$500 listing (10% off — mild) contribute exactly the same amount to the SSE. The level model can't distinguish them, so it distributes attention by absolute dollars, and the tail dominates.
+
+We want an error metric that treats proportional mistakes on equal footing, so that a 50% miss is a 50% miss regardless of the listing's base price. That is what a log transform does — and it happens to be the same move the interaction-coefficient hint suggested.
 
 ## From additive to multiplicative
 
-The percentage clue from the interaction coefficients points the way. A single shared "proportional bedroom premium" would need a model that thinks in multiplications, not additions. The polynomial parade of the previous section tried to capture curvature by piling on higher-order terms in the additive structure — and extrapolated into absurdity. The problem was the additivity itself: each new term adds a correction, and nothing in the math keeps predictions positive or prevents them from swinging below zero.
+Both clues point the same direction. The interaction coefficients said the model should think in percentages; the fat right tail said the least-squares objective should too. A **log transform** gives us both at once, by reshaping $y$ before we fit.
+
+The polynomial parade of the previous section tried to capture curvature from the $X$ side by piling on higher-order terms in the additive structure — and extrapolated into absurdity. The problem was the additivity itself: each new term adds a correction, and nothing in the math keeps predictions positive or prevents them from swinging below zero.
 
 A **log transform** attacks the same curvature from a different angle. Instead of letting $X$ grow into more columns, it reshapes $y$. The motivation is a simple observation about the bedroom premium: adding a bedroom to a luxury apartment is worth more in absolute dollars than adding a bedroom to a rundown studio. Large Airbnbs are scarce; the handful that can host a family reunion or a bachelor party command a disproportionate premium over the many cramped studios. The dollar response to "one more bedroom" *grows* with the base size, which is exactly the super-linear pattern a straight-line fit cannot match.
 
@@ -821,47 +858,12 @@ print(dollar_table.round(0).to_string(index=False))
 
 A bedroom in Manhattan adds many more dollars than a bedroom in the Bronx, even though both boroughs share the same *proportional* increase in the log model. The single multiplier reproduces the pattern we spotted in the interaction coefficients — Manhattan, Brooklyn, Queens, and Staten Island all come in around the shared percentage — and pays for that compression by under-fitting the Bronx, which we already knew was the outlier. The log transform has traded five interaction coefficients for one.
 
-## Why least squares fights the wrong battle
+:::{.callout-note collapse="true"}
+## Going deeper: does the log model actually predict better?
 
-The interaction-coefficient hint is one reason the log transform was the right move. There is a second, independent reason, and it is baked into the least-squares objective itself.
+The multiplicative story says the log model captures borough heterogeneity more elegantly. But does it make *better predictions* in dollars? We can answer by breaking the data into price deciles and computing the mean absolute error within each decile for both models.
 
-Start with the raw price distribution.
-
-```{python}
-fig, ax = plt.subplots(figsize=(7, 4))
-ax.hist(prices, bins=60, edgecolor='white', alpha=0.85, color='#4c72b0')
-ax.axvline(prices.median(), color='#d62728', lw=2, ls='--',
-           label=f'median ${prices.median():.0f}')
-ax.axvline(np.percentile(prices, 90), color='#ff7f0e', lw=2, ls='--',
-           label=f'90th percentile ${np.percentile(prices, 90):.0f}')
-ax.set_xlabel('Price per night ($)')
-ax.set_ylabel('Number of listings')
-ax.set_title('Airbnb prices are heavily right-skewed')
-ax.legend(loc='upper right', fontsize=9)
-plt.tight_layout()
-plt.show()
-```
-
-The median listing costs $100 per night, but the distribution runs all the way out to $999 — a fat right tail of expensive listings an order of magnitude above the center. When the level model minimizes squared error in dollars, that tail is where most of its error budget ends up.
-
-```{python}
-# How much of the level-model's squared error comes from the most expensive listings?
-resid_level_b = prices.values - model_level_b.predict(X_level_b)
-sse_level_b = resid_level_b ** 2
-
-order = np.argsort(-prices.values)  # sort listings from most to least expensive
-sse_sorted = sse_level_b[order]
-total_sse = sse_level_b.sum()
-
-for pct in [5, 10, 20]:
-    n = int(len(prices) * pct / 100)
-    share = sse_sorted[:n].sum() / total_sse * 100
-    print(f"Top {pct:2d}% most expensive listings: {share:.1f}% of total squared error")
-```
-
-If every listing contributed the same share, the top 5% would account for 5% of the squared error. Instead they account for nearly half — the top 5% of listings absorb almost ten times their "fair share." The model is spending most of its coefficient budget fighting to fit the expensive tail.
-
-Does that fight pay off? We can answer by breaking the data into price deciles and computing the mean absolute error within each decile for both the level model and the log model. One subtlety: the log model predicts $\log(y)$, so we have to exponentiate to get a dollar prediction — and naive `np.exp()` of a log regression's fitted values systematically *underpredicts* the mean on the dollar scale (the arithmetic mean of $\exp(\log y)$ is larger than $\exp$ of the mean of $\log y$). A standard fix is to multiply by the average of $\exp(\text{log residuals})$, which rescales the predictions to match the mean. We apply that correction here so the level/log comparison is honest.
+One subtlety: the log model predicts $\log(y)$, so we exponentiate to get a dollar prediction — and naive `np.exp()` of a log-regression's fitted values systematically *underpredicts* the mean on the dollar scale (the arithmetic mean of $\exp(\log y)$ is larger than $\exp$ of the mean of $\log y$). A standard fix multiplies by the average of $\exp(\text{log residuals})$, rescaling the predictions to match the mean.
 
 ```{python}
 # Precompute predictions once.
@@ -888,12 +890,11 @@ decile_df = pd.DataFrame(decile_rows, columns=['decile', 'price range', 'level M
 ```
 
 ```{python}
-# Horizontal bar chart, two bars per decile
 fig, ax = plt.subplots(figsize=(8.5, 5.5))
 y_pos = np.arange(len(decile_df))
 bar_height = 0.38
 max_mae = decile_df[['level MAE', 'log MAE']].values.max()
-label_offset = max_mae * 0.012  # offset as fraction of axis width so labels clear the bar ends
+label_offset = max_mae * 0.012
 
 bars_level = ax.barh(y_pos - bar_height/2, decile_df['level MAE'], bar_height,
                      color='#d62728', label='level model', edgecolor='white')
@@ -910,7 +911,7 @@ for bar, val in zip(bars_log, decile_df['log MAE']):
 ax.set_yticks(y_pos)
 ax.set_yticklabels([f"D{r['decile']} ({r['price range']})" for _, r in decile_df.iterrows()],
                    fontsize=9)
-ax.invert_yaxis()  # decile 1 (cheapest) at top
+ax.invert_yaxis()
 ax.set_xlabel('Mean absolute error ($)')
 ax.set_title('Per-decile prediction error: where each model wins')
 ax.legend(loc='lower right', fontsize=10)
@@ -919,14 +920,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-Two patterns stand out. First, the top decile ($251-$999) has roughly \$170 MAE for the level model and \$180 for the log — expensive listings are hard to fit either way. Our features describe bedroom count and borough, but not the amenities, sub-neighborhood, property type, or seasonality that drive the difference between a \$300 and a \$900 listing. Neither model has what it would take to predict those well, and the level model's concentration of attention on them buys it roughly nothing. Second, in deciles 4-7 (roughly \$76-\$150 per night, where most listings live) the log model's MAE is 74-89% of the level model's. That is a real improvement of \$5-$10 per listing across the middle of the distribution.
+Two patterns stand out. First, the top decile (\$251-\$999) has roughly \$170 MAE for the level model and \$180 for the log — expensive listings are hard to fit either way. Our features describe bedroom count and borough, not amenities, sub-neighborhood, property type, or seasonality; neither model has what it would take to predict those well. Second, in deciles 4-7 (\$76-\$150 per night, where most listings live) the log model's MAE is 74-89% of the level model's, a real improvement of \$5-\$10 per listing.
 
-The mechanism is straightforward. Squared-dollar error treats a \$50 miss on a \$100 listing (50% off — a disaster) the same as a \$50 miss on a \$500 listing (10% off — mild). The level model cannot distinguish these, so it distributes its attention by *absolute* dollars, which means the expensive tail dominates. The log transform puts errors on a proportional scale — a 50% miss is a 50% miss whether the listing is \$100 or \$500 — which matches how we actually judge prediction quality.
-
-:::{.callout-tip}
-## Think About It
-
-The level model minimizes mean squared error in dollars — it is by definition the best fit among linear functions $\beta_0 + \beta_1 \cdot \text{bedrooms} + \cdots$. And yet the log model just beat it on MAE across most of the distribution. How is that possible? Is the log model's backtransformed prediction, $\exp(\beta_0 + \beta_1 \cdot \text{bedrooms} + \cdots)$, a linear function of bedrooms and borough? If not, what does that tell you about what "least squares minimizes MSE" actually promises?
+There's a puzzle hiding in this table. The level model minimizes squared error in dollars — it is by definition the best fit among linear functions $\beta_0 + \beta_1 \cdot \text{bedrooms} + \cdots$. And yet the log model just beat it on MAE across most of the distribution. How? The log model's backtransformed prediction, $\exp(\beta_0 + \beta_1 \cdot \text{bedrooms} + \cdots)$, is *not* a linear function of bedrooms and borough — it lives in a different (non-linear) class of predictors. "Least squares minimizes MSE" is a promise within the linear class only; a richer class can beat it with a different objective. The log transform isn't cheating; it's changing the shape of the hypothesis space to match the multiplicative structure of prices.
 :::
 
 ## The four transform combinations
