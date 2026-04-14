@@ -19,7 +19,7 @@ The Epic sepsis model is not an isolated failure. Dermatology AI systems have re
 
 - **Covariate shift**: the input distribution changes (e.g., training on one hospital's patients, deploying at another with different demographics)
 - **Temporal shift**: the world changes over time (e.g., consumer preferences, market conditions, pandemic disruptions)
-- **Label shift**: the outcome distribution changes while features given the outcome stay the same (e.g., a cancer screening model trained at a referral center where 5% of patients have colorectal cancer, deployed in routine screening where prevalence is 0.3% — the biomarker profile given cancer looks similar in both populations, but far fewer patients actually have cancer, so the model's false positive rate spikes)
+- **Label shift**: the outcome distribution changes while features given the outcome stay the same (e.g., an ICU sepsis model trained in a year when sepsis prevalence is 8% and deployed a year later when a new admission policy drops prevalence to 4% — patients who *do* have sepsis still look the same on paper, but the base rate has shifted, so a model whose decision threshold was tuned to the old prevalence will fire far more false alarms per true case)
 :::
 
 Before trusting any model's reported performance, ask: training data from *when*? From *where*? From *whom*? Is the deployment population the same? The Epic sepsis model trained on one hospital system and deployed at another. The dermatology AI trained on light skin and deployed on everyone. In each case, the mismatch between training and deployment data — distribution shift — explains the failure.
@@ -92,17 +92,23 @@ axes[1].set_xlabel('Feature (e.g., weekly spending)')
 axes[1].set_yticks([])
 axes[1].legend(fontsize=9, loc='upper right')
 
-# Label shift: base rate changes
-categories = ['Training\n(referral clinic)', 'Deployment\n(routine screening)']
-rates = [0.05, 0.003]
-bars = axes[2].bar(categories, rates, color=['steelblue', 'orangered'], alpha=0.7,
-                   edgecolor='black', linewidth=0.8)
+# Label shift: base rate changes. Show the same two feature-given-label densities
+# in both populations, but with very different mixing weights so the *marginal*
+# (the heavy dashed curves) looks very different even though the per-class
+# distributions are identical.
+pos_density = gaussian(x_grid, 6.8, 0.9)
+neg_density = gaussian(x_grid, 4.2, 1.3)
+train_prev, deploy_prev = 0.08, 0.04
+train_marginal = train_prev * pos_density + (1 - train_prev) * neg_density
+deploy_marginal = deploy_prev * pos_density + (1 - deploy_prev) * neg_density
+axes[2].fill_between(x_grid, train_marginal, alpha=0.45, color='steelblue',
+                     label='Training (8% positive)')
+axes[2].fill_between(x_grid, deploy_marginal, alpha=0.45, color='orangered',
+                     label='Deployment (4% positive)')
 axes[2].set_title('Label shift\noutcome base rate changes')
-axes[2].set_ylabel('P(positive case)')
-axes[2].set_ylim(0, 0.065)
-for bar, rate in zip(bars, rates):
-    axes[2].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.002,
-                 f'{rate:.1%}', ha='center', fontsize=11, fontweight='bold')
+axes[2].set_xlabel('Feature (e.g., biomarker score)')
+axes[2].set_yticks([])
+axes[2].legend(fontsize=9, loc='upper right')
 
 plt.tight_layout()
 save_for_slides('distribution-shift-panels')
@@ -136,6 +142,8 @@ Any performance metric can be computed on either the training set or the test se
 - **Test $R^2$**: $R^2$ computed on held-out data the model was not trained on. Measures how well the model predicts new observations. Can *decrease* if the model overfits.
 
 More generally, the **train version** of a metric (accuracy, MSE, etc.) measures fit; the **test version** measures generalization. The gap between them reveals overfitting.
+
+(One vocabulary trap if you read across literatures: clinical ML papers — including the Wong et al. sepsis paper above — often use *validation* to mean what we call *testing*, i.e., checking model performance on a held-out cohort. In this chapter we use *validation* specifically for the hyperparameter-selection split introduced later.)
 :::
 
 
@@ -534,7 +542,7 @@ Think of the synthetic experiment above: each of the 200 runs drew a new $\mathc
 $$\text{Bias}(x) = \mathbb{E}_{\mathcal{D}}[\hat{f}_{\mathcal{D}}(x)] - f(x)$$
 $$\text{Variance}(x) = \mathbb{E}_{\mathcal{D}}\bigl[(\hat{f}_{\mathcal{D}}(x) - \mathbb{E}_{\mathcal{D}}[\hat{f}_{\mathcal{D}}(x)])^2\bigr]$$
 
-For a fresh test observation $y = f(x) + \varepsilon$ with $\varepsilon$ independent of the training data, the expected squared prediction error decomposes into three pieces:
+For a fresh test observation $y = f(x) + \varepsilon$ with $\varepsilon$ independent of the training data, the expected squared prediction error decomposes into three pieces:^[The decomposition is usually traced to Geman, Bienenstock, and Doursat, "Neural Networks and the Bias/Variance Dilemma," *Neural Computation*, 1992.]
 
 $$\mathbb{E}\bigl[(y - \hat{f}_{\mathcal{D}}(x))^2\bigr] = \text{Bias}^2(x) + \text{Variance}(x) + \sigma^2$$
 
@@ -567,48 +575,68 @@ The line has high bias (it can't capture the curvature) but low variance. The de
 
 ### The U-curve
 
-Now turn the knob: imagine running the synthetic experiment at every polynomial degree from 1 to 10 and plotting bias$^2$, variance, and total expected error against degree. Bias$^2$ drops as the model becomes flexible enough to capture the truth. Variance rises as the flexibility starts fitting noise. Their sum — the total expected error — is U-shaped, with the irreducible noise $\sigma^2$ as a floor no model can cross.
+Now turn the knob: run the synthetic experiment at every polynomial degree from 1 to 8 and plot bias$^2$, variance, and the total expected error against degree. Bias$^2$ drops as the model becomes flexible enough to capture the truth. Variance rises as the flexibility starts fitting noise. Their sum — the total expected error — is U-shaped, with the irreducible noise $\sigma^2$ as a floor no model can cross.
 
 ```{python}
 #| label: fig-bias-variance-ucurve
-complexity = np.linspace(0.2, 10, 400)
-bias_sq_curve = 1.4 * np.exp(-0.55 * complexity) + 0.04
-variance_curve = 0.04 * np.exp(0.38 * complexity) + 0.02
-sigma_sq_floor = np.full_like(complexity, 0.15)
-total_error = bias_sq_curve + variance_curve + sigma_sq_floor
+# Monte Carlo sweep: for each polynomial degree, draw 200 fresh training sets,
+# fit the model, and average bias² and variance across a uniform grid of test points.
+np.random.seed(1)
+
+degree_sweep = np.arange(1, 9)
+bias_sq_per_degree = np.zeros(len(degree_sweep))
+var_per_degree = np.zeros(len(degree_sweep))
+
+for j, d in enumerate(degree_sweep):
+    preds_d = np.zeros((n_repeats, len(x_grid)))
+    for i in range(n_repeats):
+        x_tr = np.random.uniform(0, 1, n_train_pts)
+        y_tr = true_fn(x_tr) + np.random.normal(0, sigma_noise, n_train_pts)
+        coefs = np.polyfit(x_tr, y_tr, d)
+        preds_d[i] = np.polyval(coefs, x_grid)
+    mean_pred = preds_d.mean(axis=0)
+    bias_sq_per_degree[j] = ((mean_pred - f_true) ** 2).mean()
+    var_per_degree[j] = preds_d.var(axis=0).mean()
+
+sigma_sq = sigma_noise ** 2
+total_per_degree = bias_sq_per_degree + var_per_degree + sigma_sq
 
 fig, ax = plt.subplots(figsize=(9, 5.5))
-ax.plot(complexity, bias_sq_curve, label='Bias²', color='steelblue', linewidth=2.5)
-ax.plot(complexity, variance_curve, label='Variance', color='orangered', linewidth=2.5)
-ax.plot(complexity, sigma_sq_floor, label='σ² (irreducible)',
-        color='gray', linewidth=2, linestyle='--')
-ax.plot(complexity, total_error, label='Total expected error',
-        color='black', linewidth=3)
+ax.plot(degree_sweep, bias_sq_per_degree, 'o-', label='Bias²',
+        color='steelblue', linewidth=2.5, markersize=8)
+ax.plot(degree_sweep, var_per_degree, 's-', label='Variance',
+        color='orangered', linewidth=2.5, markersize=8)
+ax.axhline(sigma_sq, label='σ² (irreducible)', color='gray', linewidth=2, linestyle='--')
+ax.plot(degree_sweep, total_per_degree, 'D-', label='Total expected error',
+        color='black', linewidth=3, markersize=8)
 
-sweet_idx = int(np.argmin(total_error))
-ax.axvline(complexity[sweet_idx], color='seagreen', linestyle=':', alpha=0.8)
+sweet_idx = int(np.argmin(total_per_degree))
+ax.axvline(degree_sweep[sweet_idx], color='seagreen', linestyle=':', alpha=0.8)
 ax.annotate('sweet spot',
-            xy=(complexity[sweet_idx], total_error[sweet_idx]),
-            xytext=(complexity[sweet_idx] + 1.3, total_error[sweet_idx] + 0.35),
+            xy=(degree_sweep[sweet_idx], total_per_degree[sweet_idx]),
+            xytext=(degree_sweep[sweet_idx] + 1.1, total_per_degree[sweet_idx] + 0.12),
             fontsize=12, color='seagreen', fontweight='bold',
             arrowprops=dict(arrowstyle='->', color='seagreen', lw=1.5))
 
-ax.text(0.8, 1.55, 'underfit\n(high bias)', fontsize=11, color='steelblue',
+ymax = max(total_per_degree.max() * 1.25, 0.6)
+ax.text(1.2, ymax * 0.9, 'underfit\n(high bias)', fontsize=11, color='steelblue',
         style='italic', ha='left')
-ax.text(9.5, 1.55, 'overfit\n(high variance)', fontsize=11, color='orangered',
+ax.text(7.8, ymax * 0.9, 'overfit\n(high variance)', fontsize=11, color='orangered',
         style='italic', ha='right')
 
-ax.set_xlabel('Model complexity →')
-ax.set_ylabel('Error')
-ax.set_title('The bias-variance U-curve')
+ax.set_xlabel('Polynomial degree (model complexity →)')
+ax.set_ylabel('Expected squared error')
+ax.set_title('The bias-variance U-curve (measured on synthetic data)')
+ax.set_xticks(degree_sweep)
+ax.set_ylim(0, ymax)
 ax.legend(fontsize=11, loc='upper center')
-ax.set_xticks([])
-ax.set_ylim(0, 2.0)
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
 save_for_slides('bias-variance-ucurve')
 plt.show()
 ```
+
+Unlike the hand-drawn cartoon a U-curve sometimes gets in textbooks, every point on this plot is *measured* — it comes from the same 200-training-set Monte Carlo we ran for the line and degree-4 fits, run at every degree from 1 to 8. The shape drops out of the experiment, not a stylized formula.
 
 :::{.callout-tip}
 ## Think About It
@@ -630,6 +658,8 @@ The solution: a **three-way split**.
 - **Validation set** — held-out data used to *choose* model complexity (number of features, regularization strength, tree depth). The modeler sees validation scores and adjusts accordingly.
 - **Test set** — held-out data touched *only once*, at the very end, to report final performance. No modeling decisions depend on the test set.
 :::
+
+Think of the three roles the way you'd think about a student's three exams. The training data is the textbook you study from. The validation data is a practice exam you take while you still have time to change your approach — if you do badly, you try a different study strategy. The test data is the final exam: you walk in, you take it once, and whatever score you earn is the one that counts. If you were allowed to take the final three times and report the highest of the three, your final wouldn't be a fair estimate of what you know — and the same thing happens when you reuse a test set to pick a model.
 
 ### Worked example
 
@@ -840,7 +870,15 @@ print(f"\nBest model by CV: {best['model']} (CV R² = {best['cv_mean']:.4f})")
 
 Cross-validation confirms the pattern from the single train/test split: performance improves through the first few levels, then declines as polynomial degree increases. The error bars (standard deviations across folds) quantify uncertainty — overlapping error bars suggest the difference between models is not reliable.
 
-Notice, though, that our three procedures don't agree on a single "best" level: the 8-level train/test plot put the peak at Level 3, the three-way split picked Level 2, and 5-fold CV favors the low-variance plateau around Levels 3–5. That's a useful reminder, not a contradiction — with only a few hundred listings, any single decision rule is itself noisy, and the practical takeaway is that Levels 3–5 are indistinguishable on this data. CV's averaging makes its ranking the most trustworthy of the three.
+Notice, though, that our three procedures don't agree on a single "best" level:
+
+| Method | Best level |
+|---|---|
+| Train/test peak | 3 |
+| Three-way split (validation) | 2 |
+| 5-fold CV | 5 |
+
+These don't all agree — but that's not a contradiction. Each procedure has its own noise source, and on a 500-listing dataset any one number can drift by a few percentage points of $R^2$ from the underlying truth. Cross-validation averages out the most noise and is usually the most trustworthy, which is why the practical takeaway is that Levels 3–5 are indistinguishable on this data and CV's ranking is the one to trust.
 
 :::{.callout-warning}
 ## CV Assumes the Data Can Be Shuffled
@@ -950,6 +988,32 @@ After standardization, every coefficient is in the same units (response per stan
 
 Scikit-learn's `StandardScaler` handles this. Fit the scaler on the training data (to learn the means and standard deviations), then transform both the training and test data using those same statistics. Applying the *training* statistics to the test data prevents information leakage — the test set plays no role in determining the scaling.
 
+To see why this matters, it helps to look at what goes wrong when you skip it. The code cell below fits Lasso on the *raw*, unstandardized base features — bedrooms and bathrooms (range 0–10), plus room-type and borough dummies (range 0–1) — and compares the surviving coefficients to a parallel fit on the standardized features:
+
+```{python}
+# Compare Lasso on raw vs. standardized base features
+raw_train = base.iloc[idx_train].reset_index(drop=True).astype(float).values
+raw_test = base.iloc[idx_test].reset_index(drop=True).astype(float).values
+
+scaler_raw = StandardScaler()
+std_train = scaler_raw.fit_transform(raw_train)
+std_test = scaler_raw.transform(raw_test)
+
+lasso_raw = Lasso(alpha=1.0, max_iter=10000).fit(raw_train, y_train)
+lasso_std = Lasso(alpha=1.0, max_iter=10000).fit(std_train, y_train)
+
+compare = pd.DataFrame({
+    'feature': base.columns,
+    'raw range': [f'{raw_train[:, j].min():.0f}–{raw_train[:, j].max():.0f}'
+                  for j in range(raw_train.shape[1])],
+    'coef (unstandardized)': np.round(lasso_raw.coef_, 2),
+    'coef (standardized)': np.round(lasso_std.coef_, 2),
+})
+print(compare.to_string(index=False))
+```
+
+The two columns are not the same. Without standardization, Lasso assigns a coefficient of roughly $-77$ to `room_Private room` — and about $36$ to `bedrooms` — because a 0-or-1 dummy needs a large coefficient to move the prediction and a 0-to-4 numeric feature needs a small one, so the penalty $\alpha|\beta|$ falls unequally on features of genuinely similar importance. After standardization, every feature is on the same footing, the `room_Private room` coefficient drops to $-40$ while `bedrooms` barely moves, and the relative ranking changes. The same Lasso penalty applied to the same data is making two very different decisions about which features matter, and the only thing that changed is the units.
+
 ```{python}
 # Use degree-3 polynomial features on our 500-listing subsample
 # (enough features to overfit, but not so many that the comparison is trivial)
@@ -984,6 +1048,11 @@ print(f"Lasso — Train R²: {lasso_model.score(X_deg3_train_std, y_train):.3f} 
 ```
 
 On this split, both Ridge and Lasso beat OLS on the same features. The coefficient plots below reveal the mechanism. We stack the three panels so their shapes line up, and give each its own y-scale — because the OLS coefficients span several hundred while Lasso's sit well under twenty, forcing them onto the same axis would make Ridge and Lasso look flat.
+
+:::{.callout-tip}
+## Think About It
+Before you look at the three panels: what should Ridge's coefficients look like compared to OLS's — shrunk toward zero, or a few set exactly to zero? What about Lasso's? If Lasso and Ridge end up with similar test $R^2$, do their coefficient vectors have to look the same?
+:::
 
 ```{python}
 fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
@@ -1034,22 +1103,32 @@ print(f"Test R²:  {r2_score(y_test, lasso_cv.predict(X_deg3_test_std)):.3f}")
 Which features did Lasso keep? Because we gave `PolynomialFeatures` human-readable column names, we can ask it directly:
 
 ```{python}
-# Print the top surviving features by coefficient magnitude
+#| label: fig-lasso-survivors
+# Rank the surviving features by |coefficient| and plot the top 10
 feature_names = X_deg3.columns
 nonzero_mask = lasso_cv.coef_ != 0
-top_features = (
+survivors = (
     pd.DataFrame({
         'feature': feature_names[nonzero_mask],
         'coefficient': lasso_cv.coef_[nonzero_mask],
     })
     .assign(abs_coef=lambda d: d['coefficient'].abs())
     .sort_values('abs_coef', ascending=False)
-    .drop(columns='abs_coef')
     .head(10)
+    .iloc[::-1]  # reverse so the largest bar sits at the top of the barh chart
     .reset_index(drop=True)
 )
-print("Top 10 features kept by LassoCV (standardized coefficients):")
-print(top_features.to_string(index=False))
+
+fig, ax = plt.subplots(figsize=(8, 5))
+bar_colors = ['steelblue' if c > 0 else 'indianred' for c in survivors['coefficient']]
+ax.barh(survivors['feature'], survivors['coefficient'], color=bar_colors, edgecolor='black', linewidth=0.4)
+ax.axvline(0, color='black', linewidth=0.8)
+ax.set_xlabel('Standardized coefficient')
+ax.set_title('Features surviving at the CV-optimal α')
+ax.grid(True, axis='x', alpha=0.3)
+plt.tight_layout()
+save_for_slides('lasso-survivors')
+plt.show()
 ```
 
 The surviving features are a readable, targeted subset — `bedrooms`, room-type and borough dummies, a handful of interaction terms. Lasso decided these matter most and threw away the rest.
@@ -1109,7 +1188,7 @@ ax.axvline(lasso_cv.alpha_, color='orangered', linestyle='--', linewidth=2,
            label=f'Best α = {lasso_cv.alpha_:.4f}')
 ax.set_xscale('log')
 ax.set_xlabel('Regularization strength (α)')
-ax.set_ylabel('Cross-validated MSE')
+ax.set_ylabel('Cross-validated MSE (dollars²)')
 ax.set_title('LassoCV: choosing α by cross-validation')
 ax.legend(fontsize=12)
 ax.grid(True, alpha=0.3)
