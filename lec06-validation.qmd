@@ -13,16 +13,7 @@ The root cause: Epic evaluated the model on data similar to its training data, n
 
 The Epic sepsis model is not an isolated failure. Dermatology AI systems have reported 90%+ accuracy on light skin tones but as low as 17% on dark skin, because the test sets didn't reflect the diversity of the deployment population.^[Daneshjou et al., "Disparities in Dermatology AI Performance on a Diverse, Curated Clinical Image Set," *Science Advances*, 2022.] Amazon built an AI recruiting tool that achieved high accuracy but systematically penalized resumes containing the word "women's" — the model had learned to replicate historical hiring bias embedded in its training data, and the company scrapped it.^[Dastin, "Amazon scraps secret AI recruiting tool that showed bias against women," *Reuters*, 2018.] In each case, the model looked good on data it had already seen but failed on the data that mattered.
 
-:::{.callout-important}
-## Definition: Distribution Shift
-**Distribution shift** occurs when the data a model encounters at deployment differs systematically from its training data. Common forms:
-
-- **Covariate shift**: the input distribution changes (e.g., training on one hospital's patients, deploying at another with different demographics)
-- **Temporal shift**: the world changes over time (e.g., consumer preferences, market conditions, pandemic disruptions)
-- **Label shift**: the outcome distribution changes while features given the outcome stay the same (e.g., an ICU sepsis model trained in a year when sepsis prevalence is 8% and deployed a year later when a new admission policy drops prevalence to 4% — patients who *do* have sepsis still look the same on paper, but the base rate has shifted, so a model whose decision threshold was tuned to the old prevalence will fire far more false alarms per true case)
-:::
-
-Before trusting any model's reported performance, ask: training data from *when*? From *where*? From *whom*? Is the deployment population the same? The Epic sepsis model trained on one hospital system and deployed at another. The dermatology AI trained on light skin and deployed on everyone. In each case, the mismatch between training and deployment data — distribution shift — explains the failure.
+Every one of these failures shares the same root cause: the evaluation didn't simulate the data the model would face in deployment. Before trusting any model's reported performance, ask: training data from *when*? From *where*? From *whom*?
 
 In [Chapter 5](lec05-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. But we've been measuring performance on the *same data we trained on*. Evaluating a model on its training data is like grading a student on the questions they've already seen — of course they'll do well. The question the hospital *should* have asked is the question this chapter answers: **does this model generalize?** We'll develop the tools to answer it: train/test splits, cross-validation, and the bias-variance tradeoff that explains why more complex models don't always win.
 
@@ -61,20 +52,37 @@ def save_for_slides(name):
     plt.savefig(f'{SLIDE_IMG_DIR}/{name}.png', dpi=150, bbox_inches='tight')
 ```
 
-Each of the three shift types looks different on paper:
+## Evaluating on new data
+
+Training a model on data and then testing it on the *same* data is like letting a student write the exam with the answer key open. A perfect score tells you they can copy, not that they understand the material. A model that scores well on its training data might have memorized noise — patterns specific to those particular observations that won't appear again.
+
+The fix: **split the data before fitting any model.** Set aside a random portion — say 30% — that the model never sees during training. After fitting the model on the remaining 70%, evaluate it on the held-out portion. These held-out observations simulate new data from the same population: same city, same time period, same measurement process, but observations the model has never encountered.
+
+When does a random split give a reliable estimate of future performance? When future data comes from the *same distribution* as the training data. A random split shuffles observations so each set is a representative sample of the underlying population. If tomorrow's data looks statistically like today's, the held-out score is a trustworthy preview.
+
+When does it break down? When deployment data differs systematically from training data — a mismatch called **distribution shift**. A random split shuffles observations *within* one population, so training and test sets come from the same distribution by construction. That is exactly what the Epic sepsis model's evaluation looked like: same hospital, same era, same coding practices. A random split would have pronounced it fine. Deploy the same model at a different hospital and the distribution has shifted — the test set the vendor used tells you nothing about the new population's performance. A random split tests *in-distribution* generalization; it cannot detect a mismatch between training and deployment. [Chapter 16](lec16-backtesting.qmd) returns to this problem when splits must respect time.
+
+:::{.callout-note collapse="true"}
+## Going deeper: three kinds of distribution shift
+
+Distribution shift comes in several distinct forms, each one painted by a different picture:
+
+- **Covariate shift**: the input distribution changes (e.g., training on one hospital's patients, deploying at another with different demographics).
+- **Temporal shift**: the world changes over time (e.g., consumer preferences, market conditions, pandemic disruptions).
+- **Label shift**: the outcome's base rate changes while features given the outcome stay the same (e.g., a sepsis model trained when prevalence is 8% and deployed a year later at 4% — individual patients who *do* have sepsis still look the same on paper, but the base rate has shifted, so a model whose decision threshold was tuned to the old prevalence fires far more false alarms per true case).
 
 ```{python}
 #| label: fig-distribution-shift
+#| fig-cap: "Three kinds of distribution shift, each with its own picture."
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-x_grid = np.linspace(0, 10, 400)
+x_grid_shift = np.linspace(0, 10, 400)
 
 def gaussian(x, mu, sigma):
     return np.exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * np.sqrt(2 * np.pi))
 
-# Covariate shift: feature distribution changes
-axes[0].fill_between(x_grid, gaussian(x_grid, 3.5, 1.1), alpha=0.45,
+axes[0].fill_between(x_grid_shift, gaussian(x_grid_shift, 3.5, 1.1), alpha=0.45,
                      color='steelblue', label='Training')
-axes[0].fill_between(x_grid, gaussian(x_grid, 6.5, 1.1), alpha=0.45,
+axes[0].fill_between(x_grid_shift, gaussian(x_grid_shift, 6.5, 1.1), alpha=0.45,
                      color='orangered', label='Deployment')
 axes[0].set_title('Covariate shift\ninput distribution changes')
 axes[0].set_xlabel('Feature (e.g., patient age)')
@@ -82,28 +90,23 @@ axes[0].set_ylabel('Density')
 axes[0].set_yticks([])
 axes[0].legend(fontsize=9, loc='upper right')
 
-# Temporal shift: the world moves
-axes[1].fill_between(x_grid, gaussian(x_grid, 4.0, 1.4), alpha=0.45,
+axes[1].fill_between(x_grid_shift, gaussian(x_grid_shift, 4.0, 1.4), alpha=0.45,
                      color='steelblue', label='Pre-pandemic')
-axes[1].fill_between(x_grid, gaussian(x_grid, 6.0, 2.0), alpha=0.45,
+axes[1].fill_between(x_grid_shift, gaussian(x_grid_shift, 6.0, 2.0), alpha=0.45,
                      color='orangered', label='Post-pandemic')
 axes[1].set_title('Temporal shift\nthe world changes over time')
 axes[1].set_xlabel('Feature (e.g., weekly spending)')
 axes[1].set_yticks([])
 axes[1].legend(fontsize=9, loc='upper right')
 
-# Label shift: base rate changes. Show the same two feature-given-label densities
-# in both populations, but with very different mixing weights so the *marginal*
-# (the heavy dashed curves) looks very different even though the per-class
-# distributions are identical.
-pos_density = gaussian(x_grid, 6.8, 0.9)
-neg_density = gaussian(x_grid, 4.2, 1.3)
+pos_density = gaussian(x_grid_shift, 6.8, 0.9)
+neg_density = gaussian(x_grid_shift, 4.2, 1.3)
 train_prev, deploy_prev = 0.08, 0.04
 train_marginal = train_prev * pos_density + (1 - train_prev) * neg_density
 deploy_marginal = deploy_prev * pos_density + (1 - deploy_prev) * neg_density
-axes[2].fill_between(x_grid, train_marginal, alpha=0.45, color='steelblue',
+axes[2].fill_between(x_grid_shift, train_marginal, alpha=0.45, color='steelblue',
                      label='Training (8% positive)')
-axes[2].fill_between(x_grid, deploy_marginal, alpha=0.45, color='orangered',
+axes[2].fill_between(x_grid_shift, deploy_marginal, alpha=0.45, color='orangered',
                      label='Deployment (4% positive)')
 axes[2].set_title('Label shift\noutcome base rate changes')
 axes[2].set_xlabel('Feature (e.g., biomarker score)')
@@ -116,16 +119,7 @@ plt.show()
 ```
 
 Each example in the opening vignette lands in one of these panels: Epic sepsis (different hospital population) is covariate shift; Amazon hiring (historical bias encoded in training data) is a label-shift-style problem once deployed on an intentionally debiased pipeline; any model trained pre-pandemic and deployed post-pandemic hits temporal shift. A random train/test split sees none of them.
-
-## Evaluating on new data
-
-Training a model on data and then testing it on the *same* data is like letting a student write the exam with the answer key open. A perfect score tells you they can copy, not that they understand the material. A model that scores well on its training data might have memorized noise — patterns specific to those particular observations that won't appear again.
-
-The fix: **split the data before fitting any model.** Set aside a random portion — say 30% — that the model never sees during training. After fitting the model on the remaining 70%, evaluate it on the held-out portion. These held-out observations simulate new data from the same population: same city, same time period, same measurement process, but observations the model has never encountered.
-
-When does a random split give a reliable estimate of future performance? When future data comes from the *same distribution* as the training data. A random split shuffles observations so each set is a representative sample of the underlying population. If tomorrow's data looks statistically like today's, the held-out score is a trustworthy preview.
-
-When does it break down? Exactly the distribution shift scenarios above. A model trained on one hospital's patients and tested on a random subset of the *same hospital's* patients will look fine. Deploy it at a different hospital, and performance may collapse. A random split tests in-distribution generalization; it cannot detect covariate, temporal, or label shift. [Chapter 16](lec16-backtesting.qmd) returns to this problem when splits must respect time.
+:::
 
 **How much data for each part?** A common default is 70% train / 30% test, or 80/20. The tradeoff:
 
@@ -149,9 +143,11 @@ More generally, the **train version** of a metric (accuracy, MSE, etc.) measures
 
 ## Polynomials, when they help
 
-In [Chapter 5](lec05-feature-engineering.qmd) we fit one slope per feature. But real relationships sometimes bend. The jump in price from a 1-bedroom to a 2-bedroom listing isn't necessarily the same as the jump from a 4-bedroom to a 5-bedroom — at some point, extra bedrooms stop adding as much, and the straight-line fit starts to miss. A **polynomial feature** lets the slope bend by adding powers of $x$ ($x^2$, $x^3$, $\ldots$) as additional columns and letting the linear model pick its own coefficients on each.
+We already met one kind of polynomial feature in [Chapter 5](lec05-feature-engineering.qmd): the **interaction term** `bedrooms × borough`, a degree-2 polynomial built from two different base features. This chapter extends the same trick in two directions — to higher powers of a single feature ($x^2$, $x^3$, $\ldots$) and to all products of two, three, or more base features at once.
 
-Scikit-learn's `PolynomialFeatures` does the expansion. With `degree=2, include_bias=False`, it takes a single feature $x$ and returns two columns: $x$ and $x^2$. The resulting regression $\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$ is still linear in the *coefficients* — so OLS fits it the same way — but the fitted curve is no longer a straight line.
+The motivation for bending a single feature: the jump in price from a 1-bedroom to a 2-bedroom listing isn't necessarily the same as the jump from a 4-bedroom to a 5-bedroom — at some point, extra bedrooms stop adding as much, and the straight-line fit starts to miss. A **polynomial feature** lets the slope bend by adding powers of $x$ ($x^2$, $x^3$, $\ldots$) as additional columns and letting the linear model pick its own coefficients on each.
+
+Scikit-learn's `PolynomialFeatures` does the expansion. With `degree=2, include_bias=False`, it takes a single feature $x$ and returns two columns: $x$ and $x^2$. The resulting regression $\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$ is still linear in the *coefficients* — so OLS fits it the same way — but the fitted curve is no longer a straight line. Applied to a pair of features $(x_1, x_2)$ at degree 2, the same call returns $x_1, x_2, x_1^2, x_1 x_2, x_2^2$ — so every interaction term from Chapter 5 shows up automatically as one of the degree-2 polynomial features.
 
 ```{python}
 # Load Airbnb data (same setup as Chapter 5)
@@ -165,9 +161,9 @@ df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
 print(f"Dropped {n_before - len(df):,} rows with missing values or extreme prices")
 
-# Subsample: with ~1000 engineered features and only a few hundred training points,
-# overfitting will be dramatic and easy to see.
-df_sub = df.sample(500, random_state=42).reset_index(drop=True)
+# Subsample: enough to see overfitting at high-degree polynomials, but not so much
+# that we leave the regime where a single train/test split is informative.
+df_sub = df.sample(1500, random_state=42).reset_index(drop=True)
 y_sub = df_sub['price']
 
 print(f"Full dataset: {n_before:,} listings")
@@ -211,15 +207,77 @@ plt.show()
 
 At small bedroom counts the two fits agree, but the polynomial bends upward as bedrooms grow — picking up the fact that the price gap between a 4- and 5-bedroom listing is bigger than the gap between a 1- and 2-bedroom listing. That curvature is real, and the straight line can't see it.
 
-But polynomials can also misbehave. Does higher degree always mean a better fit on *new* data? That's the question the rest of the chapter can now answer rigorously, now that we have train and test sets.
+If a little bending helps, does more bending help more? Let's push the degree up on the same bedrooms-only feature and see what each fit predicts — both inside the observed range and a few bedrooms beyond it.
+
+```{python}
+#| label: fig-polynomial-parade
+MAX_DEGREE = 6
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+max_obs = float(df_sub['bedrooms'].max())
+
+# Left panel: polynomial fits on bedrooms, extrapolated beyond the observed range
+ax = axes[0]
+ax.scatter(df_sub['bedrooms'], y_sub, alpha=0.15, s=15, color='gray', label='listings')
+x_extrap = np.linspace(0, 9, 300).reshape(-1, 1)
+ax.axvspan(max_obs, 9, alpha=0.15, color='red', label='extrapolation region')
+
+colors_poly = plt.cm.viridis(np.linspace(0, 0.9, MAX_DEGREE))
+parade_r2s = []
+top_degree_pred = None
+
+for degree in range(1, MAX_DEGREE + 1):
+    poly = PolynomialFeatures(degree=degree, include_bias=False)
+    X_p = poly.fit_transform(df_sub[['bedrooms']].values)
+    m = LinearRegression().fit(X_p, y_sub.values)
+    parade_r2s.append(m.score(X_p, y_sub.values))
+    pred = m.predict(poly.transform(x_extrap))
+    if degree == MAX_DEGREE:
+        top_degree_pred = pred
+    if degree in [1, 2, 4, MAX_DEGREE]:
+        ax.plot(x_extrap, pred, color=colors_poly[degree-1], linewidth=2,
+                label=f'degree {degree}')
+
+ax.axhline(0, color='black', linewidth=0.5)
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Predicted price ($)')
+ax.set_title('R² says higher degree is better. Do you agree?')
+ax.legend(fontsize=9, loc='upper left')
+ax.set_ylim(-300, 600)
+
+ax.annotate(f'degree {MAX_DEGREE} swings\nwildly here',
+            xy=(8.5, top_degree_pred[-30]),
+            xytext=(6.3, -220),
+            fontsize=9, color='#b00020',
+            arrowprops=dict(arrowstyle='->', color='#b00020', lw=1.2))
+
+# Right panel: training R² by degree — the "higher is better" view
+ax = axes[1]
+ax.bar(range(1, MAX_DEGREE + 1), parade_r2s, color=colors_poly, edgecolor='white')
+for i, r2_val in enumerate(parade_r2s):
+    ax.text(i + 1, r2_val + 0.005, f'{r2_val:.3f}', ha='center', fontsize=9)
+ax.set_xlabel('Polynomial degree')
+ax.set_ylabel('Training R²')
+ax.set_title('Training R² climbs with degree')
+ax.set_ylim(0, max(parade_r2s) * 1.25)
+
+plt.tight_layout()
+save_for_slides('polynomial-parade')
+plt.show()
+```
+
+It fits the data better and better! Training $R^2$ climbs from about 0.17 at degree 1 up to around 0.30 at degree 6 — every extra degree buys a little more "fit." What a great fit. Let's ship it.
+
+…wait, is something wrong? Would you trust this model to predict the price of a 7- or 8-bedroom listing? Look at what the degree-6 curve does beyond the range we actually measured: it swings into territory no honest prediction should ever enter. And even inside the observed range, the higher-degree curves have started to wobble between points — each wiggle is the model chasing a pattern the data never really had.
+
+Training $R^2$ says yes. Your eye says no. The rest of this chapter is about resolving that disagreement by grading the model on data it has never seen before.
 
 ## Adding features: from help to harm
 
 In [Chapter 5](lec05-feature-engineering.qmd), adding features always improved $R^2$. But that was $R^2$ on the training data. Now that we can measure performance on held-out data, we can ask the real question: does adding features improve predictions on *new* data?
 
-We'll build feature matrices at increasing complexity — from two raw numeric features up through high-order polynomial interactions — and track both train and test $R^2$. We deliberately use a subsample of 500 listings: with roughly 1,000 engineered features possible at the highest complexity level, we want to land in the regime where the number of parameters approaches the number of training observations. That's where overfitting is easiest to see. (With 20,000+ listings, you'd need tens of thousands of features before overfitting bites — good news for practitioners with abundant data, but hard to see the pattern.)
+We'll build feature matrices at increasing complexity — from two raw numeric features up through high-order polynomial interactions — and track both train and test $R^2$. We deliberately use a subsample of 1,500 listings so that even our most elaborate feature expansion has fewer parameters than training observations — enough complexity to see overfitting without forcing us into the regime where OLS stops being well-defined. (With 20,000+ listings, you'd need far more features before overfitting bites — good news for practitioners with abundant data, but hard to see the pattern.)
 
-Here's the plan: eight levels of model complexity. Levels 1–4 add meaningful features one group at a time. Levels 5–8 use `PolynomialFeatures` to generate all products of up to $d$ features (including a feature with itself — so degree-2 interactions include squared terms like bedrooms$^2$, degree-3 adds cubed terms, and so on). The number of features grows combinatorially with the degree.
+Here's the plan: seven levels of model complexity. Levels 1–4 add meaningful features one group at a time. Levels 5–7 use `PolynomialFeatures` to generate all products of up to $d$ features (including a feature with itself — so degree-2 interactions include squared terms like bedrooms$^2$, degree-3 adds cubed terms, and so on). The number of features grows combinatorially with the degree.
 
 | Level | What it adds | Intuition |
 |-------|-------------|-----------|
@@ -230,7 +288,6 @@ Here's the plan: eight levels of model complexity. Levels 1–4 add meaningful f
 | 5 | all degree-2 terms | Pairwise interactions + squared terms |
 | 6 | all degree-3 terms | Three-way interactions + cubic terms |
 | 7 | all degree-4 terms | Four-way interactions + quartic terms |
-| 8 | all degree-5 terms | Five-way interactions + quintic terms |
 
 ```{python}
 # Build base features: numeric + dummies (created once, then split)
@@ -244,14 +301,14 @@ print(f"Base features: {list(base.columns)}")
 print(f"Number of base features: {base.shape[1]}")
 ```
 
-Next, we define a function that builds feature matrices at each complexity level. Levels 1–4 select columns by hand; levels 5–8 generate all polynomial terms of increasing degree.
+Next, we define a function that builds feature matrices at each complexity level. Levels 1–4 select columns by hand; levels 5–7 generate all polynomial terms of increasing degree.
 
 ```{python}
 def build_features(base_df, level):
     """Build feature matrices at increasing complexity.
 
     Levels 1-4: hand-picked features (each nested in the next).
-    Levels 5-8: all polynomial terms of degree 2-5 on the base features.
+    Levels 5-7: all polynomial terms of degree 2-4 on the base features.
     """
     num_cols = ['bedrooms', 'bathrooms']
     room_cols = [c for c in base_df.columns if c.startswith('room_')]
@@ -269,7 +326,7 @@ def build_features(base_df, level):
         inter.columns = [f'{c}_x_bed' for c in inter.columns]
         return pd.concat([out, inter], axis=1)
 
-    # Levels 5-8: polynomial features of degree (level - 3) on all base features
+    # Levels 5-7: polynomial features of degree (level - 3) on all base features
     degree = level - 3
     poly = PolynomialFeatures(degree=degree, include_bias=False)
     return pd.DataFrame(
@@ -296,7 +353,7 @@ print(f"Train: {len(y_train):,}  |  Test: {len(y_test):,}")
 
 :::{.callout-tip}
 ## Think About It
-Before we run the experiment: which level do you think will have the highest *test* $R^2$? Sketch what you expect the train and test $R^2$ curves to look like across the eight levels.
+Before we run the experiment: which level do you think will have the highest *test* $R^2$? Sketch what you expect the train and test $R^2$ curves to look like across the seven levels.
 :::
 
 Now we fit a `LinearRegression` at each complexity level and record both training and test $R^2$.
@@ -309,15 +366,14 @@ level_names = [
     '4: + bed × boro',
     '5: degree-2 terms',
     '6: degree-3 terms',
-    '7: degree-4 terms',
-    '8: degree-5 terms'
+    '7: degree-4 terms'
 ]
 
 train_r2s = []
 test_r2s = []
 n_features_list = []
 
-for level in range(1, 9):
+for level in range(1, 8):
     X_tr = build_features(base_train, level)
     X_te = build_features(base_test, level)
 
@@ -326,12 +382,12 @@ for level in range(1, 9):
     test_r2s.append(r2_score(y_test, model.predict(X_te)))
     n_features_list.append(X_tr.shape[1])
 
-print(f"Fit 8 models. Feature counts: {n_features_list}")
+print(f"Fit 7 models. Feature counts: {n_features_list}")
 ```
 
 Before we plot, pause on the prediction you sketched a moment ago. Training $R^2$ increases monotonically across these levels: because each level's feature set contains the previous level's (the levels are *nested*), adding features can only help fit the training data — in the worst case, the new coefficients are set to zero. Test $R^2$ tells a different story.
 
-Note that the eight levels represent two different kinds of complexity. Levels 1–4 add hand-picked feature *groups* — room type, borough, interactions — each motivated by a substantive hypothesis about pricing. Levels 5–8 use `PolynomialFeatures` to generate *all* products of the base features up to a given degree, a brute-force explosion with no hypothesis behind it. We plot them on one axis to make the comparison concrete, but when the curve collapses in Levels 5–8, that's driven both by "too many features" and by "features chosen mechanically," and separating those is a harder experiment.
+Note that the seven levels represent two different kinds of complexity. Levels 1–4 add hand-picked feature *groups* — room type, borough, interactions — each motivated by a substantive hypothesis about pricing. Levels 5–7 use `PolynomialFeatures` to generate *all* products of the base features up to a given degree, a brute-force explosion with no hypothesis behind it. We plot them on one axis to make the comparison concrete, but when the curve collapses in Levels 5–7, that's driven both by "too many features" and by "features chosen mechanically," and separating those is a harder experiment.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(11, 6))
@@ -348,15 +404,14 @@ if best_test_idx < len(level_names) - 1:
     ax.axvspan(best_test_idx + 0.5, len(level_names) - 0.5, alpha=0.15, color='red',
                label='Overfitting zone')
 
-# Clip y-axis to the interesting range; annotate the off-chart degree-5 collapse
-ax.set_ylim(-0.25, 0.75)
+# Clip y-axis so Levels 1-6 stay readable; Level 7's test R² is dramatically
+# negative and we annotate it as off-chart rather than let it drive the scale.
+ax.set_ylim(-0.25, 0.85)
 ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
 
 if test_r2s[-1] < -0.25:
-    # Arrow sits OUTSIDE the plot area: tail above the axis bottom, head below it,
-    # so the reader sees the arrow "leave" the chart at the deg-5 column.
     ax.annotate(
-        f'Level 8: test R² = {test_r2s[-1]:.2f}\n(falls off chart below)',
+        f'Level 7: test R² = {test_r2s[-1]:.2f}\n(falls off chart below)',
         xy=(len(level_names) - 1, -0.26),
         xytext=(len(level_names) - 1, 0.08),
         ha='center',
@@ -368,32 +423,32 @@ if test_r2s[-1] < -0.25:
 ax.set_xticks(x_pos)
 ax.set_xticklabels([f'{n}\n({nf} feat)' for n, nf in zip(
     ['bed+bath', '+room', '+boro', '+bed×boro',
-     'deg 2', 'deg 3', 'deg 4', 'deg 5'],
+     'deg 2', 'deg 3', 'deg 4'],
     n_features_list)], fontsize=9)
 ax.set_xlabel('Model complexity (features added)')
 ax.set_ylabel('Prediction R² (train vs. test)')
-ax.set_title('Training and test R² across eight models')
+ax.set_title('Training and test R² across seven models')
 ax.legend(fontsize=11, loc='lower left')
 ax.grid(True, alpha=0.3)
 
-# Visual grouping under the axis: Levels 1-4 are hand-picked, 5-8 are polynomial.
+# Visual grouping under the axis: Levels 1-4 are hand-picked, 5-7 are polynomial.
 ax.annotate('', xy=(3.3, -0.42), xytext=(-0.3, -0.42),
             xycoords=('data', 'axes fraction'),
             arrowprops=dict(arrowstyle='-', color='steelblue', lw=1.5),
             annotation_clip=False)
-ax.annotate('', xy=(7.3, -0.42), xytext=(3.7, -0.42),
+ax.annotate('', xy=(6.3, -0.42), xytext=(3.7, -0.42),
             xycoords=('data', 'axes fraction'),
             arrowprops=dict(arrowstyle='-', color='darkorange', lw=1.5),
             annotation_clip=False)
 ax.text(1.5, -0.46, 'hand-picked features', ha='center', va='top',
         fontsize=9, color='steelblue', fontweight='bold',
         transform=ax.get_xaxis_transform())
-ax.text(5.5, -0.46, 'polynomial explosion', ha='center', va='top',
+ax.text(5.0, -0.46, 'polynomial explosion', ha='center', va='top',
         fontsize=9, color='darkorange', fontweight='bold',
         transform=ax.get_xaxis_transform())
 
 plt.tight_layout()
-save_for_slides('eight-level-traintest')
+save_for_slides('seven-level-traintest')
 plt.show()
 ```
 
@@ -403,29 +458,29 @@ The experiment reveals three phases:
 
 2. **Diminishing returns** (Levels 4–5). The bedroom × borough interactions and degree-2 polynomial terms add modest value. Train $R^2$ keeps climbing, but test $R^2$ plateaus or dips slightly. The widening gap signals that some of the "improvement" is fitting noise.
 
-3. **Collapse** (Levels 6–8). The model now has hundreds or thousands of features for only a few hundred training observations. Train $R^2$ keeps creeping up but plateaus around 0.63 — the polynomial expansions of the binary dummy columns (`room_Private^k = room_Private` and so on) collapse into copies of themselves, so the effective rank of the design matrix is much smaller than its column count and OLS cannot interpolate. The model is still drastically overfitting — it's just hitting the rank of its design matrix instead of a literal memorization ceiling. Test $R^2$ plummets anyway.
+3. **Overfitting** (Levels 6–7). The model now has hundreds of features — still fewer than the training set, but the extra flexibility is spent chasing noise instead of signal. Train $R^2$ keeps creeping up while test $R^2$ drops, and the widening gap between them is the signature of overfitting.
 
 ```{python}
 #| echo: false
-print(f"Level 8: test R² = {test_r2s[-1]:.2f}")
+print(f"Level 7: test R² = {test_r2s[-1]:.2f}")
 print(f"         {n_features_list[-1]:,} features, {len(y_train):,} training observations "
-      f"({n_features_list[-1] / len(y_train):.1f}× more knobs than data points)")
+      f"({n_features_list[-1] / len(y_train):.0%} of the training set size)")
 ```
 
-**The surprise:** a negative test $R^2$ means the model's predictions on held-out listings are *worse than simply predicting the test-set mean price every time.* We added features, and the model became useless.
+**The warning sign:** a large gap between train and test $R^2$, with test $R^2$ moving in the wrong direction as we add features. Push complexity far enough and test $R^2$ can even drop *below zero* — meaning the model's predictions on held-out listings are worse than simply predicting the test-set mean every time. Adding features has a limit; past it, more features make the model worse, not better.
 
 :::{.callout-tip}
 ## Think About It
-Why does training $R^2$ always go up as we add nested feature sets? And why can test $R^2$ go *negative*? Take a minute before reading on — the answer is hiding in the definition of $R^2$.
+Why does training $R^2$ always go up as we add nested feature sets? And why can test $R^2$ go *negative* in principle? Take a minute before reading on — the answer is hiding in the definition of $R^2$.
 :::
 
-Adding a feature can only help fit the training data: in the worst case the model sets the new coefficient to zero and recovers the previous fit. But on test data, no such guarantee holds. Recall $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$, where sklearn computes the denominator on the held-out set itself. When the model's predictions on new data are worse than predicting the test-set mean every time, the residual sum of squares exceeds the total sum of squares, and $R^2$ drops below zero. Negative test $R^2$ is the signature of catastrophic overfitting.
+Adding a feature can only help fit the training data: in the worst case the model sets the new coefficient to zero and recovers the previous fit. But on test data, no such guarantee holds. Recall from [Chapter 4](lec04-regression.qmd) that $R^2 = 1 - \|\epsilon\|^2 / \|y - \bar{y}\|^2$, where $\epsilon = y - \hat{y}$ are the residuals and $\bar{y}$ is the mean of $y$. On the test set, sklearn computes the denominator from the *held-out* $y$ and the numerator from $y - \hat{y}$ on that same held-out set. When the model's predictions on new data are worse than predicting the test-set mean every time, $\|\epsilon\|^2$ exceeds $\|y - \bar{y}\|^2$ and $R^2$ drops below zero. Negative test $R^2$ is the extreme signature of catastrophic overfitting.
 
 :::{.callout-note}
 ## Aphorism
 "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk." — John von Neumann
 
-Even when the design matrix is rank-limited, packing in hundreds of redundant features lets the model chase noise that no honest pattern supports — and the test set exposes it.
+Packing in hundreds of features lets the model chase noise that no honest pattern supports — and the test set exposes it.
 :::
 
 ## The bias-variance tradeoff
@@ -615,21 +670,20 @@ sweet_idx = int(np.argmin(total_per_degree))
 ax.axvline(degree_sweep[sweet_idx], color='seagreen', linestyle=':', alpha=0.8)
 ax.annotate('sweet spot',
             xy=(degree_sweep[sweet_idx], total_per_degree[sweet_idx]),
-            xytext=(degree_sweep[sweet_idx] + 1.1, total_per_degree[sweet_idx] + 0.12),
+            xytext=(degree_sweep[sweet_idx] + 1.1, total_per_degree[sweet_idx] + 0.04),
             fontsize=12, color='seagreen', fontweight='bold',
             arrowprops=dict(arrowstyle='->', color='seagreen', lw=1.5))
 
-ymax = max(total_per_degree.max() * 1.25, 0.6)
-ax.text(1.2, ymax * 0.9, 'underfit\n(high bias)', fontsize=11, color='steelblue',
+ax.text(1.2, 0.26, 'underfit\n(high bias)', fontsize=11, color='steelblue',
         style='italic', ha='left')
-ax.text(7.8, ymax * 0.9, 'overfit\n(high variance)', fontsize=11, color='orangered',
+ax.text(7.8, 0.26, 'overfit\n(high variance)', fontsize=11, color='orangered',
         style='italic', ha='right')
 
 ax.set_xlabel('Polynomial degree (model complexity →)')
 ax.set_ylabel('Expected squared error')
 ax.set_title('The bias-variance U-curve (measured on synthetic data)')
 ax.set_xticks(degree_sweep)
-ax.set_ylim(0, ymax)
+ax.set_ylim(-0.1, 0.3)
 ax.legend(fontsize=11, loc='upper center')
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
@@ -637,19 +691,17 @@ save_for_slides('bias-variance-ucurve')
 plt.show()
 ```
 
-Unlike the hand-drawn cartoon a U-curve sometimes gets in textbooks, every point on this plot is *measured* — it comes from the same 200-training-set Monte Carlo we ran for the line and degree-4 fits, run at every degree from 1 to 8. The shape drops out of the experiment, not a stylized formula.
-
 :::{.callout-tip}
 ## Think About It
-Go back to the Airbnb 8-level plot. Which levels show high bias? Which show high variance? Where is the sweet spot? (Hint: look at both the absolute test $R^2$ *and* the gap between train and test.)
+Go back to the Airbnb 7-level plot. Which levels show high bias? Which show high variance? Where is the sweet spot? (Hint: look at both the absolute test $R^2$ *and* the gap between train and test.)
 :::
 
-The synthetic experiment visited two points on this curve — the line (far left, dominated by bias) and the degree-4 polynomial (mid-way, near the valley). The Airbnb 8-level experiment walked the same curve, just with a different x-axis: going from bedrooms+bathrooms (underfit) through polynomial interactions (overfit) and passing through a sweet spot around Level 3. Low test $R^2$ at Level 1 signals high bias — the model is too simple to capture the real patterns. The large gap between train and test $R^2$ at Levels 6–8 signals high variance — the model is fitting noise.
+The synthetic experiment visited two points on this curve — the line (far left, dominated by bias) and the degree-4 polynomial (mid-way, near the valley). The Airbnb experiment walked the same curve, just with a different x-axis: going from bedrooms+bathrooms (underfit) through polynomial interactions (overfit). Low test $R^2$ at Level 1 signals high bias — the model is too simple to capture the real patterns. The large gap between train and test $R^2$ at the highest levels signals high variance — the model is fitting noise.
 
 
 ## Train, validation, and test sets
 
-We read the 8-level plot and spotted the best test $R^2$ around Level 3. But using the test set to choose a complexity level means we've already peeked at the data we were holding out for final evaluation — the test score for the "chosen" model is no longer an honest estimate of how it will generalize. The more models we compare on the same test set, the more likely we are to pick one that got lucky on that particular split, and the more optimistic our reported "test" $R^2$ becomes.
+We read the 7-level plot and spotted the best test $R^2$ somewhere in the middle of the curve, around Level 4. But using the test set to choose a complexity level means we've already peeked at the data we were holding out for final evaluation — the test score for the "chosen" model is no longer an honest estimate of how it will generalize. The more models we compare on the same test set, the more likely we are to pick one that got lucky on that particular split, and the more optimistic our reported "test" $R^2$ becomes.
 
 The solution: a **three-way split**.
 
@@ -660,11 +712,11 @@ The solution: a **three-way split**.
 - **Test set** — held-out data touched *only once*, at the very end, to report final performance. No modeling decisions depend on the test set.
 :::
 
-Think of the three roles the way you'd think about a student's three exams. The training data is the textbook you study from. The validation data is a practice exam you take while you still have time to change your approach — if you do badly, you try a different study strategy. The test data is the final exam: you walk in, you take it once, and whatever score you earn is the one that counts. If you were allowed to take the final three times and report the highest of the three, your final wouldn't be a fair estimate of what you know — and the same thing happens when you reuse a test set to pick a model.
+Think of the three roles the way you'd think about studying for an exam. The training data is the textbook you study from. The validation data is a practice exam you take while you still have time to change your approach — if you do badly, you try a different study strategy. The test data is the final exam: you walk in, you take it once, and whatever score you earn is the one that counts. If you were allowed to take the final three times and report the highest of the three, your final wouldn't be a fair estimate of what you know — and the same thing happens when you reuse a test set to pick a model.
 
 ### Worked example
 
-We split our 500 Airbnb listings into three groups: 60% for training (300 listings), 20% for validation (100 listings), and 20% for testing (100 listings).
+We split our 1,500 Airbnb listings into three groups: 60% for training (900 listings), 20% for validation (300 listings), and 20% for testing (300 listings).
 
 ```{python}
 # Three-way split: 60% train, 20% validate, 20% test
@@ -727,7 +779,7 @@ y_test_3 = y_sub.iloc[idx_test_3].reset_index(drop=True)
 
 # Fit on train, evaluate on validation
 val_r2s = []
-for level in range(1, 9):
+for level in range(1, 8):
     X_tr = build_features(base_train_3, level)
     X_val = build_features(base_val_3, level)
     model = LinearRegression().fit(X_tr, y_train_3)
@@ -747,7 +799,7 @@ final_test_r2 = r2_score(y_test_3, best_model.predict(X_te_best))
 print(f"\nBest model (Level {best_level}) — Test R²: {final_test_r2:.4f}")
 ```
 
-A 100-listing validation set is itself noisy, so don't be surprised that its verdict doesn't always match the earlier "Levels 3–4 look best" reading. Cross-validation — averaging across multiple held-out subsets — is often more reliable, and we introduce it next.
+A 300-listing validation set is still noisy, so don't be surprised that its verdict doesn't always match the earlier train/test reading. Cross-validation — averaging across multiple held-out subsets — is often more reliable, and we introduce it next.
 
 In practice, a common split is 60% train / 20% validation / 20% test. With more data, you can afford a larger training set (say 80/10/10). With less data, cross-validation (below) is a more efficient alternative to a fixed validation set.
 
@@ -815,7 +867,7 @@ Every observation is in the test set exactly once. Averaging over 5 folds typica
 With 5-fold CV, each observation sits in the held-out fold exactly once. How does this differ from running five independent 80/20 random splits? Which approach gives a more reliable performance estimate?
 :::
 
-Let's apply 5-fold CV to our complexity levels. We omit Level 8 (degree-5 polynomials) — its CV score is so catastrophically negative that it would compress the rest of the plot into an unreadable sliver.
+Let's apply 5-fold CV to our complexity levels.
 
 ```{python}
 # Build base features on the full subsample for CV (levels 1-7)
@@ -842,7 +894,10 @@ The CV scores give a more stable comparison than the single train/test split. Le
 
 ```{python}
 fig, ax = plt.subplots(figsize=(11, 5))
-ax.bar(range(len(cv_df)), cv_df['cv_mean'], yerr=cv_df['cv_std'],
+# Hide error bars on the off-chart levels — their standard deviations are orders
+# of magnitude larger than the visible y-range and would drown the plot in whiskers.
+visible_err = np.where(cv_df['cv_std'] < 0.5, cv_df['cv_std'], 0)
+ax.bar(range(len(cv_df)), cv_df['cv_mean'], yerr=visible_err,
        capsize=5, color='steelblue', alpha=0.8, edgecolor='white')
 ax.axhline(y=0, color='gray', linestyle='--', linewidth=1)
 ax.set_xticks(range(len(cv_df)))
@@ -852,17 +907,17 @@ ax.set_xlabel('Model complexity')
 ax.set_ylabel('Cross-validated R²')
 ax.set_title('CV confirms the pattern: improvement, then decline')
 
-# Clip the y-axis so Levels 1–6 are readable; Level 7 is catastrophic and
-# would compress the rest of the chart into a sliver if we let it drive the scale.
-ax.set_ylim(-0.3, 0.65)
+# Clip so Levels 1-5 stay readable; Levels 6-7 are catastrophic and would
+# compress the rest of the chart into a sliver if they drove the scale.
+ax.set_ylim(-0.4, 0.7)
 
-# Annotate Level 7 as off-chart so the reader knows what's missing.
-level_7_row = cv_df.iloc[6]
-ax.text(6, -0.28,
-        f"Level 7: mean R² ≈ {level_7_row['cv_mean']:.1f}\n(off chart below)",
-        ha='center', fontsize=9, color='darkred')
+if cv_df['cv_mean'].iloc[-1] < -0.4:
+    ax.text(len(cv_df) - 1, -0.38,
+            f"Level 7: mean R² ≈ {cv_df['cv_mean'].iloc[-1]:.0f}\n(off chart below)",
+            ha='center', fontsize=9, color='darkred')
 
 plt.tight_layout()
+save_for_slides('cv-bars-7levels')
 plt.show()
 
 best = cv_df.loc[cv_df['cv_mean'].idxmax()]
@@ -871,15 +926,11 @@ print(f"\nBest model by CV: {best['model']} (CV R² = {best['cv_mean']:.4f})")
 
 Cross-validation confirms the pattern from the single train/test split: performance improves through the first few levels, then declines as polynomial degree increases. The error bars (standard deviations across folds) quantify uncertainty — overlapping error bars suggest the difference between models is not reliable.
 
-Notice, though, that our three procedures don't agree on a single "best" level:
+Notice, though, that our three procedures don't always agree on a single "best" level — and that's not a contradiction. Each procedure has its own noise source, and on a 1,500-listing dataset any one number can drift by a few percentage points of $R^2$ from the underlying truth.
 
-| Method | Best level |
-|---|---|
-| Train/test peak | 3 |
-| Three-way split (validation) | 2 |
-| 5-fold CV | 5 |
+There's also a concrete reason the rankings can differ even when the procedures are working correctly: the three procedures use *different amounts* of training data. A train/test split trains on 60% of the subsample (900 listings). The three-way split trains on the same 60% (900 listings) and reserves 20% for validation. Five-fold CV trains on 4/5 of the whole subsample — 1,200 listings per fold, 33% more than the single-split procedures see. A larger training set can support more features before noise swamps signal, so CV's ranking tends to lean toward more complex models than the single-split procedures. That's a feature, not a bug: CV is simulating the model you would actually deploy, which gets to use *all* the data at the end, not just 60% of it.
 
-These don't all agree — but that's not a contradiction. Each procedure has its own noise source, and on a 500-listing dataset any one number can drift by a few percentage points of $R^2$ from the underlying truth. Cross-validation averages out the most noise and is usually the most trustworthy, which is why the practical takeaway is that Levels 3–5 are indistinguishable on this data and CV's ranking is the one to trust.
+Cross-validation averages out the most noise and is usually the most trustworthy, so the practical takeaway is that a small cluster of "middle" levels is indistinguishable on this data and CV's ranking is the one to trust.
 
 :::{.callout-warning}
 ## CV Assumes the Data Can Be Shuffled
@@ -900,12 +951,12 @@ $$\min_{\beta_0, \beta} \sum_{i=1}^n (y_i - \beta_0 - x_i^T \beta)^2 + \alpha \s
 
 Here $x_i \in \mathbb{R}^p$ is the vector of features for listing $i$, and the intercept $\beta_0$ is not penalized. The penalty strength $\alpha$ is an example of a **hyperparameter** — a setting of the learning procedure itself (like the polynomial degree we swept earlier, the number of CV folds, or the L1 penalty weight) as opposed to a *parameter* (here, the $\beta$ coefficients) that the procedure fits from data. Hyperparameters are chosen before fitting — typically by the validation set or by cross-validation, which is exactly what we do with $\alpha$ below. A close relative of Lasso is **ridge regression** (L2 regularization), which penalizes $\alpha \sum \beta_j^2$ instead. Ridge shrinks all coefficients toward zero but generally does not set them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features each contribute a small amount (ridge) or only a handful of features carry real signal (lasso).
 
-Intuitively: Lasso drives some coefficients to exactly zero because its penalty is a budget on the *sum of absolute values* $\sum_j |\beta_j|$, whose boundary has sharp corners on the coordinate axes. Ridge's budget is a smooth ball that almost never has its optimum land on an axis, so all coefficients stay nonzero. That's the one-sentence story; the callout below spells out the geometry for readers who want to see it.
-
 :::{.callout-note collapse="true"}
 ## Going deeper: the geometry of L1 vs L2
 
-Fitting Lasso is the same as minimizing squared error subject to $\sum_j |\beta_j| \leq t$. The L1 constraint region is a diamond with sharp corners along the coordinate axes, and the optimum often lands exactly on a corner — which is another way of saying some coefficients are exactly zero. The L2 constraint region $\sum_j \beta_j^2 \leq t$ is a smooth ball, and smooth balls have no corners, so the optimum almost never zeros out a coefficient. That geometric difference is the whole story.
+The one-sentence story: Lasso drives some coefficients to exactly zero because its penalty is a budget on the *sum of absolute values* $\sum_j |\beta_j|$, whose boundary has sharp corners on the coordinate axes. Ridge's budget is a smooth ball that almost never has its optimum land on an axis, so all coefficients stay nonzero.
+
+Here is the geometry behind that intuition. Fitting Lasso is the same as minimizing squared error subject to $\sum_j |\beta_j| \leq t$. The L1 constraint region is a diamond with sharp corners along the coordinate axes, and the optimum often lands exactly on a corner — which is another way of saying some coefficients are exactly zero. The L2 constraint region $\sum_j \beta_j^2 \leq t$ is a smooth ball, and smooth balls have no corners, so the optimum almost never zeros out a coefficient. That geometric difference is the whole story.
 
 ```{python}
 #| label: fig-l1-l2-geometry
@@ -1016,7 +1067,7 @@ print(compare.to_string(index=False))
 The two columns are not the same. Without standardization, Lasso assigns a coefficient of roughly $-77$ to `room_Private room` — and about $36$ to `bedrooms` — because a 0-or-1 dummy needs a large coefficient to move the prediction and a 0-to-4 numeric feature needs a small one, so the penalty $\alpha|\beta|$ falls unequally on features of genuinely similar importance. After standardization, every feature is on the same footing, the `room_Private room` coefficient drops to $-40$ while `bedrooms` barely moves, and the relative ranking changes. The same Lasso penalty applied to the same data is making two very different decisions about which features matter, and the only thing that changed is the units.
 
 ```{python}
-# Use degree-3 polynomial features on our 500-listing subsample
+# Use degree-3 polynomial features on our 1,500-listing subsample
 # (enough features to overfit, but not so many that the comparison is trivial)
 X_deg3 = build_features(base, 6)  # Level 6 = degree-3 polynomial features
 X_deg3_train = X_deg3.iloc[idx_train].reset_index(drop=True)
