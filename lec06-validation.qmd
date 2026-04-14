@@ -139,11 +139,11 @@ More generally, the **train version** of a metric (accuracy, MSE, etc.) measures
 :::
 
 
-## Adding features: from help to harm
+## Polynomials, when they help
 
-In [Chapter 5](lec05-feature-engineering.qmd), adding features always improved $R^2$. But that was $R^2$ on the training data. Now that we can measure performance on held-out data, we can ask the real question: does adding features improve predictions on *new* data?
+In [Chapter 5](lec05-feature-engineering.qmd) we fit one slope per feature. But real relationships sometimes bend. The jump in price from a 1-bedroom to a 2-bedroom listing isn't necessarily the same as the jump from a 4-bedroom to a 5-bedroom — at some point, extra bedrooms stop adding as much, and the straight-line fit starts to miss. A **polynomial feature** lets the slope bend by adding powers of $x$ ($x^2$, $x^3$, $\ldots$) as additional columns and letting the linear model pick its own coefficients on each.
 
-We'll build feature matrices at increasing complexity — from two raw numeric features up through high-order polynomial interactions — and track both train and test $R^2$. We deliberately use a subsample of 500 listings: with roughly 1,000 engineered features possible at the highest complexity level, we want to land in the regime where the number of parameters approaches the number of training observations. That's where overfitting is easiest to see. (With 20,000+ listings, you'd need tens of thousands of features before overfitting bites — good news for practitioners with abundant data, but hard to see the pattern.)
+Scikit-learn's `PolynomialFeatures` does the expansion. With `degree=2, include_bias=False`, it takes a single feature $x$ and returns two columns: $x$ and $x^2$. The resulting regression $\hat{y} = \beta_0 + \beta_1 x + \beta_2 x^2$ is still linear in the *coefficients* — so OLS fits it the same way — but the fitted curve is no longer a straight line.
 
 ```{python}
 # Load Airbnb data (same setup as Chapter 5)
@@ -165,6 +165,51 @@ y_sub = df_sub['price']
 print(f"Full dataset: {n_before:,} listings")
 print(f"Subsample: {len(df_sub):,} listings")
 ```
+
+Fit a straight line and a degree-2 polynomial to price as a function of bedrooms, then overlay both on a scatter of the raw data:
+
+```{python}
+# Linear fit: price ~ bedrooms
+x_bed = df_sub[['bedrooms']].values
+y_price = y_sub.values
+
+linear_fit = LinearRegression().fit(x_bed, y_price)
+
+# Degree-2 polynomial fit: price ~ bedrooms + bedrooms^2
+poly2 = PolynomialFeatures(degree=2, include_bias=False)
+x_bed_poly2 = poly2.fit_transform(x_bed)
+poly2_fit = LinearRegression().fit(x_bed_poly2, y_price)
+
+# Grid for smooth curves
+x_grid_bed = np.linspace(x_bed.min(), x_bed.max(), 200).reshape(-1, 1)
+y_linear_grid = linear_fit.predict(x_grid_bed)
+y_poly2_grid = poly2_fit.predict(poly2.transform(x_grid_bed))
+
+fig, ax = plt.subplots(figsize=(9, 5))
+ax.scatter(x_bed, y_price, alpha=0.25, s=25, color='gray', label='Listings')
+ax.plot(x_grid_bed, y_linear_grid, color='steelblue', linewidth=2.5,
+        label='Linear fit (degree 1)')
+ax.plot(x_grid_bed, y_poly2_grid, color='orangered', linewidth=2.5,
+        label='Polynomial fit (degree 2)')
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Price ($ / night)')
+ax.set_title('A degree-2 polynomial lets the slope bend')
+ax.legend(fontsize=11, loc='upper left')
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+save_for_slides('polynomials-when-they-help')
+plt.show()
+```
+
+At small bedroom counts the two fits agree, but the polynomial bends upward as bedrooms grow — picking up the fact that the price gap between a 4- and 5-bedroom listing is bigger than the gap between a 1- and 2-bedroom listing. That curvature is real, and the straight line can't see it.
+
+But polynomials can also misbehave. Does higher degree always mean a better fit on *new* data? That's the question the rest of the chapter can now answer rigorously, now that we have train and test sets.
+
+## Adding features: from help to harm
+
+In [Chapter 5](lec05-feature-engineering.qmd), adding features always improved $R^2$. But that was $R^2$ on the training data. Now that we can measure performance on held-out data, we can ask the real question: does adding features improve predictions on *new* data?
+
+We'll build feature matrices at increasing complexity — from two raw numeric features up through high-order polynomial interactions — and track both train and test $R^2$. We deliberately use a subsample of 500 listings: with roughly 1,000 engineered features possible at the highest complexity level, we want to land in the regime where the number of parameters approaches the number of training observations. That's where overfitting is easiest to see. (With 20,000+ listings, you'd need tens of thousands of features before overfitting bites — good news for practitioners with abundant data, but hard to see the pattern.)
 
 Here's the plan: eight levels of model complexity. Levels 1–4 add meaningful features one group at a time. Levels 5–8 use `PolynomialFeatures` to generate all products of up to $d$ features (including a feature with itself — so degree-2 interactions include squared terms like bedrooms$^2$, degree-3 adds cubed terms, and so on). The number of features grows combinatorially with the degree.
 
@@ -278,6 +323,8 @@ print(f"Fit 8 models. Feature counts: {n_features_list}")
 
 Before we plot, pause on the prediction you sketched a moment ago. Training $R^2$ increases monotonically across these levels: because each level's feature set contains the previous level's (the levels are *nested*), adding features can only help fit the training data — in the worst case, the new coefficients are set to zero. Test $R^2$ tells a different story.
 
+Note that the eight levels represent two different kinds of complexity. Levels 1–4 add hand-picked feature *groups* — room type, borough, interactions — each motivated by a substantive hypothesis about pricing. Levels 5–8 use `PolynomialFeatures` to generate *all* products of the base features up to a given degree, a brute-force explosion with no hypothesis behind it. We plot them on one axis to make the comparison concrete, but when the curve collapses in Levels 5–8, that's driven both by "too many features" and by "features chosen mechanically," and separating those is a harder experiment.
+
 ```{python}
 fig, ax = plt.subplots(figsize=(11, 6))
 
@@ -320,6 +367,23 @@ ax.set_ylabel('Prediction R² (train vs. test)')
 ax.set_title('Training and test R² across eight models')
 ax.legend(fontsize=11, loc='lower left')
 ax.grid(True, alpha=0.3)
+
+# Visual grouping under the axis: Levels 1-4 are hand-picked, 5-8 are polynomial.
+ax.annotate('', xy=(3.3, -0.42), xytext=(-0.3, -0.42),
+            xycoords=('data', 'axes fraction'),
+            arrowprops=dict(arrowstyle='-', color='steelblue', lw=1.5),
+            annotation_clip=False)
+ax.annotate('', xy=(7.3, -0.42), xytext=(3.7, -0.42),
+            xycoords=('data', 'axes fraction'),
+            arrowprops=dict(arrowstyle='-', color='darkorange', lw=1.5),
+            annotation_clip=False)
+ax.text(1.5, -0.46, 'hand-picked features', ha='center', va='top',
+        fontsize=9, color='steelblue', fontweight='bold',
+        transform=ax.get_xaxis_transform())
+ax.text(5.5, -0.46, 'polynomial explosion', ha='center', va='top',
+        fontsize=9, color='darkorange', fontweight='bold',
+        transform=ax.get_xaxis_transform())
+
 plt.tight_layout()
 plt.show()
 ```
@@ -671,13 +735,46 @@ A single train/test split is noisy — we might get lucky or unlucky. Maybe our 
    - Test on fold $k$ and record the score
 3. Report the average of the 5 test scores
 
-```
-Fold 1:  [TEST ]  [train]  [train]  [train]  [train]   → score_1
-Fold 2:  [train]  [TEST ]  [train]  [train]  [train]   → score_2
-Fold 3:  [train]  [train]  [TEST ]  [train]  [train]   → score_3
-Fold 4:  [train]  [train]  [train]  [TEST ]  [train]   → score_4
-Fold 5:  [train]  [train]  [train]  [train]  [TEST ]   → score_5
-                                                  Average → CV score
+```{python}
+#| label: fig-cv-schematic
+# 5-fold CV: rows are iterations, columns are data chunks.
+# At iteration k, chunk k is the held-out validation fold; all others are training.
+n_folds = 5
+grid = np.zeros((n_folds, n_folds))
+for k in range(n_folds):
+    grid[k, k] = 1  # 1 = validation, 0 = training
+
+fig, ax = plt.subplots(figsize=(9, 4.5))
+
+# Color: 0 (train) = steelblue, 1 (validation) = orangered. Match chapter palette.
+from matplotlib.colors import ListedColormap
+cmap = ListedColormap(['steelblue', 'orangered'])
+ax.imshow(grid, cmap=cmap, aspect='auto', vmin=0, vmax=1)
+
+# Label each cell
+for k in range(n_folds):
+    for j in range(n_folds):
+        label = 'validate' if grid[k, j] == 1 else 'train'
+        ax.text(j, k, label, ha='center', va='center',
+                color='white', fontsize=11, fontweight='bold')
+
+ax.set_xticks(range(n_folds))
+ax.set_xticklabels([f'chunk {j+1}' for j in range(n_folds)], fontsize=10)
+ax.set_yticks(range(n_folds))
+ax.set_yticklabels([f'Fold {k+1}' for k in range(n_folds)], fontsize=10)
+ax.set_xlabel('Data chunks')
+ax.set_title('5-fold cross-validation: each chunk plays validator once')
+
+# Right-side "→ score_k" annotations
+for k in range(n_folds):
+    ax.text(n_folds - 0.35, k, f'  → score$_{k+1}$',
+            ha='left', va='center', fontsize=10,
+            transform=ax.transData, clip_on=False)
+
+ax.set_xlim(-0.5, n_folds - 0.5 + 0.05)
+plt.tight_layout()
+save_for_slides('cv-schematic')
+plt.show()
 ```
 
 Every observation is in the test set exactly once. Averaging over 5 folds typically reduces the noise of any single split. (The 5 scores are not independent — the training sets overlap in 3/4 of their observations — so the reduction is weaker than averaging 5 truly independent estimates would give.) The extreme case is **leave-one-out CV** (LOO-CV), where $k = n$ and every observation gets its own fold. LOO-CV is approximately unbiased as an estimate of test error, but its $n$ training sets differ by only one observation each, so the fold-wise errors are highly correlated and the average's variance shrinks less than $1/n$. LOO-CV is also computationally expensive. Five or ten folds is the usual practical choice.
@@ -720,8 +817,20 @@ ax.axhline(y=0, color='gray', linestyle='--', linewidth=1)
 ax.set_xticks(range(len(cv_df)))
 ax.set_xticklabels([f'{r["model"]}\n({r["features"]} feat)' for _, r in cv_df.iterrows()],
                    fontsize=8)
+ax.set_xlabel('Model complexity')
 ax.set_ylabel('Cross-validated R²')
 ax.set_title('CV confirms the pattern: improvement, then decline')
+
+# Clip the y-axis so Levels 1–6 are readable; Level 7 is catastrophic and
+# would compress the rest of the chart into a sliver if we let it drive the scale.
+ax.set_ylim(-0.3, 0.65)
+
+# Annotate Level 7 as off-chart so the reader knows what's missing.
+level_7_row = cv_df.iloc[6]
+ax.text(6, -0.28,
+        f"Level 7: mean R² ≈ {level_7_row['cv_mean']:.1f}\n(off chart below)",
+        ha='center', fontsize=9, color='darkred')
+
 plt.tight_layout()
 plt.show()
 
@@ -752,10 +861,12 @@ $$\min_{\beta_0, \beta} \sum_{i=1}^n (y_i - \beta_0 - x_i^T \beta)^2 + \alpha \s
 
 Here $x_i \in \mathbb{R}^p$ is the vector of features for listing $i$, and the intercept $\beta_0$ is not penalized. The penalty strength $\alpha$ is an example of a **hyperparameter** — a setting of the learning procedure itself (like the polynomial degree we swept earlier, the number of CV folds, or the L1 penalty weight) as opposed to a *parameter* (here, the $\beta$ coefficients) that the procedure fits from data. Hyperparameters are chosen before fitting — typically by the validation set or by cross-validation, which is exactly what we do with $\alpha$ below. A close relative of Lasso is **ridge regression** (L2 regularization), which penalizes $\alpha \sum \beta_j^2$ instead. Ridge shrinks all coefficients toward zero but generally does not set them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features each contribute a small amount (ridge) or only a handful of features carry real signal (lasso).
 
-:::{.callout-note}
-## Why L1 creates sparsity and L2 does not
-Geometrically, fitting Lasso is the same as minimizing the squared-error loss subject to $\sum_j |\beta_j| \leq t$. The L1 constraint region is a diamond with sharp corners along the coordinate axes, and the optimum often lands exactly on a corner — which is another way of saying some coefficients are exactly zero. The L2 constraint region $\sum_j \beta_j^2 \leq t$ is a smooth ball, and smooth balls have no corners, so the optimum almost never zeros out a coefficient. That geometric difference is the whole story.
-:::
+Intuitively: Lasso drives some coefficients to exactly zero because its penalty is a budget on the *sum of absolute values* $\sum_j |\beta_j|$, whose boundary has sharp corners on the coordinate axes. Ridge's budget is a smooth ball that almost never has its optimum land on an axis, so all coefficients stay nonzero. That's the one-sentence story; the callout below spells out the geometry for readers who want to see it.
+
+:::{.callout-note collapse="true"}
+## Going deeper: the geometry of L1 vs L2
+
+Fitting Lasso is the same as minimizing squared error subject to $\sum_j |\beta_j| \leq t$. The L1 constraint region is a diamond with sharp corners along the coordinate axes, and the optimum often lands exactly on a corner — which is another way of saying some coefficients are exactly zero. The L2 constraint region $\sum_j \beta_j^2 \leq t$ is a smooth ball, and smooth balls have no corners, so the optimum almost never zeros out a coefficient. That geometric difference is the whole story.
 
 ```{python}
 #| label: fig-l1-l2-geometry
@@ -825,6 +936,7 @@ plt.show()
 ```
 
 The gray contours show the unconstrained OLS squared-error loss, centered on $\hat\beta_{OLS}$. Fitting Lasso or Ridge means moving along the smallest loss contour that still touches the blue (L1) or green (L2) constraint region. On the L1 diamond, the first contact is almost always a corner on an axis, so one coefficient snaps to zero. On the L2 ball, the first contact is almost always in the interior of an edge, so both coefficients stay nonzero. This generalizes to $p$ dimensions — the L1 constraint has corners along every coordinate axis, and those corners are where Lasso's sparsity comes from.
+:::
 
 ### Standardize before regularizing
 
@@ -871,29 +983,32 @@ print(f"Ridge — Train R²: {ridge_model.score(X_deg3_train_std, y_train):.3f} 
 print(f"Lasso — Train R²: {lasso_model.score(X_deg3_train_std, y_train):.3f}  Test R²: {r2_score(y_test, lasso_model.predict(X_deg3_test_std)):.3f}")
 ```
 
-On this split, both Ridge and Lasso beat OLS on the same features. The coefficient plots below reveal the mechanism. We plot all three on a shared y-axis so the shrinkage from OLS to Ridge to Lasso is visible at a glance.
+On this split, both Ridge and Lasso beat OLS on the same features. The coefficient plots below reveal the mechanism. We stack the three panels so their shapes line up, and give each its own y-scale — because the OLS coefficients span several hundred while Lasso's sit well under twenty, forcing them onto the same axis would make Ridge and Lasso look flat.
 
 ```{python}
-fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
+fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
 
 axes[0].stem(range(len(ols_model.coef_)), ols_model.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
 axes[0].set_title(f'OLS ({n_total} features, all nonzero)')
-axes[0].set_xlabel('Feature index')
-axes[0].set_ylabel('Coefficient (standardized features)')
+axes[0].set_ylabel('Coefficient')
+axes[0].axhline(0, color='black', linewidth=0.5)
 
 axes[1].stem(range(len(ridge_model.coef_)), ridge_model.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
 axes[1].set_title(f'Ridge (all {n_total} nonzero, but shrunk)')
-axes[1].set_xlabel('Feature index')
+axes[1].set_ylabel('Coefficient')
+axes[1].axhline(0, color='black', linewidth=0.5)
 
 axes[2].stem(range(len(lasso_model.coef_)), lasso_model.coef_, linefmt='steelblue', markerfmt='o', basefmt='gray')
 axes[2].set_title(f'Lasso ({n_nonzero_lasso} nonzero out of {n_total})')
 axes[2].set_xlabel('Feature index')
+axes[2].set_ylabel('Coefficient')
+axes[2].axhline(0, color='black', linewidth=0.5)
 
 plt.tight_layout()
 plt.show()
 ```
 
-With shared axes, the shrinkage story is visible: OLS coefficients span hundreds, Ridge pulls them down by roughly an order of magnitude, and Lasso zeros out most features entirely. Both regularizers resolve overfitting automatically — the penalty does the selection instead of the modeler. Ridge says "every feature contributes a little"; Lasso says "only a few features carry the signal."
+Reading the three panels top to bottom, the shrinkage story is immediate: OLS coefficients span hundreds (top panel), Ridge pulls them down by roughly an order of magnitude (middle), and Lasso zeros out most features entirely (bottom) — note each panel's y-axis range shrinks with it. Both regularizers resolve overfitting automatically — the penalty does the selection instead of the modeler. Ridge says "every feature contributes a little"; Lasso says "only a few features carry the signal."
 
 The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff directly. Large $\alpha$ means more regularization — more features zeroed out, a simpler model with higher bias and lower variance. Small $\alpha$ means less regularization — closer to OLS, with lower bias and higher variance. So how do we pick $\alpha$? Cross-validation, as we do next.
 
@@ -1009,6 +1124,16 @@ The U-shaped CV curve confirms the bias-variance tradeoff. Too small an $\alpha$
 
 The U-shaped test error curve predicts that complex models eventually overfit. This is true for individual models — but not always for *averages* of models. If you train many different overfit models and average their predictions, the average inherits the low bias of a complex model while reducing variance, as long as the models' errors are sufficiently uncorrelated. [Chapter 13](lec13-trees.qmd) puts this into practice with **random forests**, which combine many overfit decision trees to achieve low bias *and* low variance — escaping the classical U-curve entirely. The punchline to hold on to: "regularize and cross-validate" is still the right default, but averaging uncorrelated overfit models is the one known way past it.
 :::
+
+
+## What we still can't answer
+
+Cross-validation tells us which model generalizes best to new observations drawn from the *same* distribution as our training data. That's a lot — but it's not everything. Several questions remain out of reach:
+
+- **Distribution shift at deployment time.** CV holds out observations that look like the ones the model trained on. It cannot detect covariate, temporal, or label shift between now and the moment the model is deployed. [Chapter 16](lec16-backtesting.qmd) returns to this problem with temporal validation.
+- **Whether any coefficient is statistically significant.** CV picks the model that generalizes best, but it does not quantify the uncertainty on any individual coefficient — we still don't know whether `boro_Manhattan`'s effect is real or noise. [Chapter 12](lec12-regression-inference.qmd) develops the inference tools that answer this.
+- **Causation.** Everything in this chapter is still association. A borough effect measured by CV tells us where prices are higher, not *why* — and certainly not what would happen to prices if policy moved a listing across a borough boundary. [Chapter 18](lec18-causal-inference-1.qmd) separates association from causation.
+- **Nonlinear structure that polynomials can't capture.** Polynomials let a line bend smoothly, but real relationships can have sharp thresholds and rich interactions that a linear model won't find no matter how many features you engineer. [Chapter 13](lec13-trees.qmd) introduces decision trees and random forests, which handle these patterns natively.
 
 
 ## Key takeaways
