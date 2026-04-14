@@ -357,6 +357,12 @@ Why does training $R^2$ always go up when we add features? And why can test $R^2
 Adding a feature can only help fit the training data — in the worst case, the model sets that feature's coefficient to zero. But on test data, no such guarantee holds. Recall $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$. When the model's predictions on new data are worse than predicting the mean every time, the residual sum of squares exceeds the total sum of squares, and $R^2$ drops below zero. Negative test $R^2$ means catastrophic overfitting.
 :::
 
+:::{.callout-note}
+## Parametric extrapolation in the real world
+
+Overfitting isn't only an academic problem. In early 2020, the influential IHME COVID-19 model forecast U.S. deaths by fitting a Gaussian curve — a symmetric bell shape — to the daily death counts. Because the parametric form assumed deaths would decline as fast as they rose, the model repeatedly projected the pandemic was about to end even as deaths were still climbing (Jewell et al., *JAMA*, 2020). The assumed shape, not the data, was driving the predictions. The broader lesson applies to polynomials and any other rigid parametric model: they extrapolate according to their mathematical form, not the underlying phenomenon. Held-out data catches in-distribution overfitting — it cannot save you from a model whose shape is wrong at the edges.
+:::
+
 Note what a random train/test split *can* and *cannot* detect. It tests whether the model generalizes to new observations from the *same* distribution — new Airbnb listings from the same city and era. It cannot detect the kind of distribution shift that killed the Epic sepsis model (training on one hospital, deploying at another). For that, you need an **external** test set drawn from the deployment population.
 
 

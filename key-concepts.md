@@ -180,11 +180,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - "Holding constant" interpretation of coefficients in multiple regression
 - One-hot encoding: categorical variables → binary indicator columns
 - Reference level: drop one category; others interpreted relative to it
-- "Linear in parameters, not features": polynomials and interactions make linear models powerful
-- Polynomial features and the overfitting parade: high-degree polynomials fit training data well but extrapolate wildly
+- "Linear in parameters, not features": the design matrix can be built from any transformation of the raw data
 - Interaction terms: when one feature's effect depends on another
 - Missing values as features (missingness indicator)
-- Log transforms on y change coefficient interpretation (percentage vs dollar); motivated by extrapolation/multiplicative growth
+- Log transforms on y change coefficient interpretation (percentage vs dollar); motivated by proportional structure in the data and by the fat right tail of the response
 - Four log-transform combinations (level-level, log-level, level-log, log-log)
 - Adjusted R²: penalizing complexity
 - Multicollinearity: nearly parallel features create unstable coefficients
@@ -195,7 +194,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Normal equations, matrix form
 - One-hot encoding, reference level, indicator variable
 - Feature engineering
-- Polynomial features, interaction term
+- Interaction term
 - Log transform, elasticity
 - Adjusted R-squared
 - Multicollinearity
@@ -213,7 +212,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Forward: Lec 6 (validation — train/test R²), Lec 13 (trees as automatic feature engineering), Lec 12 (which features are statistically significant?), Lec 18 (when is a coefficient causal?)
 - VMLS: Ch 5 (linear independence), Ch 13 (least squares)
 
-**Surprise moment:** The polynomial overfitting parade — R² keeps climbing as you increase degree, but the predictions become nonsensical (negative or wildly inflated prices for 10+ bedrooms). The model with the highest training R² is not the best model.
+**Surprise moment:** The fat-tail clue — top 5% of listings contribute ~48% of the level model's squared error budget, almost ten times their fair share. A naive least-squares fit spends most of its attention on a tail it can't predict anyway, and the log transform is the fix.
 
 ---
 
