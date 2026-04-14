@@ -188,7 +188,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Four log-transform combinations (level-level, log-level, level-log, log-log)
 - Adjusted R²: penalizing complexity
 - Multicollinearity: nearly parallel features create unstable coefficients
-- Residual diagnostics: heteroscedasticity, curves, clusters
+- Residual diagnostics: reading fan / curve / cluster patterns as evidence of missing model structure
 
 **Key vocabulary:**
 - Column space, multiple regression
@@ -199,7 +199,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Log transform, elasticity
 - Adjusted R-squared
 - Multicollinearity
-- Heteroscedasticity, residual diagnostics
+- Residual diagnostics
 
 **Key formulas:**
 - ŷ = Xβ (matrix form)

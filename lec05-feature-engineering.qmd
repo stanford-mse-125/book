@@ -721,9 +721,9 @@ print(hint_table.round(0).to_string(index=False))
 
 Dollar premiums span a 5× range: from $16 in the Bronx to $81 in Manhattan. The interaction model needed a separate slope for every borough to fit that spread.
 
-Percentages tell a different story. Four of the five boroughs land between 51% and 80% per bedroom. Still a real range — but meaningfully closer to "one shared number" than the dollar column is. The Bronx remains an outlier either way: 23% per bedroom against its small base price.
+Percentages tell a different story. Four of the five boroughs land between 51% and 80% per bedroom. Still a real range — but meaningfully closer to "one shared number" than the dollar column is. The Bronx is the one borough that doesn't fit either picture: 23% per bedroom, \$16 per bedroom, against a small base price.
 
-So the question is: can we replace five separate bedroom-slope interaction terms with one proportional coefficient? For four of the five boroughs, approximately yes. For the Bronx, no — Bronx is genuinely a different market. That trade-off is exactly what the log transform offers.
+So the question is: can we replace five separate bedroom-slope interaction terms with a single proportional coefficient? For four of the five boroughs, approximately yes — they're close enough to a shared percentage that one number can summarize them. The Bronx will be left under-fit as the price of that simplification. The log transform is the tool that makes this trade available.
 
 ## From additive to multiplicative
 
@@ -819,7 +819,7 @@ print()
 print(dollar_table.round(0).to_string(index=False))
 ```
 
-A bedroom in Manhattan adds many more dollars than a bedroom in the Bronx, even though both boroughs share the same *proportional* increase in the log model. That single multiplier captures four of the five boroughs approximately — Manhattan, Brooklyn, Queens, and Staten Island all sat in the 51-80% range in the interaction coefficients. The Bronx remains the real outlier at 23%; no single shared percentage will fix that. The log transform has traded five interaction coefficients for one number, at the cost of mis-predicting the one borough that genuinely behaves differently.
+A bedroom in Manhattan adds many more dollars than a bedroom in the Bronx, even though both boroughs share the same *proportional* increase in the log model. The single multiplier reproduces the pattern we spotted in the interaction coefficients — Manhattan, Brooklyn, Queens, and Staten Island all come in around the shared percentage — and pays for that compression by under-fitting the Bronx, which we already knew was the outlier. The log transform has traded five interaction coefficients for one.
 
 ## Why least squares fights the wrong battle
 
@@ -859,20 +859,20 @@ for pct in [5, 10, 20]:
     print(f"Top {pct:2d}% most expensive listings: {share:.1f}% of total squared error")
 ```
 
-The top 5% of listings — roughly 1,500 out of 29,000 — account for nearly half of the level model's total squared error. The model is spending most of its coefficient budget fighting to fit the expensive tail.
+If every listing contributed the same share, the top 5% would account for 5% of the squared error. Instead they account for nearly half — the top 5% of listings absorb almost ten times their "fair share." The model is spending most of its coefficient budget fighting to fit the expensive tail.
 
-Does that fight pay off? We can answer by breaking the data into price deciles and computing the mean absolute error within each decile, for both the level model and the log model (with a Duan smearing correction to backtransform log predictions into dollars honestly).
+Does that fight pay off? We can answer by breaking the data into price deciles and computing the mean absolute error within each decile for both the level model and the log model. One subtlety: the log model predicts $\log(y)$, so we have to exponentiate to get a dollar prediction — and naive `np.exp()` of a log regression's fitted values systematically *underpredicts* the mean on the dollar scale (the arithmetic mean of $\exp(\log y)$ is larger than $\exp$ of the mean of $\log y$). A standard fix is to multiply by the average of $\exp(\text{log residuals})$, which rescales the predictions to match the mean. We apply that correction here so the level/log comparison is honest.
 
 ```{python}
 # Precompute predictions once.
 yhat_level_b = model_level_b.predict(X_level_b)
 
-# Duan smearing correction: mean(exp(log residuals)) fixes the Jensen bias
-# introduced by naive exp() of log-model predictions.
+# Back-transform log predictions to dollars, with a correction factor so
+# the arithmetic mean of the predictions matches the mean of y.
 log_pred_b = model_loglevel.predict(X_level_b)
 log_resid_b = log_prices - log_pred_b
-smearing = np.mean(np.exp(log_resid_b))
-yhat_log_dollars = np.exp(log_pred_b) * smearing
+correction = np.mean(np.exp(log_resid_b))
+yhat_log_dollars = np.exp(log_pred_b) * correction
 
 # Per-decile MAE for both models.
 deciles = pd.qcut(prices, 10, labels=False, duplicates='drop')
@@ -889,9 +889,11 @@ decile_df = pd.DataFrame(decile_rows, columns=['decile', 'price range', 'level M
 
 ```{python}
 # Horizontal bar chart, two bars per decile
-fig, ax = plt.subplots(figsize=(8, 5.5))
+fig, ax = plt.subplots(figsize=(8.5, 5.5))
 y_pos = np.arange(len(decile_df))
 bar_height = 0.38
+max_mae = decile_df[['level MAE', 'log MAE']].values.max()
+label_offset = max_mae * 0.012  # offset as fraction of axis width so labels clear the bar ends
 
 bars_level = ax.barh(y_pos - bar_height/2, decile_df['level MAE'], bar_height,
                      color='#d62728', label='level model', edgecolor='white')
@@ -899,10 +901,10 @@ bars_log = ax.barh(y_pos + bar_height/2, decile_df['log MAE'], bar_height,
                    color='#2171b5', label='log model', edgecolor='white')
 
 for bar, val in zip(bars_level, decile_df['level MAE']):
-    ax.text(val + 2, bar.get_y() + bar.get_height()/2, f'${val:.0f}',
+    ax.text(val + label_offset, bar.get_y() + bar.get_height()/2, f'${val:.0f}',
             va='center', ha='left', fontsize=9, color='#d62728')
 for bar, val in zip(bars_log, decile_df['log MAE']):
-    ax.text(val + 2, bar.get_y() + bar.get_height()/2, f'${val:.0f}',
+    ax.text(val + label_offset, bar.get_y() + bar.get_height()/2, f'${val:.0f}',
             va='center', ha='left', fontsize=9, color='#2171b5')
 
 ax.set_yticks(y_pos)
@@ -912,19 +914,19 @@ ax.invert_yaxis()  # decile 1 (cheapest) at top
 ax.set_xlabel('Mean absolute error ($)')
 ax.set_title('Per-decile prediction error: where each model wins')
 ax.legend(loc='lower right', fontsize=10)
-ax.set_xlim(0, decile_df[['level MAE', 'log MAE']].values.max() * 1.18)
+ax.set_xlim(0, max_mae * 1.24)
 plt.tight_layout()
 plt.show()
 ```
 
-Two patterns stand out. First, the top decile ($251-$999) has about $170 MAE under *either* model — the expensive tail is essentially unfittable with these features, regardless of the transformation. The level model's focus on that tail buys it nothing. Second, in deciles 5-7 (roughly $90-$150 per night, where most listings live) the log model's MAE is 75-81% of the level model's. That is a real improvement of about $10 per listing in the middle of the distribution.
+Two patterns stand out. First, the top decile ($251-$999) has roughly \$170 MAE for the level model and \$180 for the log — expensive listings are hard to fit either way. Our features describe bedroom count and borough, but not the amenities, sub-neighborhood, property type, or seasonality that drive the difference between a \$300 and a \$900 listing. Neither model has what it would take to predict those well, and the level model's concentration of attention on them buys it roughly nothing. Second, in deciles 4-7 (roughly \$76-\$150 per night, where most listings live) the log model's MAE is 74-89% of the level model's. That is a real improvement of \$5-$10 per listing across the middle of the distribution.
 
-The mechanism is straightforward. Squared-dollar error treats a $50 miss on a $100 listing (50% off — a disaster) the same as a $50 miss on a $500 listing (10% off — mild). The level model cannot distinguish these, so it distributes its attention by *absolute* dollars, which means the expensive tail dominates. The log transform puts errors on a proportional scale — a 50% miss is a 50% miss whether the listing is $100 or $500 — which matches how we actually judge prediction quality.
+The mechanism is straightforward. Squared-dollar error treats a \$50 miss on a \$100 listing (50% off — a disaster) the same as a \$50 miss on a \$500 listing (10% off — mild). The level model cannot distinguish these, so it distributes its attention by *absolute* dollars, which means the expensive tail dominates. The log transform puts errors on a proportional scale — a 50% miss is a 50% miss whether the listing is \$100 or \$500 — which matches how we actually judge prediction quality.
 
 :::{.callout-tip}
 ## Think About It
 
-Ordinary least squares minimizes the mean squared error. So how can the log transform *improve* the mean squared error? Hint: among which functions is the level model's MSE the minimum? Is $\exp(x^T\beta)$ one of them?
+The level model minimizes mean squared error in dollars — it is by definition the best fit among linear functions $\beta_0 + \beta_1 \cdot \text{bedrooms} + \cdots$. And yet the log model just beat it on MAE across most of the distribution. How is that possible? Is the log model's backtransformed prediction, $\exp(\beta_0 + \beta_1 \cdot \text{bedrooms} + \cdots)$, a linear function of bedrooms and borough? If not, what does that tell you about what "least squares minimizes MSE" actually promises?
 :::
 
 ## The four transform combinations
@@ -1022,7 +1024,7 @@ print(f"Correlation between bedrooms and beds:      {corr_beds:.3f}")
 print(f"Correlation between bedrooms and bathrooms:  {corr_bath:.3f}")
 ```
 
-A correlation of 0.9 between `bedrooms` and `beds` is enormous — these two columns carry almost the same information. The correlation between `bedrooms` and `bathrooms` is far weaker by comparison. Plotting the `bedrooms`/`beds` cloud and the three-way correlation matrix makes the near-duplication visible.
+A correlation of about 0.68 between `bedrooms` and `beds` is high — much higher than the correlation between `bedrooms` and `bathrooms` (around 0.37) — and it says these two columns are carrying overlapping information. Plotting the `bedrooms`/`beds` cloud and the three-way correlation matrix makes the near-duplication visible.
 
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.2),
@@ -1089,56 +1091,64 @@ Watch what happens to the coefficients. Without beds, bedrooms gets about \$58 a
 
 ## Residual diagnostics
 
+Multicollinearity is a warning about the *coefficients* — that their individual meanings can blur when features overlap. Residuals give us the complementary check on the *fit*: places where the model's structure is wrong rather than just its interpretation.
+
 The normal equations guarantee $X^T \epsilon = 0$ — no *linear* pattern remains between features and residuals. Nonlinear patterns can still lurk, and when they do they are diagnosing something specific: the model's structure is missing a feature, a transformation, or a category. Before looking at our own residuals, here is a vocabulary for the patterns worth recognizing.
 
 ```{python}
 # Four synthetic residual-vs-fitted plots: one well-specified model (reference)
 # and three classic failure modes. Fixed seed for reproducibility.
-rng = np.random.default_rng(42)
+syn_rng = np.random.default_rng(42)
 n_syn = 200
 
 fig, axes = plt.subplots(2, 2, figsize=(9, 7))
 
 # Top-left: NO STRUCTURE (well-specified linear model)
-x0 = rng.uniform(0, 10, n_syn)
-y0 = 1 + 2 * x0 + rng.normal(0, 2, n_syn)
-m0 = LinearRegression().fit(x0.reshape(-1, 1), y0)
-r0 = y0 - m0.predict(x0.reshape(-1, 1))
-axes[0, 0].scatter(m0.predict(x0.reshape(-1, 1)), r0, alpha=0.6, s=18, color='#2171b5')
+x_flat = syn_rng.uniform(0, 10, n_syn)
+y_flat = 1 + 2 * x_flat + syn_rng.normal(0, 2, n_syn)
+fit_flat = LinearRegression().fit(x_flat.reshape(-1, 1), y_flat)
+resid_flat = y_flat - fit_flat.predict(x_flat.reshape(-1, 1))
+axes[0, 0].scatter(fit_flat.predict(x_flat.reshape(-1, 1)), resid_flat,
+                   alpha=0.6, s=18, color='#2171b5')
 axes[0, 0].axhline(0, color='red', lw=1, ls='--')
 axes[0, 0].set_title('No pattern — structure looks right', fontsize=11)
 axes[0, 0].set_xlabel('Fitted value')
 axes[0, 0].set_ylabel('Residual')
 
 # Top-right: FAN (variance grows with fitted value)
-x1 = rng.uniform(0, 10, n_syn)
-y1 = 1 + 2 * x1 + rng.normal(0, 0.35 * (x1 + 0.5), n_syn)
-m1 = LinearRegression().fit(x1.reshape(-1, 1), y1)
-r1 = y1 - m1.predict(x1.reshape(-1, 1))
-axes[0, 1].scatter(m1.predict(x1.reshape(-1, 1)), r1, alpha=0.6, s=18, color='#d62728')
+x_fan = syn_rng.uniform(0, 10, n_syn)
+y_fan = 1 + 2 * x_fan + syn_rng.normal(0, 0.35 * (x_fan + 0.5), n_syn)
+fit_fan = LinearRegression().fit(x_fan.reshape(-1, 1), y_fan)
+resid_fan = y_fan - fit_fan.predict(x_fan.reshape(-1, 1))
+axes[0, 1].scatter(fit_fan.predict(x_fan.reshape(-1, 1)), resid_fan,
+                   alpha=0.6, s=18, color='#d62728')
 axes[0, 1].axhline(0, color='red', lw=1, ls='--')
 axes[0, 1].set_title('Fan — variance grows with prediction', fontsize=11)
 axes[0, 1].set_xlabel('Fitted value')
 axes[0, 1].set_ylabel('Residual')
 
-# Bottom-left: CURVE (true quadratic fit with a line)
-x2 = rng.uniform(-3, 3, n_syn)
-y2 = x2**2 + rng.normal(0, 1.0, n_syn)
-m2 = LinearRegression().fit(x2.reshape(-1, 1), y2)
-r2 = y2 - m2.predict(x2.reshape(-1, 1))
-axes[1, 0].scatter(m2.predict(x2.reshape(-1, 1)), r2, alpha=0.6, s=18, color='#ff7f0e')
+# Bottom-left: CURVE (quadratic truth with positive linear trend, fit with a line)
+# Mixing a linear trend with curvature gives fitted values that span the x range,
+# so the panel is scaled similarly to the others.
+x_curve = syn_rng.uniform(0, 10, n_syn)
+y_curve = 0.5 * x_curve + 0.3 * x_curve**2 + syn_rng.normal(0, 1.0, n_syn)
+fit_curve = LinearRegression().fit(x_curve.reshape(-1, 1), y_curve)
+resid_curve = y_curve - fit_curve.predict(x_curve.reshape(-1, 1))
+axes[1, 0].scatter(fit_curve.predict(x_curve.reshape(-1, 1)), resid_curve,
+                   alpha=0.6, s=18, color='#ff7f0e')
 axes[1, 0].axhline(0, color='red', lw=1, ls='--')
 axes[1, 0].set_title('Curve — systematic curvature', fontsize=11)
 axes[1, 0].set_xlabel('Fitted value')
 axes[1, 0].set_ylabel('Residual')
 
 # Bottom-right: CLUSTERS (two-component mixture)
-x3 = rng.uniform(0, 10, n_syn)
-group = rng.choice([0, 1], size=n_syn)
-y3 = 1 + 2 * x3 + np.where(group == 1, 6, -6) + rng.normal(0, 1.0, n_syn)
-m3 = LinearRegression().fit(x3.reshape(-1, 1), y3)
-r3 = y3 - m3.predict(x3.reshape(-1, 1))
-axes[1, 1].scatter(m3.predict(x3.reshape(-1, 1)), r3, alpha=0.6, s=18, color='#2ca02c')
+x_clust = syn_rng.uniform(0, 10, n_syn)
+group = syn_rng.choice([0, 1], size=n_syn)
+y_clust = 1 + 2 * x_clust + np.where(group == 1, 6, -6) + syn_rng.normal(0, 1.0, n_syn)
+fit_clust = LinearRegression().fit(x_clust.reshape(-1, 1), y_clust)
+resid_clust = y_clust - fit_clust.predict(x_clust.reshape(-1, 1))
+axes[1, 1].scatter(fit_clust.predict(x_clust.reshape(-1, 1)), resid_clust,
+                   alpha=0.6, s=18, color='#2ca02c')
 axes[1, 1].axhline(0, color='red', lw=1, ls='--')
 axes[1, 1].set_title('Clusters — missing categorical', fontsize=11)
 axes[1, 1].set_xlabel('Fitted value')
@@ -1179,9 +1189,10 @@ axes[0].axvline(median_level, color='#2171b5', lw=2, ls='--',
                 label=f'median ≈ {median_level_int}')
 axes[0].axvline(mean_level, color='black', lw=2, ls='--',
                 label=f'mean ≈ {mean_level_int}')
+axes[0].set_yscale('log')  # log-y makes the long positive tail visible
 axes[0].set_xlabel('Residual ($)')
-axes[0].set_ylabel('Count')
-axes[0].set_title('Level model residuals — right-skewed')
+axes[0].set_ylabel('Count (log scale)')
+axes[0].set_title('Level model residuals — long positive tail')
 axes[0].legend(loc='upper right', fontsize=9)
 
 # Log model residuals (log units)
@@ -1204,7 +1215,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-The level-model residuals are visibly right-skewed. The mean sits well above the median — the sign of a long upper tail of positive residuals on expensive listings the model systematically underpredicted. That skew was a clue: the same right-tail pattern is visible in the raw price distribution, and what we did to the price distribution (log transform) also fixed the residual distribution. The log-model residuals are much more symmetric, with mean and median nearly coinciding near zero. The residuals told us which transformation we needed, if we had known what to look for.
+The normal equations pin the level-model residual *mean* to exactly zero — a few pages ago that was a feature, but here it hides a problem. The *median* sits well below zero (around -\$17), which is the sign of a long upper tail of positive residuals on expensive listings the model systematically underpredicted. Plotting the count on a log y-axis makes that tail visible: notice how many listings have residuals above +$100, and how few have residuals that far negative. That asymmetry was a clue — the same right-tail pattern was already visible in the raw price distribution. What we did to the price distribution (the log transform) also fixes the residual distribution: the log-model residuals on the right panel are much more symmetric, with mean and median nearly coinciding near zero. The residuals told us which transformation we needed, if we had known what to look for.
 
 # Recap: the regression toolkit
 
@@ -1214,7 +1225,7 @@ This chapter extended the regression framework from Chapter 4 in three direction
 
 Three questions remain open:
 
-1. **Is the coefficient real or noise?** The bathrooms coefficient is about \$43, but with a different sample it might be \$39 or \$47. We'll quantify the uncertainty with confidence intervals in [Chapter 12](lec12-regression-inference.qmd).
+1. **Is the coefficient real or noise?** The bathrooms coefficient is about \$43, but with a different sample it might be \$39 or \$47. Quantifying that uncertainty requires confidence intervals, and interpreting residual patterns formally (including the fan-shape case from the diagnostics section) requires additional assumptions about the noise process. Both live in [Chapter 12](lec12-regression-inference.qmd).
 2. **Does the model generalize to new data?** Training $R^2$ always increases with more features, even noise features. We'll develop train-test splits and cross-validation in [Chapter 6](lec06-validation.qmd).
 3. **Does adding a bathroom *cause* higher prices?** Regression coefficients measure association. Causation requires a different framework — [Chapter 18](lec18-causal.qmd).
 
