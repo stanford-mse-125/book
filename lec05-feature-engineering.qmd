@@ -1164,58 +1164,64 @@ Top-left is the reference: a well-specified linear model gives residuals that sc
 - **Curve** (systematic U or arch shape): the true relationship has curvature the linear model cannot express. Adding a polynomial term or a log(x) feature usually fixes it.
 - **Clusters** (two or more vertically separated clouds): a categorical variable has been omitted, and listings in different categories are being lumped together.
 
-Now look at the residuals from our own full model.
+Now look at the residuals from our own full model. We'll fit both the level model and a log version on the same features and plot each one's residuals against its own fitted values — exactly the diagnostic the 2×2 figure just taught.
 
 ```{python}
+# Level and log versions of the full model, with residuals and fitted values for each.
 y_hat_full = model_full.predict(X_full)
 residuals_full = prices.values - y_hat_full
+
+model_log_full = LinearRegression().fit(X_full, np.log(prices))
+log_fitted_full = model_log_full.predict(X_full)
+log_residuals_full = np.log(prices.values) - log_fitted_full
+
+def quantile_envelope(fitted, resid, n_bins=20, low_q=0.10, high_q=0.90):
+    """10-90% residual envelope, computed in bins of fitted value."""
+    order = np.argsort(fitted)
+    fs, rs = fitted[order], resid[order]
+    edges = np.quantile(fs, np.linspace(0, 1, n_bins + 1))
+    centers, lows, highs = [], [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        mask = (fs >= lo) & (fs <= hi)
+        if mask.sum() >= 30:
+            centers.append(fs[mask].mean())
+            lows.append(np.quantile(rs[mask], low_q))
+            highs.append(np.quantile(rs[mask], high_q))
+    return np.array(centers), np.array(lows), np.array(highs)
 ```
 
 ```{python}
-# Fit a log-transformed version of the full model for comparison
-model_log_full = LinearRegression().fit(X_full, np.log(prices))
-log_residuals_full = np.log(prices.values) - model_log_full.predict(X_full)
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.2))
 
-fig, axes = plt.subplots(1, 2, figsize=(9.5, 4))
+# Level model residuals vs fitted (dollars)
+axes[0].scatter(y_hat_full, residuals_full, alpha=0.04, s=5, color='#d62728')
+axes[0].axhline(0, color='black', lw=1)
+c, lo, hi = quantile_envelope(y_hat_full, residuals_full)
+axes[0].plot(c, hi, color='black', lw=1.8, label='10–90% envelope')
+axes[0].plot(c, lo, color='black', lw=1.8)
+axes[0].set_xlabel('Fitted price ($)')
+axes[0].set_ylabel('Residual ($)')
+axes[0].set_title('Level model — fan shape')
+axes[0].legend(loc='upper left', fontsize=9)
 
-# Level model residuals (dollars)
-mean_level = residuals_full.mean()
-median_level = np.median(residuals_full)
-# Round first so labels don't display "-0" for tiny negatives
-mean_level_int = int(round(mean_level))
-median_level_int = int(round(median_level))
-axes[0].hist(residuals_full, bins=60, edgecolor='white', alpha=0.75, color='#d62728')
-axes[0].axvline(median_level, color='#2171b5', lw=2, ls='--',
-                label=f'median ≈ {median_level_int}')
-axes[0].axvline(mean_level, color='black', lw=2, ls='--',
-                label=f'mean ≈ {mean_level_int}')
-axes[0].set_yscale('log')  # log-y makes the long positive tail visible
-axes[0].set_xlabel('Residual ($)')
-axes[0].set_ylabel('Count (log scale)')
-axes[0].set_title('Level model residuals — long positive tail')
-axes[0].legend(loc='upper right', fontsize=9)
-
-# Log model residuals (log units)
-mean_log = log_residuals_full.mean()
-median_log = np.median(log_residuals_full)
-# Round to 2 decimals first so labels don't display "-0.00"
-mean_log_disp = round(mean_log, 2) + 0.0
-median_log_disp = round(median_log, 2) + 0.0
-axes[1].hist(log_residuals_full, bins=60, edgecolor='white', alpha=0.75, color='#2171b5')
-axes[1].axvline(median_log, color='#d62728', lw=2, ls='--',
-                label=f'median ≈ {median_log_disp:+.2f}')
-axes[1].axvline(mean_log, color='black', lw=2, ls='--',
-                label=f'mean ≈ {mean_log_disp:+.2f}')
-axes[1].set_xlabel('Residual (log units)')
-axes[1].set_ylabel('Count')
-axes[1].set_title('Log model residuals — more symmetric')
-axes[1].legend(loc='upper right', fontsize=9)
+# Log model residuals vs fitted (log units)
+axes[1].scatter(log_fitted_full, log_residuals_full, alpha=0.04, s=5, color='#2171b5')
+axes[1].axhline(0, color='black', lw=1)
+c_l, lo_l, hi_l = quantile_envelope(log_fitted_full, log_residuals_full)
+axes[1].plot(c_l, hi_l, color='black', lw=1.8, label='10–90% envelope')
+axes[1].plot(c_l, lo_l, color='black', lw=1.8)
+axes[1].set_xlabel('Fitted log(price)')
+axes[1].set_ylabel('Residual (log units)')
+axes[1].set_title('Log model — uniform spread')
+axes[1].legend(loc='upper left', fontsize=9)
 
 plt.tight_layout()
 plt.show()
 ```
 
-The normal equations pin the level-model residual *mean* to exactly zero — a few pages ago that was a feature, but here it hides a problem. The *median* sits well below zero (around -\$17), which is the sign of a long upper tail of positive residuals on expensive listings the model systematically underpredicted. Plotting the count on a log y-axis makes that tail visible: notice how many listings have residuals above +$100, and how few have residuals that far negative. That asymmetry was a clue — the same right-tail pattern was already visible in the raw price distribution. What we did to the price distribution (the log transform) also fixes the residual distribution: the log-model residuals on the right panel are much more symmetric, with mean and median nearly coinciding near zero. The residuals told us which transformation we needed, if we had known what to look for.
+The left panel is the **fan** from our synthetic vocabulary, staring back at us from real data. The 10–90% residual envelope widens from about ±\$50 for cheap listings to ±\$150 for expensive ones: the level model's spread grows with its prediction. The upper edge grows faster than the lower edge, which says the fan is one-sided — the level model under-predicts expensive listings more often than it over-predicts them, consistent with the fat right tail we saw in the price distribution.
+
+The right panel shows what happens once we transform $y$. The log-model envelope is nearly a horizontal band: the spread of residuals is the same whether we're predicting a \$50 listing or a \$500 one. The fan is gone. The residuals told us which transformation we needed, if we had known what to look for.
 
 # Recap: the regression toolkit
 
