@@ -311,7 +311,8 @@ plt.tight_layout()
 plt.show()
 ```
 
-## The reviews puzzle
+:::{.callout-note collapse="true"}
+## Going deeper: the reviews puzzle
 
 What happens when we add `number_of_reviews` to the model? Before looking at the coefficient, compare $R^2$ with and without the new feature.
 
@@ -354,10 +355,7 @@ The coefficient on `number_of_reviews` is *negative*. The association is real: l
 
 The regression faithfully reports the downward association but has no window into which of these stories is generating it. An analyst who stops at the coefficient — or worse, recommends a host strategy based on it — has confused association with causation.
 
-:::{.callout-tip}
-## Think About It
-
-When a coefficient surprises you, ask: *could the response plausibly influence this feature?* Here, high price discourages bookings, and fewer bookings mean fewer reviews — so $y$ (price) causally affects $x$ (reviews), not the other way around. Multiple regression cannot untangle this from observational data alone. Could you design a study that separates the causal direction? What data would you need beyond this cross-sectional snapshot? We develop such tools in [Chapter 18](lec18-causal.qmd).
+A good habit: when a coefficient surprises you, ask *could the response plausibly influence this feature?* Here, high price discourages bookings, and fewer bookings mean fewer reviews — so $y$ (price) causally affects $x$ (reviews), not the other way around. Multiple regression cannot untangle this from observational data alone; we develop tools that can in [Chapter 18](lec18-causal.qmd).
 :::
 
 # Feature engineering: transforming X
