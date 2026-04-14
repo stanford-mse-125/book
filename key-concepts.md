@@ -247,7 +247,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Bias-variance tradeoff
 - Lasso, Ridge, regularization
 
-**Prerequisites:** Lec 5 (feature engineering, polynomial overfitting)
+**Prerequisites:** Lec 5 (feature engineering: interactions, log transforms, residual diagnostics)
 
 **Connections:**
 - Backward: Lec 5 (polynomial overfitting motivates validation)

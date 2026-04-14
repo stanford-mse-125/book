@@ -273,16 +273,10 @@ for level in range(1, 9):
     test_r2s.append(r2_score(y_test, model.predict(X_te)))
     n_features_list.append(X_tr.shape[1])
 
-results = pd.DataFrame({
-    'Model': level_names,
-    'Features': n_features_list,
-    'Train R²': [f'{r:.4f}' for r in train_r2s],
-    'Test R²': [f'{r:.4f}' for r in test_r2s]
-})
-print(results.to_string(index=False))
+print(f"Fit 8 models. Feature counts: {n_features_list}")
 ```
 
-Training $R^2$ increases monotonically across these levels: because each level's feature set contains the previous level's (the levels are *nested*), adding features can only help fit the training data — in the worst case, the new coefficients are set to zero. Test $R^2$ tells a different story.
+Before we plot, pause on the prediction you sketched a moment ago. Training $R^2$ increases monotonically across these levels: because each level's feature set contains the previous level's (the levels are *nested*), adding features can only help fit the training data — in the worst case, the new coefficients are set to zero. Test $R^2$ tells a different story.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(11, 6))
@@ -304,12 +298,16 @@ ax.set_ylim(-0.25, 0.75)
 ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
 
 if test_r2s[-1] < -0.25:
+    # Arrow sits OUTSIDE the plot area: tail above the axis bottom, head below it,
+    # so the reader sees the arrow "leave" the chart at the deg-5 column.
     ax.annotate(
-        f'Level 8: test R² = {test_r2s[-1]:.2f}\n(off chart)',
-        xy=(len(level_names) - 1, -0.22),
-        xytext=(len(level_names) - 2.2, -0.05),
+        f'Level 8: test R² = {test_r2s[-1]:.2f}\n(falls off chart below)',
+        xy=(len(level_names) - 1, -0.26),
+        xytext=(len(level_names) - 1, 0.08),
+        ha='center',
         fontsize=10, color='darkred',
-        arrowprops=dict(arrowstyle='->', color='darkred', lw=1.2),
+        arrowprops=dict(arrowstyle='->', color='darkred', lw=1.5),
+        annotation_clip=False,
     )
 
 ax.set_xticks(x_pos)
@@ -332,7 +330,7 @@ The experiment reveals three phases:
 
 2. **Diminishing returns** (Levels 4–5). The bedroom × borough interactions and degree-2 polynomial terms add modest value. Train $R^2$ keeps climbing, but test $R^2$ plateaus or dips slightly. The widening gap signals that some of the "improvement" is fitting noise.
 
-3. **Collapse** (Levels 6–8). The model has hundreds or thousands of features for only a few hundred training observations. Train $R^2$ approaches 1 — the model memorizes the training data. Test $R^2$ plummets.
+3. **Collapse** (Levels 6–8). The model now has hundreds or thousands of features for only a few hundred training observations. Train $R^2$ keeps creeping up but plateaus around 0.63 — the polynomial expansions of the binary dummy columns (`room_Private^k = room_Private` and so on) collapse into copies of themselves, so the effective rank of the design matrix is much smaller than its column count and OLS cannot interpolate. The model is still drastically overfitting — it's just hitting the rank of its design matrix instead of a literal memorization ceiling. Test $R^2$ plummets anyway.
 
 ```{python}
 #| echo: false
@@ -341,30 +339,21 @@ print(f"         {n_features_list[-1]:,} features, {len(y_train):,} training obs
       f"({n_features_list[-1] / len(y_train):.1f}× more knobs than data points)")
 ```
 
-**The surprise:** a negative test $R^2$ means the model's predictions on held-out listings are *worse than simply predicting the mean price every time.* We added features, and the model became useless.
+**The surprise:** a negative test $R^2$ means the model's predictions on held-out listings are *worse than simply predicting the test-set mean price every time.* We added features, and the model became useless.
+
+:::{.callout-tip}
+## Think About It
+Why does training $R^2$ always go up as we add nested feature sets? And why can test $R^2$ go *negative*? Take a minute before reading on — the answer is hiding in the definition of $R^2$.
+:::
+
+Adding a feature can only help fit the training data: in the worst case the model sets the new coefficient to zero and recovers the previous fit. But on test data, no such guarantee holds. Recall $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$, where sklearn computes the denominator on the held-out set itself. When the model's predictions on new data are worse than predicting the test-set mean every time, the residual sum of squares exceeds the total sum of squares, and $R^2$ drops below zero. Negative test $R^2$ is the signature of catastrophic overfitting.
 
 :::{.callout-note}
 ## Aphorism
 "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk." — John von Neumann
 
-A Level-8 model with more parameters than training points can memorize anything — but memorization is the opposite of understanding.
+Even when the design matrix is rank-limited, packing in hundreds of redundant features lets the model chase noise that no honest pattern supports — and the test set exposes it.
 :::
-
-:::{.callout-tip}
-## Think About It
-Why does training $R^2$ always go up when we add features? And why can test $R^2$ go *negative*?
-
-Adding a feature can only help fit the training data — in the worst case, the model sets that feature's coefficient to zero. But on test data, no such guarantee holds. Recall $R^2 = 1 - \text{SS}_{\text{res}} / \text{SS}_{\text{tot}}$. When the model's predictions on new data are worse than predicting the mean every time, the residual sum of squares exceeds the total sum of squares, and $R^2$ drops below zero. Negative test $R^2$ means catastrophic overfitting.
-:::
-
-:::{.callout-note}
-## Parametric extrapolation in the real world
-
-Overfitting isn't only an academic problem. In early 2020, the influential IHME COVID-19 model forecast U.S. deaths by fitting a Gaussian curve — a symmetric bell shape — to the daily death counts. Because the parametric form assumed deaths would decline as fast as they rose, the model repeatedly projected the pandemic was about to end even as deaths were still climbing (Jewell et al., *JAMA*, 2020). The assumed shape, not the data, was driving the predictions. The broader lesson applies to polynomials and any other rigid parametric model: they extrapolate according to their mathematical form, not the underlying phenomenon. Held-out data catches in-distribution overfitting — it cannot save you from a model whose shape is wrong at the edges.
-:::
-
-Note what a random train/test split *can* and *cannot* detect. It tests whether the model generalizes to new observations from the *same* distribution — new Airbnb listings from the same city and era. It cannot detect the kind of distribution shift that killed the Epic sepsis model (training on one hospital, deploying at another). For that, you need an **external** test set drawn from the deployment population.
-
 
 ## The bias-variance tradeoff
 
@@ -466,6 +455,12 @@ plt.show()
 
 The left panel shows 20 linear fits overlaid. They cluster tightly together (low variance) but *systematically miss the curvature* — they're all wrong in the same direction (high bias). The right panel shows 20 degree-4 polynomial fits. Their average (solid line) closely tracks the true function (low bias), but individual fits scatter widely (high variance), especially near the edges of the data.
 
+:::{.callout-note}
+## Parametric extrapolation in the real world
+
+The synthetic experiment shows bias as a systematic miss when the model class can't capture the truth. Rigid parametric models make the same mistake in production. In early 2020, the influential IHME COVID-19 model forecast U.S. deaths by fitting a Gaussian-like curve — a symmetric bell shape — to the daily death counts. Because the parametric form assumed deaths would decline as fast as they rose, the model repeatedly projected the pandemic was about to end even as deaths were still climbing (Jewell et al., *JAMA*, 2020). The assumed shape, not the data, was driving the predictions. The broader lesson: parametric forms extrapolate by their assumed shape, not by the data. Held-out scores catch in-distribution overfitting — they cannot save you from a model whose shape is wrong at the edges.
+:::
+
 ### The decomposition
 
 Now that we have seen the pattern, we can name it. Let $f(x)$ denote the true relationship between features and outcome — the signal without noise. We never observe $f$ directly; we only see noisy outcomes $y = f(x) + \varepsilon$ where $\varepsilon$ has mean zero and variance $\sigma^2$. A model fit to a random training set $\mathcal{D}$ produces a prediction function $\hat{f}_{\mathcal{D}}(x)$ — its best guess at $f(x)$.
@@ -481,7 +476,7 @@ $$\mathbb{E}\bigl[(y - \hat{f}_{\mathcal{D}}(x))^2\bigr] = \text{Bias}^2(x) + \t
 
 :::{.callout-note}
 ## Where does the decomposition come from?
-Add and subtract $\mathbb{E}_{\mathcal{D}}[\hat f_{\mathcal{D}}(x)]$ inside the squared error, expand, and note that the cross-term vanishes (the test-point noise $\varepsilon$ is independent of the training data, and $\hat f_{\mathcal{D}}(x) - \mathbb{E}_{\mathcal{D}}[\hat f_{\mathcal{D}}(x)]$ has mean zero under $\mathbb{E}_{\mathcal{D}}$). Three independent sources of error add up.
+Add and subtract $\mathbb{E}_{\mathcal{D}}[\hat f_{\mathcal{D}}(x)]$ inside the squared error, expand, and note that all three cross-terms vanish (the test-point noise $\varepsilon$ is independent of the training data, and $\hat f_{\mathcal{D}}(x) - \mathbb{E}_{\mathcal{D}}[\hat f_{\mathcal{D}}(x)]$ has mean zero under $\mathbb{E}_{\mathcal{D}}$). Three independent sources of error add up.
 :::
 
 The first two terms depend on the model. The third, $\sigma^2$, is the **irreducible noise** — randomness no model can explain. Simple models have high bias and low variance; complex models have low bias and high variance. The best model minimizes the sum of the first two; $\sigma^2$ sets the floor.
@@ -551,19 +546,17 @@ save_for_slides('bias-variance-ucurve')
 plt.show()
 ```
 
-The synthetic experiment visited two points on this curve — the line (far left, dominated by bias) and the degree-4 polynomial (mid-way, near the valley). The Airbnb 8-level experiment walked the same curve, just with a different x-axis: going from bedrooms+bathrooms (underfit) through polynomial interactions (overfit) and passing through a sweet spot around Level 3–4.
-
 :::{.callout-tip}
 ## Think About It
-In the feature experiment above, which levels had high bias? Which had high variance? Where was the sweet spot?
-
-Low test $R^2$ at Level 1 (just bedrooms + bathrooms) signals high bias: the model is too simple to capture the real patterns. The large gap between train and test $R^2$ at Levels 6–8 signals high variance: the model is fitting noise. The sweet spot is around Levels 3–4, where test $R^2$ is highest.
+Go back to the Airbnb 8-level plot. Which levels show high bias? Which show high variance? Where is the sweet spot? (Hint: look at both the absolute test $R^2$ *and* the gap between train and test.)
 :::
+
+The synthetic experiment visited two points on this curve — the line (far left, dominated by bias) and the degree-4 polynomial (mid-way, near the valley). The Airbnb 8-level experiment walked the same curve, just with a different x-axis: going from bedrooms+bathrooms (underfit) through polynomial interactions (overfit) and passing through a sweet spot around Level 3. Low test $R^2$ at Level 1 signals high bias — the model is too simple to capture the real patterns. The large gap between train and test $R^2$ at Levels 6–8 signals high variance — the model is fitting noise.
 
 
 ## Train, validation, and test sets
 
-In the feature experiment, we used the test set to compare eight models and picked the one with the best test $R^2$. But that means our "test" performance is optimistic — we've implicitly fit a decision (which model to deploy) to the test data. The more models we compare on the same test set, the more likely we are to pick one that got lucky on that particular split.
+We read the 8-level plot and spotted the best test $R^2$ around Level 3. But using the test set to choose a complexity level means we've already peeked at the data we were holding out for final evaluation — the test score for the "chosen" model is no longer an honest estimate of how it will generalize. The more models we compare on the same test set, the more likely we are to pick one that got lucky on that particular split, and the more optimistic our reported "test" $R^2$ becomes.
 
 The solution: a **three-way split**.
 
@@ -589,9 +582,9 @@ print(f"Train: {len(idx_train_3)}  |  Validate: {len(idx_val_3)}  |  Test: {len(
 Visualizing the split — each row of the dataset is assigned one role:
 
 ```{python}
-# Pick a few example rows from each split
-example_rows = sorted(idx_train_3[:5]) + sorted(idx_val_3[:3]) + sorted(idx_test_3[:3])
-roles = ['Train'] * 5 + ['Validate'] * 3 + ['Test'] * 3
+# Pick a few example rows from each split — 6/2/2 to match the 60/20/20 proportions
+example_rows = sorted(idx_train_3[:6]) + sorted(idx_val_3[:2]) + sorted(idx_test_3[:2])
+roles = ['Train'] * 6 + ['Validate'] * 2 + ['Test'] * 2
 
 example = df_sub.iloc[example_rows][['bedrooms', 'bathrooms', 'room_type', 'borough', 'price']].copy()
 
@@ -659,6 +652,8 @@ final_test_r2 = r2_score(y_test_3, best_model.predict(X_te_best))
 print(f"\nBest model (Level {best_level}) — Test R²: {final_test_r2:.4f}")
 ```
 
+A 100-listing validation set is itself noisy, so don't be surprised that its verdict doesn't always match the earlier "Levels 3–4 look best" reading. Cross-validation — averaging across multiple held-out subsets — is often more reliable, and we introduce it next.
+
 In practice, a common split is 60% train / 20% validation / 20% test. With more data, you can afford a larger training set (say 80/10/10). With less data, cross-validation (below) is a more efficient alternative to a fixed validation set.
 
 
@@ -670,7 +665,7 @@ A single train/test split is noisy — we might get lucky or unlucky. Maybe our 
 
 ### How 5-fold CV works
 
-1. Split the data randomly into 5 equal-sized **folds**
+1. Split the data randomly into 5 equal-sized **folds**. The folds are just the disjoint partitions of the training data — in 5-fold CV, we chop the training set into five equal-sized chunks.
 2. For each fold $k = 1, \ldots, 5$:
    - Train the model on the other 4 folds
    - Test on fold $k$ and record the score
@@ -736,6 +731,8 @@ print(f"\nBest model by CV: {best['model']} (CV R² = {best['cv_mean']:.4f})")
 
 Cross-validation confirms the pattern from the single train/test split: performance improves through the first few levels, then declines as polynomial degree increases. The error bars (standard deviations across folds) quantify uncertainty — overlapping error bars suggest the difference between models is not reliable.
 
+Notice, though, that our three procedures don't agree on a single "best" level: the 8-level train/test plot put the peak at Level 3, the three-way split picked Level 2, and 5-fold CV favors the low-variance plateau around Levels 3–5. That's a useful reminder, not a contradiction — with only a few hundred listings, any single decision rule is itself noisy, and the practical takeaway is that Levels 3–5 are indistinguishable on this data. CV's averaging makes its ranking the most trustworthy of the three.
+
 :::{.callout-warning}
 ## CV Assumes the Data Can Be Shuffled
 CV relies on the assumption that we can shuffle the data randomly — each fold is representative of the whole. The assumption breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Chapter 16](lec16-backtesting.qmd).
@@ -753,7 +750,7 @@ Ordinary least squares (**OLS**) — the unregularized `LinearRegression` we've 
 
 $$\min_{\beta_0, \beta} \sum_{i=1}^n (y_i - \beta_0 - x_i^T \beta)^2 + \alpha \sum_{j=1}^p |\beta_j|$$
 
-Here $x_i \in \mathbb{R}^p$ is the vector of features for listing $i$, and the intercept $\beta_0$ is not penalized. A close relative is **ridge regression** (L2 regularization), which penalizes $\alpha \sum \beta_j^2$ instead. Ridge shrinks all coefficients toward zero but generally does not set them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features each contribute a small amount (ridge) or only a handful of features carry real signal (lasso).
+Here $x_i \in \mathbb{R}^p$ is the vector of features for listing $i$, and the intercept $\beta_0$ is not penalized. The penalty strength $\alpha$ is an example of a **hyperparameter** — a setting of the learning procedure itself (like the polynomial degree we swept earlier, the number of CV folds, or the L1 penalty weight) as opposed to a *parameter* (here, the $\beta$ coefficients) that the procedure fits from data. Hyperparameters are chosen before fitting — typically by the validation set or by cross-validation, which is exactly what we do with $\alpha$ below. A close relative of Lasso is **ridge regression** (L2 regularization), which penalizes $\alpha \sum \beta_j^2$ instead. Ridge shrinks all coefficients toward zero but generally does not set them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features each contribute a small amount (ridge) or only a handful of features carry real signal (lasso).
 
 :::{.callout-note}
 ## Why L1 creates sparsity and L2 does not
@@ -898,9 +895,11 @@ plt.show()
 
 With shared axes, the shrinkage story is visible: OLS coefficients span hundreds, Ridge pulls them down by roughly an order of magnitude, and Lasso zeros out most features entirely. Both regularizers resolve overfitting automatically — the penalty does the selection instead of the modeler. Ridge says "every feature contributes a little"; Lasso says "only a few features carry the signal."
 
+The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff directly. Large $\alpha$ means more regularization — more features zeroed out, a simpler model with higher bias and lower variance. Small $\alpha$ means less regularization — closer to OLS, with lower bias and higher variance. So how do we pick $\alpha$? Cross-validation, as we do next.
+
 :::{.callout-tip}
 ## Think About It
-The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff. Large $\alpha$ = more regularization = more features zeroed out = simpler model (higher bias, lower variance). Small $\alpha$ = less regularization = closer to OLS (lower bias, higher variance). You can choose $\alpha$ by cross-validation — as we do next.
+Before we let cross-validation choose $\alpha$: where do you expect the CV-error curve to bottom out — closer to the OLS end (small $\alpha$) or closer to the all-zero end (large $\alpha$)? Sketch what you think the curve looks like.
 :::
 
 ### Choosing $\alpha$ by cross-validation
@@ -946,20 +945,22 @@ The stem plots showed a snapshot at one value of $\alpha$. But Lasso actually tr
 
 ```{python}
 #| label: fig-lasso-path
-alphas_path = np.logspace(-2, 2, 100)
-_, coefs_path, _ = lasso_path(X_deg3_train_std, y_train, alphas=alphas_path)
+# Pass alphas in descending order: sklearn's lasso_path always returns coefficients
+# indexed by descending alpha, so we match the input ordering to the output.
+alphas_path = np.logspace(2, -2, 100)
+alphas_out, coefs_path, _ = lasso_path(X_deg3_train_std, y_train, alphas=alphas_path)
 
 # Highlight features that are nonzero at the CV-optimal alpha
 optimal_alpha = lasso_cv.alpha_
-optimal_idx = int(np.argmin(np.abs(alphas_path - optimal_alpha)))
+optimal_idx = int(np.argmin(np.abs(alphas_out - optimal_alpha)))
 nonzero_at_optimum = np.abs(coefs_path[:, optimal_idx]) > 1e-8
 
 fig, ax = plt.subplots(figsize=(10, 5.5))
 for j in range(coefs_path.shape[0]):
     if nonzero_at_optimum[j]:
-        ax.plot(alphas_path, coefs_path[j, :], color='steelblue', linewidth=1.4, alpha=0.8)
+        ax.plot(alphas_out, coefs_path[j, :], color='steelblue', linewidth=1.4, alpha=0.8)
     else:
-        ax.plot(alphas_path, coefs_path[j, :], color='lightgray', linewidth=0.8, alpha=0.5)
+        ax.plot(alphas_out, coefs_path[j, :], color='lightgray', linewidth=0.8, alpha=0.5)
 
 ax.axvline(optimal_alpha, color='orangered', linestyle='--', linewidth=2,
            label=f'CV-optimal α = {optimal_alpha:.3f}')
