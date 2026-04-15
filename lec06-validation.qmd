@@ -945,11 +945,11 @@ Cross-validation is not a practical answer. With 200 features, just checking eve
 
 **Lasso** (Least Absolute Shrinkage and Selection Operator) does exactly this. Instead of enumerating subsets, it fits a single regression with a penalty that drives most coefficients to exactly zero. The features Lasso keeps are the ones it thinks matter; the rest are ignored.
 
-Ordinary least squares (**OLS**) — the unregularized `LinearRegression` we've used so far — minimizes the sum of squared residuals with no constraints on the coefficients. Lasso adds an L1 penalty:
+Ordinary least squares (**OLS**) — the unregularized `LinearRegression` we've used so far — minimizes the sum of squared residuals with no penalty on the coefficients. Lasso adds an L1 penalty:
 
-$$\min_{\beta_0, \beta} \sum_{i=1}^n (y_i - \beta_0 - x_i^T \beta)^2 + \alpha \sum_{j=1}^p |\beta_j|$$
+$$\min_{\beta} \; \sum_{i=1}^n \bigl(y_i - x_i^T \beta\bigr)^2 \;+\; \alpha \sum_{j=1}^p |\beta_j|$$
 
-Here $x_i \in \mathbb{R}^p$ is the vector of features for listing $i$, and the intercept $\beta_0$ is not penalized. The penalty strength $\alpha$ is an example of a **hyperparameter** — a setting of the learning procedure itself (like the polynomial degree we swept earlier, the number of CV folds, or the L1 penalty weight) as opposed to a *parameter* (here, the $\beta$ coefficients) that the procedure fits from data. Hyperparameters are chosen before fitting — typically by the validation set or by cross-validation, which is exactly what we do with $\alpha$ below. A close relative of Lasso is **ridge regression** (L2 regularization), which penalizes $\alpha \sum \beta_j^2$ instead. Ridge shrinks all coefficients toward zero but generally does not set them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features each contribute a small amount (ridge) or only a handful of features carry real signal (lasso).
+Here $x_i \in \mathbb{R}^{p+1}$ is the vector of features for listing $i$ with a leading $1$ prepended, so the intercept $\beta_0$ lives inside $\beta \in \mathbb{R}^{p+1}$ and the fitted value is $\hat{y}_i = x_i^T \beta$. The penalty sum runs from $j = 1$ to $p$, so the intercept is left unpenalized (penalizing it would just pull all predictions toward zero for no good reason). The penalty strength $\alpha$ is an example of a **hyperparameter** — a setting of the learning procedure itself (like the polynomial degree we swept earlier, the number of CV folds, or the L1 penalty weight) as opposed to a *parameter* (here, the $\beta$ coefficients) that the procedure fits from data. Hyperparameters are chosen before fitting — typically by the validation set or by cross-validation, which is exactly what we do with $\alpha$ below. A close relative of Lasso is **ridge regression** (L2 regularization), which replaces the L1 penalty with $\alpha \sum_{j=1}^p \beta_j^2$. Ridge shrinks all coefficients toward zero but generally does not set them exactly to zero — it keeps all features but dampens them. The choice between lasso and ridge depends on whether you believe many features each contribute a small amount (ridge) or only a handful of features carry real signal (lasso).
 
 :::{.callout-note collapse="true"}
 ## Going deeper: the geometry of L1 vs L2
@@ -1030,41 +1030,65 @@ The gray contours show the unconstrained OLS squared-error loss, centered on $\h
 
 ### Standardize before regularizing
 
-The penalty $\alpha \sum |\beta_j|$ treats every coefficient on the same scale. But the *coefficients* depend on the feature's units. A feature with a small range — bedrooms, which varies from 0 to 5 — needs a *large* coefficient to move $\hat{y}$ by the same amount as a feature with a 0-to-500 range. Since L1 treats all coefficients equally, the penalty falls disproportionately on the small-range feature: it gets punished for its units, not for being less useful. Put differently: OLS is scale-invariant (if you rescale a feature, the coefficient rescales to compensate and predictions are unchanged), but ridge and lasso are *not* — rescaling changes what the penalty "sees." Standardization restores the symmetry.
+The penalty $\alpha \sum |\beta_j|$ treats every coefficient on the same scale. But the *coefficients* depend on the feature's units. A numeric feature with a small range — bedrooms, whose standard deviation is about 0.7 — needs a *large* coefficient to move $\hat{y}$ by the same amount as a feature with a large range, like the listing's number of reviews (standard deviation ~35). Fitting OLS on the unregularized problem, the bedrooms coefficient lands near \$30 per bedroom and the reviews coefficient near a few cents per review. The L1 penalty $\alpha |\beta_j|$ treats those two numbers the same — so a coefficient of 30 on bedrooms takes a big penalty hit, while the coefficient of 0.03 on reviews is essentially free. The penalty falls disproportionately on the small-range feature, punishing it for its *units* rather than for being less useful. Put differently: OLS is scale-invariant (if you rescale a feature, the coefficient rescales to compensate and predictions are unchanged), but ridge and lasso are *not* — rescaling changes what the penalty "sees." Standardization restores the symmetry.
 
 **Standardization** rescales each feature to have mean zero and standard deviation one:
 
 $$\tilde{x}_j = \frac{x_j - \bar{x}_j}{s_j}$$
 
-After standardization, every coefficient is in the same units (response per standard deviation of the feature), so the penalty shrinks them fairly. In practice, always standardize before applying lasso or ridge.
+After standardization, every coefficient is in the same units (response per standard deviation of the feature), so the penalty shrinks them fairly. In practice, always standardize numeric features before applying lasso or ridge. (For 0/1 indicator variables, standardization is a little awkward — they already live in a bounded range — and a min/max rescaler is the more common choice. Our scaling demo here uses numeric features only.)
 
 Scikit-learn's `StandardScaler` handles this. Fit the scaler on the training data (to learn the means and standard deviations), then transform both the training and test data using those same statistics. Applying the *training* statistics to the test data prevents information leakage — the test set plays no role in determining the scaling.
 
-To see why this matters, it helps to look at what goes wrong when you skip it. The code cell below fits Lasso on the *raw*, unstandardized base features — bedrooms and bathrooms (range 0–10), plus room-type and borough dummies (range 0–1) — and compares the surviving coefficients to a parallel fit on the standardized features:
+To see why standardization matters, it helps to look at what goes wrong when you skip it. The demo below fits Lasso on five numeric features whose raw scales differ dramatically — bedrooms (std $\approx 0.7$), bathrooms (std $\approx 0.4$), number of reviews (std $\approx 35$), minimum-nights requirement (std $\approx 9$), and availability in the next 365 days (std $\approx 134$). We fit lasso once on the raw features and once on standardized features, and compare the surviving coefficients and test $R^2$:
 
 ```{python}
-# Compare Lasso on raw vs. standardized base features
-raw_train = base.iloc[idx_train].reset_index(drop=True).astype(float).values
-raw_test = base.iloc[idx_test].reset_index(drop=True).astype(float).values
+# Self-contained scaling demo on five numeric features with dramatically
+# different scales. We reload the listings with just these columns so the
+# demo doesn't depend on the main experiment's subsample.
+scale_cols = ['price', 'bedrooms', 'bathrooms',
+              'number_of_reviews', 'minimum_nights', 'availability_365']
+df_scale = (
+    listings[scale_cols]
+    .dropna()
+    .loc[lambda d: d['price'].between(10, 500)]
+    .sample(1500, random_state=42)
+    .reset_index(drop=True)
+)
+feat_names = ['bedrooms', 'bathrooms', 'number_of_reviews',
+              'minimum_nights', 'availability_365']
+X_scale = df_scale[feat_names].values
+y_scale = df_scale['price'].values
 
-scaler_raw = StandardScaler()
-std_train = scaler_raw.fit_transform(raw_train)
-std_test = scaler_raw.transform(raw_test)
+idx_s_train, idx_s_test = train_test_split(
+    np.arange(len(df_scale)), test_size=0.4, random_state=42)
+X_raw_train, X_raw_test = X_scale[idx_s_train], X_scale[idx_s_test]
+y_s_train, y_s_test = y_scale[idx_s_train], y_scale[idx_s_test]
 
-lasso_raw = Lasso(alpha=1.0, max_iter=10000).fit(raw_train, y_train)
-lasso_std = Lasso(alpha=1.0, max_iter=10000).fit(std_train, y_train)
+scaler_demo = StandardScaler()
+X_std_train = scaler_demo.fit_transform(X_raw_train)
+X_std_test = scaler_demo.transform(X_raw_test)
 
-compare = pd.DataFrame({
-    'feature': base.columns,
-    'raw range': [f'{raw_train[:, j].min():.0f}–{raw_train[:, j].max():.0f}'
-                  for j in range(raw_train.shape[1])],
-    'coef (unstandardized)': np.round(lasso_raw.coef_, 2),
-    'coef (standardized)': np.round(lasso_std.coef_, 2),
+lasso_raw_fit = Lasso(alpha=1.0, max_iter=20000).fit(X_raw_train, y_s_train)
+lasso_std_fit = Lasso(alpha=1.0, max_iter=20000).fit(X_std_train, y_s_train)
+
+compare_scale = pd.DataFrame({
+    'feature': feat_names,
+    'std(x_j)': np.round(X_raw_train.std(axis=0), 2),
+    'raw coef': np.round(lasso_raw_fit.coef_, 3),
+    'standardized coef': np.round(lasso_std_fit.coef_, 3),
 })
-print(compare.to_string(index=False))
+print(compare_scale.to_string(index=False))
+print()
+r2_raw = r2_score(y_s_test, lasso_raw_fit.predict(X_raw_test))
+r2_std = r2_score(y_s_test, lasso_std_fit.predict(X_std_test))
+nz_raw = int((lasso_raw_fit.coef_ != 0).sum())
+nz_std = int((lasso_std_fit.coef_ != 0).sum())
+print(f"raw          test R² = {r2_raw:.3f}  ({nz_raw}/5 nonzero)")
+print(f"standardized test R² = {r2_std:.3f}  ({nz_std}/5 nonzero)")
 ```
 
-The two columns are not the same. Without standardization, Lasso assigns a coefficient of roughly $-77$ to `room_Private room` — and about $36$ to `bedrooms` — because a 0-or-1 dummy needs a large coefficient to move the prediction and a 0-to-4 numeric feature needs a small one, so the penalty $\alpha|\beta|$ falls unequally on features of genuinely similar importance. After standardization, every feature is on the same footing, the `room_Private room` coefficient drops to $-40$ while `bedrooms` barely moves, and the relative ranking changes. The same Lasso penalty applied to the same data is making two very different decisions about which features matter, and the only thing that changed is the units.
+The two columns are not the same. Without standardization, the raw lasso keeps all five features — `number_of_reviews` and `availability_365` survive with coefficients near zero (a penny or two per unit) because their large-scale raw values mean their OLS coefficients were already small, so the penalty $\alpha|\beta|$ barely touches them. They look "cheap to keep," even though they're essentially noise. Standardize everything first and the same lasso at the same $\alpha$ correctly zeros both of them out, leaving a leaner model built on bedrooms, bathrooms, and minimum-nights. The test $R^2$ is essentially identical in both runs — the two models predict equally well on held-out data — but they disagree on which features matter. That's the subtle cost of skipping standardization: you get a "feature importance" story that reflects units, not signal.
 
 ```{python}
 # Use degree-3 polynomial features on our 1,500-listing subsample
