@@ -880,6 +880,59 @@ Every observation is in the test set exactly once. Averaging over 5 folds typica
 With 5-fold CV, each observation sits in the held-out fold exactly once. How does this differ from running five independent 80/20 random splits? Which approach gives a more reliable performance estimate?
 :::
 
+### Why CV beats a single split: a variance-reduction demo
+
+The claim is that cross-validation gives a *more stable* estimate of test performance than any single train/test split. To see it, pick one model — say Level 4 of the Airbnb complexity ladder — and ask: if I resample the train/test split many times with different random seeds, how much does each method's estimate of test $R^2$ bounce around?
+
+```{python}
+#| label: fig-cv-variance-reduction
+# Monte Carlo: fix Level 4 (the sweet spot region), resample the random split many
+# times, and compare the spread of single-split R² vs. 5-fold CV R².
+from sklearn.model_selection import cross_val_score, train_test_split, KFold
+
+rng_seeds = np.arange(200)
+X_level4 = build_features(base, 4)
+
+single_split_r2 = np.empty(len(rng_seeds))
+cv_mean_r2     = np.empty(len(rng_seeds))
+
+for i, seed in enumerate(rng_seeds):
+    # single 60/40 split, fit OLS, score on held-out 40%
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        X_level4, y_sub, test_size=0.4, random_state=int(seed))
+    model = LinearRegression().fit(X_tr, y_tr)
+    single_split_r2[i] = r2_score(y_te, model.predict(X_te))
+
+    # 5-fold CV on the same data, different random fold assignment
+    scores = cross_val_score(
+        LinearRegression(), X_level4, y_sub,
+        cv=KFold(n_splits=5, shuffle=True, random_state=int(seed)),
+        scoring='r2')
+    cv_mean_r2[i] = scores.mean()
+
+print(f"Single 60/40 split  — mean: {single_split_r2.mean():.3f}, std: {single_split_r2.std():.3f}")
+print(f"5-fold CV mean      — mean: {cv_mean_r2.mean():.3f}, std: {cv_mean_r2.std():.3f}")
+
+fig, ax = plt.subplots(figsize=(9, 5))
+bins = np.linspace(min(single_split_r2.min(), cv_mean_r2.min()),
+                   max(single_split_r2.max(), cv_mean_r2.max()), 35)
+ax.hist(single_split_r2, bins=bins, alpha=0.55, color='steelblue',
+        label=f'single 60/40 split  (std = {single_split_r2.std():.3f})')
+ax.hist(cv_mean_r2, bins=bins, alpha=0.55, color='orangered',
+        label=f'5-fold CV mean      (std = {cv_mean_r2.std():.3f})')
+ax.axvline(single_split_r2.mean(), color='steelblue', linestyle='--', linewidth=1.5)
+ax.axvline(cv_mean_r2.mean(), color='orangered', linestyle='--', linewidth=1.5)
+ax.set_xlabel('Estimated test $R^2$ for Level 4')
+ax.set_ylabel('Count (200 resamples)')
+ax.set_title('CV narrows the distribution of the test-error estimate')
+ax.legend(fontsize=10)
+plt.tight_layout()
+save_for_slides('cv-variance-reduction')
+plt.show()
+```
+
+Both histograms are centered on roughly the same mean — neither method is systematically biased — but the 5-fold CV distribution is **much narrower**. That smaller standard deviation is the whole point of CV: whichever random seed you happen to draw, your CV estimate will be close to the truth, whereas a single split can land far from it. Now imagine you're comparing Level 3, Level 4, and Level 5 on this data: if each estimate has a standard deviation of 0.08, you can't reliably rank them; if the standard deviation drops to 0.02, the ranking is trustworthy. **Reducing the variance of the estimate directly improves your ability to choose the right model.** That is why CV is the standard tool, not a theoretical nicety.
+
 Let's apply 5-fold CV to our complexity levels.
 
 ```{python}
