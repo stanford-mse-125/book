@@ -873,11 +873,25 @@ save_for_slides('cv-schematic')
 plt.show()
 ```
 
-Every observation is in the test set exactly once. Averaging over 5 folds typically reduces the noise of any single split. (The 5 scores are not independent — the training sets overlap in 3/4 of their observations — so the reduction is weaker than averaging 5 truly independent estimates would give.) The extreme case is **leave-one-out CV** (LOO-CV), where $k = n$ and every observation gets its own fold. LOO-CV is approximately unbiased as an estimate of test error, but its $n$ training sets differ by only one observation each, so the fold-wise errors are highly correlated and the average's variance shrinks less than $1/n$. LOO-CV is also computationally expensive. Five or ten folds is the usual practical choice.
+Every observation is in the test set exactly once. Averaging over 5 folds typically reduces the noise of any single split. (The 5 scores are not independent — the training sets overlap in 3/4 of their observations — so the reduction is weaker than averaging 5 truly independent estimates would give.) Five or ten folds is the usual default.
 
 :::{.callout-tip}
 ## Think About It
 With 5-fold CV, each observation sits in the held-out fold exactly once. How does this differ from running five independent 80/20 random splits? Which approach gives a more reliable performance estimate?
+:::
+
+### Leave-one-out CV: when every observation is its own fold
+
+The extreme case of $k$-fold CV is **leave-one-out CV** (LOO-CV), where $k = n$: each training set uses $n - 1$ observations and the "fold" consists of the single held-out observation. Because each training set is nearly the full dataset, LOO-CV's estimate of test error is approximately unbiased — closer to what the final model deployed on all the data would actually achieve.
+
+**When to use LOO-CV.** The regime where LOO-CV pays off is **small $n$**: when your dataset has 50 observations, throwing out 20% of them for validation wastes training data the model needs, and 5-fold CV leaves you comparing models trained on only 40 points. LOO lets each fit use 49 points. Once $n$ is in the low thousands, 5-fold or 10-fold CV gives essentially the same answer for a fraction of the compute, and LOO has two disadvantages worth knowing: (1) it is expensive — you refit the model $n$ times — and (2) its $n$ training sets differ from each other by only a single observation, so the fold-wise errors are highly correlated and the variance of the average shrinks less than a naive $1/n$ argument would predict.
+
+:::{.callout-note collapse="true"}
+## Going deeper: approximate leave-one-out CV
+
+Refitting a model $n$ times is wasteful when the change from fitting on $n$ data points to fitting on $n - 1$ is usually tiny. **Approximate LOO-CV** exploits this: using a single fit and a one-step Newton correction, it estimates the held-out-one prediction for every observation without refitting at all, turning an $n$-refit procedure into essentially one fit plus $n$ cheap linear-algebra updates. For generalized linear models the approximation is very close to true LOO when no single observation dominates the fit; for models with influential points or weak regularization it can be diagnosed and improved.
+
+Tamara Broderick's group has built out the theory and practical diagnostics for this approach — see Giordano, Stephenson, Liu, Jordan, and Broderick, "A Swiss Army Infinitesimal Jackknife," AISTATS 2019, and follow-up work. The point for this chapter is that "LOO is too slow" is an outdated excuse in most applied settings: approximate LOO gives you near-LOO accuracy at near-single-fit cost.
 :::
 
 ### Why CV beats a single split: a variance-reduction demo
