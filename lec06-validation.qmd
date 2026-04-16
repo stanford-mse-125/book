@@ -711,6 +711,79 @@ Go back to the Airbnb 7-level plot. Which levels show high bias? Which show high
 
 The synthetic experiment visited two points on this curve — the line (far left, dominated by bias) and the degree-4 polynomial (mid-way, near the valley). The Airbnb experiment walked the same curve, just with a different x-axis: going from bedrooms+bathrooms (underfit) through polynomial interactions (overfit). Low test $R^2$ at Level 1 signals high bias — the model is too simple to capture the real patterns. The large gap between train and test $R^2$ at the highest levels signals high variance — the model is fitting noise.
 
+### Fixing overfitting and underfitting
+
+Once you've diagnosed which way the model is failing, the fix is mechanical.
+
+| symptom | diagnosis | fix |
+|:---|:---|:---|
+| training $R^2$ is low, test $R^2$ is close to it | **high bias** (underfitting) | add features, use a more flexible model class |
+| training $R^2$ is high, test $R^2$ is much lower | **high variance** (overfitting) | reduce features, regularize (Lasso / Ridge), or **add more training data** |
+| both $R^2$ are high and close | sweet spot | nothing to fix |
+| both are low, gap is small | high bias **and** high noise | check for data quality, mismeasured features, wrong outcome |
+
+The add-features and reduce-features levers we've already seen (walking Levels 1-7). The lever we *haven't* demonstrated is **more training data**. The intuition: variance comes from the model being too sensitive to the particular training set it saw. Give it more training observations and the particular-set wiggle averages out — same model, same features, lower variance.
+
+To see it, take the Level-6 model (164 polynomial features, catastrophically overfit on 900 training observations) and refit it with progressively more training data, all the way up to the full listings dataset.
+
+```{python}
+#| label: fig-more-data-cures-overfitting
+# Level 6 is the catastrophic-overfit regime at 900 training observations.
+# Sweep training-set size from 900 to ~30,000 and watch test R² recover.
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+df_full = (
+    listings[['price', 'bedrooms', 'bathrooms', 'room_type', 'neighbourhood_group_cleansed']]
+    .dropna()
+    .rename(columns={'neighbourhood_group_cleansed': 'borough'})
+    .loc[lambda d: d['price'].between(10, 500)]
+    .reset_index(drop=True)
+)
+base_full = pd.concat([
+    df_full[['bedrooms', 'bathrooms']],
+    pd.get_dummies(df_full['room_type'], drop_first=True, prefix='room'),
+    pd.get_dummies(df_full['borough'],   drop_first=True, prefix='boro'),
+], axis=1)
+y_full = df_full['price']
+
+X_full_level6 = build_features(base_full, 6)
+
+train_sizes = [900, 1500, 3000, 6000, 12000, 24000]
+test_r2_by_size = []
+np.random.seed(0)
+for n_train in train_sizes:
+    test_r2s = []
+    for trial in range(10):  # average across 10 random splits at each size
+        idx = np.random.permutation(len(df_full))[:n_train + 2000]
+        tr, te = idx[:n_train], idx[n_train:]
+        X_tr, X_te = X_full_level6.iloc[tr], X_full_level6.iloc[te]
+        y_tr, y_te = y_full.iloc[tr], y_full.iloc[te]
+        model = LinearRegression().fit(X_tr, y_tr)
+        test_r2s.append(r2_score(y_te, model.predict(X_te)))
+    test_r2_by_size.append(np.mean(test_r2s))
+
+fig, ax = plt.subplots(figsize=(9, 5))
+ax.plot(train_sizes, test_r2_by_size, 'o-', color='steelblue', linewidth=2.5, markersize=9)
+ax.axhline(0, color='gray', linestyle='--', linewidth=1)
+ax.set_xlabel('Training-set size')
+ax.set_ylabel('Test $R^2$  (Level 6: 164 polynomial features)')
+ax.set_title('More data cures overfitting — same model, same features')
+ax.set_xscale('log')
+ax.set_xticks(train_sizes)
+ax.set_xticklabels([f'{n:,}' for n in train_sizes])
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+save_for_slides('more-data-cures-overfitting')
+plt.show()
+
+print("Level 6 test R² vs training-set size:")
+for n, r2 in zip(train_sizes, test_r2_by_size):
+    print(f"  n = {n:>6,}: test R² = {r2:.3f}")
+```
+
+With 900 training rows, the 164-feature model has test $R^2$ far below zero — worse than predicting the mean. Each doubling of the training set shrinks the "chase noise" failure mode, and by the time the training set reaches the tens of thousands, the same model that was catastrophic at 900 rows is now in a competitive range. The moral for practitioners is direct: **if your model is overfit and you can get more data, that is usually the strongest single lever you have.** More data does not fix bias — a linear model through curved signal stays biased no matter how many rows you throw at it — but for variance, more data is often the cleanest answer.
+
 
 ## Train, validation, and test sets
 
