@@ -886,7 +886,7 @@ Every data analysis starts with data munging. Here's the checklist:
 - **Selection bias** — systematic difference between the sample you analyze and the population you care about, caused here by dropping rows.
 - **Data leakage** — including information in your model that wouldn't be available at prediction time, or that is mathematically derived from the target.
 - **Assert statements** — defensive checks after each cleaning step. An assert that passes documents your assumption; an assert that fails catches errors before they propagate.
-- AI assistants produce plausible-looking analyses but systematically fail to question their own data-cleaning decisions.
+- Any uncritical analysis — human or AI — can produce plausible-looking output without questioning its own data-cleaning decisions. The defense is code you can audit, not trust in the tool.
 
 ### Computational tools
 

@@ -430,21 +430,22 @@ Some pairs of runs produce nearly identical clusters (ARI close to 1). Others sh
 If your clusters change depending on the random seed, can you really trust the labels? What does "Cluster 1" even mean if it's different every time?
 :::
 
-## The AI gotcha
+## The clustering gotcha
 
-An AI assistant asked to "cluster these Airbnb listings" would:
+A quick, uncritical analysis — asked to "cluster these Airbnb listings" — typically:
 
-1. Run k-means with default settings
-2. Report 3 or 5 "beautiful" clusters
-3. Maybe make a scatter plot
-4. Move on
+1. Runs k-means with default settings
+2. Reports 3 or 5 "beautiful" clusters
+3. Maybe makes a scatter plot
+4. Moves on
 
-It would **not**:
-- Check whether the clusters are dominated by geography
-- Try different feature sets to see how clusters change
-- Run with multiple random seeds to check stability
-- Question whether k=3 is the right choice or just an arbitrary default
-- Interpret what each cluster actually represents
+And skips:
+
+- Checking whether the clusters are dominated by geography
+- Trying different feature sets to see how clusters change
+- Running with multiple random seeds to check stability
+- Questioning whether $k=3$ is the right choice or just an arbitrary default
+- Interpreting what each cluster actually represents
 
 Clustering is easy to **run** and hard to **validate**. The algorithm will always produce clusters — even from random noise. Your job is to ask: are these clusters *real*, *useful*, and *stable*?
 

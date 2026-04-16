@@ -95,7 +95,7 @@ In Chapter 5, regression projected $y$ onto a fixed set of features $X$. PCA ask
 
 ## First attempt: PCA without standardization
 
-Let's see what happens if we run PCA on the raw (unstandardized) data. This approach is what an AI assistant would typically produce.
+Let's see what happens if we run PCA on the raw (unstandardized) data — the fastest path, and an easy default to fall into.
 
 :::{.callout-tip}
 ## Think About It

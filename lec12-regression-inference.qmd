@@ -1002,191 +1002,77 @@ and regression alone cannot answer it.
 
 ## Inference for logistic regression
 
-The same t-test and confidence interval machinery from linear regression applies to logistic regression coefficients — but the interpretation changes. In linear regression, a coefficient tells you how many units the response changes per unit increase in the predictor. In logistic regression, the response is a log-odds, so the coefficient tells you how the **log-odds** change — and exponentiating gives you an **odds ratio**.
+Chapter 7 introduced logistic regression: coefficients live on the log-odds scale, and $e^{\hat{\beta}_j}$ is the **odds ratio** — the multiplicative change in odds per unit increase in $x_j$. The same inference machinery from linear regression applies to the $\hat{\beta}_j$: standard errors, test statistics, p-values, and confidence intervals. Only two things change:
 
-We demonstrate with the **Framingham Heart Study**, a landmark longitudinal study that followed thousands of residents of Framingham, Massachusetts to identify risk factors for cardiovascular disease. The outcome is `TenYearCHD`: whether the patient developed coronary heart disease within ten years.
+- The test statistic is labeled **z** instead of **t**. Logistic regression uses the **Wald test** (asymptotically normal) rather than the exact t-test. For large $n$, the two agree.
+- A 95% CI $[a, b]$ on $\hat{\beta}_j$ exponentiates directly to a 95% CI $[e^a, e^b]$ on the odds ratio (the exponential function is monotone).
+
+We return to the **Framingham Heart Study** from Chapter 7, this time with a smaller model of six clinically meaningful predictors. To match Chapter 7's setup, we standardize the features — so coefficients and odds ratios are interpreted per one-SD change in each predictor.
 
 ```{python}
-# Load and prepare Framingham data
+# Load Framingham data and drop rows with missing values
 framingham = pd.read_csv(f'{DATA_DIR}/framingham/framingham.csv')
-print(f"Observations: {len(framingham):,}")
-print(f"Missing values per column:")
-print(framingham.isnull().sum()[framingham.isnull().sum() > 0].to_string())
-print(f"\nOutcome (TenYearCHD): {framingham['TenYearCHD'].mean():.1%} developed CHD")
-```
-
-```{python}
-# Drop rows with missing values for a clean analysis
 fram = framingham.dropna().copy()
-print(f"Complete cases: {len(fram):,} (dropped {len(framingham) - len(fram):,} with missing values)")
+print(f"Complete cases: {len(fram):,} of {len(framingham):,}")
 ```
 
-We fit a logistic regression using **statsmodels** to get the full inference table — coefficients, standard errors, test statistics, p-values, and confidence intervals. We use a subset of clinically meaningful predictors.
-
 ```{python}
-# Fit logistic regression with statsmodels
+# Fit logistic regression with statsmodels on standardized features
 y = fram['TenYearCHD']
-X = fram[['age', 'male', 'BMI', 'sysBP', 'cigsPerDay', 'glucose']]
-X = sm.add_constant(X)  # add intercept
+feature_cols = ['age', 'male', 'BMI', 'sysBP', 'cigsPerDay', 'glucose']
+X_raw = fram[feature_cols]
+X = (X_raw - X_raw.mean()) / X_raw.std()  # standardize
+X = sm.add_constant(X)
 
-logit_model = sm.Logit(y, X).fit(disp=0)  # disp=0 suppresses optimization output
+logit_model = sm.Logit(y, X).fit(disp=0)
 print(logit_model.summary())
 ```
 
-The output looks similar to the OLS tables we have seen, with one key difference: the test statistic column is labeled **z** instead of **t**. Logistic regression uses the **Wald test** (asymptotically normal) rather than the t-test (exact under normality). For large samples, the distinction is minor — both compare the coefficient to its standard error.
+The table has the same structure as the OLS output from earlier in this chapter, with z-statistics in place of t-statistics.
 
-### Odds ratios: interpreting logistic regression coefficients
+### Odds ratios and confidence intervals
 
-In linear regression, $\hat{\beta}_j$ is a change in $y$. In logistic regression, $\hat{\beta}_j$ is a change in the **log-odds** of the outcome. Exponentiating converts this to an **odds ratio**:
-
-$$\text{Odds Ratio}_j = e^{\hat{\beta}_j}$$
-
-:::{.callout-important}
-## Definition: Odds Ratio
-The **odds ratio** $e^{\hat{\beta}_j}$ tells you how the odds of the outcome multiply for each one-unit increase in $x_j$, holding all other predictors constant. An odds ratio of 1.5 means the odds increase by 50%; an odds ratio of 0.8 means the odds decrease by 20%.
-:::
+Exponentiate the fitted coefficients and their CIs to get odds ratios with CIs.
 
 ```{python}
 # Compute odds ratios with 95% CIs
+ci = logit_model.conf_int()
 coef_table = pd.DataFrame({
-    'Coefficient': logit_model.params,
-    'SE': logit_model.bse,
-    'z': logit_model.tvalues,
+    'Odds Ratio': np.exp(logit_model.params),
+    'OR 95% CI Lower': np.exp(ci[0]),
+    'OR 95% CI Upper': np.exp(ci[1]),
     'p-value': logit_model.pvalues,
 })
 
-# Exponentiate coefficients and CIs to get odds ratios
-ci = logit_model.conf_int()
-coef_table['Odds Ratio'] = np.exp(logit_model.params)
-coef_table['OR 95% CI Lower'] = np.exp(ci[0])
-coef_table['OR 95% CI Upper'] = np.exp(ci[1])
-
 # Display without the intercept (odds ratio for the intercept is not meaningful)
-display_cols = ['Odds Ratio', 'OR 95% CI Lower', 'OR 95% CI Upper', 'p-value']
-print(coef_table.loc[coef_table.index != 'const', display_cols].round(4).to_string())
+print(coef_table.loc[coef_table.index != 'const'].round(4).to_string())
 ```
 
-```{python}
-# Interpret the key predictors
-or_age = np.exp(logit_model.params['age'])
-or_bmi = np.exp(logit_model.params['BMI'])
-or_sysbp = np.exp(logit_model.params['sysBP'])
-ci_age = np.exp(logit_model.conf_int().loc['age'])
-
-print("Interpreting odds ratios:")
-print(f"  age:     OR = {or_age:.3f}  ->  each additional year of age multiplies")
-print(f"           the odds of CHD by {or_age:.3f} (95% CI: [{ci_age[0]:.3f}, {ci_age[1]:.3f}])")
-print(f"  BMI:     OR = {or_bmi:.3f}  ->  each unit increase in BMI multiplies the odds by {or_bmi:.3f}")
-print(f"  sysBP:   OR = {or_sysbp:.4f} ->  each mmHg increase in systolic BP multiplies the odds by {or_sysbp:.4f}")
-print()
-print("Odds ratios near 1 indicate little effect; far from 1 indicates a strong association.")
-print("This is the standard language of epidemiology and policy research.")
-```
+Because the features are standardized, each odds ratio is the multiplicative change in odds per **one-SD** increase in that predictor, holding the others constant. To convert to per-unit (say, per year for age), divide the coefficient by the feature's SD before exponentiating.
 
 ```{python}
 #| code-fold: true
-# Visualize odds ratios with CIs (forest plot)
-fig, ax = plt.subplots(figsize=(8, 5))
-
+# Forest plot of odds ratios
 predictors = [p for p in logit_model.params.index if p != 'const']
 ors = np.exp(logit_model.params[predictors])
-or_ci_lower = np.exp(logit_model.conf_int().loc[predictors, 0])
-or_ci_upper = np.exp(logit_model.conf_int().loc[predictors, 1])
+or_ci_lower = np.exp(ci.loc[predictors, 0])
+or_ci_upper = np.exp(ci.loc[predictors, 1])
 
+fig, ax = plt.subplots(figsize=(8, 5))
 y_pos = range(len(predictors))
 ax.errorbar(ors, y_pos, xerr=[ors - or_ci_lower, or_ci_upper - ors],
             fmt='o', color='steelblue', capsize=5, markersize=8)
 ax.axvline(x=1, color='red', linestyle='--', linewidth=1, label='OR = 1 (no effect)')
 ax.set_yticks(list(y_pos))
 ax.set_yticklabels(predictors)
-ax.set_xlabel('Odds Ratio (95% CI)')
-ax.set_title('Odds Ratios for 10-Year CHD Risk\n(Framingham Heart Study)')
+ax.set_xlabel('Odds Ratio per 1 SD (95% CI)')
+ax.set_title('Odds Ratios for 10-Year CHD Risk (Framingham)')
 ax.legend()
 plt.tight_layout()
 plt.show()
-
-print("An odds ratio whose CI excludes 1 is statistically significant.")
-print("An odds ratio whose CI includes 1 may not be distinguishable from 'no effect.'")
 ```
 
-:::{.callout-tip}
-## Think About It
-The coefficient on `age` is small (a fraction), but the odds ratio compounds over years. A 10-year age difference multiplies the odds by $e^{10 \times \hat{\beta}_{\text{age}}}$. How large is that for the Framingham model?
-:::
-
-:::{.callout-note}
-## CIs on odds ratios
-To build a confidence interval for the odds ratio, exponentiate the CI endpoints for $\hat{\beta}_j$. Because the exponential function is monotone increasing, a 95% CI for $\beta_j$ of $[a, b]$ maps to a 95% CI for $e^{\beta_j}$ of $[e^a, e^b]$. This is exactly what the table above displays.
-:::
-
-
-## Calibration: do predicted probabilities mean what they say?
-
-A logistic regression predicts probabilities, not just class labels. But do those probabilities mean what they claim? If a model predicts a 70% probability of heart disease for a group of patients, did roughly 70% of them actually develop CHD?
-
-:::{.callout-important}
-## Definition: Calibration
-A model is **well-calibrated** if its predicted probabilities match observed frequencies. Among all observations that received a predicted probability near $p$, the fraction of positive outcomes should be approximately $p$.
-:::
-
-A **calibration plot** checks this visually: bin predictions by predicted probability, compute the observed fraction of positives in each bin, and plot observed vs. predicted. A perfectly calibrated model lies on the diagonal.
-
-```{python}
-from sklearn.calibration import calibration_curve
-
-# Get predicted probabilities from the logistic regression
-y_prob = logit_model.predict(X)
-
-# Compute calibration curve
-prob_true, prob_pred = calibration_curve(y, y_prob, n_bins=10, strategy='uniform')
-```
-
-```{python}
-#| code-fold: true
-# Calibration plot
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-# Left: calibration plot
-axes[0].plot(prob_pred, prob_true, 'o-', color='steelblue', markersize=8, label='Logistic regression')
-axes[0].plot([0, 1], [0, 1], 'r--', linewidth=1, label='Perfect calibration')
-axes[0].set_xlabel('Mean Predicted Probability')
-axes[0].set_ylabel('Observed Frequency (Fraction of Positives)')
-axes[0].set_title('Calibration Plot\n(Framingham CHD Model)')
-axes[0].legend()
-axes[0].set_xlim(-0.02, 0.55)
-axes[0].set_ylim(-0.02, 0.55)
-
-# Right: histogram of predicted probabilities
-axes[1].hist(y_prob, bins=30, color='steelblue', edgecolor='black', alpha=0.7)
-axes[1].set_xlabel('Predicted Probability of CHD')
-axes[1].set_ylabel('Count')
-axes[1].set_title('Distribution of Predicted Probabilities')
-
-plt.tight_layout()
-plt.show()
-
-print("Left: points near the diagonal indicate good calibration.")
-print("Right: most predictions cluster at low probabilities (CHD is relatively rare).")
-```
-
-```{python}
-# Quantify calibration: for each bin, compare predicted vs observed
-print("Calibration check (per bin):")
-print(f"  {'Predicted':>12s}  {'Observed':>12s}  {'Difference':>12s}")
-for p_pred, p_true in zip(prob_pred, prob_true):
-    print(f"  {p_pred:12.3f}  {p_true:12.3f}  {p_true - p_pred:+12.3f}")
-```
-
-### Why calibration matters for decisions
-
-Calibration directly affects decision-making. Suppose a doctor uses a model-predicted risk threshold of 30% to recommend preventive treatment. If the model systematically overestimates risk — predicting 30% when the true rate is 15% — patients receive unnecessary interventions. If it underestimates, patients who need treatment are missed.
-
-For linear regression, we check whether the model's assumptions hold using residual plots and Q-Q plots. For classification, **calibration** fills an analogous role: it checks whether the model's probability outputs are trustworthy. A model can have high accuracy or AUC yet be poorly calibrated — accurate in ranking patients by risk, but wrong about the absolute risk level.
-
-:::{.callout-tip}
-## Think About It
-A model with good AUC but poor calibration ranks observations correctly (high risk above low risk) but gets the absolute probabilities wrong. When would ranking be sufficient? When would you need well-calibrated probabilities?
-:::
+An odds ratio whose CI excludes 1 is statistically significant; one whose CI includes 1 is not distinguishable from "no effect."
 
 **Next up:** [Chapter 12.5](lec12.5-classification-inference.qmd) applies everything
 from Act 2 to classification problems. Then [Chapter 13](lec13-trees.qmd) opens Act 3
@@ -1207,8 +1093,7 @@ with a completely different model family: decision trees and random forests.
 - **LINE conditions**: The four assumptions for regression inference -- Linearity, Independence, Normality, Equal variance.
 - **Prediction interval**: An interval for where a *single new* observation might fall at a given $x$. Always wider than the confidence interval for the mean -- it includes both estimation uncertainty and individual variability.
 - **Parsimony / Occam's razor**: The best model is the simplest one that adequately fits the data. Drop predictors that are not useful.
-- **Odds ratio**: $e^{\hat{\beta}_j}$ — how the odds of the outcome multiply per one-unit increase in $x_j$, holding other predictors constant. Confidence intervals on $\hat{\beta}_j$ map to CIs on the odds ratio by exponentiating.
-- **Calibration**: A model is well-calibrated if predicted probabilities match observed frequencies. Check with a calibration plot (observed fraction of positives vs. mean predicted probability per bin).
+- **Wald test** (for logistic regression coefficients): asymptotically-normal analog of the t-test; the z-statistic $\hat{\beta}_j / \text{SE}(\hat{\beta}_j)$ is compared to a standard normal. CIs on $\hat{\beta}_j$ map to CIs on the odds ratio $e^{\hat{\beta}_j}$ by exponentiating.
 - The t-test for a coefficient asks: is this predictor useful, or could the observed coefficient be due to noise?
 - A confidence interval for a coefficient gives the range of plausible effect sizes, not just a yes/no answer.
 - Building models step by step (adding one predictor at a time) reveals what "controlling for" actually does to coefficients.
@@ -1229,7 +1114,6 @@ with a completely different model family: decision trees and random forests.
 - `stats.probplot(residuals, dist='norm')` -- Q-Q plot data with correct scaling
 - `format_pvalue(p)` -- format p-values in scientific notation when below 0.001
 - `sm.Logit(y, X).fit().summary()` -- fit logistic regression with inference (coefficients, SEs, z-statistics, p-values, CIs)
-- `calibration_curve(y_true, y_prob, n_bins=10)` -- compute observed frequency vs. predicted probability for calibration plots
 
 ### For the quiz
 
@@ -1241,5 +1125,4 @@ with a completely different model family: decision trees and random forests.
 - Know what a residual plot and Q-Q plot show, and what patterns indicate problems (heteroscedasticity, non-normality).
 - Know the LINE conditions (Linearity, Independence, Normality, Equal variance) and which diagnostic plots check which conditions.
 - Know that bootstrap CIs (Chapter 8) are a fallback when normality assumptions fail.
-- Know that $e^{\hat{\beta}_j}$ is an odds ratio and be able to interpret one in context (e.g., "each additional year of age multiplies the odds of CHD by 1.05").
-- Know what a calibration plot shows and why good calibration matters for decisions.
+- Be able to interpret a logistic regression inference table: read off z-statistics, p-values, and CIs, and convert coefficients and CIs to odds ratios.

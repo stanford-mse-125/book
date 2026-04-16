@@ -9,7 +9,7 @@ So far, every model we've built predicts a number — price, readmission rate, t
 
 ## The 85% accuracy trap
 
-A hospital wants to predict which patients will be readmitted within 30 days, so they can intervene early. Missing those patients costs hospitals \$25,000+ per avoidable readmission in CMS penalties. But there's a catch: only 15% of patients are readmitted. If you just predict "not readmitted" for everyone, you're right 85% of the time.
+A hospital wants to predict which patients will be readmitted within 30 days, so they can intervene early. Each avoidable readmission costs roughly \$25,000 to treat, and Medicare's Hospital Readmissions Reduction Program penalizes hospitals with above-expected 30-day readmission rates by up to 3% of reimbursements. But there's a catch: only 15% of patients are readmitted. If you just predict "not readmitted" for everyone, you're right 85% of the time.
 
 **Is that a good model?** An 85%-accurate model that catches zero at-risk patients is worse than useless — it's expensive.
 
@@ -23,14 +23,15 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (7, 4.5)
+plt.rcParams['figure.figsize'] = (8, 5)
 plt.rcParams['font.size'] = 12
 
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay,
                              roc_curve, auc, precision_recall_curve)
 from sklearn.preprocessing import StandardScaler
+from sklearn.calibration import calibration_curve
 
 # Load data
 DATA_DIR = 'data'
@@ -65,7 +66,14 @@ print(f"  CHD:     {chd_counts[1]:,} ({chd_counts[1]/len(framingham)*100:.1f}%)"
 print(f"  Ratio:   {chd_counts[0]/chd_counts[1]:.1f}:1")
 ```
 
-Only 15.2% of patients developed CHD. This ratio reflects **class imbalance** — the positive class is much rarer than the negative class. Class imbalance arises frequently in real applications: fraud detection, disease screening, equipment failure.
+In the data, **CHD is coded as 1 and no CHD as 0** — the column `TenYearCHD` takes those two values. Only 15.2% of patients developed CHD.
+
+:::{.callout-important}
+## Definition: Positive and Negative Class
+The **positive class** is the outcome you are trying to detect, coded 1 in the data. The **negative class** is its absence, coded 0. The terminology comes from signal detection and medical testing: a *positive test result* is one that *detects* the condition — a positive CHD test (or a positive cancer test) is bad news for the patient. "Positive" tracks the 1 in the encoding, not the desirability of the outcome.
+:::
+
+This ratio reflects **class imbalance** — the positive class (CHD) is much rarer than the negative class (no CHD). Class imbalance arises frequently in real applications: fraud detection, disease screening, equipment failure.
 
 Class imbalance is going to cause us a lot of trouble today. Let's see why.
 
@@ -99,18 +107,16 @@ X_train.describe().round(1)
 
 ## From regression to classification
 
-In linear regression, we predicted a continuous outcome: price, blood pressure, etc. Now we want to predict a **binary** outcome: CHD or no CHD.
+To expose the accuracy trap — and see what to use instead — we first need an actual model to evaluate. In linear regression, we predicted a continuous outcome: price, blood pressure, etc. Now we want to predict a **binary** outcome: CHD or no CHD.
 
 Could we just use linear regression on the 0/1 outcome? Let's try it and see what goes wrong.
 
 ```{python}
 # What happens if we use linear regression on a binary outcome?
-from sklearn.linear_model import LinearRegression
-
-scaler_temp = StandardScaler()
-X_train_temp = scaler_temp.fit_transform(X_train)
-lin_model = LinearRegression().fit(X_train_temp, y_train)
-lin_preds = lin_model.predict(scaler_temp.transform(X_test))
+scaler_lin = StandardScaler()
+X_train_lin = scaler_lin.fit_transform(X_train)
+lin_model = LinearRegression().fit(X_train_lin, y_train)
+lin_preds = lin_model.predict(scaler_lin.transform(X_test))
 
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.scatter(X_test['age'], lin_preds, alpha=0.3, s=10)
@@ -153,7 +159,7 @@ Now we have a quantity that ranges from $-\infty$ to $+\infty$:
 
 The log-odds scale is centered at zero ($p = 0.5$, a coin flip) and stretches symmetrically toward $\pm\infty$. Notice: $p = 0.20$ and $p = 0.80$ produce log-odds of equal magnitude but opposite sign.
 
-Here's the key insight: **log-odds can be any real number — just like a linear regression prediction.** So let's model the log-odds as a linear function of the features:
+**Log-odds can be any real number — just like a linear regression prediction.** So let's model the log-odds as a linear function of the features:
 
 $$\log\!\left(\frac{p}{1-p}\right) = \beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p$$
 
@@ -163,7 +169,7 @@ To convert back to a probability, solve for $p$:
 
 $$p = \frac{1}{1 + e^{-(\beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p)}}$$
 
-The function $\sigma(z) = 1/(1 + e^{-z})$ is called the **sigmoid function**. It maps any real number to $[0, 1]$ — exactly the constraint we needed.
+The function $\sigma(z) = 1/(1 + e^{-z})$ — where $z = \beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p$ is called the **linear predictor** — is the **sigmoid function**. It maps any real number to $[0, 1]$ — exactly the constraint we needed.
 
 :::{.callout-warning}
 ## Logistic Regression Conditions
@@ -210,7 +216,7 @@ ax.plot(age_grid, proba_age, linewidth=2.5, color='steelblue',
 ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.4)
 ax.set_xlabel('Age')
 ax.set_ylabel('Predicted probability of CHD')
-ax.set_title('Logistic regression with one feature: the S-curve')
+ax.set_title('Logistic regression on age alone (lower portion of the S-curve)')
 ax.legend()
 plt.tight_layout()
 plt.show()
@@ -226,7 +232,7 @@ Why not just use squared error on the 0/1 outcomes? You could, but squared error
 
 > *"The loss function determines what the model finds."*
 
-Logistic regression minimizes the **logistic loss** (also called **cross-entropy** or negative log-likelihood). The idea: we choose coefficients to maximize the likelihood of the observed outcomes. If a patient had CHD and we predicted probability 0.9, that's good (high likelihood). If we predicted 0.1 for a patient who had CHD, that's bad (low likelihood). Mathematically, the logistic loss for a single observation is:
+Logistic regression minimizes the **logistic loss** (also called **cross-entropy** or negative log-likelihood). We choose coefficients to maximize the likelihood of the observed outcomes. If a patient had CHD and we predicted probability 0.9, that's good (high likelihood). If we predicted 0.1 for a patient who had CHD, that's bad (low likelihood). Mathematically, the logistic loss for a single observation is:
 
 $$\ell(\beta) = -\left[ y \log(p) + (1-y) \log(1-p) \right]$$
 
@@ -257,29 +263,54 @@ When the predicted probability is near 1 (a good prediction), both losses are sm
 
 In Chapter 5, we solved linear regression with the normal equations — a closed-form solution. Logistic regression has no such shortcut: the sigmoid makes the loss nonlinear. Instead, we use **gradient descent**, an iterative algorithm that repeatedly steps in the direction that decreases the loss most steeply.
 
-The total loss across all $n$ training observations is $L(\beta) = \frac{1}{n}\sum_{i=1}^n \ell_i(\beta)$. Gradient descent minimizes $L$ by repeatedly stepping in the steepest downhill direction:
+The total loss across all $n$ training observations is $L(\beta) = \frac{1}{n}\sum_{i=1}^n \ell_i(\beta)$. Imagine $L$ as a landscape above the $\beta$ plane, with height = loss. Gradient descent is literal hiking: at each step, compute the gradient $\nabla L(\beta)$ (the vector of partial derivatives, pointing in the *uphill* direction), then step the opposite way.
 
 $$\beta \leftarrow \beta - \eta \cdot \nabla L(\beta)$$
 
-where $\eta$ is the **learning rate** (step size). The logistic loss is **convex** — one valley, one global minimum — so gradient descent finds THE answer regardless of starting point.
+Here $\eta$ is the **learning rate** — how big a step to take. The logistic loss is **convex**: the landscape is shaped like a single bowl with no false valleys. As long as the data isn't pathological (e.g., perfectly separable, which would send the minimum off to infinity), gradient descent converges to the unique global minimum regardless of starting point.
 
 ```{python}
-# Standardize features
+# Standardize features (gradient descent is better-behaved when features share a scale)
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 ```
 
-Now let's fit the final model using sklearn's `LogisticRegression`, which uses a sophisticated version of this same idea under the hood.
+Let's watch gradient descent actually converge. We'll hand-roll it on a small two-feature logistic regression (`age` + `BMI`) so we can see the loss drop step by step.
+
+```{python}
+# Hand-rolled gradient descent on a two-feature logistic regression
+age_idx, bmi_idx = features.index('age'), features.index('BMI')
+X_gd = np.c_[np.ones(len(X_train_scaled)), X_train_scaled[:, [age_idx, bmi_idx]]]
+y_gd = y_train.values
+
+beta = np.zeros(X_gd.shape[1])
+eta, n_iter = 0.5, 50
+losses = []
+for _ in range(n_iter):
+    p = 1 / (1 + np.exp(-(X_gd @ beta)))
+    grad = X_gd.T @ (p - y_gd) / len(y_gd)
+    beta -= eta * grad
+    losses.append(-np.mean(y_gd * np.log(p + 1e-12) + (1 - y_gd) * np.log(1 - p + 1e-12)))
+
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(losses, linewidth=2)
+ax.set_xlabel('Iteration')
+ax.set_ylabel('Training logistic loss')
+ax.set_title('Gradient descent on logistic regression: the loss falls each step')
+plt.tight_layout()
+plt.show()
+```
+
+The loss drops fast in the first few iterations and then settles. Because the problem is convex, "settles" means we've reached the minimum.
+
+Now let's fit the full model using sklearn's `LogisticRegression`, which uses a more sophisticated version of this same idea under the hood.
 
 ```{python}
 # Fit logistic regression
 model = LogisticRegression(penalty=None, max_iter=1000, random_state=42)
 model.fit(X_train_scaled, y_train)
-
 print("Logistic regression fitted.")
-print(f"Training accuracy: {model.score(X_train_scaled, y_train):.3f}")
-print(f"Test accuracy:     {model.score(X_test_scaled, y_test):.3f}")
 ```
 
 Let's see what the model's predictions look like on the data. Here we plot predicted CHD probability against age, with actual outcomes overlaid.
@@ -309,12 +340,15 @@ Unlike the one-feature fit earlier, the predictions don't trace a clean S-curve 
 
 Logistic regression outputs a probability for each patient. To classify patients as "CHD" or "no CHD," we need a **threshold**: predict positive whenever the predicted probability exceeds the threshold. The default is 0.5, and sklearn's `model.predict()` uses it automatically. We'll see shortly that this default can be a poor choice — but let's start there.
 
-Test accuracy of ~85%. Sounds great, right?
+How does the model do? Let's compute test-set accuracy at the default threshold.
 
-:::{.callout-tip}
-## Think About It
-Before we compare, what accuracy would you expect from a model that just predicts "no CHD" for every patient?
-:::
+```{python}
+# Test accuracy at the default threshold (0.5)
+test_acc = model.score(X_test_scaled, y_test)
+print(f"Test accuracy: {test_acc:.3f}")
+```
+
+Sounds great, right?
 
 **But wait.** What's the accuracy of the dumbest possible model — one that just predicts "no CHD" for everyone?
 
@@ -322,8 +356,8 @@ Before we compare, what accuracy would you expect from a model that just predict
 # The "always predict negative" baseline
 baseline_accuracy = 1 - y_test.mean()
 print(f"Baseline accuracy (predict all negative): {baseline_accuracy:.3f}")
-print(f"Our model accuracy:                       {model.score(X_test_scaled, y_test):.3f}")
-print(f"Improvement over baseline:                {model.score(X_test_scaled, y_test) - baseline_accuracy:.3f}")
+print(f"Our model accuracy:                       {test_acc:.3f}")
+print(f"Improvement over baseline:                {test_acc - baseline_accuracy:.3f}")
 ```
 
 Our fancy logistic regression barely beats "predict everyone is fine." That ~85% accuracy is **almost entirely driven by the class imbalance**, not by the model learning anything useful.
@@ -361,7 +395,6 @@ Each odds ratio tells us how the odds of CHD change per one-standard-deviation i
 print("Logistic Regression Coefficients (standardized features):")
 print("=" * 55)
 for _, row in coef_df.iterrows():
-    direction = "+" if row['Coefficient'] > 0 else "-"
     print(f"  {row['Feature']:>12s}: odds x {row['Odds Ratio']:.2f} per 1-SD increase")
 ```
 
@@ -387,20 +420,25 @@ Before we evaluate overall performance, let's look at specific patients. This st
 ```{python}
 # Pick a few patients to examine
 y_proba = model.predict_proba(X_test_scaled)[:, 1]
-test_examples = pd.DataFrame(X_test, columns=features)
+test_examples = pd.DataFrame(X_test, columns=features).reset_index(drop=True)
 test_examples['True CHD'] = y_test.values
 test_examples['Predicted Prob'] = y_proba
+test_examples['Pred @ 0.5'] = (y_proba >= 0.5).astype(int)
+
+cell_lookup = {(1, 1): 'TP', (0, 0): 'TN', (0, 1): 'FP', (1, 0): 'FN'}
+test_examples['Cell'] = [cell_lookup[(t, p)] for t, p in
+                         zip(test_examples['True CHD'], test_examples['Pred @ 0.5'])]
 
 # Show a few interesting cases
 examples = test_examples.nsmallest(1, 'Predicted Prob')
 examples = pd.concat([examples, test_examples.nlargest(2, 'Predicted Prob')])
-# Find a borderline case near threshold 0.5
+# Find a borderline case near threshold 0.3
 borderline = test_examples.iloc[(test_examples['Predicted Prob'] - 0.3).abs().argsort()[:1]]
 examples = pd.concat([examples, borderline])
-examples[['age', 'male', 'sysBP', 'cigsPerDay', 'True CHD', 'Predicted Prob']].round(3)
+examples[['age', 'male', 'sysBP', 'cigsPerDay', 'True CHD', 'Predicted Prob', 'Pred @ 0.5', 'Cell']].round(3)
 ```
 
-At the default threshold of 0.5, anyone with predicted probability above 0.5 is classified as "CHD." Is that the right threshold? We'll revisit this question soon.
+At the default threshold of 0.5, anyone with predicted probability above 0.5 is classified as "CHD." Every patient lands in exactly one cell of a 2×2 grid: **TP** (true positive — said yes, was yes), **TN** (said no, was no), **FP** (said yes, was no), or **FN** (said no, was yes). Aggregating across all test patients gives the **confusion matrix**.
 
 ## The confusion matrix: seeing where the model fails
 
@@ -438,7 +476,7 @@ This outcome is a **False Negative** — and in medicine, false negatives can be
 
 :::{.callout-tip}
 ## Think About It
-If you were designing a screening tool, which is worse — a false positive (unnecessary follow-up test) or a false negative (missed heart disease)?
+A follow-up test (the consequence of a false positive) costs roughly \$500. Missing a CHD case and treating it in an emergency (the consequence of a false negative) costs tens of thousands. With those numbers in mind, would you rather the screening tool flag too many patients or too few — and how would that change if the costs were flipped, as they are in spam filtering?
 :::
 
 ## Precision vs Recall
@@ -449,7 +487,7 @@ If you were designing a screening tool, which is worse — a false positive (unn
 - **Recall** (Sensitivity) = $\frac{TP}{TP + FN}$ = "Of all actual CHD cases, how many did I catch?"
 :::
 
-A mnemonic: Precision asks, "I flagged this patient — should I trust my flag?" Recall asks, "Of all sick people, how many did we find?"
+Precision asks, "I flagged this patient — should I trust my flag?" Recall asks, "Of all sick people, how many did we find?"
 
 Two metrics capture the two types of mistakes, and they tell very different stories.
 
@@ -506,14 +544,9 @@ ax.set_xlim([0, 1])
 ax.set_ylim([0, 1.02])
 plt.tight_layout()
 plt.show()
-
-print(f"AUC = {roc_auc:.3f}")
-print("Interpretation: if you pick one CHD patient and one non-CHD patient")
-print(f"at random, the model ranks the CHD patient higher {roc_auc*100:.0f}% of the time.")
-print()
-print("This quantity is the concordance probability. It measures the model's")
-print("ability to *rank* patients by risk -- not how well it classifies at any threshold.")
 ```
+
+The AUC here is about 0.75. Interpretation: if you pick one CHD patient and one non-CHD patient at random, the model ranks the CHD patient higher 75% of the time. This quantity is the **concordance probability** — it measures the model's ability to *rank* patients by risk, not how well it classifies at any threshold.
 
 ## Threshold choice: the precision-recall tradeoff
 
@@ -541,6 +574,7 @@ for t in thresholds_to_try:
 ```
 
 See the tradeoff? As we lower the threshold:
+
 - **Recall goes up** — we catch more CHD cases
 - **Precision goes down** — more false alarms
 - **Accuracy goes down** — more negative cases are now misclassified
@@ -579,26 +613,26 @@ plt.show()
 
 ## Base rate neglect: why "99% accuracy" can be meaningless
 
-Precision depends on the base rate. A test with high sensitivity and high specificity can still have low precision when the condition is rare. This is one of the most common ways people are misled by machine learning claims.
+Precision depends on the base rate. A test with high **sensitivity** (catches most true cases) and high **specificity** (correctly clears most non-cases) can still have low precision when the condition is rare. This is one of the most common ways people are misled by machine learning claims.
 
 :::{.callout-tip}
 ## Think About It
-A vendor pitches a cancer screening test with "99% accuracy" — it correctly classifies 99% of patients. Cancer prevalence in the screened population is 0.5%. A patient tests positive. What is the probability they actually have cancer?
+A vendor pitches a cancer screening test with "99% accuracy" — it catches 99% of cancer cases *and* correctly clears 99% of healthy patients (sensitivity = specificity = 99%). Cancer prevalence in the screened population is 0.5%. A patient tests positive. What is the probability they actually have cancer?
 :::
 
 Work it out with a concrete population of 10,000 patients.
 
 ```{python}
-# Base rate neglect: "99% accuracy" with a rare condition
+# Base rate neglect: "99% accuracy" (i.e., sensitivity = specificity = 99%) with a rare condition
 n = 10_000
 prevalence = 0.005       # 0.5% have cancer
-accuracy = 0.99          # 99% correctly classified
+sens_spec = 0.99         # sensitivity and specificity both 99%
 
 n_cancer = n * prevalence              # 50 have cancer
 n_healthy = n * (1 - prevalence)       # 9,950 don't
 
-true_positives = n_cancer * accuracy   # 49.5 correctly detected
-false_positives = n_healthy * (1 - accuracy)  # 99.5 false alarms
+true_positives = n_cancer * sens_spec         # 49.5 correctly detected
+false_positives = n_healthy * (1 - sens_spec) # 99.5 false alarms
 total_positive = true_positives + false_positives
 
 ppv = true_positives / total_positive  # precision = P(cancer | positive test)
@@ -614,7 +648,7 @@ print(f"")
 print(f"Two-thirds of positive results are wrong.")
 ```
 
-A "99% accurate" test, and two-thirds of positive results are wrong. The false positives swamp the true positives because the condition is so rare.
+A "99% accurate" test delivers two-thirds wrong positives. The false positives swamp the true positives because the condition is so rare.
 
 This is why mass screening programs are controversial — and why a vendor claiming "99% accuracy" should immediately prompt the question: *what is the base rate?* Without knowing how common the condition is, accuracy tells you almost nothing about the chance that a positive result is real.
 
@@ -656,7 +690,7 @@ for group in ['30-40', '40-50', '50-60', '60-70']:
     print(f"{group:>10s} {n:>6d} {chd_rate:>10.3f} {auc_val:>8.3f}")
 ```
 
-**There it is.** For patients under 40, the AUC drops dramatically — close to 0.5, which is *random guessing*. The model essentially learned "older people get heart disease" and has almost no ability to identify risk in younger patients.
+For patients under 40, the AUC is about 0.36 — *below* 0.5, which would be random guessing. In this subgroup, the model ranks a CHD patient higher than a non-CHD patient only 36% of the time; *inverting* its predictions would actually do better. The positive class is tiny here (~6 CHD cases in 191 patients), so the estimate is noisy — the true AUC could be anywhere near 0.5. But the point stands: the overall AUC of 0.75 hides a subgroup where the model has essentially no useful signal. It learned "older people get heart disease" and has almost no ability to identify risk in younger patients.
 
 This failure is critical for a screening tool. Young patients who *do* develop CHD are exactly the cases where early intervention matters most — and the model is blind to them.
 
@@ -664,7 +698,7 @@ This failure is critical for a screening tool. Young patients who *do* develop C
 # Box plot: predicted probabilities by age group and actual outcome
 test_df['Outcome'] = test_df['y_true'].map({0: 'No CHD', 1: 'CHD'})
 
-fig, ax = plt.subplots(figsize=(10, 5))
+fig, ax = plt.subplots(figsize=(8, 5))
 sns.boxplot(data=test_df.dropna(subset=['age_group']),
             x='age_group', y='y_proba', hue='Outcome',
             palette={'No CHD': 'steelblue', 'CHD': 'firebrick'}, ax=ax)
@@ -677,15 +711,59 @@ plt.show()
 
 For older patients, the model separates CHD from non-CHD reasonably well (the distributions don't overlap as much). For younger patients, the predicted probabilities are all bunched near zero — the model thinks *nobody* young is at risk.
 
-**Why this matters:** An AI assistant would report the overall AUC of 0.75, declare the model "moderately good," and move on. It wouldn't check subgroup performance. But in practice, a model that fails for young patients is dangerous — it creates a false sense of security for exactly the people who most need screening.
+**Why this matters:** A naive analysis would report the overall AUC of 0.75, declare the model "moderately good," and move on — without checking subgroup performance. But in practice, a model that fails for young patients is dangerous — it creates a false sense of security for exactly the people who most need screening.
 
 What could we do about it? Options include training separate models for different age groups, adding interaction terms (recall Chapter 5), or collecting more data on young CHD patients. There's no easy fix — but the first step is always checking.
 
-## Same problem, different domain: hospital readmissions
+## Calibration: do predicted probabilities mean what they say?
 
-The Framingham CHD prediction and hospital readmission prediction share the same fundamental challenge: class imbalance. In the CMS hospital readmissions data, about 15-20% of patients are readmitted within 30 days — almost the same positive rate as our CHD data. The same traps apply: accuracy is misleading, the "always predict negative" model looks great on paper, and threshold choice depends on the cost of each type of mistake.
+Logistic regression outputs a probability for each patient. But do those probabilities mean what they claim? If the model says "30% risk" for a group of patients, does roughly 30% of that group actually develop CHD?
 
-The hospital has to decide: **where on the precision-recall curve do we want to operate?** There's no purely statistical answer — it depends on intervention costs, staff availability, and patient outcomes.
+:::{.callout-important}
+## Definition: Calibration
+A model is **well-calibrated** if its predicted probabilities match observed frequencies. Among all observations that received a predicted probability near $p$, the fraction of positive outcomes should be approximately $p$.
+:::
+
+A **calibration plot** checks this visually: bin predictions by predicted probability, compute the observed fraction of positives in each bin, and plot observed vs. predicted. A perfectly calibrated model lies on the diagonal.
+
+:::{.callout-tip}
+## Think About It
+Before you look at the plot — if you sorted patients into ten groups by predicted risk (lowest 10%, next 10%, ..., highest 10%), would you expect the observed CHD rate in each group to match the average predicted risk for that group? Why or why not, given everything you've already seen about this model?
+:::
+
+```{python}
+# Bin test-set predictions into deciles (equal counts per bin) and compare observed vs. predicted
+prob_true, prob_pred = calibration_curve(y_test, y_proba, n_bins=10, strategy='quantile')
+
+fig, ax = plt.subplots(figsize=(7, 6))
+ax.plot(prob_pred, prob_true, 'o-', color='steelblue', markersize=8, label='Logistic regression')
+ax.plot([0, 1], [0, 1], 'r--', linewidth=1, label='Perfect calibration')
+ax.set_xlabel('Mean predicted probability')
+ax.set_ylabel('Observed fraction of CHD cases')
+ax.set_title('Calibration plot — Framingham CHD model (decile bins)')
+ax.legend()
+ax.set_xlim(-0.02, 1.02)
+ax.set_ylim(-0.02, 1.02)
+plt.tight_layout()
+plt.show()
+```
+
+Points near the diagonal mean the model's probabilities are trustworthy at face value. Points above the line mean the model **underestimates** risk; points below, it **overestimates** risk. With decile bins — each containing ~10% of the test set — the plot is dominated by low predicted probabilities, where most patients sit. Across that range, the curve tracks the diagonal reasonably well; the model's "10% risk" label really does correspond to roughly a 10% observed rate.
+
+### Calibration and decisions
+
+Calibration directly affects decision-making. Suppose a doctor uses a 30% predicted-risk threshold to recommend preventive treatment. If the model systematically overestimates risk — predicting 30% when the true rate is 15% — patients receive unnecessary interventions. If it underestimates, patients who need treatment are missed.
+
+Calibration and AUC measure different things. A model can have high AUC yet be poorly calibrated: it ranks patients correctly (high risk above low risk) while getting the absolute risk levels wrong. Whether that gap is a problem depends on how you use the probabilities.
+
+:::{.callout-tip}
+## Think About It
+A model with good AUC but poor calibration ranks observations correctly but gets the absolute probabilities wrong. When is ranking enough? When do you need well-calibrated probabilities?
+:::
+
+## Closing the loop: back to hospital readmissions
+
+We opened with a hospital predicting 30-day readmissions, where 15% of patients are readmitted and "predict no one" scores 85% accuracy. The setup is the same as Framingham. Every tool from this chapter now applies to that problem: the confusion matrix exposes which patients the model misses; precision and recall frame the clinical tradeoff; the ROC curve shows performance across thresholds; the threshold itself is a cost-benefit call about intervention dollars and patient outcomes; subgroup analysis checks whether the model works across demographics; calibration asks whether the model's "25% readmission risk" label really means one in four. **Where on the precision-recall curve should the hospital operate?** There's no purely statistical answer — it depends on intervention costs, staff availability, and patient outcomes. That pattern — statistics narrows the choices, context picks one — is what every classification deployment looks like.
 
 ## Key Takeaways
 
@@ -693,7 +771,7 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 
 - **The loss function determines what the model finds.** Linear regression minimizes squared error. Logistic regression minimizes logistic loss (cross-entropy). The choice of loss function is a modeling decision.
 
-- **Gradient descent** finds the coefficients by iteratively walking downhill on the loss landscape. For logistic regression (convex), it finds THE answer. For neural networks (non-convex), you might get stuck in a local minimum.
+- **Gradient descent** finds the coefficients by iteratively walking downhill on the loss landscape. For logistic regression (convex), it converges to the unique global minimum (assuming the data isn't perfectly separable). For neural networks (non-convex), it can get stuck in a local minimum.
 
 - **Accuracy is misleading** with imbalanced classes. A model that predicts "everyone is fine" gets 85% accuracy but catches zero actual cases.
 
@@ -702,6 +780,8 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 - **Precision vs Recall** captures the fundamental tradeoff: catching more positives (recall) means more false alarms (lower precision). The right balance depends on the cost of each type of mistake — a consequential decision.
 
 - **Always check subgroup performance.** An overall AUC of 0.75 can hide the fact that the model is *useless* for certain patient groups. Models that work "on average" can fail exactly where it matters most.
+
+- **Calibration** asks whether predicted probabilities match observed frequencies. A model can rank well (high AUC) yet miscalibrate — predicting 30% when the true rate is 15%. Calibration is load-bearing whenever the probabilities themselves drive decisions, not just their ordering.
 
 ## Metrics cheat sheet
 
@@ -724,6 +804,7 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 5. Accuracy is misleading with class imbalance — always look at precision, recall, and the confusion matrix.
 6. Threshold choice is a cost-benefit decision, not a statistical one.
 7. Subgroup analysis can reveal dramatic failures hidden by aggregate performance.
+8. Calibration checks whether predicted probabilities match observed frequencies; a calibration plot (observed vs. predicted per bin) should lie on the diagonal.
 
 ### Definitions
 
@@ -740,6 +821,7 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 - **F1 score**: harmonic mean of precision and recall
 - **ROC curve**: True Positive Rate vs. False Positive Rate across all thresholds
 - **AUC**: area under the ROC curve; 1.0 = perfect, 0.5 = random guessing
+- **Calibration**: predicted probabilities match observed frequencies (the calibration plot lies on the diagonal)
 
 ### Computational tools
 
@@ -749,14 +831,12 @@ The hospital has to decide: **where on the precision-recall curve do we want to 
 - `ConfusionMatrixDisplay()` — plot the confusion matrix
 - `roc_curve()`, `auc()` — compute the ROC curve and its area
 - `precision_recall_curve()` — compute the precision-recall curve
-- `classification_report()` — print precision, recall, F1, and accuracy in one call
+- `calibration_curve(y_true, y_prob, n_bins=10, strategy='quantile')` — observed frequency vs. mean predicted probability per bin
 
 ### For the quiz
 
-Be able to (1) interpret logistic regression coefficients as odds ratios, (2) compute precision and recall from a confusion matrix, (3) explain why accuracy is misleading with class imbalance, (4) describe the gradient descent update rule and what convexity guarantees, (5) choose a threshold given the costs of false positives and false negatives.
+Be able to (1) interpret logistic regression coefficients as odds ratios, (2) compute precision and recall from a confusion matrix, (3) explain why accuracy is misleading with class imbalance, (4) describe the gradient descent update rule and what convexity guarantees, (5) choose a threshold given the costs of false positives and false negatives, (6) interpret a calibration plot and explain when ranking is enough vs. when well-calibrated probabilities are needed.
 
 ## Coming up next
 
-Act 3 continues with [Chapter 14](lec14-pca.qmd) on **PCA** — when you have 96 columns, can you summarize them with just 5? PCA finds the best low-dimensional summary of your data, and the linear algebra from earlier in the course tells us exactly what "best" means.
-
-And in **Chapter 17**, we'll see how gradient descent powers **gradient boosting** — an algorithm that builds on today's ideas to produce state-of-the-art predictions.
+Chapter 7 closes Act 1: we now have a toolkit of regression and classification models. [Chapter 8](lec08-sampling.qmd) opens **Act 2** with the **bootstrap** — a surprisingly powerful way to quantify uncertainty in any estimate, including the accuracy, AUC, and odds ratios we just computed. [Chapter 12](lec12-regression-inference.qmd) returns to logistic regression for formal inference on coefficients (confidence intervals and p-values on the odds ratios). In Act 3, [Chapter 13](lec13-trees.qmd) extends classification to decision trees and random forests, and [Chapter 17](lec17-automl-llms.qmd) shows how gradient descent powers **gradient boosting** — today's state-of-the-art tabular predictor, built on this chapter's machinery.

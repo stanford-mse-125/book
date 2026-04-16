@@ -34,7 +34,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Key concepts:**
 - Applied statistics = decisions under uncertainty
 - Three course themes: explore & model, test & decide, complex models
-- Dollar-sign decisions: hospital fines, Airbnb pricing, drug approval, sports betting
+- Consequential decisions: hospital fines, Airbnb pricing, drug approval, sports betting
 - First look at real, messy data — what AI gets right and wrong
 - Missing data as a signal, not just a nuisance ("Too Few to Report")
 
@@ -280,6 +280,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Precision (of those you predicted positive, how many are?) and recall (of actual positives, how many did you catch?)
 - ROC curve and AUC: performance across all thresholds
 - Threshold selection depends on the cost of errors ($$ decision)
+- Calibration: do predicted probabilities match observed frequencies? (calibration plot, diagonal = perfect)
 
 **Key vocabulary:**
 - Logistic regression, sigmoid function
@@ -287,11 +288,13 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Gradient descent, loss landscape, learning rate, convergence
 - Local minimum, global minimum (for non-convex problems)
 - Class imbalance, accuracy trap / accuracy paradox
+- Positive class (coded 1) vs. negative class (coded 0) — terminology from medical testing, not desirability
 - Confusion matrix
 - True positive, false positive, true negative, false negative
 - Precision, recall, F1 score
 - ROC curve, AUC (Area Under Curve)
 - Threshold
+- Calibration, calibration plot
 
 **Key formulas:**
 - Sigmoid: p = 1 / (1 + e^(−z)) where z = β₀ + β₁x₁ + ⋯
@@ -304,10 +307,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 4-5 (regression — OLS has closed form; logistic does not), Lec 6 (train/test, validation — apply to classification)
-- Forward: Lec 12 (inference on logistic coefficients, calibration), Lec 13 (classification trees — trees handle both regression and classification), Lec 17 (gradient boosting uses gradient descent ideas)
+- Forward: Lec 12 (inference on logistic coefficients — z-tests, CIs on odds ratios), Lec 13 (classification trees — trees handle both regression and classification), Lec 17 (gradient boosting uses gradient descent ideas)
 - ORIE 4741: losses.tex — logistic loss section
 
-**Surprise moment:** Overall AUC ~0.73 hides dramatic failures in subgroups — model fails for specific demographics
+**Surprise moment:** Overall AUC ~0.75 hides dramatic failures in subgroups — the under-40 AUC is ~0.36 (below 0.5, worse than random; the tiny positive class makes the estimate noisy, but the direction stands)
 
 ---
 
@@ -536,7 +539,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Prerequisites:** Lec 7 (classification), Lec 8-12 (all inference tools)
 
 **Connections:**
-- Backward: Lec 7 (classification model), Lec 8 (bootstrap), Lec 9 (permutation), Lec 10-11 (hypothesis testing, multiple testing), Lec 12 (regression inference, calibration)
+- Backward: Lec 7 (classification model, calibration), Lec 8 (bootstrap), Lec 9 (permutation), Lec 10-11 (hypothesis testing, multiple testing), Lec 12 (regression inference)
 - Forward: Lec 13 (students can apply these tools to tree-based classifiers)
 
 ---
