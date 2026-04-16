@@ -1436,6 +1436,26 @@ The U-shaped CV curve confirms the bias-variance tradeoff. Too small an $\alpha$
 The U-shaped test error curve predicts that complex models eventually overfit. This is true for individual models — but not always for *averages* of models. If you train many different overfit models and average their predictions, the average inherits the low bias of a complex model while reducing variance, as long as the models' errors are sufficiently uncorrelated. [Chapter 13](lec13-trees.qmd) puts this into practice with **random forests**, which combine many overfit decision trees to achieve low bias *and* low variance — escaping the classical U-curve entirely. The punchline to hold on to: "regularize and cross-validate" is still the right default, but averaging uncorrelated overfit models is the one known way past it.
 :::
 
+## Recommended workflow
+
+Pull the pieces together. Here is the procedure we recommend for choosing a model and reporting its test error, adapted to dataset size.
+
+1. **Set aside a held-out test set at the very start.** 20% is the default. Don't touch it until step 5. If the data are temporal (will be re-run over time), take the *most recent* 20% as the test set, not a random 20% — see [Chapter 16](lec16-backtesting.qmd).
+2. **Choose a candidate model family** (feature set, polynomial degree, lasso vs ridge vs OLS) and a grid of hyperparameters (e.g., $\alpha$ values for lasso).
+3. **Pick the best hyperparameters using cross-validation on the training+validation data** (everything that isn't the test set). 5- or 10-fold CV is the standard choice; use LOO if $n < 200$.
+4. **Refit the best model on all the training+validation data** — this is the model you would actually deploy.
+5. **Score the refit model once on the held-out test set.** That score is your reported test error. Do not touch the test set again — if you re-optimize against it, the reported score is no longer honest.
+6. **Report the test score with uncertainty** — either a bootstrap CI (Chapter 8) or the standard deviation across the CV folds as a minimum.
+
+How this plays out on three datasets of different sizes:
+
+**Case 1: small data (≈150 observations, ≈5 features).** A clinical pilot with 150 patients, a handful of lab markers, and an outcome you want to predict. A fixed 20% test set is only 30 rows — too few for a stable estimate. Use a 20% test set anyway for the final score (you need *something* untouched), but do hyperparameter selection via LOO-CV on the remaining 120 rows. The "best model" to refit and score is whatever LOO preferred. Report the test error alongside its bootstrap CI — with 30 test rows the CI will be wide, and that wide interval is honest information, not a weakness to hide.
+
+**Case 2: medium data (≈1,500 observations, tens of features) — the Airbnb case we've been running.** 60/20/20 train/val/test or a fixed 20% test set with 5-fold CV on the remaining 80%. Either works. The 5-fold route uses training data more efficiently and is what we'd recommend in practice. Report test R² plus the CV-fold standard deviation.
+
+**Case 3: large data (≈100,000+ observations, many features).** With abundant data the split matters less. A single 80/20 split gives a test set of 20,000+ rows — the test estimate is precise without averaging. 5-fold CV on the training 80% still helps for hyperparameter selection; you could also use a single train/validation split since each piece is still large. Report test R² and, if you're reporting inference-level claims, bootstrap the test set to get a CI. With this much data, regularization is less critical (overfitting is harder), so even OLS on a well-engineered feature set is a reasonable baseline.
+
+The through-line across all three cases: **the test set is touched exactly once**, the chosen model is refit on all non-test data before scoring, and the reported error carries uncertainty. The procedure changes in its details (LOO vs 5-fold, test size choice) but not in its shape.
 
 ## What we still can't answer
 
