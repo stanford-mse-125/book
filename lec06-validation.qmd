@@ -1110,6 +1110,8 @@ The gray contours show the unconstrained OLS squared-error loss, centered on $\h
 
 ### Standardize before regularizing
 
+> **Why this section is here.** The stem plots and coefficient path later in this section all assume the features have been standardized first. This subsection explains why that preprocessing step matters and what goes wrong if you skip it; if you've already used regularized regression in practice, feel free to skim.
+
 The penalty $\alpha \sum |\beta_j|$ treats every coefficient on the same scale. But the *coefficients* depend on the feature's units. A numeric feature with a small range — bedrooms, whose standard deviation is about 0.7 — needs a *large* coefficient to move $\hat{y}$ by the same amount as a feature with a large range, like the listing's number of reviews (standard deviation ~35). Fitting OLS on the unregularized problem, the bedrooms coefficient lands near \$30 per bedroom and the reviews coefficient near a few cents per review. The L1 penalty $\alpha |\beta_j|$ treats those two numbers the same — so a coefficient of 30 on bedrooms takes a big penalty hit, while the coefficient of 0.03 on reviews is essentially free. The penalty falls disproportionately on the small-range feature, punishing it for its *units* rather than for being less useful. Put differently: OLS is scale-invariant (if you rescale a feature, the coefficient rescales to compensate and predictions are unchanged), but ridge and lasso are *not* — rescaling changes what the penalty "sees." Standardization restores the symmetry.
 
 **Standardization** rescales each feature to have mean zero and standard deviation one:
