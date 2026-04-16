@@ -495,6 +495,21 @@ Two sources of prediction error:
 - **Variance** is the error from over-complicating. The model is so flexible that it's too sensitive to the particular training data it happened to see. High variance corresponds to **overfitting** — the model learns noise as if it were signal.
 :::
 
+### The data-generating model
+
+Before we can measure bias and variance, we have to say what we think the world looks like. Throughout this chapter we assume each observation is generated as
+
+$$y = f(x) + \varepsilon, \qquad \varepsilon \sim \mathcal{N}(0, \sigma^2)$$
+
+where $f(x)$ is the true relationship between features and outcome — the **signal** — and $\varepsilon$ is mean-zero Gaussian **noise** independent across observations. The noise is what keeps even a perfect model from ever scoring zero error: $\sigma^2$ is the **irreducible noise floor**.
+
+We never see $f$ directly. A model fit to a training set $\mathcal{D}$ produces a prediction function $\hat{f}_{\mathcal{D}}(x)$ — its best guess at $f(x)$. Bias will measure how far the *average* of $\hat{f}_{\mathcal{D}}(x)$ (across random $\mathcal{D}$) falls from $f(x)$; variance will measure how much individual fits scatter around that average. Both are expectations *over the random draw of the training set*, which means they're properties you can only measure when you can generate many fresh datasets from a known $f$ — i.e., on simulated data. On a real dataset you have one draw from $\mathcal{D}$ and one fit $\hat{f}_{\mathcal{D}}$; you cannot read bias or variance off it.
+
+:::{.callout-warning}
+## You can only measure bias and variance on simulated data
+On a real dataset you have one training set, one fit, and no access to $f$. There is no way to ask "what is the average prediction at $x$ across training sets?" or "how much does $\hat f(x)$ vary?" — both questions need access to the data-generating process. The decomposition is a *conceptual* tool on real data (it explains *why* test error is U-shaped) and a *measurable* tool only on synthetic data where we chose $f$ and $\sigma$ ourselves. Every real-data diagnostic in this chapter — train-test gaps, CV curves — reads the *symptoms* of high bias or high variance, not the quantities themselves.
+:::
+
 | | Too few features | Just right | Too many features |
 |---|---|---|---|
 | **Bias** | High (underfitting) | Low | Low |
@@ -591,9 +606,7 @@ The synthetic experiment shows bias as a systematic miss when the model class ca
 
 ### The decomposition
 
-Now that we have seen the pattern, we can name it. Let $f(x)$ denote the true relationship between features and outcome — the signal without noise. We never observe $f$ directly; we only see noisy outcomes $y = f(x) + \varepsilon$ where $\varepsilon$ has mean zero and variance $\sigma^2$. A model fit to a random training set $\mathcal{D}$ produces a prediction function $\hat{f}_{\mathcal{D}}(x)$ — its best guess at $f(x)$.
-
-Think of the synthetic experiment above: each of the 200 runs drew a new $\mathcal{D}$, fit a model, and produced one $\hat{f}_{\mathcal{D}}$. At a fixed test point $x$, the 200 predictions have an average and a spread. Bias measures how far that *average* is from the truth; variance measures how much individual predictions scatter around the average. The expectation is taken over the random draw of the training set $\mathcal{D}$ — for a linear model, this is the cloud of blue lines in the left panel; for the degree-4 polynomial, the cloud of orange curves in the right.
+Now we can write the decomposition formally. Recall $y = f(x) + \varepsilon$ from the data-generating model above, and let $\hat{f}_{\mathcal{D}}(x)$ be the model fit to training set $\mathcal{D}$. Each of the 200 runs in the synthetic experiment above drew a new $\mathcal{D}$, fit a model, and produced one $\hat{f}_{\mathcal{D}}$. At a fixed test point $x$, the 200 predictions have an average and a spread — and those are exactly the cloud of blue lines in the left panel and the cloud of orange curves in the right.
 
 $$\text{Bias}(x) = \mathbb{E}_{\mathcal{D}}[\hat{f}_{\mathcal{D}}(x)] - f(x)$$
 $$\text{Variance}(x) = \mathbb{E}_{\mathcal{D}}\bigl[(\hat{f}_{\mathcal{D}}(x) - \mathbb{E}_{\mathcal{D}}[\hat{f}_{\mathcal{D}}(x)])^2\bigr]$$
