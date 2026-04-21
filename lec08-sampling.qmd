@@ -261,6 +261,59 @@ The **percentile method** builds a CI from the middle 95% of bootstrap values �
 *Note:* the intuition and the formal definition are not the same statement. The estimand is a fixed number; the *interval* is what varies from study to study. So we cannot say "the estimand has a 95% chance of being in [45, 60]" — that would require treating the estimand as random, which it isn't. We can say "if we repeated the study, 95% of the intervals we'd build would contain the estimand."
 :::
 
+:::{.callout-note collapse="true"}
+## Going deeper: does the bootstrap really cover 95%?
+
+The formal statement promises that, across many hypothetical repeats of the study, 95% of the intervals we'd build should contain the true estimand. Let's verify by simulation.
+
+We set up a synthetic population with a known mean, run many "trials," bootstrap a 95% CI from each, and count how many intervals cover the truth.
+
+```{python}
+rng_cov = np.random.default_rng(0)
+
+mu_pop = 50.0                # the known "truth"
+sigma_pop = 150.0            # population SD (roughly CD4-change scale)
+n_trials = 1000              # number of simulated trials
+n_per_trial = 100            # sample size in each trial
+B_demo = 1000                # bootstrap replications per trial
+
+covered = 0
+intervals = []
+for _ in range(n_trials):
+    sample = rng_cov.normal(mu_pop, sigma_pop, size=n_per_trial)
+    boot_means = np.array([
+        rng_cov.choice(sample, size=n_per_trial, replace=True).mean()
+        for _ in range(B_demo)
+    ])
+    lo, hi = np.percentile(boot_means, [2.5, 97.5])
+    intervals.append((lo, hi))
+    if lo <= mu_pop <= hi:
+        covered += 1
+
+print(f"{covered} of {n_trials} intervals covered μ = {mu_pop} — "
+      f"simulated coverage = {covered / n_trials:.1%}")
+```
+
+The simulated coverage should land near the advertised 95%, with small Monte Carlo noise. A visualization of the first 100 intervals, color-coded by whether they caught the truth:
+
+```{python}
+fig, ax = plt.subplots(figsize=(7, 8))
+for i, (lo, hi) in enumerate(intervals[:100]):
+    hit = lo <= mu_pop <= hi
+    ax.plot([lo, hi], [i, i], color='steelblue' if hit else 'crimson', lw=2)
+ax.axvline(mu_pop, color='black', lw=1.5, ls='--',
+           label=f'true mean μ = {mu_pop}')
+ax.set_xlabel('95% CI bounds')
+ax.set_ylabel('trial index')
+ax.set_title('100 simulated trials — blue CIs cover μ, red miss')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+The misses are the point of "95%" rather than "100%." The procedure is *calibrated* to catch the truth 95 times out of 100 in the long run, not every single time. If the simulated coverage came out to, say, 0.82 or 1.00, that would indicate the procedure was miscalibrated — which is exactly the diagnostic that statisticians run on any new CI method before recommending it.
+:::
+
 :::{.callout-warning}
 ## What a confidence interval does (and doesn't) cover
 
@@ -340,9 +393,9 @@ The Central Limit Theorem (CLT) says: **if you average many independent things, 
 
 More precisely: if $X_1, X_2, \ldots, X_n$ are **iid** (independent and identically distributed) with finite mean $\mu$ and finite variance $\sigma^2$, then for large $n$,
 
-$$\bar{X}_n \approx \text{Normal}\!\left(\mu,\; \frac{\sigma}{\sqrt{n}}\right),$$
+$$\bar{X}_n \;\sim\; \text{Normal}\!\left(\mu,\; \frac{\sigma}{\sqrt{n}}\right) \quad \text{(approximately, for large $n$)},$$
 
-where Normal$(\mu, \sigma/\sqrt{n})$ denotes the normal distribution with mean $\mu$ and standard deviation $\sigma/\sqrt{n}$.
+where Normal$(\mu, \sigma/\sqrt{n})$ denotes the normal distribution with mean $\mu$ and standard deviation $\sigma/\sqrt{n}$. The `$\sim$` here reads *distributed as* — the standard textbook symbol for "has this distribution"; the parenthetical reminds us the match is asymptotic, not exact.
 
 :::{.callout-note}
 ## Notation check
@@ -615,7 +668,7 @@ At $m = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clear
 - **Bootstrap** — resample the observed data with replacement to approximate the sampling distribution.
 - **Sampling distribution** — the distribution of values a statistic would take if we could repeat the study many times with a fresh sample each time. The bootstrap *approximates* it by resampling the observed data.
 - **Confidence interval** — an interval built by a procedure with the property that, across many repetitions of the study, about 95% of intervals contain the estimand. The **percentile method** takes the 2.5th and 97.5th percentiles of the bootstrap distribution.
-- **Central Limit Theorem (CLT)** — for large $n$ and iid observations, $\bar{X}_n \approx \text{Normal}(\mu,\; \sigma/\sqrt{n})$.
+- **Central Limit Theorem (CLT)** — for large $n$ and iid observations, $\bar{X}_n \sim \text{Normal}(\mu,\; \sigma/\sqrt{n})$ (approximately, for large $n$).
 - **Standard error (SE)** — the standard deviation of a statistic's sampling distribution; for the mean, $\text{SE} = \sigma/\sqrt{n}$.
 - **Normal approximation** — using $\hat{\theta} \pm 1.96 \cdot \text{SE}$ instead of bootstrapping; relies on the CLT.
 - **iid** (independent and identically distributed) — each observation drawn from the same distribution, independently of the others.
