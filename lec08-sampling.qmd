@@ -585,9 +585,10 @@ At $m = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clear
 
 ### Key definitions
 
-- **Estimand** — the quantity you want to know (e.g., the true treatment effect).
+- **Estimand** — the quantity you want to know (e.g., a difference of population means).
 - **Estimator** — the procedure used to approximate the estimand (e.g., difference in sample means).
 - **Estimate** — the specific number produced from one sample (e.g., ~50 CD4 cells).
+- **Population mean** — the average of a quantity across every member of the population; fixed but unknown. Chapter 8 estimates population means (and differences of population means) from samples.
 - **Bootstrap** — resample the observed data with replacement to approximate the sampling distribution.
 - **Sampling distribution** — the distribution of values a statistic would take if we could repeat the study many times with a fresh sample each time. The bootstrap *approximates* it by resampling the observed data.
 - **Confidence interval** — an interval built by a procedure with the property that, across many repetitions of the study, about 95% of intervals contain the estimand. The **percentile method** takes the 2.5th and 97.5th percentiles of the bootstrap distribution.
