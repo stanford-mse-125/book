@@ -127,41 +127,7 @@ We already have three vocabulary terms in play — the 50-cell **estimate** we r
 
 The key insight: **the estimate changes every time you draw a new sample, but the estimand stays fixed.**
 
-For ACTG 175, the story is clean: 2,139 patients are a sample from the millions of HIV-positive adults who might take these drugs, so the population mean genuinely exists. The bootstrap will simulate what would happen if we could re-run the trial with different patients. Polling works the same way — 1,000 voters sampled from millions.
-
-Not every dataset fits this picture so neatly. If you have every hospital in the country, or a full year of Airbnb listings, what does the "population" even mean? And when a pandemic or a policy change shifts the whole system at once, resampling cannot see it coming. The collapsible box below pulls on those threads; the rest of the chapter treats the population as fixed so we can focus on the procedure.
-
-:::{.callout-note collapse="true"}
-## Going deeper: when does the "population" exist?
-
-*Fixed relative to what?* The claim that a population parameter exists, and that our sample is one of many possible draws from it, deserves scrutiny.
-
-**Case 1: Your data really is a sample.** ACTG 175 fits this case — HIV-positive adults number in the millions, and the trial is a literal subset of a larger population. Polling works the same way: 1,000 voters are a sample of millions. The bootstrap simulates what would happen if we re-ran the study with different patients or different respondents.
-
-**Case 2: You have all the data, but the process is noisy.** The CMS hospital readmissions dataset contains *every* hospital in the country — no larger population of hospitals to sample from. Uncertainty still makes sense to ask about, since different patients could have shown up at each hospital. If Stanford Hospital's **Excess Readmission Ratio** (ERR) is 1.05, that number reflects the particular mix of patients admitted during the measurement window; a different year, with different patients, might yield 0.98 or 1.12. The "population" is not a set of hospitals — it is the set of possible patient streams a hospital could receive. The bootstrap resamples patients within each hospital to capture this idiosyncratic variation.
-
-**Case 3: The whole world shifts.** Hospital readmission rates changed dramatically during COVID-19 — not from different patients showing up, but from a pandemic altering the entire healthcare system at once. A similar problem affects election polling: in 2016, polls captured sampling variability well, but missed a late systematic shift that moved *all* respondents in the same direction. Resampling rows of a poll cannot simulate the Comey letter arriving — the event affected every voter, not a random subset.
-
-The distinction determines what the bootstrap can and cannot tell you:
-
-- **Idiosyncratic variation** is unit-level randomness: which patients happened to arrive, which voters happened to be sampled. Resampling captures this.
-- **Systematic variation** is a shift that affects all units at once: a pandemic, a policy change, a recession. Resampling *cannot* capture this — every bootstrap resample is built from the same pool of observations, all of which experienced the same conditions.
-
-A 95% bootstrap confidence interval says: "if we repeated this study under the same conditions, 95% of intervals would contain the true parameter." It does *not* say: "if conditions change, the pattern will still hold." Confidence intervals quantify **sampling uncertainty**, not **stability of the world**. Before trusting a CI for a decision, ask: is the uncertainty that matters for my decision the kind the bootstrap captures? Or is it the kind where the whole system might shift?
-
-This question will return in [Chapter 16](lec16-backtesting.qmd) (backtesting), where models that looked excellent in historical data failed when conditions changed; and in [Chapters 18–19](lec18-causal-inference-1.qmd) (causal inference), where the estimand is a counterfactual quantity — not "what is the population mean?" but "what *would have happened* if the treatment had been different?"
-
-So why use the bootstrap at all? Decisions still have to be made. A hospital administrator facing an ERR of 1.05 cannot wait for philosophical certainty — the CMS penalty is real and the budget is due. Acting *as if* the population parameter exists, while being explicit about what your confidence interval does and does not cover, is often the best available strategy. The model is a useful fiction: wrong in its ontology, but disciplined in its accounting of one important source of uncertainty. A good analyst names the sources of uncertainty the model *doesn't* cover, so the decision-maker can weigh them.
-
-**Discussion exercise.** For each dataset, answer three questions: (1) What is the "population"? (2) Is the data a sample, or the whole thing? (3) If you bootstrapped a confidence interval and used it to make a decision, what kind of uncertainty would it miss?
-
-1. ACTG 175 clinical trial (2,139 HIV-positive adults, treatment effect on CD4 count)
-2. CMS hospital readmissions (every US hospital, excess readmission ratio)
-3. NYC Airbnb listings (every listing in March 2018, predicting price)
-4. A poll of 1,000 likely voters (who will win the election?)
-
-Some of these have clean answers. Others don't. Wrestling with that ambiguity is part of the art of applied statistics.
-:::
+For ACTG 175, the story is clean: the 2,139 patients are a sample from the millions of HIV-positive adults who might take these drugs, so the two population means genuinely exist. The bootstrap will simulate what would happen if we could re-run the trial with different patients. Polling works the same way — 1,000 voters sampled from millions.
 
 The distribution that all those hypothetical sub-trials trace out has a name:
 
