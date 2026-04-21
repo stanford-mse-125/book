@@ -66,14 +66,13 @@ print(f"\nObserved difference of means:   {observed_diff:.1f} CD4 cells")
 The treatment group improved more, on average. Let's visualize the full distributions to see how much overlap there is.
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharex=True, sharey=True)
+fig, axes = plt.subplots(2, 1, figsize=(7, 7), sharex=True, sharey=True)
 
 axes[0].hist(control['cd4_change'], bins=40, color='steelblue', alpha=0.7, edgecolor='white')
 axes[0].axvline(0, color='black', lw=1, ls=':', alpha=0.6)
 axes[0].axvline(control['cd4_change'].mean(), color='red', lw=2, ls='--',
                 label=f"Mean = {control['cd4_change'].mean():.1f}")
 axes[0].set_title('Control (ZDV mono)')
-axes[0].set_xlabel('CD4 Change at 20 Weeks')
 axes[0].set_ylabel('Count')
 axes[0].legend()
 
@@ -83,6 +82,7 @@ axes[1].axvline(treatment['cd4_change'].mean(), color='red', lw=2, ls='--',
                 label=f"Mean = {treatment['cd4_change'].mean():.1f}")
 axes[1].set_title('Treatment (combination arms)')
 axes[1].set_xlabel('CD4 Change at 20 Weeks')
+axes[1].set_ylabel('Count')
 axes[1].legend()
 
 plt.suptitle('CD4 Change Distributions by Treatment Group', fontsize=14)
