@@ -521,7 +521,7 @@ For a difference of two independent means (and independence is what a randomized
 
 $$\text{SE} = \sqrt{\frac{s_T^2}{n_T} + \frac{s_C^2}{n_C}},$$
 
-where $s_T, s_C$ are the sample standard deviations and $n_T, n_C$ the sample sizes. Notice the plug-in step: the CLT's formula uses the *population* standard deviation $\sigma$, which we never know in practice, so we substitute the sample standard deviation $s$. By the law of large numbers, $s \to \sigma$ as $n$ grows, so for large $n$ the plug-in error vanishes. Let's compare the two approaches side by side.
+where $s_T, s_C$ are the sample standard deviations and $n_T, n_C$ the sample sizes — the same plug-in we saw for the single-mean SE above, now applied separately to each group. Let's compare the two approaches side by side.
 
 ```{python}
 # ddof=1 tells numpy to divide by (n-1), the standard sample-variance convention
