@@ -21,9 +21,9 @@ DATA_DIR = 'data'
 np.random.seed(42)
 ```
 
-We estimated the treatment effect as about 50 CD4 cells. How precise is that? We'll resample to find out — and discover that the answer looks surprisingly normal.
+In 1991, AIDS was the leading cause of death for Americans aged 25–44. Zidovudine (AZT), the first HIV drug, extended lives but often stopped working as the virus evolved resistance. The NIH's AIDS Clinical Trials Group launched **ACTG 175** to settle an urgent question: does combination therapy — two HIV drugs at once — work better than AZT alone? Between 1991 and 1995, the trial enrolled 2,139 adults with HIV and tracked the change in **CD4 cell count** (a measure of immune-system health) at 20 weeks. CD4 cells are the white blood cells HIV destroys, so a rising count means the immune system is recovering. The result would determine the standard of care for millions of patients worldwide (Hammer et al., *NEJM* 1996).
 
-Act 2 opens with a new question: **can we trust the numbers our models produce?** A model says the treatment effect is about 50 CD4 cells, or that an extra bedroom adds \$85 to rent. How much would those numbers change with different data?
+Any particular group of 2,139 patients is one random draw from a larger population: some would have improved on any drug, others would have worsened for unrelated reasons. Given such variation, how do we know whether a measured advantage for combination therapy reflects the drugs, or could have arisen from the particular mix of patients who enrolled? Act 2 of this book tackles that question — for this trial and for every model that follows: **can we trust the numbers our data produce?** The tools are the **bootstrap** and the **normal approximation**; together they turn a single sample into a statement about uncertainty.
 
 :::{.callout-note}
 ## Bradley Efron's radical idea
@@ -33,22 +33,31 @@ For most of the 20th century, quantifying uncertainty required mathematical deri
 
 ## Estimand, estimator, estimate
 
-Let's ground this in a real dataset. AIDS Clinical Trials Group Study 175 (ACTG 175) enrolled 2,139 HIV-positive adults between 1991--1995 (Hammer et al., *NEJM* 1996). The trial compared HIV treatments; the key outcome is the change in CD4 cell count (a measure of immune function) at 20 weeks.
+Before writing code, let's name what we want to measure. The medical question is whether combination therapy improves CD4 counts more than AZT alone. Both sides of the question refer to **population means**: the average CD4 change we would see if every eligible patient took combination therapy, and the average we would see if every eligible patient took AZT alone. Each is a fixed but unknown number; the chapter's job is to estimate them from the sample we have.
+
+:::{.callout-important}
+## Definition: Population mean
+
+A **population mean** is the average of some quantity across every member of the population — here, the average CD4 change among all HIV-positive adults eligible for the trial, under a given treatment assignment. ACTG 175 gives us two population means to estimate: the mean CD4 change under combination therapy and the mean CD4 change under AZT alone. Each is a fixed but unknown number.
+
+The **difference** of the two population means is a derived quantity we'll often care about. Because ACTG 175 randomly assigned patients, this difference equals the drug's **causal effect** on CD4 change; [Chapter 18](lec18-causal-inference-1.qmd) returns to the causal interpretation. Here we treat the difference purely as a statistical quantity — a linear combination of two population means — and estimate it from the data.
+:::
+
+Let's load the trial data and compute the difference of sample means. We write $n_T$ for the treatment-group size and $n_C$ for the control-group size — the only "$n$'s" we care about in the clinical-trial analysis.
 
 ```{python}
 df = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
-
-# Compute CD4 change at 20 weeks
 df['cd4_change'] = df['cd420'] - df['cd40']
 
 # Two groups: ZDV monotherapy (control) vs combination therapy
 control = df[df['treat'] == 0]
 treatment = df[df['treat'] == 1]
 
-print(f"Control group (ZDV mono):     {len(control)} patients")
-print(f"Treatment group (combination): {len(treatment)} patients")
-print(f"\nMean CD4 change — control:   {control['cd4_change'].mean():.1f}")
-print(f"Mean CD4 change — treatment: {treatment['cd4_change'].mean():.1f}")
+n_T, n_C = len(treatment), len(control)
+print(f"Treatment group (combination): n_T = {n_T} patients")
+print(f"Control group   (ZDV mono):    n_C = {n_C} patients")
+print(f"\nMean CD4 change — treatment: {treatment['cd4_change'].mean():.1f}")
+print(f"Mean CD4 change — control:   {control['cd4_change'].mean():.1f}")
 
 observed_effect = treatment['cd4_change'].mean() - control['cd4_change'].mean()
 print(f"\nObserved treatment effect:   {observed_effect:.1f} CD4 cells")
@@ -83,12 +92,35 @@ plt.show()
 
 The treatment group improved by about 50 more CD4 cells. But look at the spread — there's enormous patient-to-patient variation. If we enrolled a *different* set of patients, would we still see a ~50-cell advantage?
 
-That question motivates three vocabulary terms that we'll use throughout Act 2:
+To get a feel for how much a new set of patients might matter, imagine the trial had only been able to enroll 50 people in the treatment arm instead of $n_T = 1607$. Different random draws of 50 from the patients we do have would give different sample means. Let's simulate three such hypothetical sub-trials.
+
+```{python}
+# .dropna() is a safety net — in this dataset, cd4_change has no missing values, so no rows are dropped.
+treatment_cd4 = treatment['cd4_change'].dropna().values
+
+# Three hypothetical sub-trials of 50 patients each, drawn from the treatment group
+print("Three hypothetical sub-trials of 50 patients each:\n")
+for i in range(3):
+    sample = np.random.choice(treatment_cd4, size=50, replace=False)
+    print(f"  Sub-trial {i+1}: mean CD4 change = {sample.mean():.1f}")
+
+print(f"\n  Full treatment group mean:    {treatment_cd4.mean():.1f}")
+```
+
+Three different samples, three different estimates. Sample-to-sample variation is a fundamental feature of statistical estimation.
+
+:::{.callout-tip}
+## Think about it
+
+The three sub-trials above all drew 50 patients each. If we instead drew sub-trials of 500 patients (ten times larger), would you expect the three estimates to vary more, less, or about the same? Why? (You'll see the answer quantified once we meet the CLT.)
+:::
+
+We already have three vocabulary terms in play — the 50-cell **estimate** we reported earlier, the averaging **procedure** that produced it, and the true treatment effect we're *trying* to approximate. Let's name them.
 
 :::{.callout-important}
 ## Definition: Estimand, estimator, estimate
 
-- **Estimand:** the quantity you want to know — here, the difference in mean CD4 change if we could test *everyone* who might take these drugs. We treat it as a fixed (but unknown) number; whether this is literally true depends on the dataset (more on this below).
+- **Estimand:** the quantity you want to know — here, the population treatment effect defined above. We treat it as a fixed (but unknown) number; whether this is literally true depends on the dataset (more on this below).
 - **Estimator:** the procedure we use to approximate the estimand — here, "compute the difference in sample means."
 - **Estimate:** the specific number our estimator produces from this particular dataset — about 50 CD4 cells.
 :::
@@ -128,24 +160,20 @@ So why use the bootstrap at all? Decisions still have to be made. A hospital adm
 3. NYC Airbnb listings (every listing in March 2018, predicting price)
 4. A poll of 1,000 likely voters (who will win the election?)
 
-Some of these have clean answers. Others don't — and the discomfort you feel is the point.
+Some of these have clean answers. Others don't. Wrestling with that ambiguity is part of the art of applied statistics.
 :::
 
-We extract the treatment group's CD4 changes as a NumPy array, dropping any missing values with `.dropna()`. (Always check how many rows you lose: `treatment['cd4_change'].isna().sum()` would tell you.)
+The distribution that all those hypothetical sub-trials trace out has a name:
 
-```{python}
-treatment_cd4 = treatment['cd4_change'].dropna().values
+:::{.callout-important}
+## Definition: Sampling distribution
 
-# Take 3 random samples of 50 from the treatment group
-print("Three random samples of 50 patients from the treatment group:\n")
-for i in range(3):
-    sample = np.random.choice(treatment_cd4, size=50, replace=False)
-    print(f"  Sample {i+1}: mean CD4 change = {sample.mean():.1f}")
+The **sampling distribution** of a statistic is the distribution of values the statistic would take if we could repeat the study many times, each time with a fresh sample from the population. The three sub-trials above are a tiny glimpse of it — three draws from the sampling distribution of the treatment-group mean at sample size 50.
 
-print(f"\n  Full treatment group mean:    {treatment_cd4.mean():.1f}")
-```
+We rarely see the sampling distribution directly: we have one sample, not many. The rest of this chapter is about two ways to approximate it — by resampling (**the bootstrap**) and by formula (**the normal approximation**).
+:::
 
-Three different samples, three different estimates. Sample-to-sample variation is a fundamental feature of statistical estimation, not a bug. The question that motivates the rest of this lecture: **how much do these estimates vary, and what can we say about that variation?**
+The question that motivates the rest of the chapter: **how much do these estimates vary, and what can we say about that variation?**
 
 ## The bootstrap idea
 
@@ -157,17 +185,27 @@ We can't rerun the clinical trial. We have one dataset. But here's a clever tric
 The **bootstrap** resamples the observed data **with replacement** to approximate the sampling distribution of a statistic. Our sample is the best picture we have of the population, so we treat the sample *as if* it were the population, and draw new "samples" from it — with replacement, meaning the same observation can appear more than once in a resample.
 :::
 
-Let's take one bootstrap resample of the treatment group and compare it to the original.
+Expanded as a **reusable recipe**, the procedure is:
+
+1. Treat the observed sample as if it were the population.
+2. Draw a resample of the same size as the original, with replacement.
+3. Compute the statistic of interest (mean, difference of means, median, regression slope, anything) on the resample.
+4. Repeat steps 2–3 $B$ times (typically $B = 10{,}000$).
+5. Summarize the distribution of those $B$ values — its standard deviation estimates the standard error, and its 2.5th and 97.5th percentiles give a 95% confidence interval.
+
+We'll walk through steps 1–5 for the ACTG treatment effect in a moment. The same recipe applies to any statistic you care about — regression coefficients ([Chapter 12](lec12-regression-inference.qmd)), classification AUCs, and beyond.
+
+Let's take one bootstrap resample of the treatment group and compare it to the original. Each resample draws the same number of observations as the original dataset ($n_T$ for the treatment group, $n_C$ for the control).
 
 ```{python}
 # One bootstrap resample: same size as original, drawn with replacement
-resample = np.random.choice(treatment_cd4, size=len(treatment_cd4), replace=True)
+resample = np.random.choice(treatment_cd4, size=n_T, replace=True)
 
-print(f"Original treatment group: {len(treatment_cd4)} patients, mean = {treatment_cd4.mean():.1f}")
+print(f"Original treatment group: {n_T} patients, mean = {treatment_cd4.mean():.1f}")
 print(f"Bootstrap resample:       {len(resample)} patients, mean = {resample.mean():.1f}")
 ```
 
-The resample has the same size as the original, but different composition. Let's make "with replacement" concrete with a small example:
+The resample has the same size as the original, but different composition. Let's make "with replacement" concrete with a small example, sampling five times from the numbers 10, 20, 30, 40, 50:
 
 ```{python}
 # Small example to illustrate "with replacement"
@@ -185,16 +223,16 @@ Now let's do a few resamples and see how the treatment group mean varies:
 ```{python}
 print("Five bootstrap resamples of the treatment group:\n")
 for i in range(5):
-    resample = np.random.choice(treatment_cd4, size=len(treatment_cd4), replace=True)
+    resample = np.random.choice(treatment_cd4, size=n_T, replace=True)
     print(f"  Resample {i+1}: mean = {resample.mean():.1f}")
 print(f"\n  Original mean:       {treatment_cd4.mean():.1f}")
 ```
 
-Each resample gives a slightly different mean. The bootstrap idea is to do this *thousands* of times to map out the full distribution of plausible values.
+Each resample gives a slightly different mean. The bootstrap idea is to do this *thousands* of times to map out the full distribution of plausible values. We'll call the number of bootstrap replications $B$ — a separate knob from the dataset size $n$.
 
 ## Bootstrap the treatment effect
 
-Now let's bootstrap the quantity we actually care about: the treatment effect (difference in means between treatment and control groups). We resample *each group independently*, then compute the difference.
+Now let's bootstrap the quantity we actually care about: the treatment effect (difference in means between the two groups). We resample *each group independently*, then compute the difference.
 
 ```{python}
 control_cd4 = control['cd4_change'].dropna().values
@@ -205,8 +243,7 @@ def bootstrap_effect(treatment_data, control_data):
     c_resample = np.random.choice(control_data, size=len(control_data), replace=True)
     return t_resample.mean() - c_resample.mean()
 
-# 10,000 bootstrap replications
-B = 10_000
+B = 10_000   # number of bootstrap replications
 boot_effects = np.array([bootstrap_effect(treatment_cd4, control_cd4) for _ in range(B)])
 
 print(f"Bootstrap mean of treatment effect:      {boot_effects.mean():.1f}")
@@ -215,15 +252,11 @@ print(f"Bootstrap SD of treatment effect (≈ SE): {boot_effects.std():.1f}")
 
 The `[bootstrap_effect(...) for _ in range(B)]` construction is a **list comprehension** — Python shorthand for a loop that collects results into a list. The `_` is the convention for a loop variable we don't need, and `10_000` is Python syntax for the integer $10{,}000$. The expression calls `bootstrap_effect` exactly $B$ times and stacks the results into an array.
 
-Why $B = 10{,}000$? Large enough that the CI endpoints are stable to about a tenth of a CD4 cell across reruns; small enough to run in a few seconds. A different seed would shift the endpoints by a cell or two — that's **Monte Carlo error**, separate from the sampling uncertainty we're trying to estimate.
+Why $B = 10{,}000$? Large enough that the CI endpoints are stable to about a tenth of a CD4 cell across reruns; small enough to run in a few seconds. A different seed would shift the endpoints by a cell or two — that's **Monte Carlo error**, separate from the sampling uncertainty we're trying to estimate. Note that $B$ (how many resamples we take) is a completely separate quantity from $n_T, n_C$ (how big each resample is): we'd get the same kind of answer from a larger trial with a smaller $B$, or a smaller trial with a larger $B$, but the two quantities do different things.
 
-The SD of the bootstrap distribution is our estimate of the standard error of the treatment-effect estimator — that's the whole point of resampling.
+The SD of the bootstrap distribution is our estimate of the standard error of the treatment-effect estimator — that's the whole point of resampling. It approximates the spread of the **sampling distribution** of the estimator (Definition above).
 
-:::{.callout-important}
-## Definition: Sampling distribution
-
-The **sampling distribution** of a statistic is the distribution of values the statistic would take if we could repeat the study many times, each time with a fresh sample from the population. We usually cannot observe it directly — we only have one sample. The bootstrap *approximates* the sampling distribution by resampling from the observed data.
-:::
+Preview: at the end of the chapter we'll see that a closed-form formula could have given the same standard error without any resampling. So why bother with the bootstrap? Because the formula works *only* for means of not-too-skewed data. The moment we ask about the median, the 95th percentile, or a mean when $n$ is small and tails are heavy, no formula exists — only the bootstrap does. The ACTG analysis is the easy warm-up; the harder cases come later.
 
 We summarize the bootstrap distribution with a **confidence interval**.
 
@@ -242,7 +275,7 @@ The **percentile method** builds a CI from the middle 95% of bootstrap values �
 :::{.callout-tip}
 ## Think about it
 
-Before running the next cell: given the bootstrap mean ≈ 50 and bootstrap SD ≈ 14, do you expect the 95% CI to include zero? What would it mean for the drug if the CI *did* include zero?
+Before running the next cell: given the bootstrap mean ≈ 50 and bootstrap SD ≈ 5.5, do you expect the 95% CI to include zero? What would it mean for the drug if the CI *did* include zero?
 :::
 
 ```{python}
@@ -308,28 +341,42 @@ The normal curve fits almost perfectly. **The close fit isn't a coincidence.** A
 
 ## The CLT explains why
 
-The Central Limit Theorem (CLT) says: **if you average many independent things, the result is approximately normal — for large enough $n$.**
+The Central Limit Theorem (CLT) says: **if you average many independent things, the result is approximately normal — for large enough sample size.**
 
-More precisely: if $X_1, X_2, \ldots, X_n$ are **iid** (independent and identically distributed) with mean $\mu$ and standard deviation $\sigma$, then for large $n$,
+More precisely: if $X_1, X_2, \ldots, X_n$ are **iid** (independent and identically distributed) with finite mean $\mu$ and finite variance $\sigma^2$, then for large $n$,
 
 $$\bar{X}_n \approx \text{Normal}\!\left(\mu,\; \frac{\sigma}{\sqrt{n}}\right),$$
 
-where Normal$(\mu, \sigma/\sqrt{n})$ denotes the normal distribution with mean $\mu$ and standard deviation $\sigma/\sqrt{n}$. You saw iid random variables throughout MS&E 120 — every time you assumed observations were drawn independently from the same distribution. In ACTG 175, independence is reasonable — patients are different people whose outcomes don't influence each other; identical distribution is the assumption of randomization, which ensures each treatment-group patient is drawn from the same distribution of treatment responses.
+where Normal$(\mu, \sigma/\sqrt{n})$ denotes the normal distribution with mean $\mu$ and standard deviation $\sigma/\sqrt{n}$.
+
+:::{.callout-note}
+## Notation check
+
+We use $\text{Normal}(\mu, \sigma)$ with the second slot a *standard deviation*, matching scipy's `norm` and many intro texts. Some references (Wasserman, Casella & Berger) write $\text{Normal}(\mu, \sigma^2)$ with the *variance* instead. Read carefully when you consult another source.
+:::
+
+Crucially, the $X_i$ themselves do **not** need to be normal. Any distribution works, as long as it has a finite mean and a finite variance — bounded first and second moments are the entire requirement. That is what makes the CLT so powerful: cell counts, dollar amounts, survey scores, wait times — real data is rarely normal, but averages of iid draws from such data are.
+
+You saw iid random variables throughout MS&E 120. In ACTG 175, iid is reasonable: **independence** follows because patients are different people whose outcomes don't influence each other, and **identical distribution** is the sampling assumption — we treat the 2,139 enrolled patients as iid draws from the population of HIV-positive adults eligible for the trial.
+
+Randomization does something different: it ensures the treatment and control groups are comparable draws from that same population, so any difference in outcomes isn't driven by group-selection bias. [Chapter 9](lec09-permutation-tests.qmd) returns to randomization as a source of exchangeability when we build permutation tests.
 
 Our treatment effect is a difference of two sample means, and each sample mean is approximately normal by the CLT. A useful fact from MS&E 120: a linear combination of independent normal random variables is itself normal — so $\bar{X}_T - \bar{X}_C$ is normal whenever each $\bar{X}$ is. That is why the bootstrap distribution looks bell-shaped.
 
 ### Convergence demo
 
-Let's watch the CLT at work. We'll draw samples from the (decidedly non-normal!) CD4 distribution at increasing sample sizes.
+Let's watch the CLT at work. We'll draw samples of varying size $m$ from the treatment CD4-change distribution and see how the sampling distribution of the sample mean sharpens. (We use $m$ to distinguish the demo's sample size from $n_T$, the actual dataset size: $m$ is how many patients we *pretend* to have for this demonstration, while $n_T = 1607$ is how many we actually have.)
+
+A note on the distribution we're sampling from: CD4-change values aggregate many small sources of cross-patient variation — baseline health, virus genetics, adherence to the drug regime, concomitant infections — so a CLT-at-the-patient-level argument already applies, and the distribution is broadly mound-shaped (though still with heavier tails than a pure normal, as the histogram below shows). The demo is therefore a gentle test of the CLT's promise: even starting from something that already looks broadly normal, averaging tightens the picture further as $m$ grows.
 
 :::{.callout-tip}
 ## Think about it
 
-The CD4 distribution is skewed and not close to normal. Before running the next cell, predict: if we draw many samples of size $n = 10$ and compute their means, will the *distribution of means* look skewed like the CD4 distribution, or closer to a bell curve? What about at $n = 500$?
+Before running the next cell, predict: if we draw many samples of size $m = 10$ from the CD4-change distribution and compute their means, will the spread of those means be wider, narrower, or the same as the original CD4-change distribution? What about at $m = 500$?
 :::
 
 ```{python}
-sample_sizes = [10, 50, 500]
+sample_sizes_m = [10, 50, 500]   # values of m (sample size per draw)
 panel_positions = [(0, 1), (1, 0), (1, 1)]
 clt_results = {}
 
@@ -338,40 +385,40 @@ mu = treatment_cd4.mean()
 
 fig, axes = plt.subplots(2, 2, figsize=(10, 7))
 
-# Top-left: the population distribution (skewed, non-normal)
+# Top-left: the CD4-change distribution we're sampling from
 axes[0, 0].hist(treatment_cd4, bins=50, density=True, color='gray', alpha=0.7, edgecolor='white')
-axes[0, 0].set_title(f'Population (treatment CD4 changes, σ={sigma:.0f})', fontsize=11)
+axes[0, 0].set_title(f'CD4 change (the "population", σ={sigma:.0f})', fontsize=11)
 axes[0, 0].set_xlabel('CD4 Change')
 axes[0, 0].set_ylabel('Density')
 
-# Other three panels: sampling distributions at n=10, 50, 500
-for (row, col), n in zip(panel_positions, sample_sizes):
+# Other three panels: sampling distributions at m = 10, 50, 500
+for (row, col), m in zip(panel_positions, sample_sizes_m):
     means = np.array([
-        np.random.choice(treatment_cd4, size=n, replace=True).mean()
+        np.random.choice(treatment_cd4, size=m, replace=True).mean()
         for _ in range(10_000)
     ])
-    clt_results[n] = means
+    clt_results[m] = means
 
     axes[row, col].hist(means, bins=50, density=True, color='steelblue', alpha=0.7, edgecolor='white')
 
     # Overlay CLT normal prediction
     x = np.linspace(means.min(), means.max(), 200)
-    se = sigma / np.sqrt(n)
-    axes[row, col].plot(x, norm.pdf(x, mu, se), 'r-', lw=2, label=f'Normal(μ, σ/√{n})')
+    se = sigma / np.sqrt(m)
+    axes[row, col].plot(x, norm.pdf(x, mu, se), 'r-', lw=2, label=f'Normal(μ, σ/√{m})')
 
-    axes[row, col].set_title(f'Sampling dist of mean, n = {n} (SD = {means.std():.1f})', fontsize=11)
+    axes[row, col].set_title(f'Sampling dist of mean, m = {m} (SD = {means.std():.1f})', fontsize=11)
     axes[row, col].set_xlabel('Sample Mean')
     axes[row, col].legend(fontsize=9)
 
 # Share x-range across the three sampling-distribution panels so "gets narrower" is visible
 sampling_xlim = (
-    min(clt_results[n].min() for n in sample_sizes),
-    max(clt_results[n].max() for n in sample_sizes),
+    min(clt_results[m].min() for m in sample_sizes_m),
+    max(clt_results[m].max() for m in sample_sizes_m),
 )
 for row, col in panel_positions:
     axes[row, col].set_xlim(sampling_xlim)
 
-plt.suptitle('Sampling distribution of the mean at n = 10, 50, 500, with CLT overlay',
+plt.suptitle('Sampling distribution of the mean at m = 10, 50, 500, with CLT overlay',
              fontsize=13, y=1.01)
 plt.tight_layout()
 plt.show()
@@ -380,23 +427,23 @@ plt.show()
 Three things to notice:
 
 1. **Centered at the population mean.** The sample mean is *unbiased*.
-2. **Gets narrower as $n$ increases.** More data means more precise estimates.
-3. **Gets more normal as $n$ increases.** Even at $n = 10$ it's already fairly bell-shaped, and by $n = 500$ the normal overlay is nearly perfect.
+2. **Gets narrower as $m$ increases**, specifically at rate $1/\sqrt{m}$ — quadruple the data, halve the SE.
+3. **Gets more normal as $m$ increases.** The CD4 distribution was already close to normal; by $m = 500$ the normal overlay of the sampling distribution is nearly perfect.
 
-The width of the sampling distribution has a name: the **standard error (SE)**. The CLT gives us a formula:
+The width of the sampling distribution has a name: the **standard error (SE)**. Plugging the demo's sample size $m$ into the CLT's formula,
 
-$$\text{SE}(\bar{X}) = \frac{\sigma}{\sqrt{n}}$$
+$$\text{SE}(\bar{X}) = \frac{\sigma}{\sqrt{m}},$$
 
-Let's verify:
+we can check it against the simulation:
 
 ```{python}
 print(f"Population SD (sigma): {sigma:.1f}\n")
-print(f"{'n':>5s}  {'SE (formula)':>14s}  {'SE (simulated)':>16s}")
+print(f"{'m':>5s}  {'SE (formula)':>14s}  {'SE (simulated)':>16s}")
 print("-" * 40)
-for n in [10, 50, 500]:
-    se_formula = sigma / np.sqrt(n)
-    se_simulated = clt_results[n].std()
-    print(f"{n:>5d}  {se_formula:>14.2f}  {se_simulated:>16.2f}")
+for m in sample_sizes_m:
+    se_formula = sigma / np.sqrt(m)
+    se_simulated = clt_results[m].std()
+    print(f"{m:>5d}  {se_formula:>14.2f}  {se_simulated:>16.2f}")
 ```
 
 The formula matches simulation almost exactly.
@@ -450,7 +497,11 @@ So why bother with the normal approximation if we have the bootstrap?
 :::{.callout-warning}
 ## When the normal approximation fails
 
-So why bother with the bootstrap at all, if the formula agrees? Because the agreement is specific to *means* of not-too-skewed data. For the median, no closed-form SE exists; for right-skewed data at small $n$, the CLT hasn't kicked in yet. In both cases the bootstrap is the only honest answer. Let's see what each looks like.
+So why bother with the bootstrap at all, if the formula agrees? Because the agreement is specific to *means* of not-too-skewed data. For the median, no closed-form SE exists; for right-skewed data at small $m$, the CLT hasn't kicked in yet. In both cases the bootstrap is the only honest answer. Let's see what each looks like.
+
+**Caveat: the bootstrap isn't magic either.** When $n$ is very small, the observed sample is a poor picture of the population, so resampling from it just propagates that poor picture. And for extreme quantiles (the minimum, the 95th percentile, the maximum), even a large sample carries little information in the tails. No resampling method can conjure information the data doesn't have — when you see a heavily skewed or lumpy bootstrap distribution, treat the CI as a signal of uncertainty *in your uncertainty estimate*, not a final answer.
+
+**A working rule of thumb.** For modestly skewed data, $m \geq 30$ is usually enough for the CLT to kick in; for heavy-tailed data like prices, incomes, or wait times, you may need $m$ in the hundreds. When in doubt, bootstrap — and if the bootstrap distribution is visibly skewed at the $m$ you have, the normal CI will be wrong in the same direction.
 :::
 
 ### Demo 1: The median
@@ -465,39 +516,38 @@ We have $\text{SE}(\bar{X}) = \sigma / \sqrt{n}$ for the mean. What's the analog
 
 ```{python}
 fig, axes = plt.subplots(2, 3, figsize=(12, 6), sharex='col')
-sample_sizes = [10, 50, 500]
 
-for col, n in enumerate(sample_sizes):
-    # Bootstrap the mean
+for col, m in enumerate(sample_sizes_m):
+    # Bootstrap the mean at sample size m
     means = np.array([
-        np.random.choice(treatment_cd4, size=n, replace=True).mean()
+        np.random.choice(treatment_cd4, size=m, replace=True).mean()
         for _ in range(10_000)
     ])
     axes[0, col].hist(means, bins=50, density=True, color='steelblue', alpha=0.7, edgecolor='white')
-    axes[0, col].set_title(f'Mean, n = {n} (SD = {means.std():.1f})', fontsize=11)
+    axes[0, col].set_title(f'Mean, m = {m} (SD = {means.std():.1f})', fontsize=11)
 
-    # Bootstrap the median
+    # Bootstrap the median at sample size m
     medians = np.array([
-        np.median(np.random.choice(treatment_cd4, size=n, replace=True))
+        np.median(np.random.choice(treatment_cd4, size=m, replace=True))
         for _ in range(10_000)
     ])
     axes[1, col].hist(medians, bins=50, density=True, color='darkorange', alpha=0.7, edgecolor='white')
-    axes[1, col].set_title(f'Median, n = {n} (SD = {medians.std():.1f})', fontsize=11)
+    axes[1, col].set_title(f'Median, m = {m} (SD = {medians.std():.1f})', fontsize=11)
     axes[1, col].set_xlabel('Sample statistic')
 
 axes[0, 0].set_ylabel('Density')
 axes[1, 0].set_ylabel('Density')
 
-plt.suptitle('Bootstrap distributions: mean vs median at matched n', fontsize=13, y=1.01)
+plt.suptitle('Bootstrap distributions: mean vs median at matched m', fontsize=13, y=1.01)
 plt.tight_layout()
 plt.show()
 ```
 
-The median's bootstrap distribution is **lumpier** (especially at small $n$), **wider**, and doesn't converge to normal as cleanly. The lumpiness is a real feature, not a plotting artifact: the sample median can only take values that appear in the resample (or averages of adjacent order statistics), so its distribution lives on a discrete grid. No *simple* formula like $\sigma / \sqrt{n}$ exists for the median's standard error — you would need the population density at the median, which we do not know. For the median and most other statistics without a clean CLT, the bootstrap is the practical tool.
+The median's bootstrap distribution is **lumpier** (especially at small $m$), **wider**, and doesn't converge to normal as cleanly. The lumpiness is a real feature, not a plotting artifact: the sample median can only take values that appear in the resample (or averages of adjacent order statistics), so its distribution lives on a discrete grid. No *simple* formula like $\sigma / \sqrt{n}$ exists for the median's standard error — the asymptotic formula involves the population density at the median, a nonparametric object you would need its own bootstrap to estimate. For the median and most other statistics without a clean CLT, the bootstrap is the practical tool.
 
-### Demo 2: Heavy tails at small n
+### Demo 2: Heavy tails at small m
 
-Even for means, the CLT needs enough data to "kick in." With right-skewed data and small $n$, the sampling distribution can itself be skewed.
+Even for means, the CLT needs enough data to "kick in." With right-skewed data and small $m$, the sampling distribution can itself be skewed.
 
 ```{python}
 listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
@@ -514,18 +564,18 @@ Let's bootstrap the mean of Airbnb prices at two sample sizes to see how tail we
 ```{python}
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
-# Bootstrap the mean at n=20 (small sample, heavy tails)
+# Bootstrap the mean at m = 20 (small sample, heavy tails)
 boot_means_20 = np.array([
     np.random.choice(airbnb_prices, size=20, replace=True).mean()
     for _ in range(10_000)
 ])
 
 axes[0].hist(boot_means_20, bins=60, density=True, color='steelblue', alpha=0.7, edgecolor='white')
-axes[0].set_title(f'Bootstrap mean, n = 20 (right-skewed, SD = {boot_means_20.std():.0f})', fontsize=11)
+axes[0].set_title(f'Bootstrap mean, m = 20 (right-skewed, SD = {boot_means_20.std():.0f})', fontsize=11)
 axes[0].set_xlabel('Sample Mean Price ($)')
 axes[0].set_ylabel('Density')
 
-# Compare to n=500
+# Compare at m = 500
 boot_means_500 = np.array([
     np.random.choice(airbnb_prices, size=500, replace=True).mean()
     for _ in range(10_000)
@@ -536,7 +586,7 @@ x = np.linspace(boot_means_500.min(), boot_means_500.max(), 200)
 axes[1].hist(boot_means_500, bins=60, density=True, color='steelblue', alpha=0.7, edgecolor='white')
 axes[1].plot(x, norm.pdf(x, boot_means_500.mean(), boot_means_500.std()),
              'r-', lw=2, label='Normal overlay')
-axes[1].set_title(f'Bootstrap mean, n = 500 (approximately normal, SD = {boot_means_500.std():.0f})', fontsize=11)
+axes[1].set_title(f'Bootstrap mean, m = 500 (approximately normal, SD = {boot_means_500.std():.0f})', fontsize=11)
 axes[1].set_xlabel('Sample Mean Price ($)')
 axes[1].legend()
 
@@ -545,7 +595,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-At $n = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clearly **skewed right** — the normal approximation would give a misleading CI. By $n = 500$, the CLT has had enough data to produce a roughly normal shape.
+At $m = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clearly **skewed right** — the normal approximation would give a misleading CI. By $m = 500$, the CLT has had enough data to produce a roughly normal shape.
 
 > "When in doubt, bootstrap. It's slower but honest."
 
@@ -554,7 +604,8 @@ At $n = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clear
 - **Bootstrap:** resample with replacement to estimate uncertainty. Works for *any* statistic — means, medians, regression coefficients, anything. The bootstrap generalizes to regression coefficients ([Chapter 12](lec12-regression-inference.qmd)) and beyond.
 - **The CLT explains why** bootstrap distributions often look normal — at least for means and other "average-like" statistics.
 - **Normal approximation:** a fast, analytical shortcut when the CLT applies (large $n$, well-behaved data, mean-like statistics). Replace 10,000 resamples with $\hat{\theta} \pm 1.96 \cdot \text{SE}$.
-- **When the CLT fails** (median, heavy tails, small $n$), the bootstrap is the fallback. It's slower but always works.
+- **When the CLT fails** (median, heavy tails, small $n$), the bootstrap is usually the right fallback — but it isn't magic: it can't conjure information the sample doesn't have.
+- **Where you'll meet this outside stats class:** A/B-test lift CIs from bootstrap or normal approximation; FiveThirtyEight-style poll aggregations; value-at-risk estimates from bootstrapped return distributions. Same pattern everywhere: one dataset, a statistic, quantified sampling uncertainty.
 - **Next:** [Chapter 9](lec09-permutation-tests.qmd) asks "is the treatment effect *real* or could it be zero?" — introducing permutation tests and hypothesis testing.
 
 ## Study guide
@@ -572,6 +623,13 @@ At $n = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clear
 - **Normal approximation** — using $\hat{\theta} \pm 1.96 \cdot \text{SE}$ instead of bootstrapping; relies on the CLT.
 - **iid** (independent and identically distributed) — each observation drawn from the same distribution, independently of the others.
 - **Monte Carlo error** — the variation in bootstrap output from using finite $B$ resamples; separate from sampling uncertainty.
+
+### Notation used in this chapter
+
+- $n_T, n_C$ — treatment- and control-group dataset sizes (here 1607 and 532).
+- $n$ — generic sample size in the CLT statement and $\sigma/\sqrt{n}$ formula.
+- $B$ — number of bootstrap replications (here 10,000).
+- $m$ — the sample size we *vary* in the CLT-convergence, median, and Airbnb demos, to illustrate how the sampling distribution sharpens as sample size grows. In standard bootstrap, $m = n$.
 
 ### Key ideas
 
