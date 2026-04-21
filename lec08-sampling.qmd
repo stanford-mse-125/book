@@ -349,49 +349,50 @@ Before running the next cell, predict: if we draw many samples of size $m = 10$ 
 
 ```{python}
 sample_sizes_m = [10, 50, 500]   # values of m (sample size per draw)
-panel_positions = [(0, 1), (1, 0), (1, 1)]
 clt_results = {}
 
 sigma = treatment_cd4.std()
 mu = treatment_cd4.mean()
 
-fig, axes = plt.subplots(2, 2, figsize=(10, 7))
+fig, axes = plt.subplots(4, 1, figsize=(8, 11))
 
-# Top-left: the CD4-change distribution we're sampling from
-axes[0, 0].hist(treatment_cd4, bins=50, density=True, color='gray', alpha=0.7, edgecolor='white')
-axes[0, 0].set_title(f'CD4 change (the "population", σ={sigma:.0f})', fontsize=11)
-axes[0, 0].set_xlabel('CD4 Change')
-axes[0, 0].set_ylabel('Density')
+# Top panel: the CD4-change distribution we're sampling from
+axes[0].hist(treatment_cd4, bins=50, density=True, color='gray', alpha=0.7, edgecolor='white')
+axes[0].set_title(f'CD4 change (the "population", σ={sigma:.0f})', fontsize=11)
+axes[0].set_ylabel('Density')
 
-# Other three panels: sampling distributions at m = 10, 50, 500
-for (row, col), m in zip(panel_positions, sample_sizes_m):
+# Panels 1-3: sampling distributions at m = 10, 50, 500
+for i, m in enumerate(sample_sizes_m):
+    ax = axes[i + 1]
     means = np.array([
         np.random.choice(treatment_cd4, size=m, replace=True).mean()
         for _ in range(10_000)
     ])
     clt_results[m] = means
 
-    axes[row, col].hist(means, bins=50, density=True, color='steelblue', alpha=0.7, edgecolor='white')
+    ax.hist(means, bins=50, density=True, color='steelblue', alpha=0.7, edgecolor='white')
 
     # Overlay CLT normal prediction
     x = np.linspace(means.min(), means.max(), 200)
     se = sigma / np.sqrt(m)
-    axes[row, col].plot(x, norm.pdf(x, mu, se), 'r-', lw=2, label=f'Normal(μ, σ/√{m})')
+    ax.plot(x, norm.pdf(x, mu, se), 'r-', lw=2, label=f'Normal(μ, σ/√{m})')
 
-    axes[row, col].set_title(f'Sampling dist of mean, m = {m} (SD = {means.std():.1f})', fontsize=11)
-    axes[row, col].set_xlabel('Sample Mean')
-    axes[row, col].legend(fontsize=9)
+    ax.set_title(f'Sampling dist of mean, m = {m} (SD = {means.std():.1f})', fontsize=11)
+    ax.set_ylabel('Density')
+    ax.legend(fontsize=9)
 
 # Share x-range across the three sampling-distribution panels so "gets narrower" is visible
 sampling_xlim = (
     min(clt_results[m].min() for m in sample_sizes_m),
     max(clt_results[m].max() for m in sample_sizes_m),
 )
-for row, col in panel_positions:
-    axes[row, col].set_xlim(sampling_xlim)
+for i in range(1, 4):
+    axes[i].set_xlim(sampling_xlim)
+
+axes[3].set_xlabel('Sample Mean')  # bottom sampling-distribution panel owns the shared x-label
 
 plt.suptitle('Sampling distribution of the mean at m = 10, 50, 500, with CLT overlay',
-             fontsize=13, y=1.01)
+             fontsize=13, y=1.00)
 plt.tight_layout()
 plt.show()
 ```
