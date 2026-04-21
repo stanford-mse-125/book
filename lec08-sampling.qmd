@@ -59,8 +59,8 @@ print(f"Control group   (ZDV mono):    n_C = {n_C} patients")
 print(f"\nMean CD4 change — treatment: {treatment['cd4_change'].mean():.1f}")
 print(f"Mean CD4 change — control:   {control['cd4_change'].mean():.1f}")
 
-observed_effect = treatment['cd4_change'].mean() - control['cd4_change'].mean()
-print(f"\nObserved treatment effect:   {observed_effect:.1f} CD4 cells")
+observed_diff = treatment['cd4_change'].mean() - control['cd4_change'].mean()
+print(f"\nObserved difference of means:   {observed_diff:.1f} CD4 cells")
 ```
 
 The treatment group improved more, on average. Let's visualize the full distributions to see how much overlap there is.
@@ -115,12 +115,12 @@ Three different samples, three different estimates. Sample-to-sample variation i
 The three sub-trials above all drew 50 patients each. If we instead drew sub-trials of 500 patients (ten times larger), would you expect the three estimates to vary more, less, or about the same? Why? (You'll see the answer quantified once we meet the CLT.)
 :::
 
-We already have three vocabulary terms in play — the 50-cell **estimate** we reported earlier, the averaging **procedure** that produced it, and the true treatment effect we're *trying* to approximate. Let's name them.
+We already have three vocabulary terms in play — the 50-cell **estimate** we reported earlier, the averaging **procedure** that produced it, and the true difference of population means we're *trying* to approximate. Let's name them.
 
 :::{.callout-important}
 ## Definition: Estimand, estimator, estimate
 
-- **Estimand:** the quantity you want to know — here, the population treatment effect defined above. We treat it as a fixed (but unknown) number; whether this is literally true depends on the dataset (more on this below).
+- **Estimand:** the quantity you want to know — here, the difference of population means defined above. We treat it as a fixed (but unknown) number; whether this is literally true depends on the dataset (more on this below).
 - **Estimator:** the procedure we use to approximate the estimand — here, "compute the difference in sample means."
 - **Estimate:** the specific number our estimator produces from this particular dataset — about 50 CD4 cells.
 :::
@@ -193,7 +193,7 @@ Expanded as a **reusable recipe**, the procedure is:
 4. Repeat steps 2–3 $B$ times (typically $B = 10{,}000$).
 5. Summarize the distribution of those $B$ values — its standard deviation estimates the standard error, and its 2.5th and 97.5th percentiles give a 95% confidence interval.
 
-We'll walk through steps 1–5 for the ACTG treatment effect in a moment. The same recipe applies to any statistic you care about — regression coefficients ([Chapter 12](lec12-regression-inference.qmd)), classification AUCs, and beyond.
+We'll walk through steps 1–5 for the ACTG difference of means in a moment. The same recipe applies to any statistic you care about — regression coefficients ([Chapter 12](lec12-regression-inference.qmd)), classification AUCs, and beyond.
 
 Let's take one bootstrap resample of the treatment group and compare it to the original. Each resample draws the same number of observations as the original dataset ($n_T$ for the treatment group, $n_C$ for the control).
 
@@ -230,31 +230,31 @@ print(f"\n  Original mean:       {treatment_cd4.mean():.1f}")
 
 Each resample gives a slightly different mean. The bootstrap idea is to do this *thousands* of times to map out the full distribution of plausible values. We'll call the number of bootstrap replications $B$ — a separate knob from the dataset size $n$.
 
-## Bootstrap the treatment effect
+## Bootstrap the difference of means
 
-Now let's bootstrap the quantity we actually care about: the treatment effect (difference in means between the two groups). We resample *each group independently*, then compute the difference.
+Now let's bootstrap the quantity we actually care about: the difference of sample means between the two groups. We resample *each group independently*, then compute the difference.
 
 ```{python}
 control_cd4 = control['cd4_change'].dropna().values
 
-def bootstrap_effect(treatment_data, control_data):
+def bootstrap_diff(treatment_data, control_data):
     """Resample both groups independently, return difference in means."""
     t_resample = np.random.choice(treatment_data, size=len(treatment_data), replace=True)
     c_resample = np.random.choice(control_data, size=len(control_data), replace=True)
     return t_resample.mean() - c_resample.mean()
 
 B = 10_000   # number of bootstrap replications
-boot_effects = np.array([bootstrap_effect(treatment_cd4, control_cd4) for _ in range(B)])
+boot_diffs = np.array([bootstrap_diff(treatment_cd4, control_cd4) for _ in range(B)])
 
-print(f"Bootstrap mean of treatment effect:      {boot_effects.mean():.1f}")
-print(f"Bootstrap SD of treatment effect (≈ SE): {boot_effects.std():.1f}")
+print(f"Bootstrap mean of difference:            {boot_diffs.mean():.1f}")
+print(f"Bootstrap SD of difference (≈ SE):       {boot_diffs.std():.1f}")
 ```
 
-The `[bootstrap_effect(...) for _ in range(B)]` construction is a **list comprehension** — Python shorthand for a loop that collects results into a list. The `_` is the convention for a loop variable we don't need, and `10_000` is Python syntax for the integer $10{,}000$. The expression calls `bootstrap_effect` exactly $B$ times and stacks the results into an array.
+The `[bootstrap_diff(...) for _ in range(B)]` construction is a **list comprehension** — Python shorthand for a loop that collects results into a list. The `_` is the convention for a loop variable we don't need, and `10_000` is Python syntax for the integer $10{,}000$. The expression calls `bootstrap_diff` exactly $B$ times and stacks the results into an array.
 
 Why $B = 10{,}000$? Large enough that the CI endpoints are stable to about a tenth of a CD4 cell across reruns; small enough to run in a few seconds. A different seed would shift the endpoints by a cell or two — that's **Monte Carlo error**, separate from the sampling uncertainty we're trying to estimate. Note that $B$ (how many resamples we take) is a completely separate quantity from $n_T, n_C$ (how big each resample is): we'd get the same kind of answer from a larger trial with a smaller $B$, or a smaller trial with a larger $B$, but the two quantities do different things.
 
-The SD of the bootstrap distribution is our estimate of the standard error of the treatment-effect estimator — that's the whole point of resampling. It approximates the spread of the **sampling distribution** of the estimator (Definition above).
+The SD of the bootstrap distribution is our estimate of the standard error of the difference-of-means estimator — that's the whole point of resampling. It approximates the spread of the **sampling distribution** of the estimator (Definition above).
 
 Preview: at the end of the chapter we'll see that a closed-form formula could have given the same standard error without any resampling. So why bother with the bootstrap? Because the formula works *only* for means of not-too-skewed data. The moment we ask about the median, the 95th percentile, or a mean when $n$ is small and tails are heavy, no formula exists — only the bootstrap does. The ACTG analysis is the easy warm-up; the harder cases come later.
 
@@ -280,9 +280,9 @@ Before running the next cell: given the bootstrap mean ≈ 50 and bootstrap SD �
 
 ```{python}
 # 95% bootstrap CI: percentile method (2.5th and 97.5th percentiles)
-ci_low, ci_high = np.percentile(boot_effects, [2.5, 97.5])
+ci_low, ci_high = np.percentile(boot_diffs, [2.5, 97.5])
 
-print(f"Observed treatment effect: {observed_effect:.1f} CD4 cells")
+print(f"Observed difference of means: {observed_diff:.1f} CD4 cells")
 print(f"95% Bootstrap CI:          [{ci_low:.1f}, {ci_high:.1f}]")
 print(f"\nDoes the CI include zero?  {'Yes' if ci_low <= 0 <= ci_high else 'No'}")
 ```
@@ -292,7 +292,7 @@ Let's visualize the bootstrap distribution along with the confidence interval.
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
 
-ax.hist(boot_effects, bins=60, density=True, color='steelblue', alpha=0.7, edgecolor='white',
+ax.hist(boot_diffs, bins=60, density=True, color='steelblue', alpha=0.7, edgecolor='white',
         label='Bootstrap distribution')
 
 # Shade the 95% CI
@@ -300,17 +300,17 @@ ax.axvspan(ci_low, ci_high, alpha=0.15, color='steelblue', label=f'95% CI: [{ci_
 
 # Vertical line at zero
 ax.axvline(0, color='black', lw=2, ls=':', alpha=0.7, label='Zero (no effect)')
-ax.axvline(observed_effect, color='red', lw=2, ls='--', label=f'Observed effect = {observed_effect:.1f}')
+ax.axvline(observed_diff, color='red', lw=2, ls='--', label=f'Observed difference = {observed_diff:.1f}')
 
-ax.set_xlabel('Treatment Effect (CD4 cells)')
+ax.set_xlabel('Difference of mean CD4 change')
 ax.set_ylabel('Density')
-ax.set_title('Bootstrap Distribution of the Treatment Effect')
+ax.set_title('Bootstrap distribution of the difference of means')
 ax.legend(fontsize=10)
 plt.tight_layout()
 plt.show()
 ```
 
-The confidence interval is entirely above zero, suggesting the treatment genuinely helps. We can say *helps* — a causal claim — because ACTG 175 was randomized: patients were assigned to treatment or control by lottery, so the two groups match in expectation at baseline. Without randomization, the CI alone would not license a causal reading; [Chapter 18](lec18-causal-inference-1.qmd) formalizes the point. We will formalize the "is the effect real or just noise?" question in [Chapter 9](lec09-permutation-tests.qmd) (permutation tests) and [Chapter 10](lec10-hypothesis-testing.qmd) (hypothesis testing). For now, focus on the *shape* of that histogram.
+The confidence interval is entirely above zero, suggesting combination therapy genuinely improves CD4 counts more than AZT alone. Because ACTG 175 randomly assigned patients, the positive difference reads as the drug's **causal effect** on CD4 change, not merely a correlation; [Chapter 18](lec18-causal-inference-1.qmd) formalizes what randomization buys us. We will formalize the "is the difference real or just noise?" question in [Chapter 9](lec09-permutation-tests.qmd) (permutation tests) and [Chapter 10](lec10-hypothesis-testing.qmd) (hypothesis testing). For now, focus on the *shape* of that histogram.
 
 ## "It looks normal!"
 
@@ -321,15 +321,15 @@ Let's overlay a normal density curve and see how well it fits.
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
 
-ax.hist(boot_effects, bins=60, density=True, color='steelblue', alpha=0.7, edgecolor='white',
+ax.hist(boot_diffs, bins=60, density=True, color='steelblue', alpha=0.7, edgecolor='white',
         label='Bootstrap distribution')
 
 # Overlay normal density with matching mean and SD
-x = np.linspace(boot_effects.min(), boot_effects.max(), 300)
-ax.plot(x, norm.pdf(x, boot_effects.mean(), boot_effects.std()),
-        'r-', lw=2.5, label=f'Normal(μ={boot_effects.mean():.1f}, σ={boot_effects.std():.1f})')
+x = np.linspace(boot_diffs.min(), boot_diffs.max(), 300)
+ax.plot(x, norm.pdf(x, boot_diffs.mean(), boot_diffs.std()),
+        'r-', lw=2.5, label=f'Normal(μ={boot_diffs.mean():.1f}, σ={boot_diffs.std():.1f})')
 
-ax.set_xlabel('Treatment Effect (CD4 cells)')
+ax.set_xlabel('Difference of mean CD4 change')
 ax.set_ylabel('Density')
 ax.set_title('Bootstrap Distribution vs Normal Density')
 ax.legend(fontsize=10)
@@ -361,7 +361,7 @@ You saw iid random variables throughout MS&E 120. In ACTG 175, iid is reasonable
 
 Randomization does something different: it ensures the treatment and control groups are comparable draws from that same population, so any difference in outcomes isn't driven by group-selection bias. [Chapter 9](lec09-permutation-tests.qmd) returns to randomization as a source of exchangeability when we build permutation tests.
 
-Our treatment effect is a difference of two sample means, and each sample mean is approximately normal by the CLT. A useful fact from MS&E 120: a linear combination of independent normal random variables is itself normal — so $\bar{X}_T - \bar{X}_C$ is normal whenever each $\bar{X}$ is. That is why the bootstrap distribution looks bell-shaped.
+Our difference of sample means is a linear combination of two sample means, and each sample mean is approximately normal by the CLT. A useful fact from MS&E 120: a linear combination of independent normal random variables is itself normal — so $\bar{X}_T - \bar{X}_C$ is normal whenever each $\bar{X}$ is. That is why the bootstrap distribution looks bell-shaped.
 
 ### Convergence demo
 
@@ -462,7 +462,7 @@ The **normal approximation** uses the CLT to replace bootstrap resampling with a
 
 $$\hat{\theta} \pm 1.96 \cdot \text{SE}.$$
 
-For the treatment effect, the standard error of a difference of means (assuming the two groups are independent, as in a randomized trial — that's where the variances *add*) is:
+For a difference of two independent means (and independence is what a randomized trial buys us — that's where the variances *add*), the standard error is:
 
 $$\text{SE} = \sqrt{\frac{s_T^2}{n_T} + \frac{s_C^2}{n_C}},$$
 
@@ -473,13 +473,13 @@ where $s_T, s_C$ are the sample standard deviations and $n_T, n_C$ the sample si
 se_normal = np.sqrt(treatment_cd4.var(ddof=1) / len(treatment_cd4) +
                     control_cd4.var(ddof=1) / len(control_cd4))
 
-normal_ci_low = observed_effect - 1.96 * se_normal
-normal_ci_high = observed_effect + 1.96 * se_normal
+normal_ci_low = observed_diff - 1.96 * se_normal
+normal_ci_high = observed_diff + 1.96 * se_normal
 
 print("Side-by-side comparison:")
 print(f"  Bootstrap CI (10,000 resamples): [{ci_low:.1f}, {ci_high:.1f}]")
 print(f"  Normal CI   (one formula):       [{normal_ci_low:.1f}, {normal_ci_high:.1f}]")
-print(f"\n  SE (bootstrap):  {boot_effects.std():.2f}")
+print(f"\n  SE (bootstrap):  {boot_diffs.std():.2f}")
 print(f"  SE (formula):    {se_normal:.2f}")
 ```
 
@@ -606,7 +606,7 @@ At $m = 20$ with heavy-tailed Airbnb prices, the bootstrap distribution is clear
 - **Normal approximation:** a fast, analytical shortcut when the CLT applies (large $n$, well-behaved data, mean-like statistics). Replace 10,000 resamples with $\hat{\theta} \pm 1.96 \cdot \text{SE}$.
 - **When the CLT fails** (median, heavy tails, small $n$), the bootstrap is usually the right fallback — but it isn't magic: it can't conjure information the sample doesn't have.
 - **Where you'll meet this outside stats class:** A/B-test lift CIs from bootstrap or normal approximation; FiveThirtyEight-style poll aggregations; value-at-risk estimates from bootstrapped return distributions. Same pattern everywhere: one dataset, a statistic, quantified sampling uncertainty.
-- **Next:** [Chapter 9](lec09-permutation-tests.qmd) asks "is the treatment effect *real* or could it be zero?" — introducing permutation tests and hypothesis testing.
+- **Next:** [Chapter 9](lec09-permutation-tests.qmd) asks "is the difference *real* or could it be zero?" — introducing permutation tests and hypothesis testing.
 
 ## Study guide
 
