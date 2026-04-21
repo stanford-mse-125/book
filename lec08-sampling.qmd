@@ -151,6 +151,17 @@ We can't rerun the clinical trial. We have one dataset. But here's a clever tric
 The **bootstrap** resamples the observed data **with replacement** to approximate the sampling distribution of a statistic. Our sample is the best picture we have of the population, so we treat the sample *as if* it were the population, and draw new "samples" from it — with replacement, meaning the same observation can appear more than once in a resample.
 :::
 
+To make "with replacement" concrete, imagine the trial had enrolled just five patients — Alex, Jordan, Sam, Taylor, and Casey. The bootstrap imagines a re-run of the trial by drawing five patients from this group *with replacement*: we draw a name, record their CD4 change, put them back, and draw again. Some patients may appear twice; some may not appear at all. Each resample is a plausible "alternative dataset" we might have seen.
+
+```{python}
+trial_patients = ['Alex', 'Jordan', 'Sam', 'Taylor', 'Casey']
+resample = np.random.choice(trial_patients, size=5, replace=True)
+print(f"Original five:  {trial_patients}")
+print(f"One resample:   {list(resample)}")
+```
+
+Scaling up from five to 1,607 works the same way — we'll resample *rows* of the CD4 data, with replacement, and each resample has the same size as the original.
+
 Expanded as a **reusable recipe**, the procedure is:
 
 1. Treat the observed sample as if it were the population.
@@ -161,30 +172,42 @@ Expanded as a **reusable recipe**, the procedure is:
 
 We'll walk through steps 1–5 for the ACTG difference of means in a moment. The same recipe applies to any statistic you care about — regression coefficients ([Chapter 12](lec12-regression-inference.qmd)), classification AUCs, and beyond.
 
-Let's take one bootstrap resample of the treatment group and compare it to the original. Each resample draws the same number of observations as the original dataset ($n_T$ for the treatment group, $n_C$ for the control).
+Before we loop this thousands of times, let's see what a single bootstrap resample of the full treatment group looks like. The plot below shows the original CD4-change distribution on top, and three bootstrap resamples below — each the same size as the original but drawn with replacement. The overall shape is similar across resamples, and each resample's mean (red dashed line) is close to but different from the original mean.
 
 ```{python}
-# One bootstrap resample: same size as original, drawn with replacement
-resample = np.random.choice(treatment_cd4, size=n_T, replace=True)
+rng_for_panels = np.random.default_rng(7)  # fixed seed so the demo is reproducible
+panel_resamples = [
+    rng_for_panels.choice(treatment_cd4, size=len(treatment_cd4), replace=True)
+    for _ in range(3)
+]
 
-print(f"Original treatment group: {n_T} patients, mean = {treatment_cd4.mean():.1f}")
-print(f"Bootstrap resample:       {len(resample)} patients, mean = {resample.mean():.1f}")
+fig, axes = plt.subplots(4, 1, figsize=(8, 10), sharex=True)
+
+axes[0].hist(treatment_cd4, bins=40, color='gray', alpha=0.7, edgecolor='white')
+axes[0].axvline(treatment_cd4.mean(), color='red', lw=2, ls='--',
+                label=f'Mean = {treatment_cd4.mean():.1f}')
+axes[0].set_title('Original treatment group (n = 1607)')
+axes[0].set_ylabel('Count')
+axes[0].legend()
+
+for i, resample in enumerate(panel_resamples):
+    ax = axes[i + 1]
+    ax.hist(resample, bins=40, color='steelblue', alpha=0.7, edgecolor='white')
+    ax.axvline(resample.mean(), color='red', lw=2, ls='--',
+               label=f'Mean = {resample.mean():.1f}')
+    ax.set_title(f'Bootstrap resample {i + 1} (n = 1607, drawn with replacement)')
+    ax.set_ylabel('Count')
+    ax.legend()
+
+axes[3].set_xlabel('CD4 Change at 20 Weeks')
+plt.suptitle('One bootstrap resample vs. the original', fontsize=13, y=1.00)
+plt.tight_layout()
+plt.show()
 ```
 
-The resample has the same size as the original, but different composition. Let's make "with replacement" concrete with a small example, sampling five times from the numbers 10, 20, 30, 40, 50:
+Same size, slightly different composition, slightly different mean — that resample-to-resample variation is what the bootstrap captures. Repeating this thousands of times traces out the full distribution of plausible values.
 
-```{python}
-# Small example to illustrate "with replacement"
-small_data = np.array([10, 20, 30, 40, 50])
-small_resample = np.random.choice(small_data, size=5, replace=True)
-
-print(f"Original data:       {small_data}")
-print(f"Bootstrap resample:  {small_resample}")
-print(f"\nSome values appear twice, some are missing — that's the point.")
-print(f"Each resample is a plausible 'alternative dataset' we might have seen.")
-```
-
-Now let's do a few resamples and see how the treatment group mean varies:
+Now let's do a few resamples and watch how the mean varies:
 
 ```{python}
 print("Five bootstrap resamples of the treatment group:\n")
