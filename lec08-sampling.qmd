@@ -497,6 +497,12 @@ for m in sample_sizes_m:
 
 The formula matches simulation almost exactly.
 
+A practical caveat: the formula uses the *population* standard deviation $\sigma$, which we never know in the real world. In this demo we pretended the full treatment arm was the population and computed its SD directly. In practice we *estimate* $\sigma$ with the sample standard deviation $s$ — giving the operational formula
+
+$$\widehat{\text{SE}}(\bar X) \;=\; \frac{s}{\sqrt{n}}.$$
+
+The law of large numbers says $s \to \sigma$ as $n$ grows, so the plug-in error vanishes for large samples and is small even for moderate $n$. Every CI in this chapter (and in the rest of the course) uses this plug-in silently — sample SD where theory calls for population SD.
+
 :::{.callout-tip}
 ## Think about it
 
@@ -542,6 +548,42 @@ So why bother with the normal approximation if we have the bootstrap?
 2. **Composable.** You can combine standard errors across studies (meta-analysis) without re-bootstrapping, using the same addition-of-variances step we just saw.
 3. **Speed.** One formula vs. 10,000 resamples. For simple problems on a laptop this gap is small; for large datasets or complex models it is not.
 4. **Less code.** The one-line CI is easy to audit and hard to misconfigure.
+
+:::{.callout-note collapse="true"}
+## Going deeper: how big a trial do we need?
+
+Before ACTG 175 enrolled a single patient, NIH had to answer: *how many patients do we need to detect a clinically meaningful effect with acceptable certainty?* Resampling cannot answer this — you don't have data yet. The normal approximation can.
+
+**Setup.**
+
+- **Target detectable effect**: $\Delta = 50$ CD4 cells (the smallest difference worth knowing about).
+- **SD guess**: $\sigma \approx 150$ per arm, from pilot data and prior trials.
+- **Power**: 80% — the probability of correctly rejecting "no effect" when the true effect is $\Delta$.
+- **Significance**: $\alpha = 0.05$ — the probability of wrongly rejecting "no effect" when the truth is zero.
+
+**Derivation.** For a two-sample test of means with equal group sizes $n$, the SE of the difference is $\sqrt{2\sigma^2/n}$. To achieve 80% power at $\alpha = 0.05$, the detectable effect must satisfy
+
+$$(z_{\alpha/2} + z_\beta) \cdot \sqrt{\tfrac{2\sigma^2}{n}} \;=\; \Delta,$$
+
+where $z_{\alpha/2} = 1.96$ is the two-sided 5% critical value and $z_\beta = 0.84$ is the 80th percentile of the standard normal. Solving for $n$:
+
+$$n \;=\; \frac{2\sigma^2 \,(z_{\alpha/2} + z_\beta)^2}{\Delta^2}.$$
+
+Plugging in:
+
+```{python}
+sigma_plan = 150      # SD guess per arm
+delta = 50            # target detectable effect
+z_alpha2 = 1.96       # two-sided α = 0.05
+z_beta = 0.84         # 80% power
+
+n_per_arm = 2 * sigma_plan**2 * (z_alpha2 + z_beta)**2 / delta**2
+print(f"Needed sample size per arm: {n_per_arm:.0f}")
+print(f"Total enrolment (two arms): {2 * n_per_arm:.0f}")
+```
+
+ACTG 175 actually enrolled 2,139 patients — roughly ten times the minimum this calculation suggests. The trial was designed to detect smaller effects, examine subgroup differences, and tolerate dropout, so the extra enrolment is not overkill but structured redundancy. The pedagogical point stands: only the normal approximation gives you a sample-size answer at all; there is nothing to bootstrap when no data exist yet. Chapter 10 returns to power calculations once we formalize hypothesis testing.
+:::
 
 :::{.callout-warning}
 ## When the normal approximation fails
