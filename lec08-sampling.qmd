@@ -238,6 +238,12 @@ The **percentile method** builds a CI from the middle 95% of bootstrap values �
 *Note:* the intuition and the formal definition are not the same statement. The estimand is a fixed number; the *interval* is what varies from study to study. So we cannot say "the estimand has a 95% chance of being in [45, 60]" — that would require treating the estimand as random, which it isn't. We can say "if we repeated the study, 95% of the intervals we'd build would contain the estimand."
 :::
 
+:::{.callout-warning}
+## What a confidence interval does (and doesn't) cover
+
+A confidence interval quantifies **sampling uncertainty** — the scatter we'd see from re-running the same study under the same conditions, with fresh patients drawn from the same population. It does *not* cover **systematic shifts** — a pandemic, a policy change, a recession — that move every unit at once. Before trusting a CI for a decision, ask whether the uncertainty that matters is the kind the bootstrap captures, or the kind where the whole system might change underneath you. [Chapter 16](lec16-backtesting.qmd) returns to this distinction when models trained on historical data meet changed conditions.
+:::
+
 :::{.callout-tip}
 ## Think about it
 
