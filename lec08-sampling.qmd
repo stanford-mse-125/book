@@ -40,6 +40,8 @@ Before writing code, let's name what we want to measure. The medical question is
 
 A **population mean** is the average of some quantity across every member of the population — here, the average CD4 change among all HIV-positive adults eligible for the trial, under a given treatment assignment. ACTG 175 gives us two population means to estimate: the mean CD4 change under combination therapy and the mean CD4 change under AZT alone. Each is a fixed but unknown number.
 
+Each population mean is a parameter of an underlying **population distribution**, which we write $\mathcal{X}$: the full distribution of CD4 change across the population. ACTG 175 has two — $\mathcal{X}_T$ under combination therapy and $\mathcal{X}_C$ under AZT alone — with means $\mu_T, \mu_C$ and SDs $\sigma_T, \sigma_C$. Each patient's outcome is a single draw, $X_i \sim \mathcal{X}$.
+
 The **difference** of the two population means is a derived quantity we'll often care about. Because ACTG 175 randomly assigned patients, this difference equals the drug's **causal effect** on CD4 change; [Chapter 18](lec18-causal-inference-1.qmd) returns to the causal interpretation. Here we treat the difference purely as a statistical quantity — a linear combination of two population means — and estimate it from the data.
 :::
 
@@ -383,7 +385,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-The normal curve fits almost perfectly. **The close fit isn't a coincidence.** A theorem from your probability course explains why: the **Central Limit Theorem**.
+The normal curve fits almost perfectly. **The close fit isn't a coincidence.** A pair of theorems from your probability course explain why.
+
+You've already met the **Law of Large Numbers** (LLN): as $n \to \infty$, the sample mean $\bar X_n$ converges to the population mean $\mu$, and the sample SD $s_n$ converges to $\sigma$. The LLN is why our plug-in estimators work at all — $\hat\mu = \bar X$ and $\hat\sigma = s$ get arbitrarily close to the true values as samples grow. But the LLN only promises *eventual* convergence; it says nothing about *how fast* or *in what shape*. That's what the **Central Limit Theorem** adds.
 
 ## The CLT explains why
 
@@ -500,12 +504,6 @@ A practical caveat: the formula uses the *population* standard deviation $\sigma
 $$\widehat{\text{SE}}(\bar X) \;=\; \frac{s}{\sqrt{n}}.$$
 
 The law of large numbers says $s \to \sigma$ as $n$ grows, so the plug-in error vanishes for large samples and is small even for moderate $n$. Every CI in this chapter (and in the rest of the course) uses this plug-in silently — sample SD where theory calls for population SD.
-
-:::{.callout-tip}
-## Think about it
-
-You may have heard of the **Law of Large Numbers** (LLN) from your probability course as well. The LLN says the sample mean *converges* to the population mean. The CLT tells you **how fast** (at rate $1/\sqrt{n}$) and **in what shape** (normal).
-:::
 
 ## The normal approximation
 
