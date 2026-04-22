@@ -1,5 +1,5 @@
 ---
-title: "Backtesting and Time Series Validation"
+title: "When Validation Isn't Enough"
 execute:
   enabled: true
 jupyter: python3

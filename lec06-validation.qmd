@@ -60,7 +60,7 @@ The fix: **split the data before fitting any model.** Set aside a random portion
 
 When does a random split give a reliable estimate of future performance? When future data comes from the *same distribution* as the training data. A random split shuffles observations so each set is a representative sample of the underlying population. If tomorrow's data looks statistically like today's, the held-out score is a trustworthy preview.
 
-When does it break down? When deployment data differs systematically from training data — a mismatch called **distribution shift**. A random split shuffles observations *within* one population, so training and test sets come from the same distribution by construction. That is exactly what the Epic sepsis model's evaluation looked like: same hospital, same era, same coding practices. A random split would have pronounced it fine. Deploy the same model at a different hospital and the distribution has shifted — the test set the vendor used tells you nothing about the new population's performance. A random split tests *in-distribution* generalization; it cannot detect a mismatch between training and deployment. [Chapter 16](lec16-backtesting.qmd) returns to this problem when splits must respect time.
+When does it break down? When deployment data differs systematically from training data — a mismatch called **distribution shift**. A random split shuffles observations *within* one population, so training and test sets come from the same distribution by construction. That is exactly what the Epic sepsis model's evaluation looked like: same hospital, same era, same coding practices. A random split would have pronounced it fine. Deploy the same model at a different hospital and the distribution has shifted — the test set the vendor used tells you nothing about the new population's performance. A random split tests *in-distribution* generalization; it cannot detect a mismatch between training and deployment. [Chapter 16](lec16-feedback-loops.qmd) returns to this problem when splits must respect time.
 
 :::{.callout-note collapse="true"}
 ## Going deeper: three kinds of distribution shift
@@ -1080,7 +1080,7 @@ Cross-validation averages out the most noise and is usually the most trustworthy
 
 :::{.callout-warning}
 ## CV Assumes the Data Can Be Shuffled
-CV relies on the assumption that we can shuffle the data randomly — each fold is representative of the whole. The assumption breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Chapter 16](lec16-backtesting.qmd).
+CV relies on the assumption that we can shuffle the data randomly — each fold is representative of the whole. The assumption breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Chapter 16](lec16-feedback-loops.qmd).
 :::
 
 ## Lasso (regularization)
@@ -1433,7 +1433,7 @@ The U-shaped test error curve predicts that complex models eventually overfit. T
 
 Pull the pieces together. Here is the procedure we recommend for choosing a model and reporting its test error, adapted to dataset size.
 
-1. **Set aside a held-out test set at the very start.** 20% is the default. Don't touch it until step 5. If the data are temporal (will be re-run over time), take the *most recent* 20% as the test set, not a random 20% — see [Chapter 16](lec16-backtesting.qmd).
+1. **Set aside a held-out test set at the very start.** 20% is the default. Don't touch it until step 5. If the data are temporal (will be re-run over time), take the *most recent* 20% as the test set, not a random 20% — see [Chapter 16](lec16-feedback-loops.qmd).
 2. **Choose a candidate model family** (feature set, polynomial degree, lasso vs ridge vs OLS) and a grid of hyperparameters (e.g., $\alpha$ values for lasso).
 3. **Pick the best hyperparameters using cross-validation on the training+validation data** (everything that isn't the test set). 5- or 10-fold CV is the standard choice; use LOO if $n < 200$.
 4. **Refit the best model on all the training+validation data** — this is the model you would actually deploy.
@@ -1454,7 +1454,7 @@ The through-line across all three cases: **the test set is touched exactly once*
 
 Cross-validation tells us which model generalizes best to new observations drawn from the *same* distribution as our training data. That's a lot — but it's not everything. Several questions remain out of reach:
 
-- **Distribution shift at deployment time.** CV holds out observations that look like the ones the model trained on. It cannot detect covariate, temporal, or label shift between now and the moment the model is deployed. [Chapter 16](lec16-backtesting.qmd) returns to this problem with temporal validation.
+- **Distribution shift at deployment time.** CV holds out observations that look like the ones the model trained on. It cannot detect covariate, temporal, or label shift between now and the moment the model is deployed. [Chapter 16](lec16-feedback-loops.qmd) returns to this problem with temporal validation.
 - **Whether any coefficient is statistically significant.** CV picks the model that generalizes best, but it does not quantify the uncertainty on any individual coefficient — we still don't know whether `boro_Manhattan`'s effect is real or noise. [Chapter 12](lec12-regression-inference.qmd) develops the inference tools that answer this.
 - **Causation.** Everything in this chapter is still association. A borough effect measured by CV tells us where prices are higher, not *why* — and certainly not what would happen to prices if policy moved a listing across a borough boundary. [Chapter 18](lec18-causal-inference-1.qmd) separates association from causation.
 - **Nonlinear structure that polynomials can't capture.** Polynomials let a line bend smoothly, but real relationships can have sharp thresholds and rich interactions that a linear model won't find no matter how many features you engineer. [Chapter 13](lec13-trees.qmd) introduces decision trees and random forests, which handle these patterns natively.
@@ -1470,7 +1470,7 @@ Cross-validation tells us which model generalizes best to new observations drawn
 
 - **Regularization resolves overfitting automatically.** Lasso (L1) zeros out unimportant features; ridge (L2) shrinks all coefficients; standardize first so the penalty sees every feature on the same scale; pick $\alpha$ by cross-validation.
 
-Where this leads: [Chapter 7](lec07-classification.qmd) (classification metrics), [Chapter 8](lec08-sampling.qmd) (bootstrap uncertainty), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 13](lec13-trees.qmd) (decision trees and random forests — averaging past the classical tradeoff), [Chapter 16](lec16-backtesting.qmd) (temporal validation).
+Where this leads: [Chapter 7](lec07-classification.qmd) (classification metrics), [Chapter 8](lec08-sampling.qmd) (bootstrap uncertainty), [Chapter 12](lec12-regression-inference.qmd) (regression inference), [Chapter 13](lec13-trees.qmd) (decision trees and random forests — averaging past the classical tradeoff), [Chapter 16](lec16-feedback-loops.qmd) (temporal validation).
 
 
 ## Study guide

@@ -30,7 +30,7 @@ book:
         - lec13-trees.qmd
         - lec14-pca.qmd
         - lec15-clustering.qmd
-        - lec16-backtesting.qmd
+        - lec16-feedback-loops.qmd
         - lec17-automl-llms.qmd
         - lec18-causal-inference-1.qmd
         - lec19-causal-inference-2.qmd

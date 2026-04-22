@@ -357,7 +357,7 @@ The confidence interval is entirely above zero, suggesting combination therapy g
 :::{.callout-warning}
 ## What a confidence interval does (and doesn't) cover
 
-A confidence interval quantifies **sampling uncertainty** — the scatter we'd see from re-running the same study under the same conditions, with fresh patients drawn from the same population. It does *not* cover **systematic shifts** — a pandemic, a policy change, a recession — that move every unit at once. Before trusting a CI for a decision, ask whether the uncertainty that matters is the kind the bootstrap captures, or the kind where the whole system might change underneath you. [Chapter 16](lec16-backtesting.qmd) returns to this distinction when models trained on historical data meet changed conditions.
+A confidence interval quantifies **sampling uncertainty** — the scatter we'd see from re-running the same study under the same conditions, with fresh patients drawn from the same population. It does *not* cover **systematic shifts** — a pandemic, a policy change, a recession — that move every unit at once. Before trusting a CI for a decision, ask whether the uncertainty that matters is the kind the bootstrap captures, or the kind where the whole system might change underneath you. [Chapter 16](lec16-feedback-loops.qmd) returns to this distinction when models trained on historical data meet changed conditions.
 :::
 
 ## "It looks normal!"
