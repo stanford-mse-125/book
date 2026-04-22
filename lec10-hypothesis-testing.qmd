@@ -25,7 +25,7 @@ np.random.seed(42)
 
 The average cost to bring a drug to market exceeds \$1.3 billion. A clinical trial just produced a p-value of 0.00000000000000000028. Time to approve the drug? Not so fast.
 
-In [Chapter 9](lec09-permutation-tests.qmd), we used permutation to simulate what the treatment effect would look like if the drug did nothing — that gave us a p-value. Today we formalize that machinery and discover its limitations.
+In [Chapter 9](lec09-permutation-tests.qmd), we used a permutation test to build the null distribution — what the test statistic would look like if the drug did nothing — and computed a p-value. Today we formalize that machinery and discover its limitations.
 
 ## Setup: Recap the Clinical Trial
 
@@ -66,7 +66,7 @@ That's exactly what hypothesis testing answers. Let's be precise.
 
 Here's the recipe for any hypothesis test — a checklist you can follow for any problem:
 
-1. **State $H_0$ and $H_1$** — what are the competing claims?
+1. **State $H_0$ (null hypothesis) and $H_1$ (alternative hypothesis)** — what are the competing claims?
 2. **Choose a test statistic** — what number summarizes the evidence?
 3. **Determine the null distribution** — what would the test statistic look like if $H_0$ were true?
 4. **Compute the p-value** — how extreme is your observed test statistic under $H_0$?
@@ -77,7 +77,7 @@ For our clinical trial:
 |-----------|-------------------|
 | **Null hypothesis** $H_0$ | The treatment has no effect (mean difference = 0) |
 | **Alternative hypothesis** $H_1$ | The treatment has an effect (mean difference $\neq$ 0) |
-| **Test statistic** | Difference in sample means (or the **t-statistic**) |
+| **Test statistic** | The **t-statistic**: difference in means ÷ standard error (formula below) |
 | **p-value** | Probability of seeing a result *at least* this extreme, *if $H_0$ were true* |
 
 ::: {.callout-important}
@@ -93,9 +93,9 @@ The **p-value** is the probability of observing a test statistic at least as ext
 :::
 
 ::: {.callout-warning}
-## The #1 p-value misconception
+## The #1 p-value misconception (worth repeating)
 
-The p-value is NOT the probability that $H_0$ is true. It's the probability of getting data at least as extreme as ours *if $H_0$ were true*. Big difference.
+[Chapter 9](lec09-permutation-tests.qmd) flagged this, but it bears repeating: the p-value is NOT the probability that $H_0$ is true. It's the probability of getting data at least as extreme as ours *if $H_0$ were true*. Big difference.
 
 If you test "is this coin fair" and get p = 0.03, it does NOT mean there's a 3% chance the coin is fair. It means: IF the coin were fair, there'd be only a 3% chance of seeing data this extreme.
 :::
@@ -137,7 +137,7 @@ The p-value here is so small that the choice of $\alpha$ doesn't matter. But for
 ::: {.callout-tip}
 ## Think About It
 
-Try changing the alpha values above. What's the smallest alpha at which you'd still reject $H_0$ for this trial?
+This p-value is so small that any conventional $\alpha$ rejects. But imagine a borderline case: a different trial produces p = 0.04. A colleague argues the result is "just barely significant" and shouldn't be trusted. Another says p < 0.05 means we reject. Who is right — and what does the disagreement reveal about the 0.05 threshold?
 :::
 
 ## Two Types of Errors
@@ -321,10 +321,10 @@ Key observations:
 ::: {.callout-tip}
 ## Think About It
 
-You're designing the next clinical trial. Before running a \$2M study, you should know if you have enough patients. How do you decide how many to enroll?
+Look at the power curves above. Roughly how many patients per group would you need to detect a 30 CD4 cell effect with 80% power? What about a 10 CD4 cell effect? (The next section computes the exact answer.)
 :::
 
-In practice, you'd use a **power analysis** tool rather than writing simulations from scratch. Here's the standard tool:
+In practice, you'd use a **power analysis** tool rather than writing simulations from scratch. These tools take the effect size as **Cohen's d** — the effect measured in standard-deviation units ($d = \Delta / \sigma$), so that 0.2, 0.5, and 0.8 are conventionally called small, medium, and large effects regardless of the original units.
 
 ::: {.callout-note}
 ## Power analysis requires distributional assumptions
@@ -376,15 +376,9 @@ A drug might save 1,000 lives per year but costs \$2B to manufacture. What false
 :::
 
 ```{python}
-# Null distribution (permutation-based)
-null_mean_diffs = []
-combined = np.concatenate([control.values, treatment.values])
-for _ in range(50_000):
-    shuffled = np.random.permutation(combined)
-    half = len(shuffled) // 2
-    null_mean_diffs.append(shuffled[:half].mean() - shuffled[half:].mean())
-null_mean_diffs = np.array(null_mean_diffs)
-null_se = null_mean_diffs.std()
+# SE of the difference of means under the null (normal approximation, Chapter 8)
+null_se = np.sqrt(control.var(ddof=1) / len(control) + treatment.var(ddof=1) / len(treatment))
+print(f"SE of the difference of means: {null_se:.2f}")
 ```
 
 ```{python}
@@ -505,7 +499,7 @@ for n in subsample_sizes:
     print(f"{n:>12}  {power:>21.0%}  {detected:>16}")
 ```
 
-The real effect is always there, but small samples often miss it. With n = 15 per group, a t-test detects the effect less than half the time. The ability to detect a real effect is called **power**, and it depends on **both** the effect size and the sample size.
+The real effect is always there, but small samples often miss it. With n = 15 per group, a t-test detects the effect less than half the time — that's the power problem from the previous section. But the flip side is just as important:
 
 ```{python}
 # p-value as a function of sample size (fixed effect)
@@ -543,22 +537,22 @@ The lesson: always report effect sizes and confidence intervals alongside p-valu
 ::: {.callout-tip}
 ## Think About It: the blood pressure drug
 
-A clinical trial with 10,000 participants tests a new blood pressure drug and finds a statistically significant reduction (p = 0.013). Impressive? The actual effect is a 2 mmHg decrease in systolic blood pressure. For context, drinking a cup of coffee temporarily raises blood pressure by about 5 mmHg (Mesas et al., *Journal of Hypertension*, 2011). The drug's effect is real — it's not zero — but it is smaller than your morning coffee. Would you recommend this drug to patients, given the costs and potential side effects?
-
-Statistical significance told us the effect is *not zero*. It said nothing about whether the effect is *worth acting on*. That judgment requires domain knowledge: what reduction is clinically meaningful, what are the side effects, and what alternatives exist.
+A clinical trial with 10,000 participants tests a new blood pressure drug and finds a statistically significant reduction (p = 0.013). The actual effect is a 2 mmHg decrease in systolic blood pressure. For context, drinking a cup of coffee temporarily raises blood pressure by about 5 mmHg (Mesas et al., *Journal of Hypertension*, 2011). The drug's effect is real — it's not zero — but it is smaller than your morning coffee. Would you recommend this drug to patients, given the costs and potential side effects?
 :::
 
-:::{.callout-note}
-## Goodhart's Law
+Statistical significance told us the blood pressure effect is *not zero*. It said nothing about whether the effect is *worth acting on*. That judgment requires domain knowledge: what reduction is clinically meaningful, what are the side effects, and what alternatives exist.
+
+:::{.callout-note collapse="true"}
+## Going deeper: Goodhart's Law
 
 "When a measure becomes a target, it ceases to be a good measure" (attributed to Charles Goodhart, 1975; popularized by Marilyn Strathern). Whenever people are rewarded for optimizing a metric, they find ways to hit the target without achieving the goal the metric was supposed to measure.
 
 - **Hospital readmission penalties.** The US Centers for Medicare and Medicaid Services (CMS) penalize hospitals with high readmission rates. The metric was supposed to measure care quality. Instead, some hospitals avoided admitting the sickest patients in the first place — keeping readmission rates low by selecting healthier patients, not by providing better care.
 - **School test scores.** When teacher evaluations depend on standardized test scores, the incentive shifts from teaching understanding to teaching the test. Scores rise, but learning does not.
 - **P-values.** The $p < 0.05$ threshold was supposed to measure evidence strength. When careers and publications depend on clearing that bar, researchers (often unconsciously) run analyses until they find significance. The result is p-hacking — a topic we'll examine in detail in [Chapter 11](lec11-multiple-testing.qmd).
-:::
 
 The pattern is the same in every case: a metric designed to *measure* performance becomes a target to *optimize*, and optimization pressure corrupts the metric. Whenever you use a number to make decisions, ask: could the people being measured change their behavior to hit the target without achieving the underlying goal?
+:::
 
 ## Key Takeaways
 
@@ -567,7 +561,7 @@ The pattern is the same in every case: a metric designed to *measure* performanc
 - **Power** = probability of detecting a real effect. Use **power analysis** and **sample size planning** to design studies with at least 80% power.
 - **Statistical significance is not the same as practical importance.** With enough data, even tiny effects are "significant." Always report effect size, confidence interval, AND p-value.
 
-We'll revisit these ideas in Lecture 11 when we ask: what happens when you run 20 tests at once? In Lecture 12, we'll apply hypothesis tests to regression coefficients.
+We'll revisit these ideas in [Chapter 11](lec11-multiple-testing.qmd) when we ask: what happens when you run 20 tests at once? In [Chapter 12](lec12-regression-inference.qmd), we'll apply hypothesis tests to regression coefficients.
 
 ## Study guide
 

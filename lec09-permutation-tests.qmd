@@ -23,7 +23,7 @@ np.random.seed(42)
 
 In [Chapter 8](lec08-sampling.qmd), we answered the question "how precise is our estimate?" using bootstrap confidence intervals and the normal approximation. Today we ask a sharper question: **is the effect *real*, or could it be zero?**
 
-The distinction matters. The bootstrap measures **precision** — how much our estimate would vary if we repeated the experiment. The permutation test measures **significance** — whether the observed effect is distinguishable from pure chance. These two tools are complementary: one gives you a confidence interval, the other gives you a p-value.
+The distinction matters. The bootstrap measures **precision** — how much our estimate would vary if we repeated the experiment. The permutation test measures **significance** — whether the observed effect is distinguishable from pure chance. These two tools are complementary: the bootstrap tells you *how much* the effect could vary; the permutation test tells you *whether* an effect exists at all.
 
 :::{.callout-note}
 ## The Lady Tasting Tea
@@ -35,7 +35,7 @@ Fisher realized he didn't need any assumptions about probability distributions. 
 
 ## Setup: The Treatment Effect
 
-Let's reload the ACTG 175 clinical trial data and compute the observed treatment effect. (We call `.dropna()` to drop patients with missing CD4 measurements.)
+Let's reload the ACTG 175 clinical trial data. In [Chapter 8](lec08-sampling.qmd), we estimated the difference of population means between the two groups — about 50 CD4 cells. In a clinical trial, this difference is called the **treatment effect**. (`.dropna()` is a safety net — in this dataset, all patients have CD4 measurements.)
 
 ```{python}
 df = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
@@ -52,26 +52,28 @@ print(f"Control n:           {len(control)}")
 print(f"Treatment n:         {len(treatment)}")
 ```
 
-In [Chapter 8](lec08-sampling.qmd), we computed a bootstrap 95% confidence interval for this treatment effect and found it was entirely above zero — suggestive evidence that the drug works. But can we test this more rigorously? Can we quantify exactly how surprising this result would be if the drug had no effect at all?
+The bootstrap confidence interval we built in [Chapter 8](lec08-sampling.qmd) was entirely above zero — suggestive evidence that the drug works. But can we test this more rigorously? Can we quantify exactly how surprising this result would be if the drug had no effect at all?
 
 ## The Permutation Test Idea
 
 Here is the key insight: **if the drug has NO effect, then it doesn't matter which group a patient was in.** The treatment labels are meaningless — every patient would have had the same outcome regardless of which group they were assigned to.
 
-So what would happen if we **shuffled the labels**? If the drug truly does nothing, randomly reassigning patients to "control" and "treatment" should produce treatment effects that look just like the one we observed. But if our observed effect is much larger than what shuffling produces, that's evidence the drug works.
+This claim — "the drug has no effect" — is the **null hypothesis**: the default assumption a test tries to disprove. The number we compute from the data to measure the effect (here, the difference of group means) is the **test statistic**.
+
+So what would happen if we **shuffled the labels**? If the null hypothesis is true, randomly reassigning patients to "control" and "treatment" should produce test statistics that look just like the one we observed. But if our observed test statistic is much larger than what shuffling produces, that's evidence against the null — evidence that the drug works.
 
 :::{.callout-important}
 ## Definition: Permutation test
-A hypothesis test that builds the **null distribution** by shuffling group labels and recomputing the test statistic. The null distribution shows what the test statistic looks like when the null hypothesis (no effect) is true.
+A hypothesis test that builds the **null distribution** by shuffling group labels and recomputing the test statistic. The null distribution shows what the test statistic would look like if the null hypothesis were true.
 :::
 
-Why is shuffling valid here? Patients in ACTG 175 were **randomly assigned** to treatment groups. Random assignment makes the labels **exchangeable** under the null: if the drug does nothing, swapping labels does not change anything about the data. This property gives the permutation test its logical foundation.
+Why is shuffling valid here? Patients in ACTG 175 were **randomly assigned** to treatment groups. Labels are **exchangeable** under the null hypothesis when swapping them does not change the joint distribution of the data. Random assignment guarantees exchangeability: if the drug has no effect, the CD4 outcomes don't depend on which label a patient received, so shuffled datasets are just as plausible as the original. This property gives the permutation test its logical foundation.
 
 ### Step by step
 
 1. Combine all CD4 changes into one pool (ignoring labels)
 2. Randomly assign $n_{\text{control}}$ patients to "control" and the rest to "treatment"
-3. Compute the fake treatment effect
+3. Compute the test statistic (difference in means) on the fake groups
 4. Repeat many times
 
 ```{python}
@@ -114,7 +116,7 @@ You're on the FDA advisory panel. The observed treatment effect is ~50 CD4 cells
 
 ## Building the Null Distribution
 
-Five permutations gave us a rough sense. To compute a reliable p-value, we need thousands.
+Five permutations gave us a rough sense. To build the full null distribution, we need thousands.
 
 ```{python}
 n_perms = 10_000
@@ -178,7 +180,14 @@ A p-value this small means: under 10,000 random shufflings, essentially **none**
 
 :::{.callout-tip}
 ## Think About It
-Why do we add 1 to both the numerator and denominator? A p-value of exactly zero would claim infinite evidence against the null — a claim no finite simulation can support. Adding 1 to the numerator counts the observed data as one of the permutations (which it is, under the null). Adding 1 to the denominator adjusts the total accordingly. The resulting estimator is **conservative**: it never underestimates the true p-value, at the cost of a small upward bias that shrinks as $n_{\text{perms}}$ grows.
+
+A skeptic says: "A p-value of 0.0001 means there's only a 0.01% chance the drug doesn't work." Is the skeptic right? (The next section examines this claim.)
+:::
+
+:::{.callout-note collapse="true"}
+## Going deeper: why add 1?
+
+A p-value of exactly zero would claim infinite evidence against the null — a claim no finite simulation can support. Adding 1 to the numerator counts the observed data as one of the permutations (which it is, under the null). Adding 1 to the denominator adjusts the total accordingly. The resulting estimator is **conservative**: it never underestimates the true p-value, at the cost of a small upward bias that shrinks as $n_{\text{perms}}$ grows (Phipson & Smyth, 2010).
 :::
 
 ## What the p-Value Is NOT
@@ -195,13 +204,21 @@ The p-value is one of the most misinterpreted quantities in statistics. Before w
 3. **p = 0.049 and p = 0.051 are not meaningfully different.** The conventional threshold of 0.05 is arbitrary. Treat the p-value as a continuous measure of evidence, not a binary verdict.
 :::
 
-We'll formalize hypothesis testing in [Chapter 10](lec10-hypothesis-testing.qmd). For now, think of the p-value as measuring how *surprising* the data are under the null.
+The p-value is the tool we need now; [Chapter 10](lec10-hypothesis-testing.qmd) introduces the full testing framework.
 
 In data analytics, this kind of comparison between two groups is often called **A/B testing** — the labels "A" and "B" stand for the two groups being compared.
 
 ## A Second Example: Airbnb Prices by Borough
 
 Let's practice the full permutation test workflow on a different dataset. Is there a real difference in Airbnb listing prices between Manhattan and Brooklyn?
+
+Unlike the clinical trial, there is no random assignment here — a listing's borough is fixed, not randomized. The null hypothesis is weaker: Manhattan and Brooklyn prices come from the same distribution. If so, borough labels carry no information about price, and shuffling them should not change the test statistic. This is a test of *association*, not causation — the permutation test can detect that the groups differ, but cannot tell us *why*.
+
+:::{.callout-tip}
+## Think About It
+
+If the permutation test finds a significant price difference, can we conclude that *being in Manhattan* causes higher prices? What alternative explanations could produce the same result?
+:::
 
 ```{python}
 # Load Airbnb data — just the columns we need
@@ -286,11 +303,17 @@ These two simulation-based tools answer different questions:
 
 **Bootstrap = precision. Permutation = significance. Use both.**
 
+:::{.callout-tip}
+## Think About It
+
+Your bootstrap 95% CI for a treatment effect is [15, 85] — it excludes zero. Without computing anything, do you expect the permutation p-value to be above or below 0.05? Why?
+:::
+
 A bootstrap CI that excludes zero and a small permutation p-value are telling you the same story from different angles. When they agree — as they do for the ACTG 175 data — you can be confident in the conclusion.
 
 ### The CI/Hypothesis Test Duality
 
-In fact, the agreement between bootstrap CIs and hypothesis tests is not a coincidence — it's a mathematical equivalence. A 95% confidence interval contains all the values of the parameter that would *not* be rejected by a two-sided test at $\alpha = 0.05$. So if the 95% CI for a treatment effect excludes zero, that's the same as rejecting $H_0{:}\;\text{effect} = 0$ at the 5% level. The CI gives you *more* information than the test alone — it tells you the range of plausible values, not just whether zero is among them.
+In fact, the agreement between bootstrap CIs and hypothesis tests is not a coincidence — it's a mathematical equivalence. We write $H_0$ (read "H-naught") for the null hypothesis and $\alpha$ for the threshold at which we reject it — [Chapter 10](lec10-hypothesis-testing.qmd) formalizes both. A 95% confidence interval contains all the values of the parameter that would *not* be rejected by a two-sided test at $\alpha = 0.05$. So if the 95% CI for a treatment effect excludes zero, that's the same as rejecting $H_0{:}\;\text{effect} = 0$ at the 5% level. The CI gives you *more* information than the test alone — it tells you the range of plausible values, not just whether zero is among them.
 
 :::{.callout-important}
 ## Confidence intervals and hypothesis tests are two sides of the same coin
@@ -298,7 +321,10 @@ In fact, the agreement between bootstrap CIs and hypothesis tests is not a coinc
 A 95% confidence interval that excludes 0 is equivalent to rejecting $H_0{:}\;\text{effect} = 0$ in a two-sided test at $\alpha = 0.05$. If the interval includes 0, you fail to reject. This equivalence is exact for parametric methods and approximate for simulation-based methods. The correspondence holds for any confidence level: a 99% CI corresponds to $\alpha = 0.01$, and so on.
 :::
 
-Let's verify this with the ACTG 175 data. We'll compute the bootstrap CI from [Lecture 8](lec08-sampling.qmd) and check whether it excludes zero, then compare to the permutation test p-value we already computed.
+:::{.callout-note collapse="true"}
+## Going deeper: verifying the duality
+
+Let's verify with the ACTG 175 data. We recompute the bootstrap CI from [Chapter 8](lec08-sampling.qmd) and check whether it excludes zero, then compare to the permutation p-value.
 
 ```{python}
 # Bootstrap 95% CI for the treatment effect
@@ -322,10 +348,11 @@ elif (ci_lower > 0) or (p_value < 0.05):
 else:
     print(f"\nNeither method finds a significant effect.")
 ```
+:::
 
 ## Connection to the Normal Approximation
 
-Just as the bootstrap CI has a normal approximation (the CLT-based interval from [Lecture 8](lec08-sampling.qmd)), the permutation test has an analytical counterpart: the **two-sample t-test**.
+Just as the bootstrap CI has a normal approximation (the CLT-based interval from [Chapter 8](lec08-sampling.qmd)), the permutation test has an analytical counterpart: the **two-sample t-test**.
 
 ```{python}
 # Two-sample t-test on the ACTG 175 data
@@ -338,19 +365,9 @@ print(f"  p-value:     {p_value:.4f}")
 print(f"\nBoth are very small — same conclusion.")
 ```
 
-The t-test assumes the data are approximately normal. The permutation test makes no such assumption — it only requires exchangeability under the null. For large samples (like ACTG 175), the two approaches give nearly identical results. For small or skewed samples, the permutation test is more reliable.
+The t-test assumes the data are approximately normal. The permutation test makes no such assumption — it only requires exchangeability under the null. For large samples (like ACTG 175 and the Airbnb data), the two approaches give nearly identical p-values. For small or skewed samples, the permutation test is more reliable.
 
-```{python}
-# Same comparison for the Airbnb data
-t_stat_airbnb, t_pvalue_airbnb = stats.ttest_ind(manhattan, brooklyn)
-print(f"Airbnb two-sample t-test:")
-print(f"  t-statistic: {t_stat_airbnb:.2f}")
-print(f"  p-value:     {t_pvalue_airbnb:.6f}")
-print(f"\nAirbnb permutation test:")
-print(f"  p-value:     {p_value_airbnb:.4f}")
-```
-
-The t-test is faster (no simulation needed) but assumes normality. The permutation test is assumption-free but requires computation. In practice, they agree when samples are large. We'll explore the formal testing framework — null and alternative hypotheses, significance levels, Type I and Type II errors, and power — in [Chapter 10](lec10-hypothesis-testing.qmd).
+The t-test is faster (no simulation needed) but restrictive. The permutation test is assumption-free but requires computation. In practice, use whichever is appropriate and check that the other agrees.
 
 ## Key Takeaways
 
