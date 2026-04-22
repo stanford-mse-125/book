@@ -31,7 +31,7 @@ Any particular group of 2,139 patients is one random draw from a larger populati
 For most of the 20th century, quantifying uncertainty required mathematical derivation — you needed a formula for the standard error of each statistic you cared about. In 1979, Bradley Efron at Stanford proposed a radical alternative: **just resample the data and see what happens.** His "bootstrap" was initially controversial — it felt like cheating, conjuring information from nothing. But it worked, and it liberated statisticians from having to derive a new formula for every new problem. The bootstrap is now one of the most widely used tools in applied statistics. (See Salsburg, *The Lady Tasting Tea*, Ch. 24, "The Bootstrap.")
 :::
 
-## Estimand, estimator, estimate
+## The quantity we want to estimate
 
 Before writing code, let's name what we want to measure. The medical question is whether combination therapy improves CD4 counts more than AZT alone. Both sides of the question refer to **population means**: the average CD4 change we would see if every eligible patient took combination therapy, and the average we would see if every eligible patient took AZT alone. Each is a fixed but unknown number; the chapter's job is to estimate them from the sample we have.
 
@@ -114,18 +114,6 @@ Three different samples, three different estimates. Sample-to-sample variation i
 
 The three sub-trials above all drew 50 patients each. If we instead drew sub-trials of 500 patients (ten times larger), would you expect the three estimates to vary more, less, or about the same? Why? (You'll see the answer quantified once we meet the CLT.)
 :::
-
-We already have three vocabulary terms in play — the 50-cell **estimate** we reported earlier, the averaging **procedure** that produced it, and the true difference of population means we're *trying* to approximate. Let's name them.
-
-:::{.callout-important}
-## Definition: Estimand, estimator, estimate
-
-- **Estimand:** the quantity you want to know — here, the difference of population means defined above. We treat it as a fixed (but unknown) number; whether this is literally true depends on the dataset (more on this below).
-- **Estimator:** the procedure we use to approximate the estimand — here, "compute the difference in sample means."
-- **Estimate:** the specific number our estimator produces from this particular dataset — about 50 CD4 cells.
-:::
-
-The key insight: **the estimate changes every time you draw a new sample, but the estimand stays fixed.**
 
 For ACTG 175, the story is clean: the 2,139 patients are a sample from the millions of HIV-positive adults who might take these drugs, so the two population means genuinely exist. The bootstrap will simulate what would happen if we could re-run the trial with different patients. Polling works the same way — 1,000 voters sampled from millions.
 
@@ -243,11 +231,21 @@ The `[bootstrap_diff(...) for _ in range(B)]` construction is a **list comprehen
 
 Why $B = 10{,}000$? Large enough that the CI endpoints are stable to about a tenth of a CD4 cell across reruns; small enough to run in a few seconds. A different seed would shift the endpoints by a cell or two — that's **Monte Carlo error**, separate from the sampling uncertainty we're trying to estimate. Note that $B$ (how many resamples we take) is a completely separate quantity from $n_T, n_C$ (how big each resample is): we'd get the same kind of answer from a larger trial with a smaller $B$, or a smaller trial with a larger $B$, but the two quantities do different things.
 
-The SD of the bootstrap distribution is our estimate of the standard error of the difference-of-means estimator — that's the whole point of resampling. It approximates the spread of the **sampling distribution** of the estimator (Definition above).
+The SD of the bootstrap distribution is our estimate of the standard error of the difference of sample means — that's the whole point of resampling. It approximates the spread of the **sampling distribution** of the difference of sample means (Definition above).
 
 Preview: at the end of the chapter we'll see that a closed-form formula could have given the same standard error without any resampling. So why bother with the bootstrap? Because the formula works *only* for means of not-too-skewed data. The moment we ask about the median, the 95th percentile, or a mean when $n$ is small and tails are heavy, no formula exists — only the bootstrap does. The ACTG analysis is the easy warm-up; the harder cases come later.
 
-We summarize the bootstrap distribution with a **confidence interval**.
+Before we summarize the bootstrap distribution with a confidence interval, let's name the three vocabulary terms we've been using implicitly.
+
+:::{.callout-important}
+## Definition: Estimand, estimator, estimate
+
+- **Estimand:** the quantity you want to know — here, the difference of population means defined above. We treat it as a fixed (but unknown) number.
+- **Estimator:** the procedure we use to approximate the estimand — here, "compute the difference in sample means."
+- **Estimate:** the specific number our estimator produces from this particular dataset — about 50 CD4 cells.
+:::
+
+The key insight: **the estimate changes every time you draw a new sample, but the estimand stays fixed.**
 
 :::{.callout-important}
 ## Definition: Confidence interval
@@ -314,12 +312,6 @@ plt.show()
 The misses are the point of "95%" rather than "100%." The procedure is *calibrated* to catch the truth 95 times out of 100 in the long run, not every single time. If the simulated coverage came out to, say, 0.82 or 1.00, that would indicate the procedure was miscalibrated — which is exactly the diagnostic that statisticians run on any new CI method before recommending it.
 :::
 
-:::{.callout-warning}
-## What a confidence interval does (and doesn't) cover
-
-A confidence interval quantifies **sampling uncertainty** — the scatter we'd see from re-running the same study under the same conditions, with fresh patients drawn from the same population. It does *not* cover **systematic shifts** — a pandemic, a policy change, a recession — that move every unit at once. Before trusting a CI for a decision, ask whether the uncertainty that matters is the kind the bootstrap captures, or the kind where the whole system might change underneath you. [Chapter 16](lec16-backtesting.qmd) returns to this distinction when models trained on historical data meet changed conditions.
-:::
-
 :::{.callout-tip}
 ## Think about it
 
@@ -359,6 +351,12 @@ plt.show()
 ```
 
 The confidence interval is entirely above zero, suggesting combination therapy genuinely improves CD4 counts more than AZT alone. Because ACTG 175 randomly assigned patients, the positive difference reads as the drug's **causal effect** on CD4 change, not merely a correlation; [Chapter 18](lec18-causal-inference-1.qmd) formalizes what randomization buys us. We will formalize the "is the difference real or just noise?" question in [Chapter 9](lec09-permutation-tests.qmd) (permutation tests) and [Chapter 10](lec10-hypothesis-testing.qmd) (hypothesis testing). For now, focus on the *shape* of that histogram.
+
+:::{.callout-warning}
+## What a confidence interval does (and doesn't) cover
+
+A confidence interval quantifies **sampling uncertainty** — the scatter we'd see from re-running the same study under the same conditions, with fresh patients drawn from the same population. It does *not* cover **systematic shifts** — a pandemic, a policy change, a recession — that move every unit at once. Before trusting a CI for a decision, ask whether the uncertainty that matters is the kind the bootstrap captures, or the kind where the whole system might change underneath you. [Chapter 16](lec16-backtesting.qmd) returns to this distinction when models trained on historical data meet changed conditions.
+:::
 
 ## "It looks normal!"
 
