@@ -712,7 +712,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 ---
 
-## Lecture 17: AutoML, LLMs, and the Future of Data Analysis
+## Lecture 17: Working with AI
 
 **Objectives addressed:** 3 (evaluate AI analyses), 19 (AI coding assistants), 20 (AI failure modes), 21 (prompt decomposition)
 
@@ -800,6 +800,8 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Difference-in-differences (DiD): comparing before/after changes across treatment and control
 - Parallel trends assumption: treatment and control would have followed the same trend without treatment
 - DiD as regression with an interaction term: Y ~ Treated + Post + Treated × Post
+- Instrumental variables and regression discontinuity as other quasi-experimental tools (brief mention)
+- **Propensity score matching (PSM):** estimate $e(x) = P(T=1 \mid X=x)$, match treated/control units with similar scores, compare outcomes within matched pairs — balances all *observed* covariates simultaneously but cannot address unmeasured confounders
 
 **Key vocabulary:**
 - Counterfactual
@@ -808,19 +810,25 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Difference-in-differences (DiD)
 - Parallel trends assumption
 - Treatment effect
+- Instrumental variable (IV), regression discontinuity (RD)
+- **Propensity score**, **propensity score matching**, **hidden (unmeasured) confounder**
+- SUTVA (stable unit treatment value assumption), peeking in A/B tests
 
 **Key formulas:**
 - DiD = (Ȳ_treated,after − Ȳ_treated,before) − (Ȳ_control,after − Ȳ_control,before)
 - DiD regression: Y = β₀ + β₁·Treated + β₂·Post + β₃·Treated×Post + ε
 - β₃ = the causal effect estimate
+- Propensity score: $e(x) = P(T=1 \mid X=x)$, typically fit via logistic regression
 
-**Prerequisites:** Lec 18 (DAGs, confounding); Lec 8-10 (hypothesis testing for evaluating treatment effects)
+**Prerequisites:** Lec 18 (DAGs, confounding); Lec 8-10 (hypothesis testing for evaluating treatment effects); Lec 7 (logistic regression — prerequisite for estimating propensity scores)
 
 **Connections:**
-- Backward: Lec 8-10 (ACTG 175 clinical trial revisited with causal lens), Lec 18 (DAGs)
-- The Effect Ch 16-18 (DiD, natural experiments)
+- Backward: Lec 8-10 (ACTG 175 clinical trial revisited with causal lens), Lec 18 (DAGs), Lec 7 (logistic regression used to estimate propensity scores)
+- The Effect Ch 16-18 (DiD, natural experiments); Rosenbaum & Rubin 1983 (propensity score theory)
 
-**Surprise moment:** NBA play-in tournament introduction as a natural experiment affecting player usage patterns
+**Aphorism:** "Compared to what?" — every causal claim hides a counterfactual comparison
+
+**Surprise moment:** a single rule change (MLB's 1973 designated-hitter rule) creates a textbook natural experiment — Bradbury & Drinen showed AL pitchers hit batters ~15% more often than NL pitchers after 1973, explained causally by moral hazard (they no longer had to bat themselves)
 
 ---
 

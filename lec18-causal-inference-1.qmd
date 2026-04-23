@@ -37,7 +37,7 @@ If we could magically send every student to Stanford without changing anything e
 
 Today we formalize *why* — and develop the tools to tell the difference.
 
-## The Stanford Premium
+## The Stanford premium
 
 Let's start with the data. The College Scorecard tracks outcomes for students at every US college.
 
@@ -83,18 +83,20 @@ print(f"Correlation: r = {r:.2f}")
 print(f"Each 100-point SAT increase is associated with ${slope*100:,.0f} higher median earnings")
 ```
 
-## Does SAT Score *Cause* Higher Earnings?
+## Does attending a selective college *cause* higher earnings?
 
-The correlation is striking: $r \approx 0.65$. Schools with higher SAT averages have higher-earning graduates. A naive interpretation: "raising SAT scores would raise earnings."
+The correlation is striking: $r \approx 0.65$. Schools with higher average SATs have higher-earning graduates. This is the Stanford-vs-state-school question with a summary statistic attached — a naive interpretation would be: "attending a more selective school raises your earnings."
 
-But wait. What if something else drives *both* SAT scores and earnings?
+Each row in this dataset is a *school*, not a student. `SAT_AVG` is the average SAT of the school's admits, not any individual student's score — so treat it as a stand-in for the bundle that makes a selective school selective: peer group, resources, alumni network, brand. The causal question is: does attending a school with that bundle cause a student to earn more?
+
+But wait. What if something else drives *both* who attends a selective school and who earns more?
 
 :::{.callout-tip}
 ## Think About It
-What factors might affect both a student's SAT score and their future earnings?
+What factors might affect both a student's ability to attend a selective school and their future earnings?
 :::
 
-## Confounders: The Hidden Third Variable
+## Confounders: the hidden third variable
 
 :::{.callout-important}
 ## Definition: Confounder
@@ -103,12 +105,12 @@ A **confounder** is a common *cause* of both the treatment and the outcome — i
 
 Here, **family wealth** is a classic confounder:
 
-- Wealthy families invest in SAT prep, better schools, tutors $\rightarrow$ **higher SAT scores**
+- Wealthy families invest in test prep, top-tier high schools, application coaches $\rightarrow$ **more likely to attend a selective college**
 - Wealthy families provide professional networks, connections, inheritance $\rightarrow$ **higher earnings**
 
-If family wealth drives both, then the SAT–earnings correlation could be entirely **spurious** — a **spurious association** that exists only from a shared cause. The SAT doesn't *cause* anything; it's just a proxy for wealth. (Recall from Chapter 11: "correlation is not causation." Now let's formalize *why*.)
+If family wealth drives both, then the selective-school-to-earnings correlation could be entirely **spurious** — a **spurious association** that exists only from a shared cause. Attending Stanford might not *cause* anything; the SAT_AVG column might just be a proxy for which schools admit wealthy students. (Recall from Chapter 11: "correlation is not causation." Now let's formalize *why*.)
 
-## Causal Diagrams (DAGs)
+## Causal diagrams (DAGs)
 
 :::{.callout-important}
 ## Definition: DAG (Directed Acyclic Graph)
@@ -120,10 +122,10 @@ A **Directed Acyclic Graph (DAG)** is a visual tool for representing causal rela
 DAGs represent causal structure visually. The potential outcomes model defines causal effects algebraically. For each unit, imagine two potential outcomes: $Y(1)$ under treatment and $Y(0)$ under control. The **causal effect** is $Y(1) - Y(0)$, but we only observe one of these for any individual (the **fundamental problem of causal inference**). Randomization ensures that the *average* causal effect can be estimated, even though individual effects cannot.
 :::
 
-There are **two paths** from SAT to Earnings:
+Write the treatment as "attend selective college" (proxied in the data by a school's SAT_AVG). There are **two paths** from the treatment to earnings:
 
-1. **Causal path (directed path):** SAT $\to$ Admission $\to$ Earnings (maybe real — all arrows point forward from treatment to outcome)
-2. **Backdoor path:** SAT $\leftarrow$ Wealth $\to$ Earnings (spurious — goes "behind" the treatment through a common cause)
+1. **Causal path (directed path):** Attend selective college $\to$ Earnings (maybe real — arrows point forward from treatment to outcome)
+2. **Backdoor path:** Attend selective college $\leftarrow$ Wealth $\to$ Earnings (spurious — goes "behind" the treatment through a common cause)
 
 The standard causal inference term for path 2 is a **backdoor path**: it connects treatment to outcome by going through a common cause rather than through a direct causal chain. A naive regression mixes both paths together. We can't tell which is which without more information. Let's draw it.
 
@@ -150,20 +152,23 @@ def draw_dag(nodes, edges, annotations=None, title='', figsize=(8, 6)):
     plt.tight_layout(); plt.show()
 ```
 
-The `draw_dag()` helper above draws nodes as rectangles and connects them with arrows. Let's use it to visualize the SAT–earnings DAG.
+The `draw_dag()` helper above draws nodes as rectangles and connects them with arrows. Let's use it to visualize the selectivity–earnings DAG.
 
 ```{python}
 draw_dag(
-    nodes={'Family Wealth': (5, 7), 'SAT Score': (2, 4),
-           'Admission': (5, 2.5), 'Earnings': (8, 4)},
-    edges=[('Family Wealth', 'SAT Score'), ('Family Wealth', 'Earnings'),
-           ('SAT Score', 'Admission'), ('Admission', 'Earnings')],
-    annotations=[('backdoor\npath', 3.2, 5.8, 'red'), ('causal\npath?', 4.8, 3.2, 'green')],
-    title='Causal Diagram (DAG): SAT Scores and Earnings'
+    nodes={'Family Wealth\n(unobserved)': (5, 7), 'Attend selective\ncollege': (2, 4),
+           'Earnings': (8, 4)},
+    edges=[('Family Wealth\n(unobserved)', 'Attend selective\ncollege'),
+           ('Family Wealth\n(unobserved)', 'Earnings'),
+           ('Attend selective\ncollege', 'Earnings')],
+    annotations=[('backdoor\npath', 3.2, 5.8, 'red'), ('causal\npath?', 5.0, 3.6, 'green')],
+    title='Causal diagram (DAG): selective-college attendance and earnings'
 )
 ```
 
-## When Does Regression Estimate a Causal Effect?
+The dashed yellow node marks a variable we cannot cleanly observe — family wealth is not in the Scorecard dataset. The chapter's central difficulty: we can see the correlation along the red path, but we can't separate the two paths without either measuring wealth or intervening.
+
+## When does regression estimate a causal effect?
 
 In Chapter 12, we interpreted regression coefficients as "holding everything else constant." Now we can see when that interpretation is *causal* and when it's just descriptive.
 
@@ -182,7 +187,7 @@ The gap between correlation and causation motivates the distinction between **ob
 With observational data, you can never be sure you've blocked every backdoor path.
 :::
 
-## Simpson's Paradox: A Confounding Problem
+## Simpson's paradox: a confounding problem
 
 In Chapter 11, you saw Simpson's Paradox in NBA rest data: extended-rest players scored fewer points overall, but *more* points within each position group. The aggregate lied. We first saw hospital readmission data in Chapter 2, where the "worst" hospitals turned out to be small rural ones with noisy estimates. Now let's see another way this data can mislead — and explain *why* using DAGs.
 
@@ -252,21 +257,28 @@ plt.tight_layout()
 plt.show()
 ```
 
-## Why Does This Happen?
+## Why does this happen?
 
 The DAG tells the story:
 
-```
-  Patient Severity ──→ Hospital Choice ──→ Readmission Rate
-         │                                       ↑
-         └───────────────────────────────────────┘
+```{python}
+draw_dag(
+    nodes={'Patient severity': (2.2, 5.5), 'Hospital choice\n(high vs low volume)': (5, 2),
+           'Readmission rate': (8, 5.5)},
+    edges=[('Patient severity', 'Hospital choice\n(high vs low volume)'),
+           ('Patient severity', 'Readmission rate'),
+           ('Hospital choice\n(high vs low volume)', 'Readmission rate')],
+    annotations=[('backdoor\npath', 5, 6.2, 'red')],
+    title="Simpson's paradox in hospitals: patient severity is the confounder",
+    figsize=(8, 5)
+)
 ```
 
 **Patient severity** is a confounder: it causes both Hospital Choice (sicker patients tend to go to smaller, specialized hospitals) and Readmission Rate (sicker patients get readmitted more). High-volume hospitals see a less severe case mix, so their aggregate readmission rate looks lower. But *within* each severity level — blocking the backdoor path — high-volume hospitals actually perform worse.
 
 Simpson's Paradox is a confounding problem. The aggregate data tells the opposite story from the disaggregated data: high-volume hospitals look *better* overall but *worse* within each severity group. Which one is "right"? The one that blocks the backdoor path by controlling for the confounder.
 
-### Simpson's Paradox in Policing: NYPD Stop-and-Frisk
+### Simpson's paradox in policing: NYPD stop-and-frisk
 
 Simpson's Paradox doesn't just show up in hospitals. It appears whenever a confounding variable has different distributions across groups — and the policy consequences can be enormous.
 
@@ -283,27 +295,48 @@ print(f"\n  Within-precinct ratio (controlling for location): 2.2x")
 print(f"\n  The ratio drops from {13/2.5:.1f}x to 2.2x after controlling for precinct.")
 ```
 
+```{python}
+# Visualize the city-wide vs within-precinct ratio — same Simpson's reversal as hospitals
+fig, ax = plt.subplots(figsize=(6, 4.5))
+comparisons = ['City-wide\n(confounded by precinct)', 'Within-precinct\n(confounder blocked)']
+ratios = [13 / 2.5, 2.2]
+colors_hr = ['#d62728', '#4878CF']
+bars = ax.bar(comparisons, ratios, color=colors_hr, edgecolor='white', width=0.55)
+ax.axhline(y=1.0, color='black', linewidth=0.8, linestyle='--', alpha=0.6)
+ax.text(1.45, 1.08, 'equal hit rates', color='black', fontsize=9, alpha=0.7, ha='right')
+ax.set_ylabel('Hit-rate ratio (white ÷ Black)')
+ax.set_title('NYPD stop-and-frisk: disparity shrinks after blocking the backdoor')
+for bar, r in zip(bars, ratios):
+    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+            f'{r:.1f}x', ha='center', va='bottom', fontsize=13, fontweight='bold')
+ax.set_ylim(0, 6)
+plt.tight_layout()
+plt.show()
+```
+
 The city-wide numbers paint a stark picture: the hit rate for white individuals is `{python} f'{13/2.5:.1f}'`x higher than for Black individuals, suggesting officers stop Black individuals on far weaker evidence. But the city-wide comparison is **confounded by precinct**. Different precincts have different stop rates *and* different racial compositions.
 
 The DAG:
 
-```
-  Precinct ──→ Race of person stopped
-      │
-      └──────→ Hit rate
+```{python}
+draw_dag(
+    nodes={'Precinct': (2, 5.5), 'Race of\nperson stopped': (5, 2), 'Hit rate': (8, 5.5)},
+    edges=[('Precinct', 'Race of\nperson stopped'),
+           ('Precinct', 'Hit rate'),
+           ('Race of\nperson stopped', 'Hit rate')],
+    annotations=[('backdoor\npath', 5, 6.2, 'red')],
+    title="Stop-and-frisk: precinct is the confounder",
+    figsize=(8, 5)
+)
 ```
 
-**Precinct** is a confounder: it influences both who gets stopped (racial composition varies by neighborhood) and the hit rate (policing intensity and weapon prevalence vary by location). When we compare hit rates *within* precincts — blocking the backdoor path — the ratio drops from 5.1x to 2.2x.
+**Precinct** is a confounder: it influences both who gets stopped (racial composition varies by neighborhood) and the hit rate (policing intensity and weapon prevalence vary by location). When we compare hit rates *within* precincts — blocking the backdoor path — the ratio drops from 5.2x to 2.2x. (The within-precinct number isn't computed from our summary data; it's the result of Sharad Goel, Justin Rao, and Ravi Shroff's stop-level analysis in the *Annals of Applied Statistics*, 2016.)
 
 The within-precinct ratio is still evidence of disparate treatment: officers appear to stop Black individuals on weaker evidence even within the same precinct. But the *magnitude* of the disparity changes dramatically once we control for location. Getting the confounding structure right is essential for accurate policy analysis.
 
 After the Stanford Open Policing Project published similar within-group analyses for the LAPD, the department changed its Metro Division operations (*Los Angeles Times*, October 2019). The statistical question — aggregate or disaggregated? — had real consequences for how a major city policed its residents.
 
-## Feedback loops as causal structure
-
-The stop-and-frisk analysis showed confounding at work in a deployed system. There's a subtler cousin. [Chapter 16](lec16-feedback-loops.qmd) introduced **feedback loops**: cases where the model's *predictions* change the outcome it's trying to measure (predictive policing, credit scoring, sepsis alerts). The DAG view makes precise why those loops break standard analysis. In a feedback-loop DAG, the model's prediction is an **intervention** on the outcome, not just an observation of it. The arrow from prediction to outcome is a causal edge — and any path that goes *through* the model's output can't be blocked by conditioning on the model's inputs. The fix isn't better covariates; it's either severing the loop (e.g., randomizing some decisions as a holdout) or analyzing the deployed system as a causal system. The next chapter develops the tools.
-
-## John Snow and the Birth of Epidemiology
+## John Snow and the birth of epidemiology
 
 :::{.callout-note}
 ## Historical Context: John Snow's Cholera Investigation
@@ -350,7 +383,7 @@ print("Deaths cluster around the Broad Street pump -- the famous map.")
 print("But is this CAUSAL evidence? Or just a spatial correlation?")
 ```
 
-## Snow's Real Evidence: The Natural Experiment
+## Snow's real evidence: the natural experiment
 
 The famous cholera map is compelling, but it's just a **correlation** — deaths cluster near a pump. Maybe those neighborhoods were just poorer or more crowded.
 
@@ -400,7 +433,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-## Why This Is a Natural Experiment
+## Why this is a natural experiment
 
 :::{.callout-important}
 ## Definition: Natural Experiment
@@ -418,13 +451,19 @@ Here, the "treatment" is contaminated water. The key features:
 
 The intermingling of houses is what makes Snow's evidence *causal*, not just correlational. He couldn't run an experiment (you can't randomly give people contaminated water!), but nature effectively ran one for him.
 
-> **The DAG:**
-> ```
-> Water Source ──→ Water Quality ──→ Cholera Death
-> ```
-> No confounding path! The neighborhoods are the same.
+```{python}
+draw_dag(
+    nodes={'Water company\n(as-if random)': (2, 4.5), 'Water quality': (5, 4.5),
+           'Cholera death': (8, 4.5)},
+    edges=[('Water company\n(as-if random)', 'Water quality'),
+           ('Water quality', 'Cholera death')],
+    annotations=[('no backdoor path — neighborhoods are comparable', 5, 2.5, '#2ca02c')],
+    title="Snow's natural experiment: no unblocked backdoor path",
+    figsize=(9, 4)
+)
+```
 
-## The Map Is Not the Experiment
+## The map is not the experiment
 
 Here's what most people get wrong about John Snow. The famous cholera map — deaths clustered around the Broad Street pump — is the image everyone remembers. It's in every textbook, every documentary, every data science course.
 
@@ -458,7 +497,7 @@ print(f"\nBroad Street pump accounts for {pump_deaths.get('Broad St', 0)} of {le
 print("\nBut proximity is not causation. Snow knew he needed stronger evidence.")
 ```
 
-## A Framework: Levels of Causal Evidence
+## A framework: levels of causal evidence
 
 Snow's investigation illustrates a hierarchy of evidence that we'll use throughout causal inference. Not all evidence is created equal:
 
@@ -466,12 +505,12 @@ Snow's investigation illustrates a hierarchy of evidence that we'll use througho
 |-------|--------|---------|----------|
 | 1 | **Randomized experiment** | Clinical trial (ACTG 175 from Chapter 10) | Gold standard |
 | 2 | **Natural experiment** | Snow's water companies | Very strong |
-| 3 | **Regression with confounders** | SAT $\to$ earnings controlling for wealth | Depends on what you control for |
-| 4 | **Simple correlation** | SAT and earnings ($r = 0.65$) | Weakest — could be confounded |
+| 3 | **Regression with confounders** | School selectivity $\to$ earnings, controlling for wealth | Depends on what you control for |
+| 4 | **Simple correlation** | School SAT_AVG and earnings ($r = 0.65$) | Weakest — could be confounded |
 
 We'll see more of levels 1 and 2 in Chapter 19.
 
-## Can We Fix Regression? Controlling for Confounders
+## Can we fix regression? Controlling for confounders
 
 If we can't run an experiment, can we at least control for confounders in a regression?
 
@@ -501,26 +540,51 @@ print(f"  Coefficient on private nonprofit: ${model_multi.coef_[1]:,.0f}")
 print(f"  R-squared = {model_multi.score(X_multi, y):.3f}")
 
 print(f"\nThe SAT coefficient barely changed (${model_simple.coef_[0]:.0f} → ${model_multi.coef_[0]:.0f}) when we controlled for school type.")
-print("School type doesn't confound the SAT-earnings relationship much in this data.")
-print("Not every suspected confounder actually confounds — but we still can't rule out other unmeasured confounders like family wealth.")
+print("School type captures only a coarse difference in resources -- within each type,")
+print("family wealth still varies enormously, so it can still confound the relationship")
+print("even when public/private flags don't. Not every suspected confounder actually")
+print("confounds at the level you measure it -- but the unmeasured confounders remain.")
 ```
 
-## The Limits of "Controlling For"
+## Feedback loops as causal structure
+
+Before leaving confounding, there's a subtler cousin worth naming. [Chapter 16](lec16-feedback-loops.qmd) introduced **feedback loops**: cases where the model's *predictions* change the outcome it's trying to measure (predictive policing, credit scoring, sepsis alerts). The DAG view makes precise why those loops break standard analysis.
+
+In a feedback-loop DAG, the model's prediction is an **intervention** on the outcome, not just an observation of it. The arrow from prediction to outcome is a causal edge — not a passive correlation — and any path that goes *through* the model's output cannot be blocked by conditioning on the model's inputs.
+
+```{python}
+draw_dag(
+    nodes={'Training\ndata': (1.5, 5), 'Model': (4, 5), 'Prediction': (6.5, 5),
+           'Action': (6.5, 2.5), 'Outcome': (4, 2.5), 'New training\ndata (next round)': (1.5, 2.5)},
+    edges=[('Training\ndata', 'Model'), ('Model', 'Prediction'),
+           ('Prediction', 'Action'), ('Action', 'Outcome'),
+           ('Outcome', 'New training\ndata (next round)'),
+           ('New training\ndata (next round)', 'Training\ndata')],
+    annotations=[('model changes what it measures', 4, 6.3, '#d62728')],
+    title='Feedback-loop DAG: prediction is an intervention, not an observation',
+    figsize=(9, 5.5)
+)
+```
+
+The fix isn't better covariates. Conditioning on model inputs cannot block a path that runs *through* the model's output. The fix is structural: either sever the loop (for example, randomize some decisions as a holdout so that outcomes for those cases are generated without the model's input) or analyze the deployed system as a causal system with its own treatment-and-outcome structure. Chapter 19 develops both approaches.
+
+## The limits of "controlling for"
 
 Adding control variables to a regression can help — but only if:
 
 1. **You include all confounders.** Miss one, and the estimate is biased.
 2. **You measure them well.** A rough proxy for "family wealth" isn't the same as actual wealth.
 3. **You don't control for the wrong things.** Controlling for a **mediator** (something on the causal path) or a **collider** (something caused by both treatment and outcome) can make bias *worse*.
+4. **The arrow structure must be passive.** If the "treatment" is a deployed model's prediction, no amount of covariate adjustment recovers a causal effect — see the feedback-loop DAG above.
 
 The difficulty of controlling for all confounders is the core challenge of observational studies. You're always one unmeasured confounder away from a wrong answer.
 
 :::{.callout-tip}
 ## Think About It
-What would you need to measure to estimate the *causal* effect of SAT scores on earnings?
+What would you need to measure to estimate the *causal* effect of attending a selective college on earnings?
 :::
 
-## A Trap: Collider Bias
+## A trap: collider bias
 
 :::{.callout-tip}
 ## Think About It
@@ -538,7 +602,7 @@ A variable is a **collider** on a particular path if both arrows on that path po
   Talent ──→ Hired at Top Firm ←── Connections
 ```
 
-Among all people, talent and connections may be unrelated. But among people hired at top firms (conditioning on the collider), they're **negatively** correlated — you got in either through talent OR connections.
+In the simulation below, talent and connections are independent by construction. But among people hired at top firms (conditioning on the collider), they're **negatively** correlated — you got in either through talent OR connections.
 
 The resulting artifact is called **collider bias** or **selection bias**, and it's a common trap in regression analysis.
 
@@ -590,14 +654,22 @@ Conditioning on a common *effect* of two variables creates a fake relationship b
 A **confounder** is a common *cause* of treatment and outcome — controlling for it **removes** bias. A **collider** is a common *effect* of treatment and outcome — controlling for it **creates** bias. The two require opposite strategies: always control for confounders, never control for colliders.
 :::
 
-## DAG Rules: What to Control For
+## DAG rules: what to control for
 
 Before we summarize the rules, let's work through one more example. Consider this DAG for the effect of Education on Health:
 
-```
-  Socioeconomic Background ──→ Education ──→ Income ──→ Health
-              │                                           ↑
-              └──────────────────────────────────────────┘
+```{python}
+draw_dag(
+    nodes={'Socioeconomic\nbackground': (2, 6), 'Education': (1.5, 3),
+           'Income': (5, 3), 'Health': (8.5, 3)},
+    edges=[('Socioeconomic\nbackground', 'Education'),
+           ('Socioeconomic\nbackground', 'Health'),
+           ('Education', 'Income'), ('Income', 'Health')],
+    annotations=[('backdoor path (confounder)', 5.2, 6.3, 'red'),
+                 ('causal path through mediator', 5, 1.9, 'green')],
+    title="Education → Health: socioeconomic background confounds, income mediates",
+    figsize=(9, 6)
+)
 ```
 
 What's the confounder? Socioeconomic Background — it's a common cause of Education and Health. Should we control for it? **Yes** — it's on a backdoor path. What's the mediator? Income — it's on the causal path from Education to Health. Should we control for Income? **No** — it would block the very effect we're trying to measure.
@@ -611,8 +683,8 @@ Here are the key rules for reading causal diagrams:
 
 | Structure | Name | Example | Control for it? |
 |-----------|------|---------|----------------|
-| X $\leftarrow$ Z $\rightarrow$ Y | **Confounder** | Wealth $\to$ SAT, Wealth $\to$ Earnings | **Yes!** Blocks the backdoor path |
-| X $\rightarrow$ Z $\rightarrow$ Y | **Mediator** | SAT $\to$ Admission $\to$ Earnings | **No!** Blocks the causal path |
+| X $\leftarrow$ Z $\rightarrow$ Y | **Confounder** | Wealth $\to$ Selective college, Wealth $\to$ Earnings | **Yes!** Blocks the backdoor path |
+| X $\rightarrow$ Z $\rightarrow$ Y | **Mediator** | Selective college $\to$ Alumni network $\to$ Earnings | **No!** Blocks the causal path |
 | X $\rightarrow$ Z $\leftarrow$ Y | **Collider** | Talent $\to$ Hired $\leftarrow$ Connections | **No!** Opens a spurious path |
 
 :::{.callout-important}
@@ -629,7 +701,7 @@ In the DAG below, identify the confounder, mediator, and collider. Which should 
 X $\to$ M $\to$ Y, &emsp; X $\leftarrow$ C $\to$ Y, &emsp; X $\to$ Z $\leftarrow$ Y
 :::
 
-## Key Takeaways
+## Key takeaways
 
 > "Correlation is not causation." Now you know *why* — and you have the tools (DAGs) to tell the difference.
 
@@ -643,7 +715,7 @@ X $\to$ M $\to$ Y, &emsp; X $\leftarrow$ C $\to$ Y, &emsp; X $\to$ Z $\leftarrow
 
 - **Block all backdoor paths, but don't block causal paths.** Control for confounders (good), but never control for colliders (opens spurious paths) or mediators (removes the effect you're trying to measure).
 
-Next time: difference-in-differences, A/B tests, and counterfactual reasoning — the tools for designing studies that establish causation.
+Back to the opening question: with observational data alone, can we estimate Stanford's causal effect on earnings? Honestly — no. We can't measure family wealth perfectly, can't enumerate every confounder, and the only "treatment" we observe is the bundle of selection + admission + culture that makes Stanford Stanford. Next time: difference-in-differences, A/B tests, and counterfactual reasoning — the tools for designing studies that *can* answer questions like this.
 
 ## Study guide
 

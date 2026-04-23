@@ -1,5 +1,5 @@
 ---
-title: "When Validation Isn't Enough"
+title: "Validation beyond the random split"
 execute:
   enabled: true
 jupyter: python3
@@ -7,7 +7,14 @@ jupyter: python3
 
 You build a model to predict tomorrow's air quality. It scores R² = 0.66 on your test set. You deploy it. It fails to beat a model that predicts "same as yesterday." A hospital trains a sepsis-alert model. It validates at AUC 0.76. Clinicians start acting on the alerts; within a year, the model's performance quietly erodes. A predictive-policing algorithm flags a neighborhood as high-crime. Police patrol more heavily. Arrests go up. The model "confirms" its own prediction.
 
-These are three different deployment failures with one common root: *the world you tested on isn't the world you deployed into, and sometimes the model itself reshapes that world.* Models are predictions about the world, and predictions change the world. This chapter is about three reasons a validated model fails after deployment: **temporal leakage** (you saw the future in your test set), **feedback loops** (your prediction changes the outcome), and **Goodhart's law** (the metric you optimized stops measuring the thing you cared about). Each has its own diagnostics, its own fixes, and its own warning signs — and recognizing them is what separates a model that looks good on paper from a model that survives contact with the world.
+The validation machinery of [Chapter 6](lec06-validation.qmd) — random train/test splits, cross-validation — was built for a specific world: rows are exchangeable, the deployment distribution matches the training distribution, and the model's predictions don't affect the outcome. That world is real, and when it holds, random-split validation is trustworthy. This chapter is about the cases where it doesn't. There are four failure modes arranged from mildest to deepest:
+
+1. **Temporal leakage.** Data has time structure. A random split puts neighbors of the test point in the training set. *Fix: validate with a temporal split (backtesting).*
+2. **Distribution shift.** Deployment-time data comes from a regime the training set never saw. *Fix: test on out-of-distribution datasets, stratify by subgroup, widen intervals for extreme inputs.*
+3. **Feedback loops.** The model's predictions change the outcome. *No passive validation procedure, random or temporal, catches this — you need to design the deployment itself (randomized holdouts, A/B tests).*
+4. **Goodhart's law.** The metric you optimized becomes a target and stops measuring the goal. *Again a structural problem, not a split problem.*
+
+Backtesting isn't another thing that fails; for time-series forecasting, it is established and basically trustworthy methodology, with caveats for sudden regime shifts. Subgroup validation and distribution-shift testing likewise work when you do them. The thesis isn't "validation is broken." The thesis is: **random-split validation is one tool, and you need the right tool for each failure mode.**
 
 ```{python}
 import numpy as np
@@ -123,7 +130,7 @@ Recall from Chapter 6 that we split data randomly into training and test sets. T
 Here's what most tutorials (and most AI tools) would do — randomly shuffle the data and split 80/20. Let's see how well it works.
 
 ```{python}
-# Random 80/20 split -- THE WRONG WAY
+# Random 80/20 split — the wrong way for time series
 np.random.seed(42)
 features = ['aqi_lag1', 'aqi_lag7_avg', 'aqi_lag3_avg', 'day_of_year']
 
@@ -200,7 +207,7 @@ We're about to train on 2021--2022 and test on 2023. Will R-squared be higher, l
 Let's train on 2021–2022 and test on 2023.
 
 ```{python}
-# Temporal split -- THE RIGHT APPROACH
+# Temporal split — the right approach
 train_temporal = la[la['Date'] < '2023-01-01']
 test_temporal = la[(la['Date'] >= '2023-01-01') & (la['Date'] < '2024-01-01')]
 
@@ -274,7 +281,7 @@ MAE tells you the average error in the same units as your target — useful for 
 
 **MAPE** (Mean Absolute Percentage Error) expresses errors as percentages:
 $$\text{MAPE} = \frac{1}{n} \sum_{i=1}^{n} \left| \frac{y_i - \hat{y}_i}{y_i} \right| \times 100\%.$$
-MAPE is intuitive — "the forecast is off by 15% on average" — but it breaks when actual values are near zero (division by zero) and penalizes under-forecasts more heavily than over-forecasts. When the actual value is small, even a modest error produces a large percentage — MAPE disproportionately penalizes forecasts for low-value days.
+MAPE is intuitive — "the forecast is off by 15% on average" — but it breaks when actual values are near zero (division by zero) and penalizes over-forecasts more heavily than under-forecasts. The asymmetry comes from the bound: when you under-forecast, the percentage error is capped at 100% (you can't predict less than zero); when you over-forecast, it's unbounded. As a result, MAPE-optimal forecasts tend to be biased low. When the actual value is small, even a modest error produces a large percentage — MAPE disproportionately penalizes forecasts for low-value days.
 
 **MASE** (Mean Absolute Scaled Error) compares your model's error to the naive baseline's error:
 $$\text{MASE} = \frac{\text{MAE of your model}}{\text{MAE of the naive forecast}}.$$
@@ -507,10 +514,10 @@ if len(extreme_mono) > 0:
     print("-" * 40)
     for actual, pred in list(zip(extreme_mono['AQI'].values, pred_extreme))[:10]:
         print(f"{actual:>12.0f} {pred:>12.0f} {actual - pred:>12.0f}")
+
+    coef_lag1 = model_mono.coef_[features.index('aqi_lag1')]
     print()
-    print("The model can't extrapolate to values it's never seen.")
-    print("This is DISTRIBUTION SHIFT -- the future can be fundamentally")
-    print("different from the past.")
+    print(f"Coefficient learned on aqi_lag1 (trained on AQI < 300): {coef_lag1:.4f}")
 else:
     print("No extreme events found in Mono County subset.")
 ```
@@ -540,6 +547,8 @@ print("The orange line (predictions) can't reach the spikes.")
 print("A linear model trained on normal conditions extrapolates nonsensically.")
 ```
 
+Why does the model fail even on days when its input — yesterday's AQI — is itself extreme? Look at the learned coefficient on `aqi_lag1`: essentially zero. Inside the training regime (AQI below 300), day-to-day changes in Mono County air quality are dominated by noise, so ordinary least squares learns that yesterday's value carries almost no predictive signal and settles for "predict the training mean." When we plug in `aqi_lag1 = 8000`, the prediction barely budges from the training mean — the model never had a chance. The failure isn't that the model refuses to extrapolate; it's that in the training distribution, the relevant signal didn't exist to be learned.
+
 :::{.callout-important}
 ## Definition: Distribution Shift
 **Distribution shift** occurs when future data comes from a fundamentally different regime than the training data. It is a severe form of non-stationarity — not just gradual changes in the mean, but a qualitative change the training data never captured.
@@ -553,17 +562,19 @@ Distribution shift is the deepest problem in time series forecasting:
 
 > "Prediction is very difficult, especially about the future." — attr. Niels Bohr
 
-In Chapter 10, we saw that a clinical trial on adults can't tell you about children. Same idea here: a model trained on AQI 0--300 can't tell you what happens at AQI 8,000. You can't extrapolate beyond the range of your data.
+A clinical trial on adults can't tell you about children — the inference only covers the population you sampled. Same idea here: a model trained on AQI 0--300 can't tell you what happens at AQI 8,000. You can't extrapolate beyond the range of your data. [Chapter 6](lec06-validation.qmd) previewed this: random splits hold out observations that *look like* the ones you trained on, so cross-validation protects you against in-distribution noise, not against a future that doesn't look like the past.
 
 In Chapter 17, we'll see that AutoML tools often make this same mistake — they use standard cross-validation by default and don't know your data is temporal.
 
 Distribution shift can also be gradual — styles of play, market conditions, or climate patterns that evolve slowly can erode model performance without triggering obvious alarms.
 
+If models can fail silently when conditions change, point forecasts hide exactly what matters. The next section quantifies the uncertainty around a forecast — at least under the regime the data captures.
+
 ## Prediction intervals: quantifying forecast uncertainty
 
 A point forecast — "tomorrow's AQI will be 62" — hides everything that matters for decision-making. Should the county issue a health advisory? That depends on whether 62 means "almost certainly between 55 and 70" or "could easily be 200." **Prediction intervals** give you that range.
 
-The idea: use the bootstrap. Resample residuals from the training set, add them to each forecast, and repeat many times. The spread of the resulting forecasts gives you a prediction interval.
+The idea: use the bootstrap. Recall from Chapter 8 that bootstrap resampling estimates uncertainty by simulating many alternative datasets from the data we have. Here we apply the same idea to forecast uncertainty: we resample the model's training residuals, add them to each forecast, and repeat many times. The spread of the resulting forecasts gives you a prediction interval.
 
 ```{python}
 # Bootstrap prediction intervals for the temporal test set
@@ -635,19 +646,45 @@ Temporal leakage is a validation *technique* failure — random splits saw the f
 
 In each case, there is a causal arrow running from the model's *prediction* back to the *outcome*:
 
-```
-  Training data ──→ Model ──→ Prediction ──→ Action ──→ Outcome ──→ New training data
-                                                                         │
-                                                                         └──→ (cycle repeats)
+```{python}
+#| fig-cap: "Feedback loop: the model's prediction changes the outcome it measures, and the new data feeds back into training."
+fig, ax = plt.subplots(figsize=(10, 3.2))
+ax.set_xlim(0, 10); ax.set_ylim(0, 3); ax.axis('off')
+
+nodes = [('Training\ndata', 1.0, 2.3), ('Model', 2.8, 2.3), ('Prediction', 4.6, 2.3),
+         ('Action', 6.4, 2.3), ('Outcome', 8.2, 2.3), ('New training\ndata', 9.5, 2.3)]
+
+for name, x, y in nodes:
+    ax.add_patch(plt.Rectangle((x - 0.65, y - 0.3), 1.3, 0.6,
+                               facecolor='lightblue', edgecolor='navy', lw=1.8, zorder=3))
+    ax.text(x, y, name, ha='center', va='center', fontsize=10, fontweight='bold', zorder=4)
+
+for (_, x1, y1), (_, x2, y2) in zip(nodes[:-1], nodes[1:]):
+    ax.annotate('', xy=(x2 - 0.65, y2), xytext=(x1 + 0.65, y1),
+                arrowprops=dict(arrowstyle='->', lw=2, color='navy'))
+
+# Cycle return arrow: from "New training data" back to "Training data"
+ax.annotate('', xy=(1.0, 2.0), xytext=(9.5, 1.6),
+            arrowprops=dict(arrowstyle='->', lw=2, color='#d62728',
+                            connectionstyle='arc3,rad=-0.3'))
+ax.text(5.0, 0.6, 'cycle repeats', ha='center', va='center',
+        fontsize=10, color='#d62728', fontstyle='italic')
+
+plt.tight_layout(); plt.show()
 ```
 
 This is why "correlation is not causation" isn't the full story. Sometimes the model *is* the cause. When a model's predictions change the environment that generates future data, standard validation breaks down. The test set no longer represents the world the model will operate in, because the model itself reshapes that world.
 
 Whenever you deploy a model, ask: how will the predictions change the data distribution in the future? If the answer is "they won't" (a weather forecaster doesn't affect the weather, a particle-physics model doesn't affect the particles), you're safe from feedback loops. If the answer is "they will" (credit scores affect who gets loans, sepsis alerts affect who gets treated), you have a feedback loop — and your validation set can't tell you how it will behave.
 
+:::{.callout-note collapse="true"}
+## Going deeper: performative prediction
+The phenomenon we're calling "feedback loop" has a formal research framework called **performative prediction** (Perdomo, Zrnic, Mendler-Dünner, Hardt 2020). It treats the deployed model $f_\theta$ as inducing a data distribution $\mathcal{D}(\theta)$ that depends on the deployed parameters, and studies when iterative retraining converges to a fixed point (a "performatively stable" $\theta$ where the model is accurate against the distribution *it induces*). The framework also subsumes *strategic classification*, where individual agents deliberately change their features to score better. The formal machinery is mostly relevant for algorithm designers; the *phenomenon* is what matters for analysts, which is why we stick with "feedback loop" in this chapter.
+:::
+
 ## Weapons of Math Destruction
 
-Cathy O'Neil calls the worst cases **Weapons of Math Destruction** (WMDs) — predictive models with three properties:^[O'Neil, *Weapons of Math Destruction*, Crown, 2016.]
+Cathy O'Neil calls the worst cases **Weapons of Math Destruction** (WMDs).^[O'Neil, *Weapons of Math Destruction*, Crown, 2016. O'Neil's own three properties are opacity, scale, and damage; we focus here on a related triad — inspired by her framework — that highlights feedback dynamics.] Three properties, together, turn an ordinary predictive model into a WMD:
 
 1. The outcome is **not easily measurable** (you can't compute a clean test error)
 2. The predictions can have **negative consequences** for individuals
@@ -664,27 +701,42 @@ You build a model that predicts which students will fail a course, and the unive
 
 ## "When a measure becomes a target..."
 
-"When a measure becomes a target, it ceases to be a good measure" (attributed to Charles Goodhart, 1975; popularized by Marilyn Strathern). Whenever people or systems are rewarded for optimizing a metric, they find ways to hit the target without achieving the goal the metric was supposed to measure. Goodhart's law is the mechanism behind many of the feedback loops you just saw: the measure gets gamed — by people, by institutions, or by the optimization itself.
+"When a measure becomes a target, it ceases to be a good measure" (attributed to Charles Goodhart, 1975; popularized by Marilyn Strathern). The law describes something deeper than overfitting. Its core is **game-theoretic**: once a measurement is tied to consequences, the units being measured *respond* to the measurement. Those who can game the metric most effectively benefit disproportionately. The data the metric generates after it becomes a target is no longer the data it was calibrated on — it's the data that results from agents trying to score well on it.
+
+Three ingredients define a Goodhart setup:
+
+1. A **proxy metric** $M$ that approximates the goal $G$ we actually care about.
+2. **Consequences** tied to $M$: money, status, survival, promotion.
+3. **Agents** who can adjust their behavior to move $M$ — and who differ in how well they can do so.
+
+Before the consequences are attached, $M$ and $G$ may be tightly linked. After, $M$ reflects the mix of "underlying $G$" and "skill at gaming $M$" — and the more optimization pressure you apply, the more the second term dominates.
 
 The pattern appears everywhere once you see it.
 
-- **Hospital readmission penalties.** The US Centers for Medicare and Medicaid Services penalize hospitals with high 30-day readmission rates. The metric was designed to measure care quality. Instead, some hospitals responded by declining to admit the sickest patients in the first place — keeping readmission rates low by selecting healthier patients, not by providing better care.
-- **School test scores.** When teacher evaluations depend on standardized test scores, the incentive shifts from teaching understanding to teaching the test. Scores rise; learning does not.
-- **Emissions testing.** Volkswagen installed software that detected when a vehicle was being emissions-tested and switched to a low-emission mode. The metric — emissions during the official test — was hit cleanly. The goal — low emissions during actual driving — was not.
-- **Citations and h-index.** Academic careers increasingly depend on citation counts. Researchers respond by salami-slicing papers, publishing incremental work, and forming citation cartels. Citation counts climb; the goal they were meant to proxy (scientific quality) does not.
-- **p-hacking.** We saw in [Chapter 10](lec10-hypothesis-testing.qmd) that the $p < 0.05$ threshold was designed to measure evidence strength. When careers and publications depend on clearing that bar, researchers (often unconsciously) run analyses until they find significance. p-hacking is Goodhart's law applied to scientific inference.
+- **Hospital readmission penalties.** CMS penalizes hospitals with high 30-day readmission rates. The metric was designed to measure care quality. Some hospitals responded by declining to admit the sickest patients in the first place — keeping readmission rates low not by providing better care, but by selecting healthier patients. The hospitals that were best at patient selection benefited most. Those that kept treating the same mix of patients looked worse by comparison, even if their care hadn't changed.
+- **School test scores.** When teacher evaluations depend on standardized test scores, some teachers shift from teaching understanding to teaching the test; some schools reclassify struggling students so they don't sit for the exam. Scores rise; learning does not. The distribution of "teachers who game well" is *not* the distribution of "teachers who teach well," so the metric's meaning drifts.
+- **Emissions testing.** Volkswagen installed software that detected when a vehicle was being tested and switched to a low-emission mode. VW optimized on the test distribution (the lab cycle), not the deployment distribution (actual driving). They scored perfectly on $M$ while $G$ (real-world emissions) moved the opposite direction.
+- **Citations and h-index.** Researchers respond to citation-based evaluation by salami-slicing papers, publishing incremental work, and forming citation cartels. Those best at playing the citation game do best under the metric — regardless of whether their research is best.
+- **p-hacking.** The $p < 0.05$ threshold was designed to measure evidence strength. When careers depend on clearing it, some researchers run analyses until they find significance. p-hacking is Goodhart's law applied to scientific inference — researchers who are more thorough about exploring specifications have an edge over those who aren't.
 
-## The machine-learning reading
+Notice the shared structure: the measurement changes the distribution of the thing being measured, and *how much* it changes depends on which units are best at responding to the measurement. You can't read Goodhart as "the data was fine, we just optimized too hard." The data itself is different once the measurement goes live.
 
-Goodhart's law has a specifically mathematical version that sits at the heart of overfitting. Go back to [Chapter 6](lec06-validation.qmd). When you train a model, you optimize a **training loss** — say, mean squared error on the training set. But the training loss is a *proxy* for what you actually care about: **test loss**, the model's error on new data from the same distribution. For a model with modest capacity, the proxy and the goal move together, and you can minimize training loss safely. For a model with enough capacity to memorize the training set — a high-degree polynomial, a deep decision tree, a neural net with millions of parameters — the proxy and the goal diverge. You can drive training loss to zero while test loss gets worse. The training metric stopped being a good measure of the thing you cared about precisely *because* you optimized it so hard.
+## The machine-learning reading (as a special case)
 
-This is why cross-validation exists. Holding out a validation set and tracking validation loss is a way of resisting Goodhart: you optimize on the training loss, but you decide *when to stop* based on a metric the optimizer never saw. It's the same idea as "the independent auditor doesn't report to the CEO."
+The famous ML phenomenon — train loss goes down while test loss rises — is a shadow of Goodhart, not its core. Go back to [Chapter 6](lec06-validation.qmd). When you train a high-capacity model on a fixed training set, you're the sole agent optimizing a proxy (training loss) for a goal (generalization loss). Your "gaming" happens entirely inside the learning algorithm: the model memorizes idiosyncratic noise in the training rows, which looks great on the training metric but doesn't transfer. Cross-validation — reserving data the optimizer never sees — is how ML practice resists this version.
 
-But even cross-validation is only a partial defense. If you repeatedly tune hyperparameters against the validation set — if you let the validation set *become* the target — the validation loss itself becomes a gamed metric. This is why serious ML practice distinguishes **training / validation / test** sets: the test set is used *once*, after all decisions are locked, precisely because any metric you optimize against long enough stops measuring what you wanted.
+But this is the *static* case: the data is fixed, only the model is optimizing. The full Goodhart picture is **dynamic**: the data itself is generated by strategic agents who respond to the metric *after it is deployed*. A recidivism-risk score that detains suspected flight risks changes which crimes go unobserved. A sepsis-alert model that triggers early intervention changes which patients develop sepsis. A ranking signal for ad quality changes which ads advertisers write. In every case, what gets to the training set next round depends on what the model did last round — and which agents are best at adapting. No amount of held-out test data from before deployment tells you what the deployed system does.
+
+If you repeatedly tune hyperparameters against the validation set — if you let the validation set *become* the target — even the ML-internal version of Goodhart kicks in: the validation loss stops measuring generalization. This is why serious ML practice distinguishes **training / validation / test** sets, and why the test set is used *once*, after all decisions are locked.
 
 ## Asking the Goodhart question
 
-The pattern is the same whether the optimizer is a gradient-descent run or a hospital administrator: a metric designed to *measure* performance becomes a target to *optimize*, and optimization pressure corrupts the metric. Whenever you use a number to make decisions, ask: **could the people or systems being measured change their behavior to hit the target without achieving the underlying goal?** If yes, you have a Goodhart problem, and you need a second measure — one the optimizer can't see, or one that captures a different aspect of the goal — to tell you when the first one has been gamed.
+The pattern is the same whether the optimizer is a gradient-descent run, a hospital administrator, or a student preparing for a standardized test: the measurement is tied to consequences, the measured party responds, and some respond more effectively than others. Whenever you use a number to make decisions, ask two questions:
+
+1. **Could the agents being measured change their behavior to move this metric without advancing the underlying goal?**
+2. **Which agents are best positioned to do so — and are they the ones the policy was supposed to reward?**
+
+If the answer to the first is yes, you have a Goodhart problem. If the answer to the second is "not the intended beneficiaries," you have an equity problem on top of a Goodhart problem. Defensive designs include auditing with a second metric the optimizer can't see, capping how often any one party can update against the metric, or — the strongest defense, and the subject of [Chapter 19](lec19-causal-inference-2.qmd) — randomizing a holdout so you can still see what the unperturbed world would look like.
 
 # Part 4: What to do
 
@@ -707,11 +759,12 @@ Temporal leakage, feedback loops, and Goodhart's law are distinct failure modes,
 
 ## Key takeaways
 
-- **Temporal leakage.** Random splits leak future information into training. Use temporal splits, walk-forward validation, and lag features engineered from past-only data.
-- **Distribution shift.** Models trained on normal conditions fail during unprecedented events. No cross-validation fully fixes this; widen prediction intervals during high-variance regimes and treat extreme-event predictions as extrapolation.
-- **Feedback loops.** When a model's predictions change the world, the test set no longer represents the deployment environment. Ask: *how do the predictions change the outcome distribution?* If they do, you have a feedback loop.
+- **Random-split validation is one tool, not the whole toolbox.** Use the validation procedure matched to the failure mode, and recognize when no validation procedure will help.
+- **Temporal leakage.** Random splits leak future information into training. Backtesting — temporal splits and walk-forward validation — is established, trustworthy methodology for forecasting (with caveats for sudden regime shifts).
+- **Distribution shift.** Models trained on normal conditions can't predict unprecedented events. Test on explicit out-of-distribution datasets, stratify by subgroup, and widen intervals for extreme inputs.
+- **Feedback loops.** When a model's predictions change the world, *no* passive validation procedure catches the problem — the test set no longer represents the deployment environment. Ask: *how do the predictions change the outcome distribution?* If they do, you need randomized holdouts, not better splits.
 - **Weapons of Math Destruction** have three properties: unmeasurable outcome, negative consequences, self-fulfilling loop. College rankings and parole-risk models are WMDs; weather forecasts and particle-physics models aren't.
-- **Goodhart's law.** When a measure becomes a target, it ceases to be a good measure. This is the mechanism behind overfitting (training loss as proxy for test loss), p-hacking, hospital readmission gaming, emissions cheating, and citation inflation.
+- **Goodhart's law is game-theoretic.** When a measurement is tied to consequences, the agents being measured respond, and those best at responding dominate the metric. Overfitting is the special case where the only agent is the learning algorithm itself.
 - **What to do.** Before deployment: split by the right axis, simulate the action the prediction drives, audit proxy-vs-outcome, stress-test tails. After deployment: monitor drift, hold out a control, A/B test changes.
 - **Always report prediction intervals** rather than point forecasts — a forecast without uncertainty isn't a complete forecast.
 
@@ -725,7 +778,7 @@ Temporal leakage, feedback loops, and Goodhart's law are distinct failure modes,
 - **Walk-forward validation:** repeatedly training on an expanding (or sliding) window and testing on the next period. Reveals *when* a model fails, not just its average performance.
 - **Distribution shift:** when future data comes from a fundamentally different regime than the training data. Models trained on normal conditions cannot predict unprecedented events.
 - **Prediction intervals:** a range (e.g., 95%) around a point forecast capturing plausible future values. Bootstrap resampling of training residuals is a general-purpose method.
-- **Feedback loop (performative prediction):** a causal arrow from the model's prediction back to the outcome — prediction → action → new data → new prediction. The test set no longer represents the deployment environment.
+- **Feedback loop:** a causal arrow from the model's prediction back to the outcome — prediction → action → new data → new prediction. The test set no longer represents the deployment environment.
 - **Weapon of Math Destruction (WMD):** a predictive model with (1) an unmeasurable outcome, (2) negative consequences for individuals, (3) a self-fulfilling feedback loop. Cathy O'Neil's framework.
 - **Goodhart's law:** when a measure becomes a target, it ceases to be a good measure. Manifests in ML as overfitting (training loss as proxy for generalization), in policy as metric gaming, in science as p-hacking.
 - **Proxy-vs-outcome auditing:** for every metric you optimize, write down the goal it's a proxy for. Where does the proxy diverge? That's where Goodhart will bite.

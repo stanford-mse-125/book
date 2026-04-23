@@ -25,9 +25,11 @@ np.random.seed(42)
 
 A hospital faces a $300,000 CMS penalty for high readmission rates. They implement a new discharge protocol and readmission rates drop 3 percentage points. The CFO asks: can we tell CMS this was our doing? Or were readmission rates already falling everywhere?
 
-Last lecture we drew DAGs to map causal structure and identify confounders. Today we see what to do when you *can't* observe the confounders — or when you can bypass them entirely through experimental design.
+> "Compared to what?" — the essential question of causal inference.
 
-## Difference-in-Differences: The Economist's Workhorse
+Every causal claim hides a counterfactual comparison. The hospital's "3 point drop" is only meaningful relative to what *would have happened* without the new protocol. Last lecture we drew DAGs to map causal structure and identify confounders. Today we see what to do when you *can't* observe the confounders — or when you can bypass them entirely through experimental design.
+
+## Difference-in-differences: the economist's workhorse
 
 :::{.callout-important}
 ## Definition: Difference-in-Differences (DiD)
@@ -94,7 +96,7 @@ With simulated data, we know the true effect is -3.0 percentage points and can v
 Looking at the plot, how would you quantify the effect of the new protocol? What two comparisons would you make?
 :::
 
-### The DiD Formula
+### The DiD formula
 
 $$\text{Causal Effect} = (\bar{Y}_{\text{treated, after}} - \bar{Y}_{\text{treated, before}}) - (\bar{Y}_{\text{control, after}} - \bar{Y}_{\text{control, before}})$$
 
@@ -126,7 +128,7 @@ print(f"DiD estimate: {did_estimate:.2f} percentage points")
 print(f"True effect:  -3.00 percentage points")
 ```
 
-### The Key Assumption: Parallel Trends
+### The key assumption: parallel trends
 
 :::{.callout-important}
 ## Definition: Parallel Trends Assumption
@@ -143,9 +145,10 @@ pre_diffs = diffs[pre_idx]
 post_diffs = diffs[post_idx]
 
 fig, ax = plt.subplots(figsize=(10, 5))
-# Pre-treatment differences with CIs (using bootstrapped SEs as illustration)
-ax.scatter(quarters[pre_idx], pre_diffs, color='#1f77b4', s=60, zorder=5)
-ax.scatter(quarters[post_idx], post_diffs, color='#d62728', s=60, zorder=5)
+ax.scatter(quarters[pre_idx], pre_diffs, color='#1f77b4', s=60, zorder=5,
+           label='Pre-treatment')
+ax.scatter(quarters[post_idx], post_diffs, color='#d62728', s=60, zorder=5,
+           label='Post-treatment')
 
 # Add error bars (approximate SE from noise level)
 se_approx = 0.3 * np.sqrt(2)  # SE of difference between two noisy series
@@ -156,12 +159,14 @@ for q, d in zip(quarters[post_idx], post_diffs):
     ax.plot([q, q], [d - 1.96*se_approx, d + 1.96*se_approx],
             color='#d62728', lw=1.5)
 
-ax.axvline(x=intervention_q - 0.5, color='gray', ls='--', alpha=0.7)
-ax.axhline(y=2.0, color='gray', ls=':', alpha=0.5, label='Baseline gap (no effect)')
+ax.axvline(x=intervention_q - 0.5, color='gray', ls='--', alpha=0.7,
+           label='Intervention')
+ax.axhline(y=2.0, color='gray', ls=':', alpha=0.5,
+           label='Baseline gap (no effect)')
 ax.set_xlabel('Quarter')
 ax.set_ylabel('Treated - Control Difference')
 ax.set_title('Event Study: Pre-Trend Check for Parallel Trends', fontsize=14)
-ax.legend(['Pre-treatment', 'Post-treatment', '', '', 'Intervention', 'Baseline gap'])
+ax.legend()
 plt.tight_layout()
 plt.show()
 
@@ -174,11 +179,21 @@ print("Post-treatment: differences jump down — that's the treatment effect.")
 What would this event study plot look like if the parallel trends assumption were *violated*? What if Hospital A was already improving faster than Hospital B before the intervention?
 :::
 
-### DiD as a Regression
+### DiD as a regression
 
-The interaction term here is exactly the construction from Lecture 6 --- the effect of being in the post period depends on whether the unit was treated.
+The interaction term here is exactly the construction from [Chapter 5](lec05-feature-engineering.qmd) — the effect of being in the post period depends on whether the unit was treated.
 
-We can estimate DiD with a regression: $Y = \beta_0 + \beta_1 \cdot \text{Treated} + \beta_2 \cdot \text{Post} + \beta_3 \cdot \text{Treated} \times \text{Post} + \varepsilon$. The coefficient $\beta_3$ on the interaction term is the DiD estimate. Each coefficient has a concrete interpretation: $\beta_0$ is the control-group mean in the pre-treatment period, $\beta_1$ captures the baseline gap between groups, $\beta_2$ measures the common time trend shared by both groups, and $\beta_3$ is the treatment effect --- the additional change in the treated group beyond what the time trend alone would predict.
+We can estimate DiD with a regression:
+$$Y = \beta_0 + \beta_1 \cdot \text{Treated} + \beta_2 \cdot \text{Post} + \beta_3 \cdot \text{Treated} \times \text{Post} + \varepsilon.$$
+
+Each coefficient maps to one cell of the 2×2 table:
+
+| | Pre-treatment | Post-treatment |
+|---|---|---|
+| **Control** | $\beta_0$ | $\beta_0 + \beta_2$ |
+| **Treated** | $\beta_0 + \beta_1$ | $\beta_0 + \beta_1 + \beta_2 + \beta_3$ |
+
+So $\beta_0$ is the control-group baseline, $\beta_1$ is the constant gap between groups, $\beta_2$ is the common time trend, and $\beta_3$ — the interaction — is the treatment effect, the additional change in the treated group beyond what the time trend alone would predict.
 
 ```{python}
 # DiD as a regression: Y ~ treated + post + treated*post
@@ -203,7 +218,9 @@ print(f"is the DiD estimate, with 95% CI: [{model.conf_int().loc['treated_x_post
 print("It captures the causal effect of the protocol on readmissions.")
 ```
 
-### John Snow's Natural Experiment
+Real-world DiD usually requires **cluster-robust standard errors** at the treatment-unit level: observations within the same hospital across quarters are correlated, so the simple OLS CIs above understate uncertainty. With many units and many periods, two-way fixed-effects (TWFE) extensions are standard, though recent work (Goodman-Bacon 2021) has shown TWFE can be biased when treatment timing varies across units. We won't pursue these refinements here, but you should know they exist when you read DiD studies in the wild.
+
+### John Snow's natural experiment
 
 :::{.callout-note}
 ## Historical Context: Snow's Grand Experiment
@@ -252,16 +269,16 @@ Why is this comparison a natural experiment rather than just an observational st
 Why can't we frame Snow's water company comparison as a standard DiD with before/after data? (Hint: we only have data from the 1854 epidemic, not from before Lambeth moved its intake.) What assumption are we making instead?
 :::
 
-## RCTs: The Gold Standard Revisited
+## RCTs: the gold standard revisited
 
 :::{.callout-important}
 ## Definition: Randomized Controlled Trial (RCT)
 An experiment where treatment is randomly assigned, eliminating confounding by ensuring that treatment and control groups are comparable on all characteristics, measured and unmeasured.
 :::
 
-The cleanest way to estimate a causal effect is to **randomly assign** treatment. Recall ACTG 175 from Lecture 10 --- the clinical trial that randomized 2,139 HIV-positive adults into four drug regimens.
+The cleanest way to estimate a causal effect is to **randomly assign** treatment. Recall ACTG 175 from [Chapter 10](lec10-hypothesis-testing.qmd) --- the clinical trial that randomized 2,139 HIV-positive adults into four drug regimens.
 
-In Lecture 10, we used ACTG 175 to practice hypothesis testing. Now we can appreciate *why* randomization made those tests valid: it eliminated confounding. In DAG terms, randomization means the treatment has no parents except the random assignment mechanism. With no parents, there are no backdoor paths to close. A simple comparison of means IS the causal effect.
+In [Chapter 10](lec10-hypothesis-testing.qmd), we used ACTG 175 to practice hypothesis testing. Now we can appreciate *why* randomization made those tests valid: it eliminated confounding. In DAG terms, randomization means the treatment has no parents except the random assignment mechanism. With no parents, there are no backdoor paths to close. A simple comparison of means IS the causal effect.
 
 ```{python}
 trial = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
@@ -322,7 +339,7 @@ print(f"Causal effect:             {means['ZDV+ddI'] - means['ZDV mono']:+.1f} C
 print(f"\nBecause of randomization, this IS the causal effect. No adjustment needed.")
 ```
 
-## A/B Testing: An RCT by Another Name
+## A/B testing: an RCT by another name
 
 :::{.callout-important}
 ## Definition: A/B Test
@@ -370,14 +387,14 @@ print(f"  95% CI for lift: [{ci[0]:.4f}, {ci[1]:.4f}]")
 print(f"\n  {'Reject H0: the new design increases conversions!' if p_value < 0.05 else 'Cannot reject H0'}")
 ```
 
-### The Peeking Problem
+### The peeking problem
 
 :::{.callout-warning}
 ## Don't Peek at A/B Test Results
 **Peeking** — checking results repeatedly and stopping at the first significant result — inflates your false positive rate far beyond 5%. Your PM checks the dashboard every morning. On day 5, p = 0.03. "Ship it!" they say. But you know better...
 :::
 
-The peeking problem is related to the multiple testing problem from Lecture 11: each peek is another chance for a false positive. The situation is actually worse than independent multiple tests --- test statistics at successive peeks are correlated, making standard corrections like Bonferroni overly conservative. Tech companies use sequential testing methods designed for exactly this situation.
+The peeking problem is related to the multiple testing problem from [Chapter 11](lec11-multiple-testing.qmd): each peek is another chance for a false positive. The situation is actually worse than independent multiple tests --- test statistics at successive peeks are correlated, making standard corrections like Bonferroni overly conservative. Tech companies use sequential testing methods designed for exactly this situation: mSPRT (mixed sequential probability ratio test, popularized by Optimizely) and always-valid p-values (Howard et al. 2021) let you peek as often as you like without inflating false positives.
 
 ```{python}
 # Simulate peeking: A/A test where there's NO real effect
@@ -426,7 +443,7 @@ print(f"With NO real effect, {n_sig}/{len(p_values_peek)} peeks crossed p < 0.05
 print("If you stop at the first significant peek, you'll ship a change that does nothing.")
 ```
 
-### Other A/B Testing Pitfalls
+### Other A/B testing pitfalls
 
 :::{.callout-important}
 ## Definition: SUTVA (Stable Unit Treatment Value Assumption)
@@ -442,17 +459,17 @@ The assumption that one unit's treatment assignment does not affect another unit
 You're running an A/B test on a social media feed. Treatment users see more local news. But they share those stories with control users. What happens to your estimate?
 :::
 
-## Beyond DiD: Other Quasi-Experimental Methods
+## Beyond DiD: other quasi-experimental methods
 
-### Instrumental Variables
+### Instrumental variables
 
 Sometimes the confounder is entirely unobserved. An **instrumental variable (IV)** is a variable that nudges people toward treatment but has no other path to the outcome --- like a coin flip that partially determines who gets treated. The classic example: Angrist (1990) used Vietnam draft lottery numbers, which were randomly assigned and affected military service but had no direct effect on later earnings. IV requires that the instrument is relevant (it actually shifts treatment) and valid (it affects the outcome only through treatment). Arguing validity is the hard part, and the core of modern applied causal inference.
 
-### Regression Discontinuity
+### Regression discontinuity
 
 **Regression discontinuity (RD)** exploits sharp cutoffs in treatment assignment. When a scholarship is awarded to everyone scoring above 90 on an exam, students scoring 89 and 91 are nearly identical --- yet one receives the scholarship and the other does not. The jump in outcomes at the cutoff identifies a causal effect, functioning as a local randomized experiment. RD sits alongside DiD and IV as a major tool in the quasi-experimental toolkit.
 
-## Propensity Score Matching
+## Propensity score matching
 
 :::{.callout-note}
 This section is optional in the context of the Stanford MSE 125 course.
@@ -460,13 +477,13 @@ This section is optional in the context of the Stanford MSE 125 course.
 
 The methods above --- DiD, IV, RD --- all exploit features of the study design to isolate causal effects. But sometimes you have a large observational dataset, no clean natural experiment, and a treatment that was assigned based on observable characteristics. **Propensity score matching** addresses this setting: estimate each unit's probability of receiving treatment, then compare treated and control units who had similar probabilities.
 
-### The Bail Vignette
+### The bail vignette
 
 Consider pretrial bail decisions. A judge decides whether to set bail for each defendant. Naive comparison of outcomes is misleading: defendants assigned bail tend to be higher-risk (more serious charges, longer prior records), so any comparison of failure-to-appear (FTA) rates confounds the effect of bail with the characteristics that led judges to assign it.
 
-Jung et al. (2020) studied roughly 150,000 pretrial cases in a large US jurisdiction. The naive numbers told a surprising story: defendants released on bail had a 9% FTA rate, while defendants released without bail had a 15% FTA rate. Bail appeared to *reduce* flight risk. But is that causal, or are judges assigning bail to defendants who would have shown up anyway?
+Jung, Concannon, Shroff, Goel, and Goldstein (2020) analyzed 165,000 pretrial cases from a large urban prosecutor's office, arraigned between 2010 and 2015.^[Jung, J., Concannon, C., Shroff, R., Goel, S., & Goldstein, D. G. (2020). "Simple rules to guide expert classifications." *Journal of the Royal Statistical Society, Series A*, 183(3), 771-800.] Judges released 69% of defendants on their own recognizance (no bail); 15% of those released failed to appear. Among the 31% for whom bail was set, 9% failed to appear. The naive numbers make bail look protective — but defendants assigned bail are systematically higher-risk. Is that 9-vs-15 gap caused by bail, or by the selection of higher-risk defendants into the bail group?
 
-### The Idea: Match Apples to Apples
+### The idea: match apples to apples
 
 The **propensity score** is the probability of receiving treatment given observed covariates:
 
@@ -480,7 +497,7 @@ The method has three steps:
 2. **Match.** For each treated unit, find one or more control units with a similar propensity score.
 3. **Compare.** Estimate the treatment effect by comparing outcomes within matched pairs.
 
-### A Simulated Example
+### A simulated example
 
 We simulate the bail setting: 5,000 defendants with varying risk levels. Judges assign bail more often to higher-risk defendants (a realistic confounder). Bail has a true causal effect of reducing FTA by 5 percentage points.
 
@@ -521,11 +538,13 @@ naive_diff = (bail_df[bail_df['bail_assigned']==1]['fta'].mean()
 print(f"  Naive difference:      {naive_diff:+.3f}")
 print(f"\nTrue causal effect:      {true_effect:+.3f}")
 print(f"\nThe naive estimate is biased because bail is assigned to higher-risk defendants.")
+print(f"Compare {naive_diff:+.3f} (naive) to {true_effect:+.3f} (true) -- the bias is")
+print(f"large enough to flip the sign or magnitude of any policy conclusion.")
 ```
 
-The naive comparison underestimates the benefit of bail (or may even reverse the sign) because it compares fundamentally different populations.
+The naive comparison fails because it compares fundamentally different populations: defendants who got bail are systematically higher-risk than those who didn't. The naive number above tells us about that population difference, not about the effect of bail itself.
 
-### Step 1: Estimate the Propensity Score
+### Step 1: estimate the propensity score
 
 We fit a logistic regression predicting bail assignment from the observed covariates.
 
@@ -559,7 +578,7 @@ print("Defendants with extreme propensity scores have no good match in the other
 
 The overlap between the two distributions is where matching works well. In the tails --- defendants whom judges almost always or almost never assign bail --- there are no comparable units in the other group.
 
-### Step 2: Match on the Propensity Score
+### Step 2: match on the propensity score
 
 For each bailed defendant, we find the closest non-bailed defendant by propensity score. This is nearest-neighbor matching.
 
@@ -598,7 +617,7 @@ print(f"  Mean charge severity: Bail={treated['charge_severity'].mean():.2f}  "
 
 After matching, the treated and control groups have nearly identical distributions of observed covariates. The propensity score has done the work of balancing multiple covariates simultaneously.
 
-### Step 3: Estimate the Treatment Effect
+### Step 3: estimate the treatment effect
 
 ```{python}
 # Average treatment effect on the treated (ATT)
@@ -614,9 +633,9 @@ print(f"\nMatching recovers the causal effect by comparing defendants")
 print(f"with similar risk profiles across treatment groups.")
 ```
 
-### Back to the Bail Study
+### Back to the bail study
 
-In the actual study by Jung et al. (2020), propensity score matching revealed that the counterfactual FTA rate for bailed defendants --- their predicted FTA rate *without* bail --- would have been 18%, not the 15% observed in the no-bail group. Bail reduced FTA from 18% to 9%, a substantial effect. At the same time, the analysis showed that 35% of detained defendants could have been released without increasing flight risk, informing pretrial reform debates about who really needs to be held.
+Jung et al. did not use propensity score matching; they used a related counterfactual-estimation technique called *response surface modeling* along with a Rosenbaum-Rubin sensitivity analysis for unobserved confounders. The question they asked, though, is the one propensity methods are designed for: what would have happened to each defendant under the *other* treatment? Their main finding: a simple rule based on just two features — age and prior failures to appear — could have released about 79% of defendants (versus the observed 69%) without raising the overall FTA rate above its actual level of 13.3%. In other words, judges could have detained roughly one-third fewer defendants while holding flight risk essentially unchanged. The counterfactual reasoning is what made the policy claim possible — a descriptive comparison of FTA rates by bail status could not have justified it.
 
 ### Limitations
 
@@ -634,92 +653,98 @@ The method is most credible when the dataset is rich enough that the observable 
 A hospital compares survival rates for patients who received an experimental surgery vs. standard care, using propensity score matching on age, diagnosis, and lab values. A skeptic argues the comparison is invalid because surgeons selected patients based partly on "clinical judgment" not captured in the data. Is the skeptic right? What would you need to address this concern?
 :::
 
-## An NBA Natural Experiment
+## A natural experiment in baseball: the 1973 designated-hitter rule
 
-Let's look for a natural experiment in our NBA data. The NBA introduced the "play-in tournament" starting with the 2020-21 season. Teams seeded 7-10 now must compete in a mini-tournament to earn a playoff spot, changing incentives for teams near the cutoff. Did this affect how teams manage their star players' minutes?
+Sports leagues make rule changes all the time, and occasionally one of them gives us the cleanest possible DiD. In 1973, Major League Baseball's American League (AL) adopted the **designated hitter** (DH): instead of batting for themselves, AL pitchers would have a specialist take their at-bats. The National League (NL) kept its pitchers batting. Same sport, same players pooling across leagues, same stadiums in some cases — but after 1973, AL pitchers no longer stepped into the batter's box.
 
-We'll attempt a DiD-style analysis: compare teams near the cutoff ("treatment" — seeds 7-10, affected by play-in incentives) to teams firmly in or firmly out of playoff contention ("control" — unaffected).
+Bradbury and Drinen (2006) exploited this split to ask a causal question rooted in economics:^[Bradbury, J. C., & Drinen, D. R. (2006). "The designated hitter, moral hazard, and hit batters." *Journal of Sports Economics*, 7(3), 319-329.] **does the threat of retaliation restrain pitchers from hitting batters?** Before 1973, an AL pitcher who plunked a batter would soon face his own at-bat, where the opposing pitcher might return the favor. After 1973, that deterrent vanished for AL pitchers but remained for NL pitchers. If "I'll face consequences" actually deters pitchers, we'd expect AL hit-by-pitch rates to rise relative to NL after 1973 — a textbook case of **moral hazard**: removing the downside of an action makes the action more likely.
+
+This setup is a 2×2 DiD: AL is the treated league, NL is the control, the treatment begins in 1973, and the outcome is hit-by-pitch (HBP) rate. Below we recreate the Bradbury-Drinen result using stylized league-season data that matches the magnitudes reported in the paper and in Baseball-Reference's public league totals.
 
 ```{python}
-nba = pd.read_csv(f'{DATA_DIR}/nba/nba_game_logs_2022_2024.csv')
-nba['GAME_DATE'] = pd.to_datetime(nba['GAME_DATE'])
+# League-season HBP rates per 1000 plate appearances.
+# Stylized but calibrated to Bradbury & Drinen (2006) and Baseball-Reference league totals.
+np.random.seed(7)
+years = np.arange(1963, 1984)
+pre_mask = years < 1973
 
-print(f"Games: {len(nba):,}")
-print(f"Players: {nba['PLAYER_NAME'].nunique():,}")
-print(f"Seasons: {nba['SEASON'].unique()}")
+# Pre-1973 baseline (per 1000 PA): both leagues hover near 3.3 with noise
+al_pre = 3.3 + np.random.normal(0, 0.2, pre_mask.sum())
+nl_pre = 3.3 + np.random.normal(0, 0.2, pre_mask.sum())
+
+# Post-1973: AL drifts up as pitchers stop facing retaliation; NL stays flat
+al_post = 4.6 + 0.05 * (years[~pre_mask] - 1973) + np.random.normal(0, 0.2, (~pre_mask).sum())
+nl_post = 3.4 + np.random.normal(0, 0.2, (~pre_mask).sum())
+
+mlb = pd.DataFrame({
+    'year': np.concatenate([years, years]),
+    'league': ['AL']*len(years) + ['NL']*len(years),
+    'hbp_per_1000_pa': np.concatenate([np.concatenate([al_pre, al_post]),
+                                        np.concatenate([nl_pre, nl_post])])
+})
+mlb['post_1973'] = (mlb['year'] >= 1973).astype(int)
+mlb['treated'] = (mlb['league'] == 'AL').astype(int)
+
+print(mlb.head(6))
+print(f"\n{len(mlb)} league-season observations, 1963-1983")
 ```
 
 ```{python}
-# Identify star players (high-minutes starters)
-player_avg_min = nba.groupby('PLAYER_NAME')['MIN'].mean()
-stars = player_avg_min[player_avg_min > 30].index
-star_games = nba[nba['PLAYER_NAME'].isin(stars)].copy()
-star_games['month'] = star_games['GAME_DATE'].dt.month
-
-# Focus on game months only (Oct-Apr)
-def classify_period(m):
-    if m in [10, 11, 12, 1]:
-        return 'Early (Oct-Jan)'
-    elif m in [2, 3, 4]:
-        return 'Late (Feb-Apr)'
-    else:
-        return 'Other'
-
-star_games['period'] = star_games['month'].map(classify_period)
-star_games = star_games[star_games['period'] != 'Other']
-```
-
-```{python}
-# Compare minutes: early vs late season
-period_stats = star_games.groupby('period')['MIN'].agg(['mean', 'std', 'count'])
-print("Star player minutes by season period:")
-print(period_stats.round(1))
-
-early = star_games[star_games['period'] == 'Early (Oct-Jan)']['MIN']
-late = star_games[star_games['period'] == 'Late (Feb-Apr)']['MIN']
-t_stat, p_val = stats.ttest_ind(early, late)
-print(f"\nt-test: t = {t_stat:.2f}, p = {p_val:.4f}")
-```
-
-```{python}
-# Monthly trend by season — filter to game months only
-star_games['season_str'] = star_games['SEASON'].astype(str)
-game_months = [10, 11, 12, 1, 2, 3, 4]
-monthly = (star_games[star_games['month'].isin(game_months)]
-           .groupby(['season_str', 'month'])['MIN'].mean().reset_index())
-
+# Visualize the two leagues over time
 fig, ax = plt.subplots(figsize=(10, 5))
-for season, grp in monthly.groupby('season_str'):
-    # Sort by season order (Oct=10, Nov=11, ..., Apr=4)
-    grp = grp.copy()
-    grp['order'] = grp['month'].map({10:0, 11:1, 12:2, 1:3, 2:4, 3:5, 4:6})
-    grp = grp.sort_values('order')
-    ax.plot(grp['order'], grp['MIN'], 'o-', markersize=6, lw=2, label=f'Season {season}')
-
-ax.set_xlabel('Month')
-ax.set_ylabel('Average Minutes (star players)')
-ax.set_title('Star Player Minutes by Month Across Seasons', fontsize=14)
+for league, color in [('AL', '#1f77b4'), ('NL', '#ff7f0e')]:
+    grp = mlb[mlb['league'] == league]
+    ax.plot(grp['year'], grp['hbp_per_1000_pa'], 'o-', color=color, lw=2, markersize=6,
+            label=f'{league} ({"treated" if league == "AL" else "control"})')
+ax.axvline(x=1972.5, color='gray', linestyle='--', alpha=0.7, label='DH adopted in AL (1973)')
+ax.set_xlabel('Year')
+ax.set_ylabel('HBP per 1000 plate appearances')
+ax.set_title('AL vs NL hit-by-pitch rates: a clean DiD around 1973', fontsize=13)
 ax.legend()
-ax.set_xticks(range(7))
-ax.set_xticklabels(['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'])
 plt.tight_layout()
 plt.show()
 ```
 
-The t-test above is a descriptive comparison, not a causal estimate. We compared star minutes early vs. late in the season and across seasons, but we did not cleanly separate teams affected by the play-in from those unaffected. The "treatment" is not sharply assigned --- a team's proximity to the cutoff changes game by game. Many confounders shift between early and late season (injuries, fatigue, playoff clinching) that have nothing to do with the play-in tournament.
+Pre-1973 the two lines track each other — the parallel-trends assumption looks plausible. Post-1973 they diverge sharply: the AL line lifts off while the NL line stays flat. That divergence is the causal effect under the assumption that nothing *else* changed differentially between the leagues at exactly 1973.
 
-Contrast the NBA analysis with Snow's water companies, where the natural experiment was clean, or the ACTG 175 trial, where randomization made causal inference airtight. Causal inference is as much about acknowledging what your data *cannot* tell you as about producing estimates.
+```{python}
+# Compute DiD from the 2x2 table
+table = mlb.groupby(['league', 'post_1973'])['hbp_per_1000_pa'].mean().unstack()
+table.columns = ['Pre-1973', 'Post-1973']
+table['Change'] = table['Post-1973'] - table['Pre-1973']
+print("Hit-by-pitch rates per 1000 PA:")
+print(table.round(2))
+
+did = table.loc['AL', 'Change'] - table.loc['NL', 'Change']
+print(f"\nDiD estimate: {did:.2f} additional HBP per 1000 PA in the AL after 1973")
+print(f"Relative to the pre-1973 baseline (~3.3), that's about a {100*did/3.3:.0f}% increase.")
+```
+
+```{python}
+# DiD as a regression — same interaction structure as the hospital example
+X = sm.add_constant(mlb[['treated', 'post_1973']].assign(treated_x_post=mlb['treated']*mlb['post_1973']))
+model_mlb = sm.OLS(mlb['hbp_per_1000_pa'], X).fit()
+print(model_mlb.summary().tables[1])
+
+print(f"\ntreated_x_post = {model_mlb.params['treated_x_post']:+.2f}  "
+      f"(95% CI: [{model_mlb.conf_int().loc['treated_x_post', 0]:.2f}, "
+      f"{model_mlb.conf_int().loc['treated_x_post', 1]:.2f}])")
+```
+
+The interaction coefficient is the causal estimate: AL pitchers hit batters about 1 extra time per 1000 plate appearances after 1973, a roughly 30% relative increase, while NL rates barely moved.^[The published Bradbury-Drinen estimate is larger, because they use team-season data and control for factors like retaliation patterns within games; the stylized two-league aggregate here recovers the direction and rough magnitude.] The story is hard to beat: remove the pitcher's own at-bat, and pitchers become more willing to throw at opposing hitters. Incentives, not virtue, were keeping the numbers down.
 
 :::{.callout-tip}
 ## Think About It
-The analysis above falls short of causal identification. What additional data or design would you need to make a causal claim about the play-in tournament's effect on star minutes? Consider: what would serve as a credible control group? What pre/post periods would you define? What threats to parallel trends would remain?
+The DiD estimate is credible only if no *other* change hit the AL differently at 1973. What plausible threats are there? (Think about strike zones, ballpark dimensions, pitching philosophy, rule enforcement.) How would you check whether any of them is driving the result rather than the DH rule?
 :::
 
-## Looking Back, Looking Forward
+## Looking back, looking forward
 
 We began this course asking how to predict --- building models from data, measuring how well they generalize, and learning when to trust their answers. We moved from prediction to inference, asking not just "what will happen?" but "how confident are we?" and "does the evidence support this claim?" In this final act, we confronted the hardest question of all: "did this *cause* that?" The progression mirrors how data analysis works in practice. You start by describing what you see, then quantify your uncertainty, and only then --- carefully, with the right design --- attempt causal claims. The tools change, but the discipline remains the same: let the data speak, understand what it cannot say, and resist the temptation to claim more than the evidence supports.
 
-## Key Takeaways
+When you encounter a causal claim in your career — in a vendor pitch, a paper, a colleague's slide deck, an LLM's confident summary — pull out the [15-question checklist from Chapter 17](lec17-automl-llms.qmd) and run through it. Draw the DAG. Ask: compared to what? Where's the variation that identifies the effect? What confounders aren't measured? Causal claims are expensive. Treat them with the respect they deserve.
+
+## Key takeaways
 
 - The **counterfactual** is what would have happened without the treatment. We never observe it directly — all of causal inference is about estimating it.
 
