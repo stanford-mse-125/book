@@ -363,10 +363,12 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Null distribution: what the test statistic looks like when H₀ is true
 - p-value: probability of a result this extreme under H₀
 - Two-sided test: |observed| vs |permuted|
-- Exchangeability: random assignment makes labels exchangeable under H₀
+- One-sided test: one tail only, with the direction chosen *before* seeing the data; default to two-sided when in doubt
+- Exchangeability under the null: random assignment makes labels exchangeable under H₀
+- Association vs. causation: random assignment (ACTG 175) licenses causal claims; observational comparisons (NBA home/away) detect differences but cannot decompose the confounded mechanisms
 - Connection: bootstrap (Lec 8) = precision of estimate; permutation = significance of effect
 - Conservative p-value estimator: (count + 1) / (n_perms + 1) (Phipson & Smyth 2010)
-- CI/hypothesis test duality: a 95% CI excluding 0 is equivalent to rejecting H0 at alpha = 0.05
+- CI/hypothesis test duality: a 95% CI excluding 0 corresponds to a two-sided p < 0.05
 
 **Key vocabulary:**
 - Permutation test (shuffle labels)
@@ -374,14 +376,20 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Null hypothesis (informal — formalized in Lec 10)
 - p-value
 - Exchangeability
+- One-sided / two-sided tests
 - Simulation-based inference
 - CI/hypothesis test duality
+
+**Running examples:**
+- ACTG 175 clinical trial (randomized → causal interpretation)
+- Deflategate (narrative motivation for the one-sided test; no worked computation)
+- NBA home-court scoring advantage, 2021–24 (observational → association, not causation; forward link to Ch 18)
 
 **Prerequisites:** Lec 8 (bootstrap — students know resampling)
 
 **Connections:**
 - Backward: Lec 8 (bootstrap)
-- Forward: Lec 10 (formal hypothesis testing framework), Lec 11 (multiple testing)
+- Forward: Lec 10 (formal hypothesis testing framework), Lec 11 (multiple testing), Ch 18 (causal inference)
 
 **Surprise moment:** None of 10,000 permutations produce an effect as large as observed — the drug works
 

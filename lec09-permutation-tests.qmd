@@ -28,9 +28,7 @@ The distinction matters. The bootstrap measures **precision** — how much our e
 :::{.callout-note}
 ## The Lady Tasting Tea
 
-The permutation test has a famous origin story. In the 1920s, at a tea party at the Rothamsted agricultural research station in England, a colleague named Muriel Bristol claimed she could tell whether the milk or the tea had been poured into the cup first. Most people laughed. But R.A. Fisher — one of the founders of modern statistics — took her seriously. He designed a proper experiment: eight cups, four milk-first, four tea-first, presented in random order. Bristol was asked to identify which four were milk-first.
-
-Fisher realized he didn't need any assumptions about probability distributions. He could compute the exact probability of getting all four right *by chance alone* — just by counting how many ways to choose 4 cups out of 8. This approach is the logic of the permutation test: enumerate what could happen under the null (no ability to distinguish), then ask how extreme the observed result is. (Bristol got all eight correct.) This story gives its name to Salsburg's history of 20th-century statistics, *The Lady Tasting Tea* — the moment when hypothesis testing took its modern form.
+R.A. Fisher's 1920s experiment — eight cups of tea, four milk-first, presented in random order, and a colleague who claimed she could tell which was which — is the permutation test in miniature. Fisher counted the ways she *could* have guessed right by chance alone, then asked how extreme her actual score was against that reference. No distributional assumptions required. (She got all eight correct.)
 :::
 
 ## Setup: The Treatment Effect
@@ -67,7 +65,7 @@ So what would happen if we **shuffled the labels**? If the null hypothesis is tr
 A hypothesis test that builds the **null distribution** by shuffling group labels and recomputing the test statistic. The null distribution shows what the test statistic would look like if the null hypothesis were true.
 :::
 
-Why is shuffling valid here? Patients in ACTG 175 were **randomly assigned** to treatment groups. Labels are **exchangeable** under the null hypothesis when swapping them does not change the joint distribution of the data. Random assignment guarantees exchangeability: if the drug has no effect, the CD4 outcomes don't depend on which label a patient received, so shuffled datasets are just as plausible as the original. This property gives the permutation test its logical foundation.
+Why is shuffling valid here? Patients in ACTG 175 were **randomly assigned** to treatment groups. Labels are **exchangeable** when swapping them does not change the joint distribution of the data. Random assignment guarantees exchangeability *under the null*: if the drug has no effect, the CD4 outcomes don't depend on which label a patient received, so shuffled datasets are just as plausible as the original. (If the drug *does* have an effect, the labels are no longer exchangeable — which is exactly what the test is designed to detect.) This property gives the permutation test its logical foundation.
 
 ### Step by step
 
@@ -161,7 +159,7 @@ The probability of observing a result at least as extreme as what you got, assum
 
 The p-value answers this question: if there were truly no effect, how often would we see something this extreme?
 
-We compute a **two-sided** p-value: we count permutations where the test statistic is large **in absolute value** — that is, at least as far from zero as the observed effect in either direction. A drug that dramatically helps or dramatically hurts patients would both be noteworthy. (A **one-sided** test would only look at one tail — for example, counting only permutations where the fake effect is *at least as large* as the observed effect. One-sided tests are appropriate when you have a specific directional hypothesis before seeing the data.)
+We compute a **two-sided** p-value: we count permutations where the test statistic is large **in absolute value** — that is, at least as far from zero as the observed effect in either direction. A drug that dramatically helps or dramatically hurts patients would both be noteworthy. (A later section looks at cases where only one direction is of interest.)
 
 ```{python}
 # Count how many permutations produced an effect as extreme as observed
@@ -208,85 +206,153 @@ The p-value is the tool we need now; [Chapter 10](lec10-hypothesis-testing.qmd) 
 
 In data analytics, this kind of comparison between two groups is often called **A/B testing** — the labels "A" and "B" stand for the two groups being compared.
 
-## A Second Example: Airbnb Prices by Borough
+## One-Sided vs Two-Sided Tests
 
-Let's practice the full permutation test workflow on a different dataset. Is there a real difference in Airbnb listing prices between Manhattan and Brooklyn?
+So far we've counted permutations extreme in *either* direction — the two-sided test. But sometimes the question is asymmetric. The **Deflategate** controversy from the 2015 NFL playoffs is the classic example.
 
-Unlike the clinical trial, there is no random assignment here — a listing's borough is fixed, not randomized. The null hypothesis is weaker: Manhattan and Brooklyn prices come from the same distribution. If so, borough labels carry no information about price, and shuffling them should not change the test statistic. This is a test of *association*, not causation — the permutation test can detect that the groups differ, but cannot tell us *why*.
+At halftime of the AFC Championship game between the New England Patriots and the Indianapolis Colts, officials measured air pressure in eleven Patriots footballs and four Colts footballs (halftime ran out before all the Colts' balls could be gauged). The Patriots' balls were below the legal minimum. Physics alone — warm locker room to cold field, via the Ideal Gas Law — predicts that *both* teams' balls should lose pressure from cooling, so the right comparison is not "are the Patriots' balls low?" but "are they low *relative to the Colts'*, beyond what cooling explains?" (Complicating matters, the two teams inflated to slightly different starting pressures: the Patriots near the 12.5 psi legal minimum, the Colts closer to 13.0 psi. Real analyses of the case had to account for this.)
+
+Notice the asymmetry in the hypothesis. A Patriots ball that dropped *less* than the Colts' would not have been evidence of cheating — it would have exonerated the team. Only a drop in one direction could indict them. When the alternative hypothesis is one-directional, we use a **one-sided test**.
+
+:::{.callout-important}
+## Definition: One-sided and two-sided tests
+
+A **two-sided test** counts permutations extreme in **either direction**: $|t_{\text{perm}}| \ge |t_{\text{obs}}|$. Use when effects in either direction would be noteworthy.
+
+A **one-sided test** counts permutations in **one direction only**: $t_{\text{perm}} \ge t_{\text{obs}}$ (or $\le$, depending on the alternative). Use when only one direction is of scientific or practical interest — and only when that choice was made *before* seeing the data.
+:::
+
+The picture below shows which permutations count as "surprising" under each convention. The shaded regions are the events that would count *against* the null.
+
+```{python}
+#| fig-cap: "Which permutations count as surprising? Left: two-sided — both tails. Right: one-sided — upper tail only."
+from scipy.stats import norm
+
+x = np.linspace(-4, 4, 400)
+y = norm.pdf(x)
+obs = 2.0
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
+
+# Two-sided
+ax = axes[0]
+ax.plot(x, y, color='gray', lw=1.5)
+ax.fill_between(x, y, where=(x >= obs),  color='#d7263d', alpha=0.6)
+ax.fill_between(x, y, where=(x <= -obs), color='#d7263d', alpha=0.6)
+ax.axvline(obs, color='#d7263d', lw=1.5, ls='--')
+ax.axvline(-obs, color='#d7263d', lw=1.5, ls=':')
+ax.set_title('Two-sided test')
+ax.set_xlabel('Test statistic under null')
+ax.set_ylabel('Density')
+ax.annotate('extreme\n(either direction)', xy=(2.6, 0.02), xytext=(0.5, 0.18),
+            ha='center', fontsize=10, arrowprops=dict(arrowstyle='->', color='gray'))
+
+# One-sided (upper)
+ax = axes[1]
+ax.plot(x, y, color='gray', lw=1.5)
+ax.fill_between(x, y, where=(x >= obs), color='#d7263d', alpha=0.6)
+ax.axvline(obs, color='#d7263d', lw=1.5, ls='--')
+ax.set_title('One-sided test (upper tail)')
+ax.set_xlabel('Test statistic under null')
+ax.annotate('extreme\n(this direction only)', xy=(2.6, 0.02), xytext=(0.5, 0.18),
+            ha='center', fontsize=10, arrowprops=dict(arrowstyle='->', color='gray'))
+
+for ax in axes:
+    ax.set_xlim(-4, 4)
+    ax.set_ylim(0, 0.45)
+
+plt.tight_layout()
+plt.show()
+```
+
+When the null distribution is symmetric, the two-sided p-value is *exactly* double the one-sided p-value. So "going one-sided" halves your p-value — which is why the direction must be chosen *before* looking at the data. Picking the tail after seeing which side the observed statistic fell into inflates the Type I error: a test nominally at $\alpha = 0.05$ actually rejects at rate 0.10 under the null.
+
+:::{.callout-warning}
+## Prefer two-sided by default
+
+If you are not sure which one to use, use a two-sided test. It is the honest default. A one-sided test is justified only when effects in the other direction are genuinely uninteresting or impossible, and that judgment must be pre-registered — not chosen after seeing which way the data pointed.
+:::
 
 :::{.callout-tip}
 ## Think About It
 
-If the permutation test finds a significant price difference, can we conclude that *being in Manhattan* causes higher prices? What alternative explanations could produce the same result?
+For each scenario, would you use a one-sided or two-sided test, and why?
+
+1. **Deflategate**: the accusation is that the Patriots *under-inflated* their footballs. Pressures above the Colts' would not be evidence of cheating.
+2. **A supplement vs. placebo** in a blood-pressure study: researchers want to know whether the supplement changes systolic blood pressure. An *increase* would be a safety signal, a *decrease* would be evidence the supplement works, and both would influence whether the supplement should be sold.
+3. **An A/B test on a checkout button color**: the product team wants to know whether the new color changes conversion — either direction would influence the rollout decision.
+
+<details><summary>Answers</summary>
+(1) One-sided — only "Patriots pressure drop > Colts pressure drop" is of interest. (2) Two-sided — both an increase (harm) and a decrease (benefit) would change what the researchers do next. (3) Two-sided — a color that hurts conversion is as informative as one that helps.
+</details>
 :::
 
-```{python}
-# Load Airbnb data — just the columns we need
-airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv',
-                      usecols=['neighbourhood_group_cleansed', 'price'],
-                      low_memory=False)
-airbnb.columns = ['borough', 'price']
+## A Second Example: Home-Court Advantage in the NBA
 
-# Filter to Manhattan and Brooklyn, drop missing
-airbnb = airbnb[airbnb['borough'].isin(['Manhattan', 'Brooklyn'])].dropna()
+ACTG 175 is a clinical trial: patients were *randomly assigned* to treatment or control. That randomization is what licenses the causal interpretation of the test — reject the null, and we conclude the drug *caused* the effect. Most real data is not like that. So let's see what changes when the groups are not randomly assigned.
 
-# Sample 500 from each borough for speed (and to make the test more interesting)
-manhattan = airbnb[airbnb['borough'] == 'Manhattan']['price'].sample(500, random_state=42)
-brooklyn = airbnb[airbnb['borough'] == 'Brooklyn']['price'].sample(500, random_state=42)
+NBA home teams win more often than away teams — but do they *score* more? Over three regular seasons (2021-22 through 2023-24), we can compare points scored by home and away teams. The null hypothesis is the same as before: home-team scoring and away-team scoring come from the same distribution. If that's true, the home/away label carries no information about points, and shuffling is valid.
 
-obs_diff = manhattan.mean() - brooklyn.mean()
-print(f"Manhattan mean price: ${manhattan.mean():.2f}")
-print(f"Brooklyn mean price:  ${brooklyn.mean():.2f}")
-print(f"Observed difference:  ${obs_diff:.2f}")
-```
+What changes is not the null, but the interpretation of rejecting it. No one randomly assigned games to home-or-away — the league schedule is fixed, and a team's home games differ from its away games in dozens of ways: the home team sleeps in its own bed, skips a flight, plays in a familiar arena, and performs in front of its own fans. These are all *confounded* with the home/away label. Rejecting the null tells us the groups differ. It does **not** tell us which of these mechanisms (or which combination) is responsible.
 
-We follow the same permutation test workflow: combine the data, shuffle labels, and recompute the difference 10,000 times.
+:::{.callout-tip}
+## Think About It
+
+If the permutation test finds a significant home-scoring advantage, can we conclude that *being the home team* causes higher scoring? What alternative explanations could produce the same result?
+:::
+
+The raw file is player-level: one row per player per game. We aggregate to team-game totals and label each team-game as home or away using the `MATCHUP` string (`"LAL vs. GSW"` = home, `"LAL @ GSW"` = away). Then we apply the same permutation workflow we just used for ACTG 175.
 
 ```{python}
-# Full permutation test workflow — same pattern as the ACTG example
-all_prices = np.concatenate([manhattan.values, brooklyn.values])
-n_manhattan = len(manhattan)
+logs = pd.read_csv(f'{DATA_DIR}/nba/nba_game_logs_2022_2024.csv',
+                   usecols=['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP', 'PTS'])
+
+# Sum player points within each (game, team) to get team totals
+team_game = (logs.groupby(['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP'], as_index=False)
+                 ['PTS'].sum())
+team_game['home'] = team_game['MATCHUP'].str.contains('vs.')
+
+home_pts = team_game[team_game['home']]['PTS'].values
+away_pts = team_game[~team_game['home']]['PTS'].values
+
+obs_diff = home_pts.mean() - away_pts.mean()
+print(f"Home: {home_pts.mean():.2f} pts   (n = {len(home_pts)})")
+print(f"Away: {away_pts.mean():.2f} pts   (n = {len(away_pts)})")
+print(f"Observed difference: {obs_diff:+.2f} points per game")
+
+# Permutation test — same pattern as ACTG 175
+all_pts = np.concatenate([home_pts, away_pts])
+n_home = len(home_pts)
 
 def permutation_diff(values, n_first):
-    """One permutation of group labels. Returns a fake difference in means."""
     shuffled = np.random.permutation(values)
     return shuffled[:n_first].mean() - shuffled[n_first:].mean()
 
-n_perms_airbnb = 10_000
-perm_diffs = np.array([
-    permutation_diff(all_prices, n_manhattan)
-    for _ in range(n_perms_airbnb)
-])
+perm_diffs = np.array([permutation_diff(all_pts, n_home) for _ in range(10_000)])
+
+n_extreme_nba = np.sum(np.abs(perm_diffs) >= np.abs(obs_diff))
+p_value_nba = (n_extreme_nba + 1) / (len(perm_diffs) + 1)
+print(f"Permutation p-value: {p_value_nba:.4f}")
 ```
 
-Now we compute the two-sided p-value and visualize the null distribution.
-
-```{python}
-n_extreme_airbnb = np.sum(np.abs(perm_diffs) >= np.abs(obs_diff))
-p_value_airbnb = (n_extreme_airbnb + 1) / (n_perms_airbnb + 1)
-
-print(f"Observed difference: ${obs_diff:.2f}")
-print(f"Permutation p-value: {p_value_airbnb:.4f}")
-```
-
-The plot below shows the null distribution with the observed difference marked in red.
+Roughly 2 points per game — small compared to the within-game spread (a typical team scores 100–125 points), but remarkably consistent across thousands of games. The observed difference is far into the tail of the null distribution.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.hist(perm_diffs, bins=50, density=True, color='lightgray', edgecolor='white',
         label='Null distribution')
 ax.axvline(obs_diff, color='red', lw=2, ls='--',
-           label=f'Observed diff = ${obs_diff:.0f}')
+           label=f'Observed diff = {obs_diff:+.2f} pts')
 ax.axvline(-obs_diff, color='red', lw=2, ls=':', alpha=0.5)
-ax.set_xlabel('Price Difference: Manhattan − Brooklyn ($)')
+ax.set_xlabel('Difference in mean points: home − away')
 ax.set_ylabel('Density')
-ax.set_title('Permutation Test: Manhattan vs Brooklyn Airbnb Prices')
+ax.set_title('Permutation Test: NBA Home vs Away Scoring (2021–24)')
 ax.legend()
 plt.tight_layout()
 plt.show()
 ```
 
-Manhattan listings are significantly more expensive than Brooklyn listings — the observed difference falls far into the tail of the null distribution. The permutation test confirms what you probably already suspected, but now we have a rigorous number to back it up.
+So the home-court scoring advantage is real. But the test can't tell us whether it comes from rest, crowd, familiarity, referee tendencies, or something else — those mechanisms are all bundled together in the home/away label. Untangling them requires a different comparison, like the natural experiment of the 2020 "bubble" playoffs when every game was played on a neutral court with no fans. (We'll return to that distinction — association vs. causation — in [Chapter 18](lec18-causal-inference-1.qmd).)
 
 ## Bootstrap vs Permutation: When to Use Which
 
@@ -313,13 +379,17 @@ A bootstrap CI that excludes zero and a small permutation p-value are telling yo
 
 ### The CI/Hypothesis Test Duality
 
-In fact, the agreement between bootstrap CIs and hypothesis tests is not a coincidence — it's a mathematical equivalence. We write $H_0$ (read "H-naught") for the null hypothesis and $\alpha$ for the threshold at which we reject it — [Chapter 10](lec10-hypothesis-testing.qmd) formalizes both. A 95% confidence interval contains all the values of the parameter that would *not* be rejected by a two-sided test at $\alpha = 0.05$. So if the 95% CI for a treatment effect excludes zero, that's the same as rejecting $H_0{:}\;\text{effect} = 0$ at the 5% level. The CI gives you *more* information than the test alone — it tells you the range of plausible values, not just whether zero is among them.
+The agreement between bootstrap CIs and hypothesis tests is not a coincidence — it is a direct consequence of what a confidence interval *is*. A 95% CI is built to contain every value of the parameter that the data would *not* rule out at the 5% level. So a 95% CI that excludes zero and a two-sided p-value below 0.05 are two descriptions of the same fact — asked from different directions.
 
 :::{.callout-important}
 ## Confidence intervals and hypothesis tests are two sides of the same coin
 
-A 95% confidence interval that excludes 0 is equivalent to rejecting $H_0{:}\;\text{effect} = 0$ in a two-sided test at $\alpha = 0.05$. If the interval includes 0, you fail to reject. This equivalence is exact for parametric methods and approximate for simulation-based methods. The correspondence holds for any confidence level: a 99% CI corresponds to $\alpha = 0.01$, and so on.
+If a 95% confidence interval excludes zero, a two-sided test of "effect = 0" rejects at the 5% level. If the interval includes zero, the test does not reject. The same correspondence holds for any confidence level: a 99% CI pairs with a 1%-level test, and so on.
+
+The CI is strictly more informative: it tells you the *range* of plausible effects, not just whether zero is among them.
 :::
+
+[Chapter 10](lec10-hypothesis-testing.qmd) formalizes the hypothesis-testing notation ($H_0$, $\alpha$, reject / fail to reject) that makes this equivalence easy to state symbolically.
 
 :::{.callout-note collapse="true"}
 ## Going deeper: verifying the duality
@@ -338,44 +408,36 @@ for i in range(n_boot):
 ci_lower, ci_upper = np.percentile(boot_effects, [2.5, 97.5])
 
 print(f"Bootstrap 95% CI: [{ci_lower:.1f}, {ci_upper:.1f}]")
-print(f"Does the CI exclude 0?  {'Yes' if ci_lower > 0 else 'No'}")
-print(f"Permutation p-value:    {p_value:.4f}")
-print(f"Reject H0 at alpha=0.05? {'Yes' if p_value < 0.05 else 'No'}")
-if (ci_lower > 0) and (p_value < 0.05):
-    print(f"\nBoth methods agree: the treatment effect is real.")
-elif (ci_lower > 0) or (p_value < 0.05):
-    print(f"\nMethods disagree — worth investigating further.")
-else:
-    print(f"\nNeither method finds a significant effect.")
+print(f"CI excludes 0:   {ci_lower > 0}")
+print(f"Permutation p:   {p_value:.4f}")
+print(f"Reject at 5%:    {p_value < 0.05}")
 ```
+
+The CI excludes zero and the p-value is tiny — the two tools agree that the treatment effect is real. The equivalence is exact for parametric tools (a normal-approximation CI paired with a z-test) and near-exact for simulation-based tools (bootstrap CI paired with permutation p-value), with any small disagreement attributable to Monte Carlo error in the two simulations.
 :::
 
-## Connection to the Normal Approximation
+:::{.callout-note collapse="true"}
+## Going deeper: the t-test as the parametric analog
 
-Just as the bootstrap CI has a normal approximation (the CLT-based interval from [Chapter 8](lec08-sampling.qmd)), the permutation test has an analytical counterpart: the **two-sample t-test**.
+Just as the bootstrap has a normal-approximation analog (the CLT-based CI from [Chapter 8](lec08-sampling.qmd)), the permutation test has one too: the **two-sample t-test**. The t-test assumes each group's mean is approximately normal (guaranteed by the CLT for large samples with finite variance) and computes a p-value from a t-distribution. For ACTG 175:
 
 ```{python}
-# Two-sample t-test on the ACTG 175 data
 t_stat, t_pvalue = stats.ttest_ind(treatment, control)
-print(f"Two-sample t-test:")
-print(f"  t-statistic: {t_stat:.2f}")
-print(f"  p-value:     {t_pvalue:.6f}")
-print(f"\nPermutation test:")
-print(f"  p-value:     {p_value:.4f}")
-print(f"\nBoth are very small — same conclusion.")
+print(f"Two-sample t-test p-value: {t_pvalue:.6f}")
+print(f"Permutation p-value:       {p_value:.4f}")
 ```
 
-The t-test assumes the data are approximately normal. The permutation test makes no such assumption — it only requires exchangeability under the null. For large samples (like ACTG 175 and the Airbnb data), the two approaches give nearly identical p-values. For small or skewed samples, the permutation test is more reliable.
-
-The t-test is faster (no simulation needed) but restrictive. The permutation test is assumption-free but requires computation. In practice, use whichever is appropriate and check that the other agrees.
+Both are tiny — same conclusion. The permutation test is assumption-free but needs simulation; the t-test is fast but assumes the CLT has kicked in. For large samples like these, either is fine; for small or heavily skewed samples, prefer the permutation test.
+:::
 
 ## Key Takeaways
 
 - **Permutation test**: shuffle group labels to simulate the null hypothesis, then measure how often chance produces something as extreme as what you observed.
 - **The p-value** measures surprise under the null — it is NOT the probability the null is true.
-- Permutation tests work for comparing groups **without distributional assumptions** — they only require exchangeability (e.g., random assignment).
-- **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). Use both.
-- The **two-sample t-test** is the normal approximation analog of the permutation test, just as the CLT-based CI is the analog of the bootstrap CI.
+- Permutation tests work for comparing groups **without distributional assumptions** — they only require exchangeability under the null (which random assignment guarantees).
+- **Two-sided by default.** A one-sided test is appropriate only when only one direction is of interest, and the direction is chosen *before* looking at the data.
+- **Random assignment licenses causal claims.** Without it (NBA home/away, Airbnb borough), a significant permutation test shows the groups differ but cannot decompose *why*.
+- **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). A 95% CI that excludes zero and a p-value below 0.05 are two sides of the same coin.
 - **Next**: [Chapter 10](lec10-hypothesis-testing.qmd) formalizes hypothesis testing — $H_0$, $H_1$, $\alpha$, Type I/II errors, and power.
 
 ## Study guide
@@ -387,18 +449,19 @@ The t-test is faster (no simulation needed) but restrictive. The permutation tes
 - **Null hypothesis**: The default claim being tested — typically "there is no effect" or "no difference between groups."
 - **p-value**: The fraction of permutation samples producing a test statistic as extreme as observed (in absolute value, for a two-sided test). Equivalently, the probability of data this extreme under the null.
 - **Exchangeability**: The property that swapping labels between groups does not change the joint distribution under the null. Random assignment guarantees exchangeability.
-- **Two-sided test**: A test that counts extreme values in both tails — effects large in absolute value.
+- **Two-sided test**: A test that counts extreme values in both tails — effects large in absolute value. Use when effects in either direction are noteworthy; this is the honest default.
+- **One-sided test**: A test that counts extreme values in one tail only. Appropriate when only one direction of effect is of interest and the direction is chosen *before* seeing the data. Deflategate is a canonical example: only under-inflation, not over-inflation, could indict the Patriots.
 - **Test statistic**: The quantity computed from the data to measure the effect (here, difference in means).
 - **Bootstrap vs. permutation**: Bootstrap resamples **within each group** (with replacement) to measure precision. Permutation shuffles labels **across groups** (without replacement) to test significance.
-- **CI/test duality**: A 95% confidence interval excluding zero is equivalent to rejecting $H_0$ at $\alpha = 0.05$. The equivalence is exact for parametric methods and approximate for simulation-based methods.
-- The two-sample t-test is the parametric (normal approximation) analog of the permutation test.
+- **CI/test duality**: A 95% confidence interval that excludes zero corresponds to a two-sided p-value below 0.05. The equivalence is exact for parametric pairs (normal-approximation CI ↔ z-test) and near-exact for simulation-based pairs (bootstrap ↔ permutation), with any gap attributable to Monte Carlo error.
+- **Association vs. causation**: a permutation test can detect that two groups differ. Whether that difference is *caused* by group membership depends on whether the labels were randomly assigned.
 
 ### Computational tools
 
 - `np.random.permutation(data)` — shuffle an array (for permutation tests)
 - `np.sum(np.abs(perm_effects) >= np.abs(observed))` — count extreme permutations
 - `(n_extreme + 1) / (n_perms + 1)` — conservative p-value estimator (the +1 counts the observed data as a permutation, preventing p = 0 from finite simulation)
-- `stats.ttest_ind(group1, group2)` — two-sample t-test (parametric analog)
+- `stats.ttest_ind(group1, group2)` — two-sample t-test (parametric analog; see Going deeper box)
 
 ### For the quiz
 
