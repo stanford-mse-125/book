@@ -77,32 +77,25 @@ Why is shuffling valid here? Patients in ACTG 175 were **randomly assigned** to 
 ```{python}
 # Combine all CD4 changes and record group sizes
 all_cd4 = df['cd4_change'].dropna().values
-all_labels = df.loc[df['cd4_change'].notna(), 'treat'].values
-
-n_ctrl = (all_labels == 0).sum()
-n_trt = (all_labels == 1).sum()
-
-print(f"Total patients: {len(all_cd4)}")
-print(f"Control: {n_ctrl}, Treatment: {n_trt}")
+n_trt = len(treatment)
+print(f"Total patients: {len(all_cd4)}   (treatment: {n_trt}, control: {len(control)})")
 ```
 
-Now we write a function that performs one permutation: it shuffles the combined data using `np.random.permutation()`, splits into fake control and treatment groups, and computes the difference in means.
+Now we write a function that performs one permutation: it shuffles the combined data using `np.random.permutation()`, splits into two fake groups, and returns the difference of group means. We'll reuse this same helper later on a second dataset — the permutation machinery is identical whether the groups were randomly assigned or not.
 
 ```{python}
-def permutation_effect(cd4_values, n_control):
-    """One permutation of treatment labels. Returns a fake treatment effect."""
-    shuffled = np.random.permutation(cd4_values)
-    perm_ctrl = shuffled[:n_control]
-    perm_trt = shuffled[n_control:]
-    return perm_trt.mean() - perm_ctrl.mean()
+def permutation_diff_of_means(values, n_first):
+    """One shuffle: the first `n_first` entries become group A, the rest group B.
+    Returns mean(A) − mean(B)."""
+    shuffled = np.random.permutation(values)
+    return shuffled[:n_first].mean() - shuffled[n_first:].mean()
 
-# Show 5 permutations
-print("Five random permutations:")
+print("Five random permutations (treatment − control):")
 for i in range(5):
-    fake = permutation_effect(all_cd4, n_ctrl)
+    fake = permutation_diff_of_means(all_cd4, n_trt)
     print(f"  Permutation {i+1}: fake effect = {fake:+.1f} CD4 cells")
 
-print(f"\nObserved effect:                    {observed_effect:+.1f} CD4 cells")
+print(f"\nObserved effect:                          {observed_effect:+.1f} CD4 cells")
 ```
 
 The fake effects bounce around zero — small positive, small negative. Our observed effect of ~50 looks very different.
@@ -119,7 +112,7 @@ Five permutations gave us a rough sense. To build the full null distribution, we
 ```{python}
 n_perms = 10_000
 perm_effects = np.array([
-    permutation_effect(all_cd4, n_ctrl)
+    permutation_diff_of_means(all_cd4, n_trt)
     for _ in range(n_perms)
 ])
 
@@ -130,25 +123,42 @@ print(f"  Min:    {perm_effects.min():.1f}")
 print(f"  Max:    {perm_effects.max():.1f}")
 ```
 
-The null distribution is tightly centered around zero, with a standard deviation much smaller than our observed effect. Let's plot it.
+The null distribution is tightly centered around zero, with a standard deviation much smaller than our observed effect.
+
+:::{.callout-tip}
+## Think About It
+Before we plot this: where do you expect the observed effect (~50 CD4 cells) to land relative to the null distribution (SD ≈ 6)? Roughly how many standard deviations out? Hold that prediction in mind as you look at the figure.
+:::
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
-ax.hist(perm_effects, bins=50, density=True, color='lightgray', edgecolor='white',
-        label='Null distribution')
-ax.axvline(observed_effect, color='red', lw=2, ls='--',
-           label=f'Observed effect = {observed_effect:.1f}')
-ax.axvline(-observed_effect, color='red', lw=2, ls=':', alpha=0.5,
-           label=f'−Observed (two-sided)')
-ax.set_xlabel('Treatment Effect Under Null (CD4 cells)')
+counts, edges, _ = ax.hist(perm_effects, bins=50, density=True,
+                           color='lightgray', edgecolor='white',
+                           label='Null distribution')
+
+# Shade the two-sided "extreme" regions the p-value actually counts.
+# (Here the tails turn out to be empty — the observed is so extreme that no
+# permutation reaches it. That IS the point: nothing to shade = tiny p-value.)
+centers = 0.5 * (edges[:-1] + edges[1:])
+in_tail = np.abs(centers) >= np.abs(observed_effect)
+if in_tail.any():
+    ax.bar(centers[in_tail], counts[in_tail],
+           width=edges[1] - edges[0], color='#d7263d', alpha=0.7,
+           label='"At least as extreme" (two-sided)')
+
+ax.axvline(observed_effect, color='#d7263d', lw=2, ls='--',
+           label=f'Observed effect = {observed_effect:+.1f}')
+ax.axvline(-observed_effect, color='#d7263d', lw=2, ls=':', alpha=0.6,
+           label=f'−Observed (reflected cutoff)')
+ax.set_xlabel('Treatment effect under null (CD4 cells)')
 ax.set_ylabel('Density')
-ax.set_title('Permutation Null Distribution')
-ax.legend()
+ax.set_title('ACTG 175 permutation null distribution')
+ax.legend(loc='upper left')
 plt.tight_layout()
 plt.show()
 ```
 
-The observed effect of ~50 CD4 cells is **way out in the tail** — not even close to what random shuffling produces. Under the null, effects cluster tightly around zero with a standard deviation of about 6 cells. Our observed effect is several standard deviations away.
+The observed effect of ~50 CD4 cells sits **far outside the entire null distribution** — so far that not one of 10,000 shuffles gets anywhere close. We'd be shading both tails beyond ±50.4 to mark the "at-least-as-extreme" region, but those tails are visibly empty — *that's* the picture of a tiny p-value. (Compare with the NBA example later in the chapter, where the tails are similarly empty but the effect is only 2 points per game.)
 
 ## The p-Value
 
@@ -174,12 +184,16 @@ print(f"Permutations with |effect| >= |{observed_effect:.1f}|: {n_extreme}")
 print(f"p-value: {p_value:.4f}")
 ```
 
-A p-value this small means: under 10,000 random shufflings, essentially **none** produced an effect as large as what we observed. The data are extremely surprising under the null hypothesis of no effect. The treatment works.
+A p-value this small means: under 10,000 random shufflings, essentially **none** produced an effect as large as what we observed. The data are extremely surprising under the null hypothesis of no effect — strong evidence the drug works. ([Chapter 10](lec10-hypothesis-testing.qmd) turns that evidence into a formal accept/reject decision.)
 
 :::{.callout-tip}
 ## Think About It
 
-A skeptic says: "A p-value of 0.0001 means there's only a 0.01% chance the drug doesn't work." Is the skeptic right? (The next section examines this claim.)
+A skeptic says: "A p-value of 0.0001 means there's only a 0.01% chance the drug doesn't work." Is the skeptic right? Think through your answer before unfolding the response below — or better, before reading the next section.
+
+<details><summary>Answer</summary>
+No. The p-value is $P(\text{data this extreme} \mid H_0 \text{ is true})$. The skeptic flipped the conditional — they're claiming $P(H_0 \text{ true} \mid \text{data})$, which requires Bayes' theorem and a prior. "P(umbrella | raining)" is not "P(raining | umbrella)." The p-value lives in the world where the null *is* true and asks how surprising the data are there.
+</details>
 :::
 
 :::{.callout-note collapse="true"}
@@ -202,30 +216,117 @@ The p-value is one of the most misinterpreted quantities in statistics. Before w
 3. **p = 0.049 and p = 0.051 are not meaningfully different.** The conventional threshold of 0.05 is arbitrary. Treat the p-value as a continuous measure of evidence, not a binary verdict.
 :::
 
-The p-value is the tool we need now; [Chapter 10](lec10-hypothesis-testing.qmd) introduces the full testing framework.
+The p-value is the tool we need now; [Chapter 10](lec10-hypothesis-testing.qmd) introduces the full testing framework. In data analytics, this kind of comparison between two groups is often called **A/B testing** — the labels "A" and "B" stand for the two groups being compared.
 
-In data analytics, this kind of comparison between two groups is often called **A/B testing** — the labels "A" and "B" stand for the two groups being compared.
+## From Randomization to Observation: NBA Home-Court Advantage
+
+ACTG 175 was a *randomized* clinical trial: patients were assigned to treatment or control by a coin flip (or its clinical-trial equivalent). That randomization is what licenses the causal interpretation — reject the null, and we conclude the drug *caused* the effect. Most real data is not like that. Let's see what changes when the groups are not randomly assigned.
+
+NBA home teams win more often than away teams — but do they *score* more? Over three regular seasons (2021-22 through 2023-24), we can compare points scored by home and away teams. **The null hypothesis is the same as before**: home-team scoring and away-team scoring come from the same distribution. If that's true, the home/away label carries no information about points, and shuffling is valid.
+
+**What's different is the interpretation of rejecting it.** No one randomly assigned games to home-or-away — the league schedule is fixed, and a team's home games differ from its away games in dozens of ways at once: the home team sleeps in its own bed, skips a flight, plays in a familiar arena, and performs in front of its own fans. These are all *confounded* with the home/away label. Rejecting the null tells us the groups differ. It does **not** tell us which of these mechanisms (or which combination) is responsible.
+
+:::{.callout-tip}
+## Think About It
+
+Suppose the permutation test finds a significant home-scoring advantage. What are at least three alternative explanations for the advantage, aside from "being the home team intrinsically helps you score"? Write them down before reading on.
+
+<details><summary>Some alternatives</summary>
+(a) Rest: the home team rarely just flew in last night. (b) Crowd: home fans are louder, which affects communication, free-throw concentration, and plausibly referee calls. (c) Familiarity: the home team practices on the same rims, sightlines, and floor every day. (d) Scheduling: back-to-backs fall more often on the visiting side of a given game. (e) Referee tendencies: studies have documented small pro-home biases in professional sports. A permutation test cannot decompose which combination produces the 2-point gap.
+</details>
+:::
+
+The raw file is player-level: one row per player per game. We first aggregate to team-game totals by summing player points within each (game, team) pair, then label each team-game as home or away using the `MATCHUP` string (`"LAL vs. GSW"` = home, `"LAL @ GSW"` = away). `pd.groupby(...)[col].sum()` with `as_index=False` returns a flat DataFrame; `str.contains` runs the pattern over the whole column.
+
+```{python}
+logs = pd.read_csv(f'{DATA_DIR}/nba/nba_game_logs_2022_2024.csv',
+                   usecols=['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP', 'PTS'])
+
+# Sum player points within each (game, team) to get team totals
+team_game = (logs.groupby(['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP'], as_index=False)
+                 ['PTS'].sum())
+team_game['home'] = team_game['MATCHUP'].str.contains('vs.')
+team_game.head()
+```
+
+Now we split into home and away point totals and compute the observed difference:
+
+```{python}
+home_pts = team_game[team_game['home']]['PTS'].values
+away_pts = team_game[~team_game['home']]['PTS'].values
+
+obs_diff_nba = home_pts.mean() - away_pts.mean()
+print(f"Home: {home_pts.mean():.2f} pts   (n = {len(home_pts)})")
+print(f"Away: {away_pts.mean():.2f} pts   (n = {len(away_pts)})")
+print(f"Observed difference: {obs_diff_nba:+.2f} points per game")
+```
+
+About 2 points per game — small compared to a typical team's 100–125-point game, but over thousands of games that's a lot of signal to distinguish from chance. The permutation-test machinery is *identical* to what we did for ACTG 175 — we reuse the same `permutation_diff_of_means` helper:
+
+```{python}
+all_pts = np.concatenate([home_pts, away_pts])
+n_home = len(home_pts)
+
+perm_diffs = np.array([
+    permutation_diff_of_means(all_pts, n_home)
+    for _ in range(10_000)
+])
+
+n_extreme_nba = np.sum(np.abs(perm_diffs) >= np.abs(obs_diff_nba))
+p_value_nba = (n_extreme_nba + 1) / (len(perm_diffs) + 1)
+print(f"Permutation p-value (two-sided): {p_value_nba:.4f}")
+```
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 5))
+counts, edges, _ = ax.hist(perm_diffs, bins=50, density=True,
+                           color='lightgray', edgecolor='white',
+                           label='Null distribution')
+
+centers = 0.5 * (edges[:-1] + edges[1:])
+in_tail = np.abs(centers) >= np.abs(obs_diff_nba)
+if in_tail.any():
+    ax.bar(centers[in_tail], counts[in_tail],
+           width=edges[1] - edges[0], color='#d7263d', alpha=0.7,
+           label='"At least as extreme" (two-sided)')
+
+ax.axvline(obs_diff_nba, color='#d7263d', lw=2, ls='--',
+           label=f'Observed diff = {obs_diff_nba:+.2f} pts')
+ax.axvline(-obs_diff_nba, color='#d7263d', lw=2, ls=':', alpha=0.6,
+           label='−Observed (reflected cutoff)')
+ax.set_xlabel('Difference in mean points: home − away')
+ax.set_ylabel('Density')
+ax.set_title('NBA home vs. away scoring, 2021–24')
+ax.legend(loc='upper left')
+plt.tight_layout()
+plt.show()
+```
+
+Under the null — home and away come from the same distribution — shuffled differences rarely wander past one point in either direction. The observed 2.12-point gap sits outside that entire null distribution. As with ACTG, the "at-least-as-extreme" tails we'd shade are visibly empty; that's why the p-value bottoms out at the simulation floor.
+
+So the home-court scoring advantage is real. But the test can't tell us whether it comes from rest, crowd, familiarity, referee tendencies, or something else — those mechanisms are all bundled together in the home/away label. Untangling them requires a different comparison, like the natural experiment of the 2020 "bubble" playoffs when every game was played on a neutral court with no fans. (We'll return to that distinction — association vs. causation — in [Chapter 18](lec18-causal-inference-1.qmd).)
 
 ## One-Sided vs Two-Sided Tests
 
-So far we've counted permutations extreme in *either* direction — the two-sided test. But sometimes the question is asymmetric. The **Deflategate** controversy from the 2015 NFL playoffs is the classic example.
+So far we've counted permutations extreme in *either* direction. That's the right default when effects in both directions matter — a harmful drug and a helpful one; home teams scoring noticeably more *or* less than away teams. But sometimes the scientific question is inherently one-directional. **"Do home teams score *more* than away teams?"** is narrower than **"do the two groups score differently?"** — and the narrower question calls for a **one-sided test**.
 
-At halftime of the AFC Championship game between the New England Patriots and the Indianapolis Colts, officials measured air pressure in eleven Patriots footballs and four Colts footballs (halftime ran out before all the Colts' balls could be gauged). The Patriots' balls were below the legal minimum. Physics alone — warm locker room to cold field, via the Ideal Gas Law — predicts that *both* teams' balls should lose pressure from cooling, so the right comparison is not "are the Patriots' balls low?" but "are they low *relative to the Colts'*, beyond what cooling explains?" (Complicating matters, the two teams inflated to slightly different starting pressures: the Patriots near the 12.5 psi legal minimum, the Colts closer to 13.0 psi. Real analyses of the case had to account for this.)
-
-Notice the asymmetry in the hypothesis. A Patriots ball that dropped *less* than the Colts' would not have been evidence of cheating — it would have exonerated the team. Only a drop in one direction could indict them. When the alternative hypothesis is one-directional, we use a **one-sided test**.
-
-:::{.callout-important}
-## Definition: One-sided and two-sided tests
-
-A **two-sided test** counts permutations extreme in **either direction**: $|t_{\text{perm}}| \ge |t_{\text{obs}}|$. Use when effects in either direction would be noteworthy.
-
-A **one-sided test** counts permutations in **one direction only**: $t_{\text{perm}} \ge t_{\text{obs}}$ (or $\le$, depending on the alternative). Use when only one direction is of scientific or practical interest — and only when that choice was made *before* seeing the data.
-:::
-
-The picture below shows which permutations count as "surprising" under each convention. The shaded regions are the events that would count *against* the null.
+Let's compute both p-values on the NBA data and compare.
 
 ```{python}
-#| fig-cap: "Which permutations count as surprising? Left: two-sided — both tails. Right: one-sided — upper tail only."
+# Two-sided: |fake diff| as large as |observed diff|
+two_sided = (np.sum(np.abs(perm_diffs) >= np.abs(obs_diff_nba)) + 1) / (len(perm_diffs) + 1)
+
+# One-sided (upper): fake diff as large as observed, in the positive direction only
+one_sided = (np.sum(perm_diffs >= obs_diff_nba) + 1) / (len(perm_diffs) + 1)
+
+print(f"Two-sided p-value:  {two_sided:.4f}")
+print(f"One-sided p-value:  {one_sided:.4f}")
+```
+
+Both came in at 0.0001 — the minimum possible with 10,000 permutations, because *no* shuffle produced a difference as large as the observed 2.12 points. Normally the one-sided p-value is **exactly half** the two-sided one (under a symmetric null) — but here both have hit the simulation floor. We'd need to either run many more permutations or work with a smaller effect to see the factor-of-two gap empirically. The picture below shows the tail-counting structure on a generic symmetric null, where the factor-of-two is easy to see:
+
+```{python}
+#| fig-cap: "Which permutations count as surprising? Left: two-sided — both tails. Right: one-sided — upper tail only. Dashed: observed. Dotted: reflected cutoff (used by two-sided only)."
 from scipy.stats import norm
 
 x = np.linspace(-4, 4, 400)
@@ -236,16 +337,16 @@ fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
 
 # Two-sided
 ax = axes[0]
-ax.plot(x, y, color='gray', lw=1.5)
-ax.fill_between(x, y, where=(x >= obs),  color='#d7263d', alpha=0.6)
+ax.plot(x, y, color='gray', lw=1.5, label='Null distribution')
+ax.fill_between(x, y, where=(x >= obs),  color='#d7263d', alpha=0.6,
+                label='"At least as extreme"')
 ax.fill_between(x, y, where=(x <= -obs), color='#d7263d', alpha=0.6)
-ax.axvline(obs, color='#d7263d', lw=1.5, ls='--')
-ax.axvline(-obs, color='#d7263d', lw=1.5, ls=':')
+ax.axvline(obs, color='#d7263d', lw=1.5, ls='--', label='Observed')
+ax.axvline(-obs, color='#d7263d', lw=1.5, ls=':', label='Reflected cutoff')
 ax.set_title('Two-sided test')
 ax.set_xlabel('Test statistic under null')
 ax.set_ylabel('Density')
-ax.annotate('extreme\n(either direction)', xy=(2.6, 0.02), xytext=(0.5, 0.18),
-            ha='center', fontsize=10, arrowprops=dict(arrowstyle='->', color='gray'))
+ax.legend(loc='upper left', fontsize=9)
 
 # One-sided (upper)
 ax = axes[1]
@@ -254,8 +355,6 @@ ax.fill_between(x, y, where=(x >= obs), color='#d7263d', alpha=0.6)
 ax.axvline(obs, color='#d7263d', lw=1.5, ls='--')
 ax.set_title('One-sided test (upper tail)')
 ax.set_xlabel('Test statistic under null')
-ax.annotate('extreme\n(this direction only)', xy=(2.6, 0.02), xytext=(0.5, 0.18),
-            ha='center', fontsize=10, arrowprops=dict(arrowstyle='->', color='gray'))
 
 for ax in axes:
     ax.set_xlim(-4, 4)
@@ -265,94 +364,47 @@ plt.tight_layout()
 plt.show()
 ```
 
-When the null distribution is symmetric, the two-sided p-value is *exactly* double the one-sided p-value. So "going one-sided" halves your p-value — which is why the direction must be chosen *before* looking at the data. Picking the tail after seeing which side the observed statistic fell into inflates the Type I error: a test nominally at $\alpha = 0.05$ actually rejects at rate 0.10 under the null.
+:::{.callout-important}
+## Definition: One-sided and two-sided tests
+
+A **two-sided test** counts permutations extreme in **either direction**: $|t_{\text{perm}}| \ge |t_{\text{obs}}|$. Use when effects in either direction would be noteworthy.
+
+A **one-sided test** counts permutations in **one direction only**: $t_{\text{perm}} \ge t_{\text{obs}}$ (or $\le$, depending on the alternative). Use when only one direction is of scientific or practical interest — and **only when the direction was chosen before seeing the data.**
+:::
+
+When the null distribution is symmetric, the two-sided p-value is *exactly* double the one-sided. So "going one-sided" halves your p-value — which is why the direction must be chosen *before* looking at the data. Picking the tail after seeing which way the observed statistic fell inflates the Type I error: a test nominally at $\alpha = 0.05$ rejects at rate 0.10 under the null.
 
 :::{.callout-warning}
 ## Prefer two-sided by default
 
-If you are not sure which one to use, use a two-sided test. It is the honest default. A one-sided test is justified only when effects in the other direction are genuinely uninteresting or impossible, and that judgment must be pre-registered — not chosen after seeing which way the data pointed.
+If you are not sure which one to use, use a two-sided test. It is the honest default. A one-sided test is justified only when effects in the other direction are genuinely uninteresting or impossible — and that judgment must be pre-registered, not chosen after seeing which way the data pointed.
+:::
+
+:::{.callout-note}
+## The canonical story: Deflategate
+
+The one-sided test has a famous case study: the 2015 NFL **Deflategate** controversy. At halftime of the AFC Championship game, officials measured air pressure in 11 Patriots footballs and 4 Colts footballs (halftime ran out before all the Colts' balls could be gauged) and found the Patriots' balls below the legal minimum. Cooling physics predicts both teams' balls should have lost pressure, but the accusation was directional: the Patriots' balls had dropped *more* than the Colts'. A Patriots ball that dropped *less* would have exonerated them — it would not have been evidence of cheating. That asymmetry is what a one-sided test encodes. (The real analysis of the case was complicated by small differences in the two teams' starting pressures — roughly 12.5 vs. 13.0 psi — and the order in which the balls were gauged.)
 :::
 
 :::{.callout-tip}
-## Think About It
+## Think About It: pick the test
 
-For each scenario, would you use a one-sided or two-sided test, and why?
+For each scenario, decide whether you'd set up a one-sided or two-sided test. For each answer, ask: *what decision rides on the result, and would the other direction change it?* Write your answers down before unfolding the response.
 
-1. **Deflategate**: the accusation is that the Patriots *under-inflated* their footballs. Pressures above the Colts' would not be evidence of cheating.
-2. **A supplement vs. placebo** in a blood-pressure study: researchers want to know whether the supplement changes systolic blood pressure. An *increase* would be a safety signal, a *decrease* would be evidence the supplement works, and both would influence whether the supplement should be sold.
-3. **An A/B test on a checkout button color**: the product team wants to know whether the new color changes conversion — either direction would influence the rollout decision.
+1. A biotech CEO has bet the company on a new cholesterol drug. She is running a trial and believes it will lower LDL. She wants the trial to give her the most accurate read on whether the drug should launch.
+2. A factory ships widgets to a customer that contractually require the widgets' mean weight to meet a specified minimum. The factory runs weekly tests on a sample of widgets to confirm the shipments meet spec.
+3. A school district rolled out a new math curriculum last year. They need to decide whether to keep it for next year, roll back to the previous curriculum, or revise.
+4. An airline is piloting a new boarding procedure on 50 flights to learn how it affects average boarding time.
 
 <details><summary>Answers</summary>
-(1) One-sided — only "Patriots pressure drop > Colts pressure drop" is of interest. (2) Two-sided — both an increase (harm) and a decrease (benefit) would change what the researchers do next. (3) Two-sided — a color that hurts conversion is as informative as one that helps.
+(1) **Two-sided — a trap.** The CEO's *hope* that the drug lowers LDL does not justify a one-sided test. A drug that *raises* LDL would be a safety signal and would absolutely change the launch decision. "I hope for direction X" is not the same as "only direction X matters." *Pre-registering* a one-sided test here would be statistical malpractice.
+(2) **One-sided.** Only weights *below* the minimum are a contract violation; weights above the minimum are fine. The direction is fixed by the contract, not by looking at the data. This is the Deflategate structure: the other direction is logically exculpatory.
+(3) **Two-sided.** Scores that drop are as relevant to the decision as scores that rise.
+(4) **Two-sided.** A slower procedure matters to operations as much as a faster one does.
+
+Notice: three of the four were two-sided, and the trap scenario (biotech) was too. That's the typical pattern in practice — one-sided tests are rare. Reserve them for cases like widget weights or Deflategate, where the other direction is *logically* irrelevant (not merely undesired), and pre-register the choice before looking at the data.
 </details>
 :::
-
-## A Second Example: Home-Court Advantage in the NBA
-
-ACTG 175 is a clinical trial: patients were *randomly assigned* to treatment or control. That randomization is what licenses the causal interpretation of the test — reject the null, and we conclude the drug *caused* the effect. Most real data is not like that. So let's see what changes when the groups are not randomly assigned.
-
-NBA home teams win more often than away teams — but do they *score* more? Over three regular seasons (2021-22 through 2023-24), we can compare points scored by home and away teams. The null hypothesis is the same as before: home-team scoring and away-team scoring come from the same distribution. If that's true, the home/away label carries no information about points, and shuffling is valid.
-
-What changes is not the null, but the interpretation of rejecting it. No one randomly assigned games to home-or-away — the league schedule is fixed, and a team's home games differ from its away games in dozens of ways: the home team sleeps in its own bed, skips a flight, plays in a familiar arena, and performs in front of its own fans. These are all *confounded* with the home/away label. Rejecting the null tells us the groups differ. It does **not** tell us which of these mechanisms (or which combination) is responsible.
-
-:::{.callout-tip}
-## Think About It
-
-If the permutation test finds a significant home-scoring advantage, can we conclude that *being the home team* causes higher scoring? What alternative explanations could produce the same result?
-:::
-
-The raw file is player-level: one row per player per game. We aggregate to team-game totals and label each team-game as home or away using the `MATCHUP` string (`"LAL vs. GSW"` = home, `"LAL @ GSW"` = away). Then we apply the same permutation workflow we just used for ACTG 175.
-
-```{python}
-logs = pd.read_csv(f'{DATA_DIR}/nba/nba_game_logs_2022_2024.csv',
-                   usecols=['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP', 'PTS'])
-
-# Sum player points within each (game, team) to get team totals
-team_game = (logs.groupby(['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP'], as_index=False)
-                 ['PTS'].sum())
-team_game['home'] = team_game['MATCHUP'].str.contains('vs.')
-
-home_pts = team_game[team_game['home']]['PTS'].values
-away_pts = team_game[~team_game['home']]['PTS'].values
-
-obs_diff = home_pts.mean() - away_pts.mean()
-print(f"Home: {home_pts.mean():.2f} pts   (n = {len(home_pts)})")
-print(f"Away: {away_pts.mean():.2f} pts   (n = {len(away_pts)})")
-print(f"Observed difference: {obs_diff:+.2f} points per game")
-
-# Permutation test — same pattern as ACTG 175
-all_pts = np.concatenate([home_pts, away_pts])
-n_home = len(home_pts)
-
-def permutation_diff(values, n_first):
-    shuffled = np.random.permutation(values)
-    return shuffled[:n_first].mean() - shuffled[n_first:].mean()
-
-perm_diffs = np.array([permutation_diff(all_pts, n_home) for _ in range(10_000)])
-
-n_extreme_nba = np.sum(np.abs(perm_diffs) >= np.abs(obs_diff))
-p_value_nba = (n_extreme_nba + 1) / (len(perm_diffs) + 1)
-print(f"Permutation p-value: {p_value_nba:.4f}")
-```
-
-Roughly 2 points per game — small compared to the within-game spread (a typical team scores 100–125 points), but remarkably consistent across thousands of games. The observed difference is far into the tail of the null distribution.
-
-```{python}
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.hist(perm_diffs, bins=50, density=True, color='lightgray', edgecolor='white',
-        label='Null distribution')
-ax.axvline(obs_diff, color='red', lw=2, ls='--',
-           label=f'Observed diff = {obs_diff:+.2f} pts')
-ax.axvline(-obs_diff, color='red', lw=2, ls=':', alpha=0.5)
-ax.set_xlabel('Difference in mean points: home − away')
-ax.set_ylabel('Density')
-ax.set_title('Permutation Test: NBA Home vs Away Scoring (2021–24)')
-ax.legend()
-plt.tight_layout()
-plt.show()
-```
-
-So the home-court scoring advantage is real. But the test can't tell us whether it comes from rest, crowd, familiarity, referee tendencies, or something else — those mechanisms are all bundled together in the home/away label. Untangling them requires a different comparison, like the natural experiment of the 2020 "bubble" playoffs when every game was played on a neutral court with no fans. (We'll return to that distinction — association vs. causation — in [Chapter 18](lec18-causal-inference-1.qmd).)
 
 ## Bootstrap vs Permutation: When to Use Which
 
@@ -373,9 +425,11 @@ These two simulation-based tools answer different questions:
 ## Think About It
 
 Your bootstrap 95% CI for a treatment effect is [15, 85] — it excludes zero. Without computing anything, do you expect the permutation p-value to be above or below 0.05? Why?
-:::
 
-A bootstrap CI that excludes zero and a small permutation p-value are telling you the same story from different angles. When they agree — as they do for the ACTG 175 data — you can be confident in the conclusion.
+<details><summary>Answer</summary>
+Below 0.05. The CI contains the parameter values the data are *consistent* with at the 5% level; excluding zero means zero is inconsistent at that level — equivalent to rejecting "effect = 0" in a two-sided test at $\alpha = 0.05$. The next section makes this equivalence explicit.
+</details>
+:::
 
 ### The CI/Hypothesis Test Duality
 
