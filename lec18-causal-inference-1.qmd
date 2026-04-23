@@ -299,38 +299,9 @@ The within-precinct ratio is still evidence of disparate treatment: officers app
 
 After the Stanford Open Policing Project published similar within-group analyses for the LAPD, the department changed its Metro Division operations (*Los Angeles Times*, October 2019). The statistical question — aggregate or disaggregated? — had real consequences for how a major city policed its residents.
 
-## Feedback Loops and Performative Prediction
+## Feedback loops as causal structure
 
-The stop-and-frisk example is one step away from an even deeper problem. What happens when a prediction model doesn't just *reflect* the world but *changes* it?
-
-**Predictive policing.** A model predicts high crime in neighborhood X. Police patrol X more heavily. More patrols produce more arrests in X. The model retrains on the new data and "confirms" that X is high-crime. The prediction is self-fulfilling — the model creates the data that justifies itself. This is not confounding in the usual sense. In a confounding story, the association already exists and we misinterpret it. In a feedback loop, the model *causes* the association.
-
-**Credit scoring.** In *Weapons of Math Destruction*, Cathy O'Neil describes how credit scores can trap people in cycles they can't escape.^[O'Neil, *Weapons of Math Destruction: How Big Data Increases Inequality and Threatens Democracy*, Crown, 2016.] A low credit score leads to denied loans. Without loans, a borrower can't build credit history. The score stays low — not because the person is irresponsible, but because the scoring system denied them the opportunity to demonstrate otherwise. The score creates the reality it claims to measure.
-
-**Recommendation algorithms.** YouTube recommends increasingly extreme content because users engage with it. Users watch what's recommended. The algorithm learns they "prefer" extreme content and recommends more. The model shapes the preferences it claims to predict.
-
-In each case, there is a causal arrow running from the model's *prediction* back to the *outcome*:
-
-```
-  Training data ──→ Model ──→ Prediction ──→ Action ──→ Outcome ──→ New training data
-                                                                         │
-                                                                         └──→ (cycle repeats)
-```
-
-This is why "correlation is not causation" isn't the full story. Sometimes the model *is* the cause. When a model's predictions change the environment that generates future data, standard validation breaks down. The test set no longer represents the world the model will operate in, because the model itself reshapes that world. How can errors change the data distribution in the future? That's the question to ask whenever a model's predictions feed back into the system it measures.
-
-Cathy O'Neil calls the worst cases **Weapons of Math Destruction** (WMDs) — predictive models with three properties:^[O'Neil, *Weapons of Math Destruction: How Big Data Increases Inequality and Threatens Democracy*, Crown, 2016.]
-
-1. The outcome is **not easily measurable** (you can't compute a clean test error)
-2. The predictions can have **negative consequences** for individuals
-3. The model creates **self-fulfilling feedback loops** that reinforce its own biases
-
-College rankings are a WMD: high rankings attract students, faculty, and donors, which raises the school's quality — the ranking creates the reality it claims to measure. Parole models are a WMD: keeping someone in prison longer may *cause* them to reoffend (fewer job prospects, deeper criminal networks), confirming the model's prediction. By contrast, CERN's particle physics models are *not* a WMD: the outcome is measurable, the experiments are rigorous, and the predictions don't change the particles.
-
-:::{.callout-tip}
-## Think About It
-You build a model that predicts which students will fail a course, and the university uses it to assign tutoring resources. Is this a Weapon of Math Destruction? Check the three properties: is the outcome measurable? Could the prediction harm students (e.g., through stigma or self-fulfilling expectations)? Does it create a feedback loop? What design choices would make this a virtuous intervention rather than a vicious cycle?
-:::
+The stop-and-frisk analysis showed confounding at work in a deployed system. There's a subtler cousin. [Chapter 16](lec16-feedback-loops.qmd) introduced **feedback loops**: cases where the model's *predictions* change the outcome it's trying to measure (predictive policing, credit scoring, sepsis alerts). The DAG view makes precise why those loops break standard analysis. In a feedback-loop DAG, the model's prediction is an **intervention** on the outcome, not just an observation of it. The arrow from prediction to outcome is a causal edge — and any path that goes *through* the model's output can't be blocked by conditioning on the model's inputs. The fix isn't better covariates; it's either severing the loop (e.g., randomizing some decisions as a holdout) or analyzing the deployed system as a causal system. The next chapter develops the tools.
 
 ## John Snow and the Birth of Epidemiology
 

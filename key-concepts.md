@@ -657,46 +657,50 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 ---
 
-## Lecture 16: Backtesting + Time Series Validation
+## Lecture 16: When Validation Isn't Enough (Feedback Loops, Leakage, Goodhart)
 
-**Objectives addressed:** 11 (train/test/validate — temporal version), 12 (lag features)
+**Objectives addressed:** 11 (train/test/validate — temporal version), 12 (lag features), 20 (AI failure modes — feedback loops + Goodhart), plus new: recognize when a validated model will fail in deployment
 
 **Key concepts:**
+- Three deployment-failure modes: temporal leakage, feedback loops, Goodhart's law
 - Temporal structure means random train/test split leaks future information
-- Backtesting: train on past, test on future (temporal split)
-- Data leakage: using information from the future to predict the past
-- Lag features: use past values (last 5 games, yesterday's AQI) as features for today
-- Non-stationarity: the data-generating process changes over time
+- Temporal split (backtesting): train on past, test on future
+- Lag features: use past values as features for the present
 - Walk-forward validation: expanding or sliding window
-- MAPE and MASE as forecast accuracy metrics
-- Prediction intervals via bootstrap residual resampling
 - Distribution shift: future data may not resemble past data
-- Benchmark forecasting methods: naive, seasonal naive, drift
+- Prediction intervals via bootstrap residual resampling
+- Feedback loops: when a model's predictions change the outcome distribution (predictive policing, credit scoring, sepsis alerts, betting markets)
+- Weapons of Math Destruction: unmeasurable outcome + negative consequences + self-fulfilling loop
+- Goodhart's law: when a measure becomes a target, it ceases to be a good measure
+- Overfitting as the ML reading of Goodhart: training loss is a proxy for test loss; hard optimization breaks the proxy
+- Proxy-vs-outcome auditing: for every metric, write down the goal it's a proxy for
+- Pre-deployment defenses: split by the right axis, simulate the deployed action, audit proxy-vs-outcome, stress-test tails
+- Post-deployment defenses: monitor drift, hold out a control, A/B test changes
 
 **Key vocabulary:**
-- Backtesting, temporal split
-- Data leakage
+- Temporal split, backtesting, walk-forward validation
+- Data leakage (temporal)
 - Lag features
-- Non-stationarity
-- Walk-forward validation
-- AQI (Air Quality Index)
-- MAPE (Mean Absolute Percentage Error)
-- MASE (Mean Absolute Scaled Error)
-- Prediction interval
 - Distribution shift
-- Naive forecast, seasonal naive, drift
+- Prediction interval
+- Feedback loop, performative prediction
+- Weapon of Math Destruction (WMD)
+- Goodhart's law
+- Proxy, proxy-vs-outcome
+- Drift monitoring, control holdout
 
-**Prerequisites:** Lec 5 (feature engineering), Lec 6 (train/test split, cross-validation)
+**Prerequisites:** Lec 5 (feature engineering), Lec 6 (train/test split, cross-validation, distribution shift preview), Lec 10 (p-hacking — a special case of Goodhart)
 
 **Connections:**
-- Backward: Lec 5 (feature engineering), Lec 6 (train/test, cross-validation)
-- Forward: Lec 17 (AutoML limitations with temporal data)
+- Backward: Lec 5 (feature engineering), Lec 6 (train/test, cross-validation, overfitting as Goodhart, distribution shift preview), Lec 10 (p-hacking as Goodhart)
+- Forward: Lec 17 (15-item checklist items #13 and #14 refer back here), Lec 18 (feedback loops as causal structure — the DAG view)
 - FPP3 Ch 5 (the forecasting toolbox — train/test for time series)
-- ORIE 4741: feature_engineering.tex (AR, ARMA, ARIMA, exponential smoothing); train-test-validate.tex ("can't randomly split time series")
+- Cathy O'Neil, *Weapons of Math Destruction* — feedback loops + WMD framework
+- ORIE 4741: feature_engineering.tex (AR, ARMA); train-test-validate.tex ("can't randomly split time series"); fairness.tex (COMPAS, feedback loops in social contexts)
 
-**Aphorism:** "Prediction is very difficult, especially about the future" (attr. Bohr)
+**Aphorism:** "When a measure becomes a target, it ceases to be a good measure" (Goodhart); "Prediction is very difficult, especially about the future" (attr. Bohr)
 
-**Surprise moment:** Model trained on historical EPA data encounters an unprecedented wildfire smoke event — future doesn't look like the past
+**Surprise moment:** The training-loss / test-loss divergence students saw in Chapter 6 is the same phenomenon as hospitals gaming readmission penalties and VW cheating emissions tests — all are Goodhart's law
 
 ---
 
@@ -728,10 +732,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Selection bias
 - LLM (Large Language Model)
 
-**Prerequisites:** All prior lectures (this is the synthesis); Lec 7 (gradient descent), Lec 13 (trees and forests)
+**Prerequisites:** All prior lectures (this is the synthesis); Lec 7 (gradient descent), Lec 13 (trees and forests), Lec 16 (feedback loops + Goodhart, referenced by checklist items #13 and #14)
 
 **Connections:**
-- Backward: **Lec 13 (trees and forests — now students see the deeper mechanics)**, Lec 3 (AI gotchas established early), Lec 7 (gradient descent → gradient boosting)
+- Backward: **Lec 13 (trees and forests — now students see the deeper mechanics)**, Lec 3 (AI gotchas established early), Lec 7 (gradient descent → gradient boosting), Lec 16 (Goodhart + feedback loops — checklist items #13 and #14 point here)
 - Ties a bow on the AI theme threaded throughout the course
 - ORIE 4741: trees.tex — decision trees, bagging, random forests, gradient boosting, feature importance
 
@@ -763,10 +767,10 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Spurious correlation / association
 - Observational data vs. experimental data
 
-**Prerequisites:** Lec 5 (regression), Lec 12 (regression coefficients, "controlling for")
+**Prerequisites:** Lec 5 (regression), Lec 12 (regression coefficients, "controlling for"), Lec 16 (feedback loops — the DAG view formalizes them)
 
 **Connections:**
-- Backward: Lec 2 (hospital data — "worst hospitals"), Lec 11 (correlation ≠ causation), Lec 12 (regression as partial control)
+- Backward: Lec 2 (hospital data — "worst hospitals"), Lec 11 (correlation ≠ causation), Lec 12 (regression as partial control), Lec 16 (feedback loops — now given the DAG-view treatment; prediction is an intervention)
 - Forward: Lec 19 (natural experiments, DiD)
 - The Effect Ch 1-6 (DAGs, confounding)
 - $$ hook: "Does your college cause higher earnings?" — College Scorecard as confounding showcase

@@ -557,8 +557,8 @@ You've now spent 17 chapters building statistical intuition. Here's how to use i
 10. **Check the uncertainty.** Is there a confidence interval? How wide is it? (Ch 8, 10, 12)
 11. **Check for practical significance.** Is the effect large enough to matter for the decision? (Ch 10)
 12. **Check for distribution shift.** Was the model trained on the same population it's being applied to? (Ch 7)
-13. **Check for Goodhart's Law.** Could optimizing this metric cause people to game it? (Ch 10)
-14. **Check for feedback loops.** Could the model's predictions change the outcome it measures? (Ch 18)
+13. **Check for Goodhart's Law.** Could optimizing this metric cause people to game it? (Ch 16)
+14. **Check for feedback loops.** Could the model's predictions change the outcome it measures? (Ch 16)
 15. **Check who paid for it.** Does the analyst or vendor have an incentive to show a particular result? (common sense)
 :::
 

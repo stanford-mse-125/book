@@ -5,9 +5,9 @@ execute:
 jupyter: python3
 ---
 
-You build a model to predict tomorrow's air quality. It scores R² = 0.66 on your test set — not bad. But when you deploy it, the model can't even beat the simplest baseline: predicting "same as yesterday." *What happened?*
+You build a model to predict tomorrow's air quality. It scores R² = 0.66 on your test set. You deploy it. It fails to beat a model that predicts "same as yesterday." A hospital trains a sepsis-alert model. It validates at AUC 0.76. Clinicians start acting on the alerts; within a year, the model's performance quietly erodes. A predictive-policing algorithm flags a neighborhood as high-crime. Police patrol more heavily. Arrests go up. The model "confirms" its own prediction.
 
-The problem isn't just your model — it's how you evaluated it. When data has a **temporal structure**, the standard random train/test split can silently mislead you, and metrics like R² can hide the fact that your model adds no value over a trivial baseline. This chapter shows exactly how, and demonstrates the right way to validate time series models.
+These are three different deployment failures with one common root: *the world you tested on isn't the world you deployed into, and sometimes the model itself reshapes that world.* Models are predictions about the world, and predictions change the world. This chapter is about three reasons a validated model fails after deployment: **temporal leakage** (you saw the future in your test set), **feedback loops** (your prediction changes the outcome), and **Goodhart's law** (the metric you optimized stops measuring the thing you cared about). Each has its own diagnostics, its own fixes, and its own warning signs — and recognizing them is what separates a model that looks good on paper from a model that survives contact with the world.
 
 ```{python}
 import numpy as np
@@ -24,6 +24,10 @@ plt.rcParams['font.size'] = 12
 
 DATA_DIR = 'data'
 ```
+
+# Part 1: Temporal leakage
+
+When your validation metric looks great but deployment fails, the first place to check is the *split*. If your data has temporal structure — anything that evolves over time, from stock prices to air quality to NBA performance — the textbook random train/test split is silently broken. Observations sit close together in time, and those neighbors leak information across the split.
 
 ## Air quality in California
 
@@ -412,88 +416,51 @@ print("The seasonal feature (day_of_year) adds a small boost.")
 
 ## A second example: NBA performance prediction
 
-You might be thinking: "This example is an air quality problem. My field is tech/finance/sports." The temporal leakage trap can appear anywhere data has a time dimension. Let's see what happens in a completely different domain.
-
-If you could reliably predict how many points an NBA player will score tonight, you could make a fortune betting. Let's try — predicting a player's performance from their last 5 games. The temporal split is still the right evaluation: you'd train on past seasons and predict the current one.
+You might be thinking: "This example is an air quality problem. My field is tech/finance/sports." The temporal-leakage trap appears anywhere data has a time dimension. Try predicting how many points an NBA player scores tonight from their last 5 games.
 
 ```{python}
-# Load NBA data
+# Load NBA data and keep players with full three-season coverage
 nba = pd.read_csv(f'{DATA_DIR}/nba/nba_load_management.csv')
 nba['GAME_DATE'] = pd.to_datetime(nba['GAME_DATE'])
 nba = nba.sort_values(['PLAYER_NAME', 'GAME_DATE']).reset_index(drop=True)
+active = nba.groupby('PLAYER_NAME').size()
+nba_active = nba[nba['PLAYER_NAME'].isin(active[active >= 150].index)].copy()
 
-# Focus on players with enough games across all 3 seasons
-games_per_player = nba.groupby('PLAYER_NAME').size()
-active_players = games_per_player[games_per_player >= 150].index
-nba_active = nba[nba['PLAYER_NAME'].isin(active_players)].copy()
-
-print(f"Active players (150+ games): {len(active_players)}")
-print(f"Records: {len(nba_active):,}")
-print(f"Seasons: {nba_active['SEASON'].unique()}")
-```
-
-We construct rolling lag features for each player using `groupby` combined with `.shift()` and `.rolling()` — the same temporal feature engineering from the AQI example, but now grouped by player.
-
-```{python}
-# Create rolling features: last-5-game averages
-nba_active = nba_active.sort_values(['PLAYER_NAME', 'GAME_DATE']).reset_index(drop=True)
+# Rolling lag features per player
 nba_active['pts_lag1'] = nba_active.groupby('PLAYER_NAME')['PTS'].shift(1)
 nba_active['pts_lag5_avg'] = nba_active.groupby('PLAYER_NAME')['PTS'].transform(
-    lambda x: x.rolling(5).mean().shift(1)
-)
+    lambda x: x.rolling(5).mean().shift(1))
 nba_active['min_lag5_avg'] = nba_active.groupby('PLAYER_NAME')['MIN'].transform(
-    lambda x: x.rolling(5).mean().shift(1)
-)
+    lambda x: x.rolling(5).mean().shift(1))
 
 nba_model = nba_active.dropna(subset=['pts_lag1', 'pts_lag5_avg', 'min_lag5_avg']).copy()
 nba_features = ['pts_lag1', 'pts_lag5_avg', 'min_lag5_avg', 'HOME']
-
-print(f"Modeling dataset: {len(nba_model):,} player-games")
+print(f"Modeling dataset: {len(nba_model):,} player-games; seasons {list(nba_model['SEASON'].unique())}")
 ```
 
-Now we repeat the same experiment: random split versus temporal split. For the temporal split, we train on the first two seasons and test on the third.
+Repeat the random-vs-temporal experiment: random 80/20 split versus train on seasons 1–2, test on season 3.
 
 ```{python}
-# Standard random split vs temporal split
 np.random.seed(42)
 mask_nba = np.random.rand(len(nba_model)) < 0.8
 
-# Random split
-model_r = LinearRegression()
-model_r.fit(nba_model[mask_nba][nba_features], nba_model[mask_nba]['PTS'])
-pred_r = model_r.predict(nba_model[~mask_nba][nba_features])
-r2_r = r2_score(nba_model[~mask_nba]['PTS'], pred_r)
+model_r = LinearRegression().fit(nba_model[mask_nba][nba_features], nba_model[mask_nba]['PTS'])
+r2_r = r2_score(nba_model[~mask_nba]['PTS'], model_r.predict(nba_model[~mask_nba][nba_features]))
 
-# Temporal split: train on seasons 1-2, test on season 3
 train_nba = nba_model[nba_model['SEASON'].isin(['2021-22', '2022-23'])]
-test_nba = nba_model[nba_model['SEASON'] == '2023-24'].copy()
+test_nba = nba_model[nba_model['SEASON'] == '2023-24']
+model_t = LinearRegression().fit(train_nba[nba_features], train_nba['PTS'])
+r2_t = r2_score(test_nba['PTS'], model_t.predict(test_nba[nba_features]))
 
-model_t = LinearRegression()
-model_t.fit(train_nba[nba_features], train_nba['PTS'])
-pred_t = model_t.predict(test_nba[nba_features])
-r2_t = r2_score(test_nba['PTS'], pred_t)
-
-print(f"NBA prediction (points scored):")
-print(f"  Random split R-squared:   {r2_r:.3f}")
-print(f"  Temporal split R-squared: {r2_t:.3f}")
-print(f"  Gap:                      {r2_r - r2_t:.3f}")
-print()
-gap_nba = r2_r - r2_t
-if gap_nba > 0.01:
-    print(f"Same pattern as AQI -- the random split is optimistically biased (gap = {gap_nba:.3f}).")
-elif gap_nba < -0.01:
-    print(f"Interesting: the temporal split slightly outperforms (gap = {gap_nba:.3f}).")
-    print("The model generalizes well across seasons -- no leakage bias here.")
-else:
-    print(f"The two splits give similar results (gap = {gap_nba:.3f}).")
-    print("The model generalizes well across seasons, but the temporal split is still the valid evaluation.")
+print(f"Random split R²:   {r2_r:.3f}")
+print(f"Temporal split R²: {r2_t:.3f}  (gap {r2_r - r2_t:+.3f})")
 ```
 
-Unlike the AQI example, the NBA model generalizes well across seasons — the temporal split performs comparably to the random split. Player scoring patterns are more stable across years than air quality is across seasons. When temporal structure doesn't create strong distribution shift, the random split may not inflate performance. But the temporal split is still the correct evaluation: it's the only one that mirrors how you'd actually deploy the model (train on past seasons, predict the current one).
+Unlike AQI, the NBA model generalizes well across seasons — player scoring patterns are more stable year to year than air quality is. When temporal structure doesn't create strong distribution shift, the random split may not inflate performance. But the temporal split is still the correct evaluation: it mirrors how you'd actually deploy.
 
-Even a model with decent R-squared doesn't necessarily translate to profit in a betting market — the market already incorporates the information your model uses. The gap between statistical performance and economic value is a recurring theme in applied statistics.
+One more twist before we leave temporal leakage behind. Even a model with a decent R² doesn't translate to profit in a betting market — the market already incorporates the information your model uses. If your "edge" comes from the last 5 games' scoring average, so does everyone else's line, and the market has already priced it in. This is the first hint of a deeper problem: the market isn't a static environment. It *adapts* to public signals. Once the whole world knows a feature predicts scoring, the feature stops predicting market outcomes. The temporal split says your R² is real; the betting profit says the market isn't sitting still. That gap between *statistical* performance and *deployment* performance is the bridge to Part 2.
 
-## When the future doesn't look like the past
+## Distribution shift: when the future doesn't look like the past
 
 Let's go back to air quality and look at something the model has *never seen*.
 
@@ -648,41 +615,120 @@ print("Point forecasts alone are dangerous for decision-making.")
 print("Always report intervals so stakeholders can plan for the plausible range.")
 ```
 
-This resampling approach is completely general: you can construct prediction intervals for *any* model, not just linear regression. And you're not limited to our residual-resampling scheme — you can devise your own null model, simulate from it, and compare. The key principle is that a forecast without a measure of uncertainty isn't a complete forecast.
+This resampling approach is completely general: you can construct prediction intervals for *any* model, not just linear regression. The key principle is that a forecast without a measure of uncertainty isn't a complete forecast. (The intervals above assume stationary residuals — in reality, bands should widen during high-variance regimes like wildfire season.)
 
-These intervals assume stationary residuals. In practice, intervals should be wider during high-variance periods like wildfire season. A model that uses the same residual distribution year-round will undercover extreme events and overcover calm ones.
+# Part 2: Feedback loops
+
+## When predictions change the world
+
+Temporal leakage is a validation *technique* failure — random splits saw the future. Feedback loops are a deeper failure: even with a perfectly clean temporal split, your model can fail in deployment because *your model is part of the world it predicts*. What happens when a prediction model doesn't just reflect the world but changes it?
+
+**Predictive policing.** A model predicts high crime in neighborhood X. Police patrol X more heavily. More patrols produce more arrests in X. The model retrains on the new data and "confirms" that X is high-crime. The prediction is self-fulfilling — the model creates the data that justifies itself. This is not confounding in the usual sense. In a confounding story, the association already exists and we misinterpret it. In a feedback loop, the model *causes* the association.
+
+**Credit scoring.** In *Weapons of Math Destruction*, Cathy O'Neil describes how credit scores can trap people in cycles they can't escape.^[O'Neil, *Weapons of Math Destruction: How Big Data Increases Inequality and Threatens Democracy*, Crown, 2016.] A low credit score leads to denied loans. Without loans, a borrower can't build credit history. The score stays low — not because the person is irresponsible, but because the scoring system denied them the opportunity to demonstrate otherwise. The score creates the reality it claims to measure.
+
+**Recommendation algorithms.** YouTube recommends increasingly extreme content because users engage with it. Users watch what's recommended. The algorithm learns they "prefer" extreme content and recommends more. The model shapes the preferences it claims to predict.
+
+**Clinical alerts.** A hospital deploys a sepsis-prediction model trained on historical data. Once the alerts go live, clinicians treat flagged patients earlier. Fewer patients progress to sepsis. The model, evaluated after deployment, looks *worse* than it did on the validation set — not because it degraded, but because the thing it was predicting stopped happening. If the hospital responds by retraining on post-deployment data, the model's ground truth is now shaped by the model itself.
+
+**Betting markets.** Back to the NBA example. Your model beats a naive baseline on historical data. You deploy it against the sportsbook. The line already encodes the same information your model uses — recent scoring averages, rest days, matchup difficulty — because thousands of sharp bettors have moved the line. Your "edge" disappears the moment the market has processed the same signals. The model doesn't fail because of distribution shift; it fails because the market *is* the feedback loop, adapting to public information in real time.
+
+In each case, there is a causal arrow running from the model's *prediction* back to the *outcome*:
+
+```
+  Training data ──→ Model ──→ Prediction ──→ Action ──→ Outcome ──→ New training data
+                                                                         │
+                                                                         └──→ (cycle repeats)
+```
+
+This is why "correlation is not causation" isn't the full story. Sometimes the model *is* the cause. When a model's predictions change the environment that generates future data, standard validation breaks down. The test set no longer represents the world the model will operate in, because the model itself reshapes that world.
+
+Whenever you deploy a model, ask: how will the predictions change the data distribution in the future? If the answer is "they won't" (a weather forecaster doesn't affect the weather, a particle-physics model doesn't affect the particles), you're safe from feedback loops. If the answer is "they will" (credit scores affect who gets loans, sepsis alerts affect who gets treated), you have a feedback loop — and your validation set can't tell you how it will behave.
+
+## Weapons of Math Destruction
+
+Cathy O'Neil calls the worst cases **Weapons of Math Destruction** (WMDs) — predictive models with three properties:^[O'Neil, *Weapons of Math Destruction*, Crown, 2016.]
+
+1. The outcome is **not easily measurable** (you can't compute a clean test error)
+2. The predictions can have **negative consequences** for individuals
+3. The model creates **self-fulfilling feedback loops** that reinforce its own biases
+
+College rankings are a WMD: high rankings attract students, faculty, and donors, which raises the school's quality — the ranking creates the reality it claims to measure. Parole-risk models are a WMD: keeping someone in prison longer may *cause* them to reoffend (fewer job prospects, deeper criminal networks), confirming the model's prediction. By contrast, CERN's particle-physics models are *not* a WMD: the outcome is measurable, the experiments are rigorous, and the predictions don't change the particles.
+
+:::{.callout-tip}
+## Think About It
+You build a model that predicts which students will fail a course, and the university uses it to assign tutoring resources. Is this a Weapon of Math Destruction? Check the three properties: is the outcome measurable? Could the prediction harm students (e.g., through stigma or self-fulfilling expectations)? Does it create a feedback loop? What design choices would make this a virtuous intervention rather than a vicious cycle?
+:::
+
+# Part 3: Goodhart's law
+
+## "When a measure becomes a target..."
+
+"When a measure becomes a target, it ceases to be a good measure" (attributed to Charles Goodhart, 1975; popularized by Marilyn Strathern). Whenever people or systems are rewarded for optimizing a metric, they find ways to hit the target without achieving the goal the metric was supposed to measure. Goodhart's law is the mechanism behind many of the feedback loops you just saw: the measure gets gamed — by people, by institutions, or by the optimization itself.
+
+The pattern appears everywhere once you see it.
+
+- **Hospital readmission penalties.** The US Centers for Medicare and Medicaid Services penalize hospitals with high 30-day readmission rates. The metric was designed to measure care quality. Instead, some hospitals responded by declining to admit the sickest patients in the first place — keeping readmission rates low by selecting healthier patients, not by providing better care.
+- **School test scores.** When teacher evaluations depend on standardized test scores, the incentive shifts from teaching understanding to teaching the test. Scores rise; learning does not.
+- **Emissions testing.** Volkswagen installed software that detected when a vehicle was being emissions-tested and switched to a low-emission mode. The metric — emissions during the official test — was hit cleanly. The goal — low emissions during actual driving — was not.
+- **Citations and h-index.** Academic careers increasingly depend on citation counts. Researchers respond by salami-slicing papers, publishing incremental work, and forming citation cartels. Citation counts climb; the goal they were meant to proxy (scientific quality) does not.
+- **p-hacking.** We saw in [Chapter 10](lec10-hypothesis-testing.qmd) that the $p < 0.05$ threshold was designed to measure evidence strength. When careers and publications depend on clearing that bar, researchers (often unconsciously) run analyses until they find significance. p-hacking is Goodhart's law applied to scientific inference.
+
+## The machine-learning reading
+
+Goodhart's law has a specifically mathematical version that sits at the heart of overfitting. Go back to [Chapter 6](lec06-validation.qmd). When you train a model, you optimize a **training loss** — say, mean squared error on the training set. But the training loss is a *proxy* for what you actually care about: **test loss**, the model's error on new data from the same distribution. For a model with modest capacity, the proxy and the goal move together, and you can minimize training loss safely. For a model with enough capacity to memorize the training set — a high-degree polynomial, a deep decision tree, a neural net with millions of parameters — the proxy and the goal diverge. You can drive training loss to zero while test loss gets worse. The training metric stopped being a good measure of the thing you cared about precisely *because* you optimized it so hard.
+
+This is why cross-validation exists. Holding out a validation set and tracking validation loss is a way of resisting Goodhart: you optimize on the training loss, but you decide *when to stop* based on a metric the optimizer never saw. It's the same idea as "the independent auditor doesn't report to the CEO."
+
+But even cross-validation is only a partial defense. If you repeatedly tune hyperparameters against the validation set — if you let the validation set *become* the target — the validation loss itself becomes a gamed metric. This is why serious ML practice distinguishes **training / validation / test** sets: the test set is used *once*, after all decisions are locked, precisely because any metric you optimize against long enough stops measuring what you wanted.
+
+## Asking the Goodhart question
+
+The pattern is the same whether the optimizer is a gradient-descent run or a hospital administrator: a metric designed to *measure* performance becomes a target to *optimize*, and optimization pressure corrupts the metric. Whenever you use a number to make decisions, ask: **could the people or systems being measured change their behavior to hit the target without achieving the underlying goal?** If yes, you have a Goodhart problem, and you need a second measure — one the optimizer can't see, or one that captures a different aspect of the goal — to tell you when the first one has been gamed.
+
+# Part 4: What to do
+
+Temporal leakage, feedback loops, and Goodhart's law are distinct failure modes, but they share a recipe for defense.
+
+**Before deployment:**
+
+1. **Split by the right axis.** If time matters, split by time. If the unit of prediction is a person and people recur across the dataset, split by person. Ask: *what's the axis of generalization I actually care about?* and split on that axis.
+2. **Simulate the deployed action.** Don't just evaluate the prediction — evaluate what the prediction will *cause*. If the model's output triggers a decision (treat, loan, patrol), simulate the downstream effect on the outcome distribution. A model whose predictions change behavior cannot be validated on passive historical data alone.
+3. **Audit proxy-vs-outcome.** For every metric you optimize, write down the goal it's a proxy for. Where does the proxy diverge from the goal? That's where Goodhart will bite.
+4. **Stress-test the tails.** Models fail on data they've never seen. Construct adversarial examples and out-of-distribution test cases before deployment, not after.
+
+**After deployment:**
+
+1. **Monitor drift.** Track model performance against fresh ground truth. When it erodes, investigate whether the world changed, whether the model changed the world, or whether the metric is being gamed.
+2. **Hold out a control.** Don't let the model decide for 100% of cases. Reserve a random sample where decisions are made by some other mechanism — a simpler baseline, a human, a coin flip. The control gives you a clean signal about what *would* have happened without the model.
+3. **A/B test major changes.** We'll develop the formal machinery in [Chapter 19](lec19-causal-inference-2.qmd). The instinct to randomize some decisions — so that the model's impact is measured causally, not just predictively — is the single most effective defense against feedback-loop failures.
+
+[Chapter 17](lec17-automl-llms.qmd) closes this course with a 15-item checklist for evaluating any analysis. Items #13 (Goodhart) and #14 (feedback loops) refer back here. When you see a production model that's been running for a year, ask: which of the three failure modes would catch it, if any?
 
 ## Key takeaways
 
-- **Never randomly split time series data.** Use temporal splits: train on the past, test on the future.
-
-- **Walk-forward validation** reveals *when* your model breaks, not just how well it does on average.
-
-- **Lag features are feature engineering** — yesterday's value, rolling averages, same-day-last-year are all transformations of the raw data.
-
-- **Backtesting is not prediction.** A strategy that looks profitable in backtest may fail in production — the market already knows the same signals.
-
-- **Distribution shift is the hardest problem.** Models trained on normal conditions fail during extreme events.
-
-- **Use scale-independent metrics** (MAPE, MASE) to compare forecasts across different series. MASE < 1 means you beat the naive baseline.
-
-- **Always report prediction intervals**, not just point forecasts. Bootstrap resampling of residuals is a simple, general-purpose method.
+- **Temporal leakage.** Random splits leak future information into training. Use temporal splits, walk-forward validation, and lag features engineered from past-only data.
+- **Distribution shift.** Models trained on normal conditions fail during unprecedented events. No cross-validation fully fixes this; widen prediction intervals during high-variance regimes and treat extreme-event predictions as extrapolation.
+- **Feedback loops.** When a model's predictions change the world, the test set no longer represents the deployment environment. Ask: *how do the predictions change the outcome distribution?* If they do, you have a feedback loop.
+- **Weapons of Math Destruction** have three properties: unmeasurable outcome, negative consequences, self-fulfilling loop. College rankings and parole-risk models are WMDs; weather forecasts and particle-physics models aren't.
+- **Goodhart's law.** When a measure becomes a target, it ceases to be a good measure. This is the mechanism behind overfitting (training loss as proxy for test loss), p-hacking, hospital readmission gaming, emissions cheating, and citation inflation.
+- **What to do.** Before deployment: split by the right axis, simulate the action the prediction drives, audit proxy-vs-outcome, stress-test tails. After deployment: monitor drift, hold out a control, A/B test changes.
+- **Always report prediction intervals** rather than point forecasts — a forecast without uncertainty isn't a complete forecast.
 
 ## Study guide
 
 ### Key ideas
 
-- **Backtesting (temporal split):** Evaluating a model by training on past data and testing on future data, mimicking real deployment.
-- **Data leakage:** When information from the future (or the test set) contaminates training, producing optimistically biased results. Random train/test splits create leakage in time series: test observations are correlated with nearby training observations.
-- **Lag features:** Predictors constructed from past values of the time series (e.g., yesterday's value, 7-day rolling average).
-- **Non-stationarity:** A time series whose statistical properties (mean, variance) change over time.
-- **Walk-forward validation (time series cross-validation):** Repeatedly training on an expanding (or sliding) window of past data and testing on the next period. Reveals *when* a model fails, not just its average performance.
-- **Distribution shift:** When future data comes from a fundamentally different regime than the training data. Models trained on normal conditions cannot predict unprecedented events.
-- **Benchmark forecasting methods:** The naive forecast ("same as yesterday"), seasonal naive ("same day last year"), and drift method ("extrapolate the trend") are standard baselines. Any useful model must beat these.
-- **MAPE** (Mean Absolute Percentage Error): expresses forecast error as a percentage. Intuitive but undefined when actual values are zero.
-- **MASE** (Mean Absolute Scaled Error): ratio of your model's MAE to the naive forecast's MAE. MASE < 1 means you beat the naive baseline. Scale-independent, so useful for comparing across different series.
-- **Prediction intervals:** A range (e.g., 95%) around a point forecast capturing plausible future values. Bootstrap resampling of training residuals is a general-purpose method for constructing them.
-- Backtesting a strategy does not guarantee future profitability — markets already incorporate public information.
+- **Temporal split (backtesting):** evaluating a model by training on past data and testing on future data, mimicking real deployment.
+- **Data leakage:** when information from the future (or the test set) contaminates training, producing optimistically biased results. Random train/test splits create leakage in time series because neighboring observations are correlated across the split.
+- **Lag features:** predictors constructed from past values (yesterday's value, 7-day rolling average, same-day-last-year).
+- **Walk-forward validation:** repeatedly training on an expanding (or sliding) window and testing on the next period. Reveals *when* a model fails, not just its average performance.
+- **Distribution shift:** when future data comes from a fundamentally different regime than the training data. Models trained on normal conditions cannot predict unprecedented events.
+- **Prediction intervals:** a range (e.g., 95%) around a point forecast capturing plausible future values. Bootstrap resampling of training residuals is a general-purpose method.
+- **Feedback loop (performative prediction):** a causal arrow from the model's prediction back to the outcome — prediction → action → new data → new prediction. The test set no longer represents the deployment environment.
+- **Weapon of Math Destruction (WMD):** a predictive model with (1) an unmeasurable outcome, (2) negative consequences for individuals, (3) a self-fulfilling feedback loop. Cathy O'Neil's framework.
+- **Goodhart's law:** when a measure becomes a target, it ceases to be a good measure. Manifests in ML as overfitting (training loss as proxy for generalization), in policy as metric gaming, in science as p-hacking.
+- **Proxy-vs-outcome auditing:** for every metric you optimize, write down the goal it's a proxy for. Where does the proxy diverge? That's where Goodhart will bite.
 
 ### Computational tools
 
@@ -690,7 +736,8 @@ These intervals assume stationary residuals. In practice, intervals should be wi
 - `pd.Series.rolling(k).mean()` — compute rolling window averages
 - Temporal train/test split: filter by date (`df[df['Date'] < cutoff]`)
 - Walk-forward loop: iterate over time periods with an expanding training window
+- Bootstrap residual resampling: construct prediction intervals for any model
 
 ### For the quiz
 
-You should be able to: (1) explain why random splitting fails for time series data, (2) implement a temporal train/test split given a date cutoff, (3) describe walk-forward validation (expanding and sliding window variants), (4) explain what distribution shift is and why no cross-validation method can fully address it, (5) compute and interpret MAPE and MASE, and (6) explain why prediction intervals matter and how bootstrap resampling produces them.
+You should be able to: (1) explain why random splitting fails for time series data and implement a temporal split, (2) describe walk-forward validation (expanding and sliding window variants), (3) explain what distribution shift is and why no cross-validation method can fully address it, (4) identify the three properties of a WMD given a deployment scenario, (5) give two examples of feedback loops and diagram the prediction-action-outcome cycle, (6) state Goodhart's law and explain how overfitting is a special case, (7) list three pre-deployment and three post-deployment practices that defend against these failure modes, and (8) explain why prediction intervals matter and how bootstrap resampling produces them.
