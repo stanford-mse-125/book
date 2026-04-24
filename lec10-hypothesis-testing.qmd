@@ -18,566 +18,469 @@ sns.set_style('whitegrid')
 plt.rcParams['figure.figsize'] = (7, 4.5)
 plt.rcParams['font.size'] = 12
 
-# Load data
 DATA_DIR = 'data'
 np.random.seed(42)
 ```
 
-The average cost to bring a drug to market exceeds \$1.3 billion. A clinical trial just produced a p-value of 0.00000000000000000028. Time to approve the drug? Not so fast.
+In [Chapter 9](lec09-permutation-tests.qmd) we shuffled labels in the ACTG 175 data and read off a p-value of about $10^{-4}$. By 2026 standards the verdict was easy: the drug worked. But in 1991, the trial *hadn't been run yet*, and the people designing it faced a different set of questions:
 
-In [Chapter 9](lec09-permutation-tests.qmd), we used a permutation test to build the null distribution — what the test statistic would look like if the drug did nothing — and computed a p-value. Today we formalize that machinery and discover its limitations.
+- **How many patients should we enroll?** Too few and we miss a real effect; too many wastes money and exposes more people than necessary to an experimental regimen.
+- **How small a p-value is convincing?** The FDA had to commit to a threshold *before* the data came in.
+- **What kinds of mistakes are we willing to make, and at what rate?**
 
-## Setup: Recap the Clinical Trial
+Chapter 9 left these on the table because it framed hypothesis testing as a question you ask *of data you already have*. This chapter is the prospective view — hypothesis testing as a tool for **designing a study**. Three new ideas make that possible:
 
-The original ACTG 175 trial had four arms; here we compare control vs. all alternative treatments combined. Let's reload the data and the observed treatment effect.
+1. A formal accounting of the **two errors** a test can make, and the rates at which they occur.
+2. A **formula-based** test (Welch's t-test) whose math we can solve before any data exists. Permutation tests need data to shuffle; we don't have data yet.
+3. **Power analysis**, which uses that math to size a study — once we are willing to *guess* what effect we hope to detect.
+
+We close by reconciling Chapter 8's bootstrap CI with the hypothesis test (they say the same thing) and by examining the failure mode that haunts every large study: any nonzero effect eventually becomes "significant," whether it matters or not.
+
+Notation: $H_0$ for the null, $H_1$ for the alternative, $p$ for the p-value, $\alpha$ for the significance threshold. Chapter 9 defined $H_0$ and the p-value informally; we formalize them here and add a careful definition of $H_1$, which we'll need to talk about errors and power.
 
 ```{python}
 df = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
 df['cd4_change'] = df['cd420'] - df['cd40']
-
 control = df[df['treat'] == 0]['cd4_change'].dropna()
 treatment = df[df['treat'] == 1]['cd4_change'].dropna()
 observed_effect = treatment.mean() - control.mean()
-
+print(f"ACTG 175: control n={len(control)}, treatment n={len(treatment)}")
 print(f"Observed treatment effect: {observed_effect:.1f} CD4 cells")
-print(f"Control n = {len(control)}, Treatment n = {len(treatment)}")
 ```
 
-Before formalizing anything, let's look at what we're working with. Do the two groups actually look different?
+## The framework in four lines
 
-```{python}
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.hist(control, bins=40, alpha=0.5, label='Control', density=True)
-ax.hist(treatment, bins=40, alpha=0.5, label='Treatment', density=True)
-ax.axvline(control.mean(), color='C0', ls='--', lw=2)
-ax.axvline(treatment.mean(), color='C1', ls='--', lw=2)
-ax.set_xlabel('CD4 Change')
-ax.set_ylabel('Density')
-ax.set_title('Control vs Treatment: CD4 Cell Changes')
-ax.legend()
-plt.show()
-```
+Every hypothesis test follows the same recipe:
 
-The distributions overlap a lot, but the treatment group is shifted to the right. Is that shift real, or could it be random noise? How different is "different enough" to conclude the drug works?
+1. **State $H_0$ and $H_1$** — the competing claims about the world.
+2. **Pick a test statistic** — one number that summarizes the evidence.
+3. **Determine the null distribution** — what the test statistic looks like if $H_0$ were true. (Chapter 9: by shuffling. This chapter: by formula.)
+4. **Compute the p-value** — and reject $H_0$ when $p < \alpha$.
 
-That's exactly what hypothesis testing answers. Let's be precise.
+For ACTG 175:
 
-## The Hypothesis Testing Framework
+| | |
+|--|--|
+| **$H_0$** | The combination treatment has no effect on CD4 change. |
+| **$H_1$** | It does (effect $\neq 0$). |
+| **Test statistic** | Difference in group means, scaled by its standard error — the **t-statistic** below. |
+| **Null distribution** | Approximately Student's $t$ (justified by the CLT). |
+| **p-value** | Probability of a t-statistic at least this extreme if $H_0$ were true. |
 
-Here's the recipe for any hypothesis test — a checklist you can follow for any problem:
-
-1. **State $H_0$ (null hypothesis) and $H_1$ (alternative hypothesis)** — what are the competing claims?
-2. **Choose a test statistic** — what number summarizes the evidence?
-3. **Determine the null distribution** — what would the test statistic look like if $H_0$ were true?
-4. **Compute the p-value** — how extreme is your observed test statistic under $H_0$?
-
-For our clinical trial:
-
-| Component | Our Clinical Trial |
-|-----------|-------------------|
-| **Null hypothesis** $H_0$ | The treatment has no effect (mean difference = 0) |
-| **Alternative hypothesis** $H_1$ | The treatment has an effect (mean difference $\neq$ 0) |
-| **Test statistic** | The **t-statistic**: difference in means ÷ standard error (formula below) |
-| **p-value** | Probability of seeing a result *at least* this extreme, *if $H_0$ were true* |
+What's new in this chapter is row 3 — a formula-based null distribution — and a more precise vocabulary for the decision rule built on top of it.
 
 ::: {.callout-important}
-## Definition: Null and Alternative Hypotheses
+## Definition: null and alternative hypotheses
 
-The **null hypothesis** ($H_0$) is the default claim — typically "no effect" or "no difference." The **alternative hypothesis** ($H_1$) is the competing claim you're testing for. A hypothesis test asks whether the data provide enough evidence to reject $H_0$ in favor of $H_1$.
+The **null hypothesis** $H_0$ is a single, specific claim about the world — typically "no effect" or "no difference" — that the test tries to disprove. For ACTG: $H_0: \mu_T - \mu_C = 0$ (the population mean CD4 change is the same in the two arms).
+
+The **alternative hypothesis** $H_1$ is the *complement* of $H_0$ within the model: every state of the world that $H_0$ rules out. For ACTG: $H_1: \mu_T - \mu_C \neq 0$ (two-sided) or $H_1: \mu_T - \mu_C > 0$ (one-sided, if only beneficial effects are of interest).
+
+A hypothesis test does *not* require us to commit to any particular value of the effect inside $H_1$. We just ask whether the data are surprising enough under $H_0$ to rule it out. That is why the test does its job without us guessing how big the true effect is.
+
+The catch — which we develop in this chapter — is that $H_1$ is a whole **family** of possible worlds (all the nonzero effects), not a single one. Talking about Type II error or power forces us to pick a specific effect inside $H_1$, because the chance of detecting a real effect depends on how big that effect actually is.
 :::
+
+## Two errors, not one
+
+Until now we have spoken as if the only worry was rejecting $H_0$ when it's true. There is a symmetric worry: failing to reject $H_0$ when $H_1$ is true.
+
+Think of a courtroom. $H_0$ is "innocent until proven guilty."
+
+- **Type I error** = convicting an innocent person. We rejected $H_0$ when it was true. *In the trial: approving a useless drug.*
+- **Type II error** = letting a guilty person go free. We failed to reject $H_0$ when $H_1$ was true. *In the trial: rejecting a drug that actually saves lives.*
+
+|  | $H_0$ true (no effect) | $H_1$ true (real effect) |
+|--|---|---|
+| **Reject $H_0$** | Type I error (rate $\alpha$) | Correct |
+| **Fail to reject $H_0$** | Correct | Type II error (rate $\beta$) |
 
 ::: {.callout-important}
-## Definition: P-value
+## Definition: significance level, Type I and Type II errors, power
 
-The **p-value** is the probability of observing a test statistic at least as extreme as the one computed from the data, assuming $H_0$ is true. It is *not* the probability that $H_0$ is true.
-:::
-
-::: {.callout-warning}
-## The #1 p-value misconception (worth repeating)
-
-[Chapter 9](lec09-permutation-tests.qmd) flagged this, but it bears repeating: the p-value is NOT the probability that $H_0$ is true. It's the probability of getting data at least as extreme as ours *if $H_0$ were true*. Big difference.
-
-If you test "is this coin fair" and get p = 0.03, it does NOT mean there's a 3% chance the coin is fair. It means: IF the coin were fair, there'd be only a 3% chance of seeing data this extreme.
-:::
-
-## Significance Level $\alpha$
-
-We need a threshold: how extreme is "extreme enough" to reject $H_0$? This threshold is called the **significance level** $\alpha$.
-
-::: {.callout-important}
-## Definition: Significance Level
-
-The **significance level** $\alpha$ is the threshold for rejecting $H_0$: if the p-value is less than $\alpha$, we reject $H_0$. It also equals the Type I error rate — the probability of rejecting $H_0$ when it is actually true.
-:::
-
-Convention: $\alpha = 0.05$. But why 0.05? R.A. Fisher suggested 0.05 in 1925 as a "convenient" threshold. It stuck, but there's nothing magical about it. Some fields use 0.01; particle physics uses roughly 0.0000003. We'll see in a moment why the choice should depend on the stakes.
-
-::: {.callout-note}
-## The brewer who invented small-sample testing
-
-The t-test we're about to use has a surprising origin. In the early 1900s, William Sealy Gosset worked as a chemist at the Guinness brewery in Dublin. He needed to compare barley varieties and yeast strains — but with only a handful of samples from each batch, the normal approximation was unreliable. Gosset worked out the exact distribution of the sample mean divided by the sample standard deviation for small samples and published it in 1908 under the pseudonym "Student" (Guinness didn't allow employees to publish under their own names, fearing competitors would learn they were using statistics). His "Student's t-distribution" is the foundation of the t-test we use today — and the reason it's still called "Student's t." (See Salsburg, *The Lady Tasting Tea*, Ch. 2.)
-:::
-
-We use **Welch's t-test** (`equal_var=False`), which does not assume the two groups have equal variance. This choice is almost always the right default.
-
-$$t = \frac{\bar{X}_1 - \bar{X}_2}{\sqrt{s_1^2/n_1 + s_2^2/n_2}}$$
-
-```{python}
-# Welch's t-test
-t_stat, p_value = stats.ttest_ind(treatment, control, equal_var=False)
-print(f"t-statistic: {t_stat:.2f}")
-print(f"p-value: {p_value:.2e}")
-print(f"\nAt alpha = 0.05: {'Reject H0' if p_value < 0.05 else 'Fail to reject H0'}")
-print(f"At alpha = 0.01: {'Reject H0' if p_value < 0.01 else 'Fail to reject H0'}")
-print(f"At alpha = 0.001: {'Reject H0' if p_value < 0.001 else 'Fail to reject H0'}")
-```
-
-The p-value here is so small that the choice of $\alpha$ doesn't matter. But for borderline cases, it matters a lot.
-
-::: {.callout-tip}
-## Think About It
-
-This p-value is so small that any conventional $\alpha$ rejects. But imagine a borderline case: a different trial produces p = 0.04. A colleague argues the result is "just barely significant" and shouldn't be trusted. Another says p < 0.05 means we reject. Who is right — and what does the disagreement reveal about the 0.05 threshold?
-:::
-
-## Two Types of Errors
-
-::: {.callout-tip}
-## Think About It
-
-Which mistake is worse — approving a useless drug, or rejecting a drug that actually saves lives?
-:::
-
-Think of it like a courtroom trial. The null hypothesis is "innocent until proven guilty."
-
-- **Type I error** = convicting an innocent person. We rejected $H_0$ when it was actually true. In our clinical trial: we approve a useless drug for patients.
-- **Type II error** = letting a guilty person go free. We failed to reject $H_0$ when $H_1$ was actually true. In our trial: we reject a drug that actually saves lives.
-
-Now here's the formal summary:
-
-|  | $H_0$ is true (no effect) | $H_1$ is true (real effect) |
-|--|---------------------------|----------------------------|
-| **Reject $H_0$** | Type I Error (false positive) | Correct! |
-| **Fail to reject $H_0$** | Correct! | Type II Error (false negative) |
-
-::: {.callout-important}
-## Definition: Type I Error, Type II Error, and Power
-
-- **Type I error**: Rejecting $H_0$ when it is true (false positive). Its rate equals $\alpha$.
-- **Type II error**: Failing to reject $H_0$ when $H_1$ is true (false negative). Its rate is $\beta$.
-- **Power**: $1 - \beta$ = the probability of correctly detecting a real effect.
+- **Significance level** $\alpha$: the threshold at which we reject $H_0$. By construction, $P(\text{reject } H_0 \mid H_0 \text{ true}) = \alpha$ — the **Type I error rate**.
+- **Type II error rate** $\beta$: $P(\text{fail to reject } H_0 \mid H_1 \text{ true})$.
+- **Power** $= 1 - \beta$: the probability of correctly detecting a real effect.
 :::
 
 ::: {.callout-important}
 ## "Fail to reject" — not "accept"
 
-Notice we say "fail to reject $H_0$," not "accept $H_0$." A non-significant result means the data are compatible with $H_0$ — but they might also be compatible with many other hypotheses. Absence of evidence is not evidence of absence.
-
-As Einstein (reportedly) put it: *"No amount of experimentation can ever prove me right; a single experiment can prove me wrong."*
+A non-significant result means the data are compatible with $H_0$ — but they may also be compatible with many other hypotheses. Absence of evidence is not evidence of absence. As Einstein (reportedly) put it: *"No amount of experimentation can ever prove me right; a single experiment can prove me wrong."*
 :::
 
-Let's visualize the tradeoff. Under the null, the test statistic is centered at zero. Under the alternative, it's shifted. The overlap is where errors happen. We use a smaller illustrative effect here so both error regions are visible; for the actual trial, the effect was large enough that Type II error was negligible. (The plot shows only the right tail of a two-sided test; the left tail is symmetric.)
+The two error rates trade off against each other on the same axis. Picture the test statistic's distribution under $H_0$ (centered at zero) and under a specific $H_1$ (shifted). Anything past the rejection threshold counts as "reject."
 
 ```{python}
 sigma = control.std()
 n_per = len(control)
 se = sigma * np.sqrt(2 / n_per)
-
-# Use a small illustrative effect so both alpha and beta regions are visible
-illustrative_effect = 1.0 * se
+illustrative_effect = 1.0 * se   # small effect so both tails are visible
 
 x = np.linspace(-4*se, illustrative_effect + 4*se, 500)
 null_dist = norm.pdf(x, 0, se)
-alt_dist = norm.pdf(x, illustrative_effect, se)
-cutoff = norm.ppf(1 - 0.025, 0, se)  # two-sided alpha=0.05
+alt_dist  = norm.pdf(x, illustrative_effect, se)
+cutoff = norm.ppf(1 - 0.025, 0, se)
 
-fig, ax = plt.subplots(figsize=(10, 5))
+fig, ax = plt.subplots(figsize=(9, 4.5))
 ax.plot(x, null_dist, 'b-', lw=2, label='Null ($H_0$: no effect)')
-ax.plot(x, alt_dist, 'r-', lw=2, label=f'Alternative ($H_1$: effect = {illustrative_effect:.0f})')
-ax.fill_between(x[x >= cutoff], null_dist[x >= cutoff], alpha=0.3, color='blue', label='Type I error ($\\alpha$)')
-ax.fill_between(x[x <= cutoff], alt_dist[x <= cutoff], alpha=0.3, color='red', label='Type II error ($\\beta$)')
-ax.axvline(cutoff, color='gray', ls='--', lw=1.5, label=f'Rejection threshold')
-ax.set_xlabel('Test Statistic (mean difference)')
+ax.plot(x, alt_dist,  'r-', lw=2, label=f'Alternative ($H_1$: real effect)')
+ax.fill_between(x[x >= cutoff], null_dist[x >= cutoff], alpha=0.3, color='blue',
+                label='Type I error ($\\alpha$)')
+ax.fill_between(x[x <= cutoff], alt_dist[x <= cutoff],  alpha=0.3, color='red',
+                label='Type II error ($\\beta$)')
+ax.axvline(cutoff, color='gray', ls='--', lw=1.5, label='Rejection threshold')
+ax.set_xlabel('Test statistic')
 ax.set_ylabel('Density')
-ax.set_title('Type I and Type II Errors: The Tradeoff')
+ax.set_title('Type I vs Type II: shifting the threshold trades one for the other')
 ax.legend(fontsize=9, loc='upper right')
 plt.show()
 ```
 
-Moving the threshold right (stricter $\alpha$) shrinks the blue region (fewer false positives) but grows the red region (more false negatives). There is no free lunch.
+Moving the threshold right (stricter $\alpha$) shrinks the blue region but grows the red region. There is no free lunch — only a *choice* of which error you'd rather make more often.
 
-## Type I Error: Seeing Effects That Aren't There
+The convention $\alpha = 0.05$ is from R.A. Fisher's 1925 textbook: he called it a "convenient" threshold and it stuck. There is nothing magical about it. Particle physics uses roughly $0.0000003$; the FDA effectively uses $0.05^2 \approx 0.0025$ by requiring two independent positive trials. Once we work out power, we'll come back to what $\alpha$ should be for a given decision.
 
-If there is truly no effect, how often will we mistakenly "find" one? By definition, at rate $\alpha$. Let's verify with simulation.
+### Verifying $\alpha$ controls Type I error
 
-We'll use only the **control group** (where everyone got the same drug), randomly split them into two fake groups, and test for a difference. There IS no difference — any "significant" result is a false positive.
+Before we use $\alpha$ to design anything, let's confirm the claim "Type I rate equals $\alpha$" actually holds on real data. Take the ACTG **control group only** — no treatment effect can possibly exist within it — split it randomly in half, and run a t-test. Any rejection is a false positive. Repeat 10,000 times.
 
 ```{python}
-# Goal: split control into two fake groups and test.
-# Any "significant" result is a false positive.
 control_vals = control.values
 n_sims = 10_000
-p_values_null = []
+p_values_null = np.empty(n_sims)
+for i in range(n_sims):
+    s = np.random.permutation(control_vals)
+    half = len(s) // 2
+    _, p_values_null[i] = stats.ttest_ind(s[:half], s[half:], equal_var=False)
 
-for _ in range(n_sims):
-    shuffled = np.random.permutation(control_vals)
-    half = len(shuffled) // 2
-    fake_a = shuffled[:half]
-    fake_b = shuffled[half:]
-    _, p = stats.ttest_ind(fake_a, fake_b, equal_var=False)
-    p_values_null.append(p)
-
-p_values_null = np.array(p_values_null)
+print(f"Fraction p < 0.05: {np.mean(p_values_null < 0.05):.3f}  (target 0.05)")
+print(f"Fraction p < 0.01: {np.mean(p_values_null < 0.01):.3f}  (target 0.01)")
+print(f"Fraction p < 0.10: {np.mean(p_values_null < 0.10):.3f}  (target 0.10)")
 ```
 
 ```{python}
-print(f"Fraction with p < 0.05: {np.mean(p_values_null < 0.05):.3f}  (should be ~0.05)")
-print(f"Fraction with p < 0.01: {np.mean(p_values_null < 0.01):.3f}  (should be ~0.01)")
-print(f"Fraction with p < 0.10: {np.mean(p_values_null < 0.10):.3f}  (should be ~0.10)")
-```
-
-```{python}
-fig, ax = plt.subplots(figsize=(8, 5))
+fig, ax = plt.subplots(figsize=(7, 4))
 ax.hist(p_values_null, bins=50, density=True, color='lightcoral', alpha=0.7, edgecolor='white')
 ax.axhline(1.0, color='black', ls='--', lw=1, label='Uniform(0,1)')
-ax.axvline(0.05, color='red', ls='--', lw=1.5, label='$\\alpha$ = 0.05')
-ax.axvspan(0, 0.05, alpha=0.15, color='red', label='Rejection region')
-ax.set_xlabel('p-value')
-ax.set_ylabel('Density')
-ax.set_title('Distribution of p-values Under the Null (no real effect)')
+ax.axvspan(0, 0.05, alpha=0.15, color='red', label='Reject region $\\alpha=0.05$')
+ax.set_xlabel('p-value'); ax.set_ylabel('Density')
+ax.set_title('Distribution of p-values when $H_0$ is true')
 ax.legend()
 plt.show()
 ```
 
-Under the null, p-values from a correctly specified test are **uniformly distributed** on [0, 1] — recall the continuous Uniform distribution from your probability course, a flat density on [0, 1]. This uniformity is exact when the null fully specifies the distribution, and a good approximation otherwise (e.g., for large samples via the CLT). Choosing $\alpha = 0.05$ therefore gives a 5% false positive rate: exactly 5% of uniform draws fall below 0.05.
+Under the null, p-values from a correctly specified test are **Uniform(0, 1)** — the flat density on $[0,1]$ from your probability course. Choosing $\alpha = 0.05$ therefore rejects exactly 5% of the time when $H_0$ is true: 5% of uniform draws fall below 0.05. The uniformity is exact when the null fully specifies the distribution and a CLT-driven approximation otherwise. Either way, $\alpha$ does what it advertises.
 
-The p-value is a random variable too — a key insight we return to throughout the course.
+The other error — Type II — is harder to characterize. It depends not just on $\alpha$, but on how big the true effect actually is. To say anything about Type II error before running an experiment, we need a *formula* for the test, not a shuffle.
 
-## Power: Can We Detect a Real Effect?
+## From simulation to formula: Welch's t-test
 
-Our trial found an effect of ~50 CD4 cells — very large, very detectable. But what if the true effect were smaller? Would we still catch it?
+In Chapter 9, we built the null distribution by shuffling labels — 10,000 fake datasets, each producing one fake test statistic. That answers "is the effect real?" for *this* dataset. But it can't answer the design question — *if I enroll 200 patients per arm and the true effect is 30 CD4 cells, how often will I reject?* — because there is no data to shuffle. We need a closed-form expression for the null distribution.
 
-**Power** is the probability of correctly rejecting $H_0$ when $H_1$ is true. Formally, power = $1 - \beta$, where $\beta$ is the Type II error rate. It depends on:
+The classical formula-based test for "do these two groups have the same mean?" is **Welch's t-test**. Using the same notation as the Chapter 8 CLT — let $\bar X_T$, $\bar X_C$ be the **sample means** of the two groups, $s_T^2$, $s_C^2$ the **sample variances** (with the standard $n-1$ divisor), and $n_T$, $n_C$ the sample sizes — the test statistic is
 
-1. The true effect size
-2. The sample size
-3. The significance level $\alpha$
+$$t \;=\; \frac{\bar{X}_T - \bar{X}_C}{\sqrt{s_T^2/n_T \;+\; s_C^2/n_C}}.$$
 
-Let's build intuition with a single example first. If the true effect is 30 CD4 cells and we have 100 patients per group, what's the power? We simulate from a normal distribution here — the actual CD4 count distribution is somewhat skewed, but the approximation is useful. The simulation also draws both groups with the same $\sigma$, a simplification; Welch's t-test works correctly either way.
+The numerator is the observed effect (the same difference of sample means we bootstrapped in Chapter 8). The denominator is exactly the standard-error formula $\widehat{\text{SE}}$ from Chapter 8 — the plug-in estimate of the SD of $\bar X_T - \bar X_C$, with each variance divided by its own sample size and the two added because the groups are independent.
+
+Under $H_0$ — and the CLT-style assumption that each group mean is approximately normal — $t$ has a known distribution (Student's $t$) that depends only on the sample sizes, not on the unknown population distribution. **That known distribution is the engine of design analysis**: we can compute it by formula for any $n_T, n_C$, no data required.
+
+Why **Welch's** specifically? Two flavors of two-sample t-test exist. The original (Student's) assumes the two groups have equal variance; Welch's drops that assumption by adjusting the standard error and the degrees of freedom. In real data the variances are rarely equal, so Welch's is the safe default — `equal_var=False` in `scipy`. Use it unless you have a positive reason to assume equal variance.
+
+::: {.callout-note}
+## The brewer who invented small-sample testing
+
+The t-test has a surprising origin. In the early 1900s, William Sealy Gosset worked as a chemist at the Guinness brewery in Dublin. He needed to compare barley varieties and yeast strains, but with only a handful of samples per batch the normal approximation was unreliable. Gosset worked out the exact distribution of the sample mean divided by the sample standard deviation for small samples and published it in 1908 under the pseudonym "Student" — Guinness didn't allow employees to publish under their real names, fearing competitors would learn they were using statistics. (See Salsburg, *The Lady Tasting Tea*, Ch. 2.)
+:::
+
+Run Welch's on ACTG and compare to Chapter 9's permutation result:
+
+```{python}
+t_stat, p_value = stats.ttest_ind(treatment, control, equal_var=False)
+print(f"Welch's t-test:    t = {t_stat:.2f},  p = {p_value:.2e}")
+print("Permutation (Ch 9):                p ≈ 1×10⁻⁴ (limited by 10,000 shuffles)")
+```
+
+Both verdicts: $H_0$ rejected at any conventional $\alpha$. The advantage of the formula isn't a different answer on *this* data — it's that the formula will *also* tell us what would have happened with 100 patients per arm, or 30, or 1000.
+
+::: {.callout-note collapse="true"}
+## Going deeper: when the formula and the shuffle disagree
+
+The t-test relies on the CLT — the sample means must be approximately normal. With ACTG's $n \approx 1000$ per arm and finite-variance outcomes, that holds easily. With small or heavy-tailed samples (financial returns, rare-event counts), the CLT may not have kicked in; the t-test's stated p-value can then be off by enough to flip the decision. The permutation test only requires exchangeability under the null, so it remains valid where the t-test fails. **Rule of thumb:** prefer the t-test for $n > 30$ per arm with roughly symmetric data; reach for permutation when either condition fails.
+:::
+
+## Power: how many patients do we need?
+
+Now to the design question. Suppose we are planning a new HIV trial and we believe the experimental arm could shift mean CD4 change by **30 cells** relative to control. (Where does that 30 come from? More on this in a moment.) How many patients do we need so that, *if* the true effect really is 30, the test will detect it most of the time?
+
+This is the **power calculation**, and it is the inverse of the question we have been asking. So far: given data, what's the p-value? Now: given a hoped-for effect, what's the chance of a small p-value?
+
+::: {.callout-warning}
+## Power analysis requires you to **guess the effect size**
+
+You cannot do a power analysis without committing to an effect size. Recall that $H_1: \mu_T - \mu_C \neq 0$ is a *family* of possible worlds — small effects, medium effects, large effects all live inside it, each with its own power. To compute one number, we have to pick one specific point in $H_1$ — typically called the **detectable effect** $\Delta$. Where that guess comes from:
+
+- **Prior studies** of similar interventions (most defensible).
+- **The smallest effect that would matter** clinically or commercially — the "minimum detectable effect" you care about distinguishing from zero.
+- **A pilot study** designed specifically to estimate plausible effect sizes.
+
+The guess is unavoidable, and it dominates the answer: doubling the assumed effect size cuts the required sample size by roughly a factor of four. Power analyses in published trial protocols always include the assumed effect; reviewers always scrutinize it.
+:::
+
+What does picking an effect size actually mean? Each $\Delta$ corresponds to a different *world we might be in* — control patients drawn from one CD4-change distribution, treatment patients from a copy of that distribution shifted by $\Delta$. Bigger $\Delta$ means the two populations are farther apart and easier to tell apart from data; smaller $\Delta$ means the two populations overlap so heavily that any individual observation could plausibly come from either.
+
+```{python}
+sigma_pop = control.std()
+mu_C = control.mean()
+deltas = [0, 10, 30, 50]
+colors_pop = ['black', 'tab:blue', 'tab:orange', 'tab:red']
+
+x = np.linspace(mu_C - 3.5*sigma_pop, mu_C + 3.5*sigma_pop + 50, 500)
+
+fig, ax = plt.subplots(figsize=(8, 4.5))
+ax.plot(x, norm.pdf(x, mu_C, sigma_pop), color='black', lw=2,
+        label='Control ($\\Delta = 0$)')
+for delta, color in zip(deltas[1:], colors_pop[1:]):
+    ax.plot(x, norm.pdf(x, mu_C + delta, sigma_pop), color=color, lw=2, ls='--',
+            label=f'Treatment ($\\Delta = {delta}$)')
+
+# Mark each mean on the x-axis
+for delta, color in zip(deltas, colors_pop):
+    ax.axvline(mu_C + delta, color=color, lw=0.8, alpha=0.4)
+
+ax.set_xlabel('CD4 change (per patient)')
+ax.set_ylabel('Density')
+ax.set_title("Each $\\Delta$ in $H_1$ is a different world: how far apart are the two populations?")
+ax.legend(loc='upper right', fontsize=10)
+plt.show()
+```
+
+With $\sigma \approx 70$ CD4 cells of patient-to-patient variation, even a $\Delta = 50$ shift leaves the two distributions heavily overlapped — knowing one patient's CD4 change tells you almost nothing about which arm they were in. What rescues us is sample size: the *sampling distribution* of $\bar X_T - \bar X_C$ has SD $\sqrt{s_T^2/n_T + s_C^2/n_C}$, which shrinks as $n$ grows. Power is the chance that the *sample mean difference* falls past the rejection threshold under the assumed $\Delta$ — and that chance grows with both $\Delta$ and $n$.
+
+We can compute power by simulation — same engine as the Chapter 9 permutation, just with a true effect baked in. We simulate from a normal distribution here for tractability; the actual CD4-change distribution is somewhat skewed, but the approximation is fine at this $n$.
 
 ```{python}
 def simulate_power(true_effect, n_per_group, alpha=0.05, n_sims=2000):
-    """Simulate the power of a two-sample t-test."""
     sigma = control.std()
     rejections = 0
     for _ in range(n_sims):
-        group_a = np.random.normal(0, sigma, n_per_group)
-        group_b = np.random.normal(true_effect, sigma, n_per_group)
-        _, p = stats.ttest_ind(group_a, group_b, equal_var=False)
-        if p < alpha:
-            rejections += 1
+        a = np.random.normal(0, sigma, n_per_group)
+        b = np.random.normal(true_effect, sigma, n_per_group)
+        _, p = stats.ttest_ind(a, b, equal_var=False)
+        rejections += (p < alpha)
     return rejections / n_sims
 
-# One specific example
-power_example = simulate_power(30, 100)
-print(f"True effect = 30 CD4 cells, n = 100 per group")
-print(f"Power = {power_example:.2f}")
-print(f"{'Good enough (>= 0.80)' if power_example >= 0.8 else 'Not enough power (< 0.80) — need more patients!'}")
+print(f"Assumed true effect = 30 CD4 cells, n = 100 per group")
+print(f"Estimated power = {simulate_power(30, 100):.2f}")
 ```
 
-This fraction — the share of simulated experiments that correctly reject $H_0$ — is exactly $1 - \beta$.
+A power of 0.5 means we'd correctly detect the effect only half the time. That's the definition of an underpowered study: you'd be flipping a coin. The conventional target is **80% power** — chosen by convention, like $\alpha = 0.05$, but now widely accepted.
 
-Now let's see how power varies across different effect sizes and sample sizes.
+How does power vary with effect size and sample size? Vary both:
 
 ```{python}
-# Power vs sample size for different effect sizes
 # This cell takes ~15 seconds to run
 sample_sizes = [25, 50, 100, 200, 500, 1000]
 effect_sizes = [10, 30, 50]
 
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=(8, 5))
 for effect in effect_sizes:
-    print(f"Computing power for effect = {effect} CD4 cells...")
     powers = [simulate_power(effect, n) for n in sample_sizes]
     ax.plot(sample_sizes, powers, 'o-', lw=2, label=f'Effect = {effect} CD4 cells')
-
-ax.axhline(0.8, color='gray', ls='--', lw=1, label='Power = 0.80 (conventional target)')
-ax.set_xlabel('Sample Size (per group)')
-ax.set_ylabel('Power')
-ax.set_title('Power: Probability of Detecting a Real Effect')
-ax.legend()
-ax.set_ylim(0, 1.05)
+ax.axhline(0.8, color='gray', ls='--', lw=1, label='Target power = 0.8')
+ax.set_xlabel('Sample size per group'); ax.set_ylabel('Power')
+ax.set_title('Power depends on the effect size you assume')
+ax.legend(); ax.set_ylim(0, 1.05)
 plt.show()
 ```
 
-Key observations:
+The curves sharpen the design tradeoff: the smaller the effect we want to be able to detect, the more patients we need — and the curve is far from linear. Going from "detect 50-cell effects" to "detect 10-cell effects" pushes required $n$ up by more than 25×.
 
-- A large effect (50 CD4 cells) is detectable even with small samples.
-- A small effect (10 CD4 cells) needs hundreds of patients per group.
-- The conventional target is 80% power. Below that, you're more likely to miss a real effect than to find it.
-
-### Power Analysis: Planning a Study
-
-::: {.callout-tip}
-## Think About It
-
-Look at the power curves above. Roughly how many patients per group would you need to detect a 30 CD4 cell effect with 80% power? What about a 10 CD4 cell effect? (The next section computes the exact answer.)
-:::
-
-In practice, you'd use a **power analysis** tool rather than writing simulations from scratch. These tools take the effect size as **Cohen's d** — the effect measured in standard-deviation units ($d = \Delta / \sigma$), so that 0.2, 0.5, and 0.8 are conventionally called small, medium, and large effects regardless of the original units.
-
-::: {.callout-note}
-## Power analysis requires distributional assumptions
-
-Power analysis requires specifying a model for the data. The `TTestIndPower` tool below assumes both groups are normally distributed with the same standard deviation. The required sample size is sensitive to these assumptions — if the true distribution is heavier-tailed or the variances differ substantially, the actual power may be lower than predicted.
-:::
+In practice you'd skip the simulation and use the analytical formula, which `statsmodels` packages neatly. Effect sizes are reported as **Cohen's $d = \Delta / \sigma$**, where $\Delta$ is the assumed mean difference and $\sigma$ is the (assumed common) population SD — the effect in standard-deviation units, so the answer doesn't depend on the original units. Conventional shorthand: $d = 0.2$ small, $0.5$ medium, $0.8$ large.
 
 ```{python}
 from statsmodels.stats.power import TTestIndPower
-
 power_analysis = TTestIndPower()
 
-# How many patients per group to detect a 30 CD4 cell effect?
-effect_size_cohen = 30 / control.std()  # Cohen's d
-n_needed = power_analysis.solve_power(
-    effect_size=effect_size_cohen, power=0.8, alpha=0.05
-)
-print(f"To detect 30 CD4 cells with 80% power at alpha=0.05:")
-print(f"  Need {n_needed:.0f} patients per group")
-print(f"  That's {2*n_needed:.0f} patients total")
+d_assumed = 30 / control.std()
+n_needed = power_analysis.solve_power(effect_size=d_assumed, power=0.8, alpha=0.05)
+print(f"Assumed effect = 30 CD4 cells (Cohen's d = {d_assumed:.2f})")
+print(f"  → need {n_needed:.0f} patients per group, {2*n_needed:.0f} total")
 ```
 
 ```{python}
-# What power did our actual trial have?
-actual_effect_cohen = observed_effect / control.std()
-actual_power = power_analysis.solve_power(
-    effect_size=actual_effect_cohen, nobs1=len(control), alpha=0.05
-)
-print(f"ACTG 175 trial: effect = {observed_effect:.1f} CD4 cells")
-print(f"  n = {len(control)} per group, power = {actual_power:.4f}")
-print(f"  We had more than enough patients for this effect.")
+d_actual = observed_effect / control.std()
+power_actual = power_analysis.solve_power(effect_size=d_actual, nobs1=len(control), alpha=0.05)
+print(f"ACTG 175 actually saw effect = {observed_effect:.1f} cells (d = {d_actual:.2f})")
+print(f"  with n = {len(control)} per group → power = {power_actual:.4f}")
+print(f"  (Far above 80% — they had more than enough patients for this effect.)")
 ```
 
-Power tells us whether our study is big enough to find an effect. But the significance level $\alpha$ tells us how much evidence we require before acting. And that depends on the stakes.
+::: {.callout-note}
+## The power formula assumes more than the test does
 
-## The Stakes: What Should $\alpha$ Be?
+`TTestIndPower` assumes both groups are normal with equal standard deviation. Welch's t-test itself works fine without that — but the **power formula** depends on knowing the variance, so power analyses inherit assumptions that the post-hoc test does not. If you suspect heavy tails or unequal variances, simulate power directly with the data-generating process you actually believe, the way `simulate_power` does above.
+:::
 
-You're the FDA. Recall that the average cost to bring a drug to market exceeds \$1.3 billion. You have to decide:
+## What should $\alpha$ be?
 
-- **Approve a useless drug** = waste billions in healthcare costs AND expose patients to side effects with no benefit (Type I error).
-- **Reject an effective drug** = patients die who could have been saved (Type II error).
+We now have the mechanics: $\alpha$ controls Type I error, power controls Type II, and to compute power we have to commit to an effect size. The remaining design choice is $\alpha$ itself.
 
-What should $\alpha$ be? 0.05? 0.01? 0.001?
+You're the FDA. Approving a useless \$1.3B drug exposes patients to side effects with no upside and burns billions in healthcare costs (Type I). Rejecting a drug that works denies treatment to people who would have benefited — and possibly survived (Type II). The cost ratio of those two errors is what should set $\alpha$, not convention.
 
 ::: {.callout-tip}
 ## Think About It
 
-A drug might save 1,000 lives per year but costs \$2B to manufacture. What false positive rate would you accept?
+A drug might save 1,000 lives per year but costs \$2B to manufacture. What false positive rate would you accept? How does your answer change if the side-effect profile is severe?
 :::
 
-```{python}
-# SE of the difference of means under the null (normal approximation, Chapter 8)
-null_se = np.sqrt(control.var(ddof=1) / len(control) + treatment.var(ddof=1) / len(treatment))
-print(f"SE of the difference of means: {null_se:.2f}")
-```
+Smaller $\alpha$ means a stricter threshold. That shrinks Type I but inflates Type II — and to keep power up at the smaller $\alpha$, the trial needs more patients. There is no free lunch.
 
 ```{python}
+null_se = np.sqrt(control.var(ddof=1) / len(control) + treatment.var(ddof=1) / len(treatment))
 x = np.linspace(-4*null_se, 4*null_se, 1000)
 y = norm.pdf(x, 0, null_se)
 
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=(9, 5))
 ax.plot(x, y, 'k-', lw=2, label='Null distribution')
 ax.fill_between(x, y, alpha=0.1, color='gray')
 
-# Different alpha levels with accessible colors
-alphas_plot = [0.05, 0.01, 0.001]
-colors_plot = ['orange', 'steelblue', 'darkred']
-styles = ['-', '--', ':']
-for a_val, color, ls in zip(alphas_plot, colors_plot, styles):
+for a_val, color, ls in [(0.05, 'orange', '-'), (0.01, 'steelblue', '--'), (0.001, 'darkred', ':')]:
     cutoff = norm.ppf(1 - a_val/2, 0, null_se)
     ax.axvline(cutoff, color=color, lw=2, ls=ls,
                label=f'$\\alpha$={a_val}: reject if |effect| > {cutoff:.1f}')
     ax.axvline(-cutoff, color=color, lw=2, ls=ls)
-
-ax.set_xlabel('Treatment Effect Under Null')
-ax.set_ylabel('Density')
-ax.set_title('How $\\alpha$ Sets the Rejection Threshold')
+ax.set_xlabel('Treatment effect under null'); ax.set_ylabel('Density')
+ax.set_title('Stricter $\\alpha$ pushes the rejection threshold outward')
 ax.legend(fontsize=10)
 plt.show()
 ```
 
-Smaller $\alpha$ means a stricter threshold — harder to reject $H_0$. That reduces false positives but increases false negatives.
+In practice, the FDA effectively requires two independent positive trials, each at $\alpha = 0.05$. If the trials are truly independent, the joint Type I rate is roughly $0.05^2 = 0.0025$ — far stricter than a single test. (This is the simplest example of a **multiple testing correction**, the topic of [Chapter 11](lec11-multiple-testing.qmd).)
 
-**There is no free lunch.** The choice of $\alpha$ depends on the relative costs of the two types of errors. In practice, the FDA often requires two independent trials, each at $\alpha = 0.05$. If the trials are truly independent, the chance of two false positives is roughly $0.05^2 = 0.0025$ — much more stringent than a single test.
+## Confidence intervals and tests: two sides of the same coin
 
-## One-Sided vs Two-Sided Tests
+Now that $H_0$, $\alpha$, and "reject" all have crisp definitions, we can close a loop opened in [Chapter 8](lec08-sampling.qmd). There we built a bootstrap 95% CI for the ACTG treatment effect: $[39.6, 61.3]$, excluding zero. Chapter 9 ran the permutation test on the same data and got $p \approx 10^{-4}$ — rejecting $H_0$. Both pointed at the same conclusion. That's not a coincidence.
 
-Our test was **two-sided**: we rejected $H_0$ for large effects in *either* direction. Sometimes we know in advance that the effect can only go one way.
+::: {.callout-important}
+## Definition: CI/hypothesis test duality
 
-- **Two-sided** $H_1$: treatment effect $\neq 0$ (could be better OR worse)
-- **One-sided** $H_1$: treatment effect $> 0$ (can only be better)
+A 95% CI for a parameter $\theta$ that **excludes** a candidate value $\theta_0$ corresponds exactly to a two-sided test of $H_0: \theta = \theta_0$ that **rejects** at $\alpha = 0.05$. If the interval **includes** $\theta_0$, the test **fails to reject**. The same correspondence holds at any level: a 99% CI pairs with a 1%-level test.
 
-Suppose a new drug might have side effects. You want to test whether it *increases* adverse events (one-sided) vs. whether it *changes* adverse events in either direction (two-sided). If you use one-sided and the drug actually *decreases* adverse events, your test won't detect that.
-
-The FDA almost always requires two-sided tests: a drug must demonstrate efficacy without assuming the direction of the effect in advance.
-
-```{python}
-# Two-sided vs one-sided p-values
-_, p_two = stats.ttest_ind(treatment, control, equal_var=False, alternative='two-sided')
-_, p_one = stats.ttest_ind(treatment, control, equal_var=False, alternative='greater')
-
-print(f"Two-sided p-value: {p_two:.2e}")
-print(f"One-sided p-value: {p_one:.2e}")
-print(f"\nWhen the effect is in the hypothesized direction,")
-print(f"the one-sided p-value is exactly half the two-sided one (for symmetric tests).")
-print(f"\nFor our data, both are tiny — the choice doesn't matter.")
-print(f"But for borderline cases (p ~ 0.05), it could flip the decision.")
-print(f"Rule of thumb: use two-sided unless you have a strong prior reason.")
-```
-
-## A One-Sample Test with Real Stakes: *Swain v. Alabama*
-
-Not every hypothesis test compares two groups. Sometimes the question is whether a single sample matches a known population value. One landmark example comes from the U.S. Supreme Court.
-
-In *Swain v. Alabama* (1965), Robert Swain, a Black man, was sentenced to death by an all-white jury in Talladega County, Alabama. His attorneys challenged the jury selection process: 26% of eligible jurors in the county were Black, yet only 8 out of 100 grand jury panelists were Black. Was this disparity evidence of racial discrimination, or could it have arisen by chance?
-
-This is a **one-sample proportion test**. Under the null hypothesis of fair (race-blind) selection, each panelist is drawn independently with a 26% probability of being Black. We can test this directly:
-
-```{python}
-# Swain v. Alabama: one-sample proportion test
-n_panelists = 100
-observed_black = 8
-expected_proportion = 0.26
-
-# Exact binomial test: P(X <= 8) under Binomial(100, 0.26)
-from scipy.stats import binomtest
-result = binomtest(observed_black, n_panelists, expected_proportion, alternative='less')
-print(f"Observed: {observed_black} Black panelists out of {n_panelists}")
-print(f"Expected under fair selection: {expected_proportion * n_panelists:.0f}")
-print(f"p-value (one-sided): {result.pvalue:.2e}")
-```
-
-The p-value is vanishingly small: under fair selection, seeing 8 or fewer Black panelists out of 100 is astronomically unlikely. Yet the Supreme Court ruled that "the overall percentage disparity has been small" and upheld the conviction. The Court reached this conclusion without performing a statistical test — a cautionary tale about relying on intuition instead of quantitative reasoning.
-
-::: {.callout-tip}
-## Think About It
-
-The expected count under fair selection is 26. The observed count is 8. Would you call that disparity "small"? What would a p-value of this magnitude mean in a clinical trial?
+The CI is strictly more informative: it gives you the *range* of plausible parameter values, not just a yes/no verdict on a single one.
 :::
 
-## Statistical Significance Is Not the Same as Importance
+The equivalence is **exact** for parametric pairs (normal CI ↔ $z$-test, $t$-CI ↔ $t$-test) and **near-exact** for simulation-based pairs (bootstrap CI ↔ permutation test), with any small gap due to Monte Carlo noise. In practice: **once you have a CI, you have most of what a test would tell you** — and more besides.
 
-With ACTG175's large sample size, even tiny, clinically meaningless effects would be "statistically significant." Let's see this in action.
+::: {.callout-note collapse="true"}
+## Going deeper: verifying the duality on ACTG 175
 
-::: {.callout-tip}
-## Think About It
-
-If we subsample to n = 15 per group, will the treatment still be significant? What about n = 25 or n = 50? Predict what happens before running the cell.
-:::
+Recompute Chapter 8's bootstrap CI (resample *within* group, with replacement) and Chapter 9's permutation p-value (shuffle labels *across* groups, without replacement) side by side:
 
 ```{python}
-# How often does a t-test detect the real effect at each sample size?
-# For each n, we draw 500 random subsamples and count the fraction
-# of t-tests that come back significant — this is the empirical power.
 np.random.seed(42)
-subsample_sizes = [15, 25, 50, 100, 200, 500]
-n_simulations = 500
+n_boot = 10_000
+boot_effects = np.empty(n_boot)
+for i in range(n_boot):
+    bc = np.random.choice(control, size=len(control), replace=True)
+    bt = np.random.choice(treatment, size=len(treatment), replace=True)
+    boot_effects[i] = bt.mean() - bc.mean()
+ci_lower, ci_upper = np.percentile(boot_effects, [2.5, 97.5])
 
-print(f"{'n per group':>12}  {'Fraction significant':>22}  {'Detected?':>16}")
-print("-" * 56)
+all_cd4 = np.concatenate([treatment.values, control.values])
+n_T = len(treatment)
+perm_effects = np.empty(n_boot)
+for i in range(n_boot):
+    s = np.random.permutation(all_cd4)
+    perm_effects[i] = s[:n_T].mean() - s[n_T:].mean()
+p_perm = (np.sum(np.abs(perm_effects) >= np.abs(observed_effect)) + 1) / (n_boot + 1)
 
-for n in subsample_sizes:
-    sig_count = 0
-    for _ in range(n_simulations):
-        sub_ctrl = control.sample(n, replace=False)
-        sub_trt = treatment.sample(n, replace=False)
-        _, p = stats.ttest_ind(sub_trt, sub_ctrl, equal_var=False)
-        if p < 0.05:
-            sig_count += 1
-    power = sig_count / n_simulations
-    detected = "Almost always" if power > 0.8 else "Sometimes" if power > 0.5 else "Rarely"
-    print(f"{n:>12}  {power:>21.0%}  {detected:>16}")
+print(f"Bootstrap 95% CI: [{ci_lower:.1f}, {ci_upper:.1f}]")
+print(f"CI excludes 0:    {ci_lower > 0}")
+print(f"Permutation p:    {p_perm:.4f}")
+print(f"Reject H0 at 5%:  {p_perm < 0.05}")
+print(f"Both agree?       {(ci_lower > 0) == (p_perm < 0.05)}")
 ```
 
-The real effect is always there, but small samples often miss it. With n = 15 per group, a t-test detects the effect less than half the time — that's the power problem from the previous section. But the flip side is just as important:
+Both agree. In large samples the duality is essentially a restatement.
+:::
+
+## Statistical significance is not the same as importance
+
+Here is the failure mode that haunts every well-funded study: with a large enough $n$, *any* nonzero effect becomes statistically significant. The p-value shrinks because the standard error shrinks; the effect itself does not have to be large.
 
 ```{python}
-# p-value as a function of sample size (fixed effect)
+sigma = control.std()
 ns = np.arange(20, 2001, 20)
 p_vals_vs_n = []
 for n in ns:
-    se = sigma * np.sqrt(2/n)
-    t = observed_effect / se
+    se_n = sigma * np.sqrt(2/n)
+    t = observed_effect / se_n
     p_vals_vs_n.append(2 * (1 - norm.cdf(abs(t))))
 
-fig, ax = plt.subplots(figsize=(8, 5))
+fig, ax = plt.subplots(figsize=(7, 4))
 ax.semilogy(ns, p_vals_vs_n, color='steelblue', lw=2)
-ax.axhline(0.05, color='red', ls='--', label='$\\alpha$ = 0.05')
-ax.set_xlabel('Sample Size (per group)')
-ax.set_ylabel('p-value (log scale)')
-ax.set_title(f'p-value vs Sample Size (true effect = {observed_effect:.0f} CD4 cells)')
+ax.axhline(0.05, color='red', ls='--', label='$\\alpha=0.05$')
+ax.set_xlabel('Sample size per group'); ax.set_ylabel('p-value (log scale)')
+ax.set_title(f'Same effect ({observed_effect:.0f} cells), shrinking p-value as n grows')
 ax.legend()
 plt.show()
 ```
 
-::: {.callout-tip}
-## Think About It
-
-If a 5 CD4 cell change is "significant" with n = 10,000, should we change treatment guidelines?
-:::
-
-The plot confirms: for a fixed real effect, the p-value shrinks as we add data. Eventually *any* nonzero effect becomes significant.
-
-::: {.callout-warning}
-## Always report effect sizes
-
-The lesson: always report effect sizes and confidence intervals alongside p-values. A small p-value tells you the effect is unlikely to be zero — it does not tell you the effect is large or important.
-:::
+For a fixed real effect, the p-value collapses as we add data. Eventually *any* nonzero effect becomes significant.
 
 ::: {.callout-tip}
 ## Think About It: the blood pressure drug
 
-A clinical trial with 10,000 participants tests a new blood pressure drug and finds a statistically significant reduction (p = 0.013). The actual effect is a 2 mmHg decrease in systolic blood pressure. For context, drinking a cup of coffee temporarily raises blood pressure by about 5 mmHg (Mesas et al., *Journal of Hypertension*, 2011). The drug's effect is real — it's not zero — but it is smaller than your morning coffee. Would you recommend this drug to patients, given the costs and potential side effects?
+A clinical trial with 10,000 participants tests a new blood pressure drug and finds a statistically significant reduction (p = 0.013). The effect: a 2 mmHg decrease in systolic blood pressure. For context, drinking a cup of coffee temporarily raises blood pressure by about 5 mmHg (Mesas et al., *Journal of Hypertension*, 2011). The drug's effect is real — it's not zero — but it's smaller than your morning coffee. Would you recommend this drug to patients, given costs and side effects?
 :::
 
-Statistical significance told us the blood pressure effect is *not zero*. It said nothing about whether the effect is *worth acting on*. That judgment requires domain knowledge: what reduction is clinically meaningful, what are the side effects, and what alternatives exist.
+::: {.callout-warning}
+## Always report effect sizes alongside p-values
 
-There's a subtler worry behind this: when the $p < 0.05$ threshold becomes a *target* — when careers and publications depend on clearing that bar — researchers (often unconsciously) run analyses until they find significance. This is **p-hacking**, which we examine in detail in [Chapter 11](lec11-multiple-testing.qmd), and it's a special case of **Goodhart's law**: the threshold was meant to *measure* evidence strength, and using it as a target for publishable results corrupts the measurement. [Chapter 16](lec16-feedback-loops.qmd) develops Goodhart's law in its general form — the same pattern that shows up in hospital readmission gaming, emissions cheating, and overfitting.
+A small p-value tells you the effect is unlikely to be zero. It does **not** tell you the effect is large or important. Always report the effect size (or, equivalently, a CI) so the reader can judge whether the result matters in practice.
+:::
 
-## Key Takeaways
+There is a subtler worry behind this. When $p < 0.05$ becomes a **target** — when careers and publications depend on clearing that bar — researchers (often unconsciously) run analyses until they find significance. This is **p-hacking**, examined in [Chapter 11](lec11-multiple-testing.qmd), and it's a special case of **Goodhart's law**: a measure that becomes a target stops being a good measure. [Chapter 16](lec16-feedback-loops.qmd) develops the general form — the same pattern that shows up in hospital readmission gaming, emissions cheating, and overfitting.
 
-- A **p-value** answers: "how surprising is this result if the null hypothesis were true?" It does NOT tell you the probability that the null is true, or that the result is important.
-- **Type I error** (false positive) rate = $\alpha$. **Type II error** (false negative) rate depends on effect size, sample size, and $\alpha$.
-- **Power** = probability of detecting a real effect. Use **power analysis** and **sample size planning** to design studies with at least 80% power.
-- **Statistical significance is not the same as practical importance.** With enough data, even tiny effects are "significant." Always report effect size, confidence interval, AND p-value.
+## Key takeaways
 
-We'll revisit these ideas in [Chapter 11](lec11-multiple-testing.qmd) when we ask: what happens when you run 20 tests at once? In [Chapter 12](lec12-regression-inference.qmd), we'll apply hypothesis tests to regression coefficients.
+- Hypothesis testing in this chapter is a tool for **designing studies**, not just summarizing data after the fact. The new ideas are error rates, the formula-based t-test, and power analysis.
+- The two errors are symmetric: **Type I** (reject $H_0$ when true, rate $\alpha$) and **Type II** (fail to reject $H_0$ when $H_1$ true, rate $\beta$). **Power** $= 1 - \beta$.
+- Under $H_0$, p-values from a correctly specified test are **Uniform on $[0,1]$** — that's why $\alpha$ does what it advertises.
+- **Welch's t-test** is the formula-based analog of the permutation test: same conclusion in large samples, but solvable for studies you haven't run yet. Use `equal_var=False` by default.
+- **Power analysis requires guessing an effect size.** Without that guess there is no calculation. The guess comes from prior studies, the minimum effect worth detecting, or a pilot — and the answer is highly sensitive to the choice.
+- **CI/hypothesis test duality**: a 95% CI excluding $\theta_0$ corresponds to a two-sided test of $\theta = \theta_0$ rejecting at $\alpha = 0.05$. The CI is strictly more informative.
+- **Statistical significance is not practical importance.** With enough data, any nonzero effect is "significant." Always report effect sizes.
+
+[Chapter 11](lec11-multiple-testing.qmd) asks: what happens when you run 20 tests at once? [Chapter 12](lec12-regression-inference.qmd) applies hypothesis tests to regression coefficients.
 
 ## Study guide
 
 ### Key ideas
 
-- **Null hypothesis** ($H_0$): The default claim (e.g., no effect, no difference). **Alternative hypothesis** ($H_1$): The competing claim you're testing for.
-- **p-value**: Probability of observing data at least this extreme, assuming $H_0$ is true. It is *not* the probability that $H_0$ is true.
-- **Significance level** ($\alpha$): The false positive rate you're willing to accept; the threshold for rejecting $H_0$.
-- **Type I error**: Rejecting $H_0$ when it's true (false positive; rate = $\alpha$). **Type II error**: Failing to reject $H_0$ when $H_1$ is true (false negative; rate = $\beta$). **Power** = $1 - \beta$.
-- **p-values are uniform under $H_0$**: Exact when the null fully specifies the distribution; a good approximation otherwise.
-- **Welch's t-test**: Two-sample t-test that does not assume equal variances.
-- You reject or fail to reject $H_0$ — you never "accept" $H_0$ or "prove" it true.
-- Power depends on effect size, sample size, and $\alpha$ — compute it before running an experiment.
-- Statistical significance does not imply practical importance; always report effect sizes alongside p-values.
+- **$H_0$ / $H_1$, p-value**: see Chapter 9 for the definitions; this chapter formalizes them and adds error rates.
+- **Significance level $\alpha$**: threshold for rejecting $H_0$; equals the Type I error rate.
+- **Type I error** (false positive, rate $\alpha$) and **Type II error** (false negative, rate $\beta$). **Power** $= 1 - \beta$.
+- **p-values are Uniform(0, 1) under $H_0$**: exact when the null fully specifies the distribution; approximate (CLT-driven) otherwise.
+- **Welch's t-test**: the formula-based two-sample test that does not assume equal variances. The standard default.
+- "Fail to reject" is not the same as "accept."
+- **CI/test duality**: a $(1-\alpha)$-level CI for $\theta$ excluding $\theta_0$ ↔ two-sided test of $\theta = \theta_0$ rejecting at level $\alpha$. The CI is strictly more informative.
+- **Power analysis**: you must commit to an effect size to compute required $n$. The 80% target is convention.
+- Statistical significance does not imply practical importance; always report effect sizes.
 
 ### Computational tools
 
 - `stats.ttest_ind(a, b, equal_var=False)` — Welch's t-test for two independent samples
-- `stats.ttest_ind(..., alternative='greater')` — one-sided t-test
-- `TTestIndPower().solve_power(effect_size, power, alpha)` — compute required sample size for a t-test
-- `TTestIndPower().solve_power(effect_size, nobs1, alpha)` — compute power given sample size
+- `TTestIndPower().solve_power(effect_size, power, alpha)` — required sample size given Cohen's $d$, target power, and $\alpha$
+- `TTestIndPower().solve_power(effect_size, nobs1, alpha)` — power given sample size
 
 ### For the quiz
 
-- Be able to state $H_0$ and $H_1$ for a given scenario and identify the appropriate test.
-- Know the difference between Type I and Type II errors, and how $\alpha$ controls the tradeoff.
-- Understand why "fail to reject" is not the same as "accept."
-- Given a p-value and $\alpha$, state the conclusion.
+- State $H_0$ and $H_1$ for a given scenario and identify the appropriate test.
+- Distinguish Type I and Type II errors and explain how $\alpha$ controls the tradeoff.
+- Read a power curve and explain what changes power.
+- Given a target power and an assumed effect size, identify the required sample size from a power tool — and explain why the assumed effect size is the most consequential input.
+- Use CI/test duality to convert between a CI and a two-sided test decision.
 - Explain why a large sample can make a tiny, meaningless effect "significant."

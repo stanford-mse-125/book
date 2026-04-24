@@ -14,78 +14,93 @@ from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (7, 4.5)
+plt.rcParams['figure.figsize'] = (8, 5)
 plt.rcParams['font.size'] = 12
 
 DATA_DIR = 'data'
 np.random.seed(42)
 ```
 
-In [Chapter 8](lec08-sampling.qmd), we answered the question "how precise is our estimate?" using bootstrap confidence intervals and the normal approximation. Today we ask a sharper question: **is the effect *real*, or could it be zero?**
+In [Chapter 8](lec08-sampling.qmd) we built a 95% bootstrap confidence interval for the ACTG treatment effect: $[39.6, 61.3]$, excluding zero. That interval already answers the usual question. "Does the drug have *any* effect?" becomes "is zero inside the interval?" If it isn't, the data rule out zero at the 5% level — and we can stop.
 
-These are different questions. The bootstrap measures **precision** — how much our estimate would vary if we repeated the experiment. The permutation test measures **significance** — whether the observed effect is distinguishable from pure chance. The two tools are complementary: the bootstrap tells you *how much* the effect could vary; the permutation test tells you *whether* an effect exists at all.
+So why an entire chapter on **hypothesis testing**? Two reasons.
+
+- **History:** Fisher's p-value (1925) predates Neyman's confidence interval (1937) by more than a decade. 
+- **Generality:** the permutation test extends to questions where no CI is natural — categorical outcomes, orderings, comparisons of whole distributions. 
+
+Both the bootstrap and the permutation test are examples of **simulation-based inference**: we build the reference distribution by resampling, not by deriving it from a closed-form formula.
 
 :::{.callout-note}
 ## The Lady Tasting Tea
 
-R.A. Fisher's 1920s experiment — eight cups of tea, four milk-first, presented in random order, and a colleague who claimed she could tell which was which — is the permutation test in miniature. Fisher counted the ways she *could* have guessed right by chance alone, then asked how extreme her actual score was against that reference. No distributional assumptions required. (She got all eight correct.)
+At Rothamsted Experimental Station in the 1920s, the algae researcher Muriel Bristol claimed she could taste whether milk had been added to a teacup before or after the tea. R.A. Fisher, a prolific contributor to the modern field of statistics — also at Rothamsted — took her seriously and designed a test: eight cups, four of each kind, presented in random order, with Bristol asked to pick out the four milk-first cups.
+
+Fisher's insight was to ask what *pure guessing* would look like. There are $\binom{8}{4} = 70$ ways to pick four cups out of eight, and only one pick is the correct labeling — so a guesser hits the right answer about 1 time in 70, roughly a 1.4% chance. Bristol's actual result forces a choice between two stories: a middling result — a couple cups mixed up — looks like what we'd expect from guessing, and we'd keep the "she can't really tell" story; a spot-on result leaves us choosing between "she genuinely can taste the difference" and "we just watched a 1-in-70 coincidence." (Bristol got all eight cups right. See Fisher 1935 for the original design, or Salsburg 2001 for the historical account.)
 :::
 
-## Setup: The Treatment Effect
 
-Let's reload the ACTG 175 clinical trial data. In [Chapter 8](lec08-sampling.qmd), we estimated the difference of population means between the two groups — about 50 CD4 cells. In a clinical trial, this difference is called the **treatment effect**. (`.dropna()` is a safety net — in this dataset, all patients have CD4 measurements.)
+
+## Setup: the treatment effect
+
+Let's move to a more modern example reload the ACTG 175 clinical trial data. In [Chapter 8](lec08-sampling.qmd), we estimated the difference of population means between the two groups — about 50 CD4 cells. In a clinical trial, this difference is called the **treatment effect**. (In ACTG 175, the "control" arm was AZT monotherapy and the "treatment" arm pools three more aggressive regimens — so the question the permutation test answers is *does the combination beat AZT alone?*, not *does the drug beat a placebo?* In 1991, giving a placebo to HIV+ patients with declining CD4 counts would have been ethically unacceptable.)
 
 ```{python}
 df = pd.read_csv(f'{DATA_DIR}/clinical-trial/ACTG175.csv')
 df['cd4_change'] = df['cd420'] - df['cd40']
 
-control = df[df['treat'] == 0]['cd4_change'].dropna()
-treatment = df[df['treat'] == 1]['cd4_change'].dropna()
+control = df[df['treat'] == 0]['cd4_change']
+treatment = df[df['treat'] == 1]['cd4_change']
+n_T, n_C = len(treatment), len(control)
 
 observed_effect = treatment.mean() - control.mean()
-print(f"Control mean:        {control.mean():.1f} CD4 cells")
-print(f"Treatment mean:      {treatment.mean():.1f} CD4 cells")
-print(f"Observed effect:     {observed_effect:.1f} CD4 cells")
-print(f"Control n:           {len(control)}")
-print(f"Treatment n:         {len(treatment)}")
+print(f"Control mean    (n_C = {n_C}): {control.mean():.1f} CD4 cells")
+print(f"Treatment mean  (n_T = {n_T}): {treatment.mean():.1f} CD4 cells")
+print(f"Observed effect:               {observed_effect:.1f} CD4 cells")
 ```
 
-The bootstrap confidence interval we built in [Chapter 8](lec08-sampling.qmd) was entirely above zero — suggestive evidence that the drug works. But can we test this more rigorously? Can we quantify exactly how surprising this result would be if the drug had no effect at all?
+The bootstrap CI from [Chapter 8](lec08-sampling.qmd) was entirely above zero — suggestive that the drug works. Can we quantify exactly how surprising the data would be if the drug did nothing?
 
-## The Permutation Test Idea
+## The permutation test idea
 
-Here is the key insight: **if the drug has NO effect, then group assignment is irrelevant.** The treatment labels carry no information — every patient would have had the same outcome regardless of which group they were assigned to.
+**If the drug has no effect, group assignment is irrelevant.** The treatment label carries no information — every patient's outcome would be the same regardless of which group they were assigned to. This claim is the **null hypothesis**: the default assumption a test tries to disprove. The number we compute from the data to measure the effect (here, the difference of group means) is the **test statistic**.
 
-This claim — "the drug has no effect" — is the **null hypothesis**: the default assumption a test tries to disprove. The number we compute from the data to measure the effect (here, the difference of group means) is the **test statistic**.
-
-So what would happen if we **shuffled the labels**? If the null hypothesis is true, randomly reassigning patients to "control" and "treatment" should produce test statistics that look just like the one we observed. But if our observed test statistic is much larger than what shuffling produces, that's evidence against the null — evidence that the drug works.
+So what happens if we **shuffle the labels**? If the null is true, reassigning patients at random should produce test statistics that look just like the observed one. If the observed statistic is much larger than what shuffling produces, that is evidence against the null.
 
 :::{.callout-important}
 ## Definition: Permutation test
 A hypothesis test that builds the **null distribution** by shuffling group labels and recomputing the test statistic. The null distribution shows what the test statistic would look like if the null hypothesis were true.
 :::
 
-Why is shuffling valid here? Patients in ACTG 175 were **randomly assigned** to treatment groups — each patient's label was decided by a coin flip at enrollment.
+Two terms, similar names, different jobs: the **null hypothesis** is a claim about the world ("the drug has no effect"); the **null distribution** is the distribution of the test statistic *if* that claim were true. The permutation test builds the second from the first by shuffling.
 
-Now suppose the drug has *no effect*. Then a patient's CD4 change is determined entirely by the patient, not by which label they happened to get. Under that assumption, any re-shuffling of the labels is just as plausible as the original — the labels are **exchangeable**. In the other direction: if the drug *does* work, shuffling would mix responders and non-responders, and the shuffled datasets look very different from the original. That difference is what the test detects.
+Why does shuffling simulate the null distribution? ACTG 175 randomized patients to treatment by coin flip. *Under the null of no effect*, a patient's CD4 change is determined by the patient alone, not by which arm they happened to get — so any relabeling is just as plausible as the original. The labels are **exchangeable**, and each shuffle is a draw from the same data-generating story as the real trial. (If the drug *does* work, shuffling mixes responders and non-responders, and the shuffled datasets look very different from the original — that difference is what the test detects.)
 
-Formally, labels are exchangeable when swapping them does not change the joint distribution of the data. Random assignment guarantees exchangeability *under the null* of no effect. Exchangeability is the logical foundation of the permutation test.
+Random assignment guarantees exchangeability under the null. Exchangeability is the logical foundation of the permutation test.
+
+:::{.callout-note collapse="true"}
+## Going deeper: what exchangeability and "no effect" really mean
+
+Two formalities hide behind the casual phrasings in this section.
+
+**Exchangeability** is a property of the random variables, not of the labels. A sequence $(X_1, \ldots, X_n)$ is **exchangeable** when permuting the indices leaves the joint distribution unchanged: for any permutation $\pi$, $(X_{\pi(1)}, \ldots, X_{\pi(n)})$ has the same distribution as the original. Under the null of no effect, the data viewed through relabelings are exchangeable — which is what lets us read off the null distribution by shuffling.
+
+**Sharp null vs equal-means null.** "No effect" is ambiguous. Fisher's **sharp null** says every patient's CD4 change is *exactly* what it would have been under either label — a strong per-patient claim. Neyman's weaker **equal-means null** says only that the two arms have the same expected CD4 change. The permutation test's validity requires the *sharp* null: a drug that left means unchanged but doubled the variance would satisfy equal-means but break exchangeability, and the test would reject spuriously. In most practical settings the distinction is invisible, but careful inference sits on the sharp null.
+:::
 
 ### Step by step
 
 1. Combine all CD4 changes into one pool (ignoring labels)
-2. Randomly assign $n_{\text{control}}$ patients to "control" and the rest to "treatment"
+2. Randomly assign $n_C$ patients to "control" and the rest to "treatment"
 3. Compute the test statistic (difference in means) on the fake groups
 4. Repeat many times
 
 ```{python}
-# Combine all CD4 changes and record group sizes
-all_cd4 = df['cd4_change'].dropna().values
-n_trt = len(treatment)
-print(f"Total patients: {len(all_cd4)}   (treatment: {n_trt}, control: {len(control)})")
+# Combine all CD4 changes into one pool
+all_cd4 = np.concatenate([treatment.values, control.values])
+print(f"Total patients: {len(all_cd4)}   (n_T = {n_T}, n_C = {n_C})")
 ```
 
-Now we write a function that performs one permutation: it shuffles the combined data using `np.random.permutation()`, splits into two fake groups, and returns the difference of group means. We'll reuse this same helper later on a second dataset — the permutation machinery is identical whether the groups were randomly assigned or not.
+Now we write a function that performs one permutation: it shuffles the combined data using `np.random.permutation()`, splits into two fake groups, and returns the difference of group means.
 
 ```{python}
 def permutation_diff_of_means(values, n_first):
@@ -96,7 +111,7 @@ def permutation_diff_of_means(values, n_first):
 
 print("Five random permutations (treatment − control):")
 for i in range(5):
-    fake = permutation_diff_of_means(all_cd4, n_trt)
+    fake = permutation_diff_of_means(all_cd4, n_T)
     print(f"  Permutation {i+1}: fake effect = {fake:+.1f} CD4 cells")
 
 print(f"\nObserved effect:                          {observed_effect:+.1f} CD4 cells")
@@ -106,33 +121,33 @@ The fake effects bounce around zero — small positive, small negative. Our obse
 
 :::{.callout-tip}
 ## Think About It
-You're on the FDA advisory panel. The observed treatment effect is ~50 CD4 cells; the fake effects we just saw ranged roughly from −7 to +7. Before seeing the full null distribution, what fraction of fake effects *greater than or equal to 50* would you need to see to vote against the drug? 1 in 100? 1 in 1,000? 1 in a million? There is no right answer here — the exercise is to commit to a standard *before* the data comes in.
+You're on the FDA advisory panel. The observed treatment effect is ~50 CD4 cells; the fake effects we just saw ranged roughly from −7 to +7. Before seeing the full null distribution, what fraction of fake effects *greater than or equal to 50* would you need to see to vote against the drug? 1 in 100? 1 in 1,000? 1 in a million? There is no right answer here — the exercise is to commit to a standard *before* the data comes in. Sanity check your answer by asking: would you be comfortable defending your threshold to a colleague who preferred one 10× stricter, and to one who preferred one 10× looser?
 :::
 
-## Building the Null Distribution
+## Building the null distribution
 
 Five permutations gave us a rough sense. To build the full null distribution, we need thousands.
+
+:::{.callout-tip}
+## Think About It
+Before we compute anything: the five fake effects we saw a moment ago ranged roughly $\pm 7$ CD4 cells. Where do you expect the observed effect (~50 CD4 cells) to land relative to a null distribution built from thousands of such shuffles? Sketch it, then read on.
+:::
 
 ```{python}
 n_perms = 10_000
 perm_effects = np.array([
-    permutation_diff_of_means(all_cd4, n_trt)
+    permutation_diff_of_means(all_cd4, n_T)
     for _ in range(n_perms)
 ])
 
 print(f"Null distribution summary:")
-print(f"  Mean:   {perm_effects.mean():.2f}")
-print(f"  SD:     {perm_effects.std():.2f}")
-print(f"  Min:    {perm_effects.min():.1f}")
-print(f"  Max:    {perm_effects.max():.1f}")
+print(f"  Mean: {perm_effects.mean():+.2f}")
+print(f"  SD:   {perm_effects.std():.2f}")
+print(f"  Min:  {perm_effects.min():+.2f}")
+print(f"  Max:  {perm_effects.max():+.2f}")
 ```
 
 The null distribution is tightly centered around zero, with a standard deviation much smaller than our observed effect.
-
-:::{.callout-tip}
-## Think About It
-Before we plot this: where do you expect the observed effect (~50 CD4 cells) to land relative to the null distribution (SD ≈ 6)? Roughly how many standard deviations out? Hold that prediction in mind as you look at the figure.
-:::
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -143,17 +158,31 @@ counts, edges, _ = ax.hist(perm_effects, bins=50, density=True,
 # Shade the two-sided "extreme" regions the p-value actually counts.
 # (Here the tails turn out to be empty — the observed is so extreme that no
 # permutation reaches it. That IS the point: nothing to shade = tiny p-value.)
-centers = 0.5 * (edges[:-1] + edges[1:])
-in_tail = np.abs(centers) >= np.abs(observed_effect)
+# Select bins by edges (not centers) so partial tail bins don't drop out.
+in_right_tail = edges[:-1] >= abs(observed_effect)
+in_left_tail  = edges[1:]  <= -abs(observed_effect)
+in_tail = in_right_tail | in_left_tail
 if in_tail.any():
-    ax.bar(centers[in_tail], counts[in_tail],
-           width=edges[1] - edges[0], color='#d7263d', alpha=0.7,
+    ax.bar(edges[:-1][in_tail], counts[in_tail],
+           width=edges[1] - edges[0], align='edge',
+           color='#d7263d', alpha=0.7,
            label='"At least as extreme" (two-sided)')
 
 ax.axvline(observed_effect, color='#d7263d', lw=2, ls='--',
            label=f'Observed effect = {observed_effect:+.1f}')
-ax.axvline(-observed_effect, color='#d7263d', lw=2, ls=':', alpha=0.6,
+ax.axvline(-observed_effect, color='#d7263d', lw=2, ls=':', alpha=1.0,
            label=f'−Observed (reflected cutoff)')
+
+# Horizontal arrow from the rightmost null bin to the observed line,
+# anchoring the prose claim "the observed lives where the null never visits."
+right_edge = edges[-1]
+y_arrow = counts.max() * 0.45
+ax.annotate('', xy=(observed_effect, y_arrow), xytext=(right_edge, y_arrow),
+            arrowprops=dict(arrowstyle='->', color='black', lw=1))
+ax.text((right_edge + observed_effect) / 2, y_arrow * 1.08,
+        'no permutation reaches here',
+        ha='center', va='bottom', fontsize=9, color='black')
+
 ax.set_xlabel('Treatment effect under null (CD4 cells)')
 ax.set_ylabel('Density')
 ax.set_title('ACTG 175 permutation null distribution')
@@ -162,18 +191,16 @@ plt.tight_layout()
 plt.show()
 ```
 
-The red dashed line marks the observed effect; the red dotted line marks its **reflected cutoff** (the mirror on the opposite side — we use it because a two-sided test counts fake effects as "at least as extreme as 50.4" in *either* direction). A two-sided p-value counts fake effects in the red-dashed-or-beyond region plus the red-dotted-or-beyond region. Here those regions are so far out that no permutation reaches them — both shaded tails would be visibly empty. That *is* the picture of a tiny p-value: the observed effect lives in a place the null distribution never visits.
+The red dashed line marks the observed effect of $+50.4$ CD4 cells. The picture answers the decision question: *if the drug did nothing, how often would shuffling alone produce an effect this far from zero?* Not one of the 10,000 permutations lands anywhere near $\pm 50$ — the observed effect sits in a region the null distribution never visits. That is what a very small p-value looks like. (Sanity check on your sketch: with ~1,000 patients per arm, the null distribution is much tighter than first-timers guess.) A drug that dramatically *hurt* patients would be just as noteworthy as one that dramatically helped, so we also mark the symmetric cutoff at $-50.4$ (red dotted line); the p-value below counts fake effects at least this far from zero in either direction.
 
-## The p-Value
+## The p-value
 
 :::{.callout-important}
 ## Definition: p-value
 The probability of observing a result at least as extreme as what you got, assuming the null hypothesis is true.
 :::
 
-The p-value answers this question: if there were truly no effect, how often would we see something this extreme?
-
-We compute a **two-sided** p-value: we count permutations where the test statistic is large **in absolute value** — that is, at least as far from zero as the observed effect in either direction. A drug that dramatically helps or dramatically hurts patients would both be noteworthy. (A later section looks at cases where only one direction is of interest.)
+We compute a **two-sided** p-value: count permutations whose test statistic is at least as far from zero as the observed effect, in either direction. (We add $+1$ to numerator and denominator so a finite simulation can't report exactly 0; see Going deeper below.)
 
 ```{python}
 # Count how many permutations produced an effect as extreme as observed
@@ -188,91 +215,91 @@ print(f"Permutations with |effect| >= |{observed_effect:.1f}|: {n_extreme}")
 print(f"p-value: {p_value:.4f}")
 ```
 
-A p-value this small means: under 10,000 random shufflings, essentially **none** produced an effect as large as what we observed. The data are extremely surprising under the null hypothesis of no effect — strong evidence the drug works. ([Chapter 10](lec10-hypothesis-testing.qmd) turns that evidence into a formal accept/reject decision.)
+Across 10,000 shufflings, **zero** produced an effect as large as observed; the $+1$ correction is the only reason the value isn't exactly 0. The data are extremely surprising under the null of no effect — strong evidence the drug works.
+
+### What the p-value is
+
+The p-value is **a measure of surprise under the null**: a probability statement about the data, conditioned on $H_0$ being true. Three implications follow from that one fact.
+
+- **It assumes the null.** A small p-value says *if there were no effect*, the data would be unlikely.
+- **It is continuous evidence, not a verdict.** A p-value of $10^{-4}$ is far stronger evidence than $0.04$, even though both are "below 0.05."
+- **It is computed from the observed data alone.** Replication, mechanism, and prior plausibility are not in the formula.
+
+### What the p-value is not
+
+The p-value is one of the most misinterpreted quantities in statistics. The cleanest way to learn the traps is to walk into one.
 
 :::{.callout-tip}
 ## Think About It
 
-A skeptic says: "A p-value of 0.0001 means there's only a 0.01% chance the drug doesn't work." Is the skeptic right? Think through your answer before unfolding the response below — or better, before reading the next section.
+A skeptic says: "A p-value of 0.0001 means there's only a 0.01% chance the drug doesn't work." Is the skeptic right? Think through your answer before reading on.
 
 <details><summary>Answer</summary>
-No. The p-value is $P(\text{data this extreme} \mid H_0 \text{ is true})$. The skeptic flipped the conditional — they're claiming $P(H_0 \text{ true} \mid \text{data})$, which requires Bayes' theorem and a prior. "P(umbrella | raining)" is not "P(raining | umbrella)." The p-value lives in the world where the null *is* true and asks how surprising the data are there.
+No — the skeptic flipped the conditional. The p-value is $P(\text{data this extreme} \mid H_0 \text{ true})$; the skeptic is claiming $P(H_0 \text{ true} \mid \text{data})$. "P(umbrella | raining)" is not "P(raining | umbrella)." Going from one to the other requires Bayes' theorem and a prior on $H_0$ — neither of which the p-value uses.
 </details>
+:::
+
+:::{.callout-warning}
+## Three traps
+
+1. **A p-value is NOT the probability that $H_0$ is true.** That is the skeptic's flipped-conditional error above.
+2. **A p-value is NOT the probability the result will replicate.** Replication depends on power, sampling variability, and whether the effect actually exists — none of which a single p-value pins down.
+3. **p = 0.049 and p = 0.051 are not meaningfully different.** The 0.05 threshold is a convention, not a phase transition. Report the number; resist binary verdicts.
 :::
 
 :::{.callout-note collapse="true"}
 ## Going deeper: why add 1?
 
-A p-value of exactly zero would claim infinite evidence against the null — a claim no finite simulation can support. Adding 1 to the numerator counts the observed data as one of the permutations (which it is, under the null). Adding 1 to the denominator adjusts the total accordingly. The resulting estimator is **conservative**: it never underestimates the true p-value, at the cost of a small upward bias that shrinks as $n_{\text{perms}}$ grows (Phipson & Smyth, 2010).
+A p-value of exactly zero would claim infinite evidence against the null — a claim no finite simulation can support. Adding 1 to the numerator counts the observed data as one of the permutations (the identity permutation is always a permutation; under the null it is equidistributed with every other). Adding 1 to the denominator adjusts the total accordingly. The resulting estimator is **conservative**: under the null, its expected value is at least the nominal false-positive rate, so the finite-simulation p-value still controls false positives at the nominal level (Phipson & Smyth, 2010). The small upward bias shrinks as $n_{\text{perms}}$ grows.
 :::
 
-## What the p-Value Is NOT
+## From randomization to observation: do NBA refs favor the home team?
 
-:::{.callout-warning}
-## Common p-value misconceptions
+ACTG 175 was a *randomized* clinical trial: patients were assigned to arms by coin flip. That randomization is what licenses the causal interpretation — reject the null, and we conclude the drug *caused* the effect. Most real data is not like that. With observational groups, the permutation mechanics are identical, but the conclusions narrow sharply: a significant test tells us the two groups differ, not *why*.
 
-The p-value is one of the most misinterpreted quantities in statistics. Before we go further, let's clear up the most common misconceptions:
+To see that difference in action, we switch to a folk hypothesis NBA fans argue about endlessly: **referees favor the home team**. Moskowitz and Wertheim made the popular case in *Scorecasting* (2011), documenting systematic pro-home biases across sports — called strikes in baseball, stoppage time in soccer, foul calls in basketball — and arguing these referee effects explain most of home-court advantage. If they're right, one place it should show up is **personal foul** counts: home teams should be called for fewer of them than visiting opponents. Three NBA regular seasons (2021-22 through 2023-24) give us the data to test it.
 
-1. **The p-value is NOT the probability that the null hypothesis is true.** It's the probability of seeing data this extreme *if* the null were true. Flipping the conditional changes the meaning entirely.
+**The null has the same shape as before**: home-team and away-team foul counts come from the same distribution. If that is true, the home/away label carries no information about fouls, and shuffling produces valid null draws.
 
-2. **The p-value is NOT the probability that the result will replicate.** A small p-value doesn't guarantee that a new experiment will find the same thing.
-
-3. **p = 0.049 and p = 0.051 are not meaningfully different.** The conventional threshold of 0.05 is arbitrary. Treat the p-value as a continuous measure of evidence, not a binary verdict.
-:::
-
-The p-value is the tool we need now; [Chapter 10](lec10-hypothesis-testing.qmd) introduces the full testing framework. In data analytics, this kind of comparison between two groups is often called **A/B testing** — the labels "A" and "B" stand for the two groups being compared.
-
-## From Randomization to Observation: NBA Home-Court Advantage
-
-ACTG 175 was a *randomized* clinical trial: patients were assigned to treatment or control by a coin flip (or its clinical-trial equivalent). That randomization is what licenses the causal interpretation — reject the null, and we conclude the drug *caused* the effect. Most real data is not like that. When groups are defined observationally rather than randomized, the permutation mechanics stay identical, but the conclusions we can draw narrow sharply.
-
-NBA home teams win more often than away teams — but do they *score* more? Over three regular seasons (2021-22 through 2023-24), we can compare points scored by home and away teams. **The null hypothesis is the same as before**: home-team scoring and away-team scoring come from the same distribution. If that's true, the home/away label carries no information about points, and shuffling is valid.
-
-**What's different is the interpretation of rejecting it.** No one randomly assigned games to home-or-away — the league schedule is fixed, and a team's home games differ from its away games in dozens of ways at once: the home team sleeps in its own bed, skips a flight, plays in a familiar arena, and performs in front of its own fans. These are all *confounded* with the home/away label. Rejecting the null tells us the groups differ. It does **not** tell us which of these mechanisms (or which combination) is responsible.
+**What's different is the interpretation of rejecting it.** No referees were randomly assigned to be home- or away-biased, and no games were randomly assigned home-or-away. Rejecting the null would tell us the two foul-count distributions differ — but it would *not* tell us *why*. Referee bias is one possible story, but other mechanisms ride along with the home/away label; the next Think About It asks you to generate some before we run the test.
 
 :::{.callout-tip}
 ## Think About It
 
-Suppose the permutation test finds a significant home-scoring advantage. What are at least three alternative explanations for the advantage, aside from "being the home team intrinsically helps you score"? Write them down before reading on.
+Suppose the permutation test finds that home teams are called for fewer fouls than away teams. Referee bias is the folk-theory explanation — but it is only one possibility. What are at least three **alternative** mechanisms, confounded with the home/away label, that could produce the same gap? Write them down before reading on.
 
 <details><summary>Some alternatives</summary>
-(a) **Rest and travel.** The home team slept in its own bed; the away team may have flown in the night before. (b) **Crowd.** Home fans are louder, which plausibly affects on-court communication, free-throw concentration, and referee calls. (c) **Familiarity.** The home team practices on the same court every day — identical rims (every arena's hoops have slightly different stiffness), identical sightlines (the angle of the arena's backdrop behind the basket), identical floor. (d) **Scheduling.** Back-to-backs — two games on consecutive nights — happen to fall on the visiting side of a given game more often than the home side, across a season. (e) **Referee tendencies.** Studies of pro sports find small pro-home biases in close calls. A permutation test cannot decompose which combination produces the 2-point gap; the "2020 bubble" playoffs in Orlando — every game on a neutral court, no fans — were the closest thing we've seen to a natural experiment that strips these confounders away.
+(a) **Fatigue and travel.** The visiting team has almost always traveled more recently. Tired defenders reach in instead of sliding their feet, and reaching fouls get called. (b) **Scheduling.** Back-to-backs (two games on consecutive nights) hit the visiting side of a given date more often than the home side over a season; compound that with (a). (c) **Defensive style.** A team may play more aggressively at home (leaning on crowd pressure) or less aggressively (feeling secure). Either asymmetry feeds into foul counts. (d) **Familiarity.** The home team knows its own sightlines, rim stiffness, and the exact location of the sideline — visiting players misposition and collide. (e) **Referee bias.** The hypothesis we started with. A permutation test cannot decompose which of (a)-(e) produces the gap; the 2020 "bubble" playoffs in Orlando — every game on a neutral court with no fans — are the closest thing we have to a natural experiment that strips many of these confounds away.
 </details>
 :::
 
-The raw file is player-level: one row per player per game. We first aggregate to team-game totals by summing player points within each (game, team) pair, then label each team-game as home or away using the `MATCHUP` string (`"LAL vs. GSW"` = home, `"LAL @ GSW"` = away). `pd.groupby(...)[col].sum()` with `as_index=False` returns a flat DataFrame; `str.contains` runs the pattern over the whole column.
+The raw file is player-level: one row per player per game. We aggregate fouls to team-game totals by summing within each (game, team) pair, then label each team-game as home or away using the `MATCHUP` string (`"LAL vs. GSW"` = home, `"LAL @ GSW"` = away).
 
 ```{python}
 logs = pd.read_csv(f'{DATA_DIR}/nba/nba_game_logs_2022_2024.csv',
-                   usecols=['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP', 'PTS'])
+                   usecols=['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP', 'PF'])
 
-# Sum player points within each (game, team) to get team totals
 team_game = (logs.groupby(['GAME_ID', 'TEAM_ABBREVIATION', 'MATCHUP'], as_index=False)
-                 ['PTS'].sum())
+                 ['PF'].sum())
 team_game['home'] = team_game['MATCHUP'].str.contains('vs.')
-team_game.head()
+
+home_pf = team_game[team_game['home']]['PF'].values
+away_pf = team_game[~team_game['home']]['PF'].values
+
+obs_diff_nba = home_pf.mean() - away_pf.mean()
+print(f"Home: {home_pf.mean():.2f} fouls per game   (n = {len(home_pf)})")
+print(f"Away: {away_pf.mean():.2f} fouls per game   (n = {len(away_pf)})")
+print(f"Observed difference (home − away): {obs_diff_nba:+.3f} fouls per game")
 ```
 
-Now we split into home and away point totals and compute the observed difference:
+Home teams are called for about 0.18 fewer fouls per game. That is small against a typical 19-to-20-foul game, but over thousands of team-games the question sharpens: is the gap distinguishable from chance under the null? Recall the `permutation_diff_of_means` helper from the ACTG analysis — the machinery is identical here. Shuffle home/away labels, recompute the difference, repeat.
 
 ```{python}
-home_pts = team_game[team_game['home']]['PTS'].values
-away_pts = team_game[~team_game['home']]['PTS'].values
-
-obs_diff_nba = home_pts.mean() - away_pts.mean()
-print(f"Home: {home_pts.mean():.2f} pts   (n = {len(home_pts)})")
-print(f"Away: {away_pts.mean():.2f} pts   (n = {len(away_pts)})")
-print(f"Observed difference: {obs_diff_nba:+.2f} points per game")
-```
-
-About 2 points per game — small compared to a typical team's 100–125-point game, but over thousands of games that's a lot of signal to distinguish from chance. The permutation-test machinery is *identical* to what we did for ACTG 175 — we reuse the same `permutation_diff_of_means` helper:
-
-```{python}
-all_pts = np.concatenate([home_pts, away_pts])
-n_home = len(home_pts)
+all_pf = np.concatenate([home_pf, away_pf])
+n_home = len(home_pf)
 
 perm_diffs = np.array([
-    permutation_diff_of_means(all_pts, n_home)
+    permutation_diff_of_means(all_pf, n_home)
     for _ in range(10_000)
 ])
 
@@ -287,84 +314,94 @@ counts, edges, _ = ax.hist(perm_diffs, bins=50, density=True,
                            color='lightgray', edgecolor='white',
                            label='Null distribution')
 
-centers = 0.5 * (edges[:-1] + edges[1:])
-in_tail = np.abs(centers) >= np.abs(obs_diff_nba)
+# Select bins by edges so partial tail bins get shaded.
+in_right_tail = edges[:-1] >= abs(obs_diff_nba)
+in_left_tail  = edges[1:]  <= -abs(obs_diff_nba)
+in_tail = in_right_tail | in_left_tail
 if in_tail.any():
-    ax.bar(centers[in_tail], counts[in_tail],
-           width=edges[1] - edges[0], color='#d7263d', alpha=0.7,
+    ax.bar(edges[:-1][in_tail], counts[in_tail],
+           width=edges[1] - edges[0], align='edge',
+           color='#d7263d', alpha=0.7,
            label='"At least as extreme" (two-sided)')
 
 ax.axvline(obs_diff_nba, color='#d7263d', lw=2, ls='--',
-           label=f'Observed diff = {obs_diff_nba:+.2f} pts')
-ax.axvline(-obs_diff_nba, color='#d7263d', lw=2, ls=':', alpha=0.6,
+           label=f'Observed diff = {obs_diff_nba:+.3f} fouls')
+ax.axvline(-obs_diff_nba, color='#d7263d', lw=2, ls=':', alpha=1.0,
            label='−Observed (reflected cutoff)')
-ax.set_xlabel('Difference in mean points: home − away')
+ax.set_xlabel('Difference in mean personal fouls: home − away')
 ax.set_ylabel('Density')
-ax.set_title('NBA home vs. away scoring, 2021–24')
+ax.set_title('NBA home vs. away personal fouls, 2021–24')
 ax.legend(loc='upper left')
 plt.tight_layout()
 plt.show()
 ```
 
-Under the null — home and away scoring come from the same distribution — shuffled differences rarely wander past one point in either direction, even with thousands of games. The observed 2.12-point gap sits outside that whole range. As with ACTG, the "at-least-as-extreme" tails the p-value would count are visibly empty, and the p-value floors at $1/10{,}001 \approx 0.0001$.
+A very different picture from ACTG. Shuffled differences under the null wander up to about $\pm 0.3$ fouls per game, so the observed gap of $-0.18$ sits **at the edge of the null distribution, not outside it**. About 5% of permutations produce a difference at least as extreme — the p-value lands right at the conventional significance threshold $\alpha = 0.05$ (the cutoff below which a result is traditionally called "statistically significant"; we will use $\alpha$ for this threshold throughout). The data are *marginally* suggestive of a home-away difference, not decisive.
 
-So the home-court scoring advantage is real. But the test can't tell us whether it comes from rest, crowd, familiarity, referee tendencies, or something else — those mechanisms are all bundled together in the home/away label. Untangling them requires a different comparison, like the natural experiment of the 2020 "bubble" playoffs when every game was played on a neutral court with no fans. (We'll return to that distinction — association vs. causation — in [Chapter 18](lec18-causal-inference-1.qmd).)
+**The contrast with ACTG 175 is the point.** There, zero of 10,000 permutations reached the observed effect (p ≈ 0.0001) — the observed lived in a place the null never visits. Here, about 500 of 10,000 do, and we land near $\alpha = 0.05$. The useful contrast is **overwhelming evidence (ACTG, p ≈ 10⁻⁴) vs marginal evidence (fouls, p ≈ 0.05)**: report the number, not a yes/no.
 
-## One-Sided vs Two-Sided Tests
+And even if the data *did* convince us the groups differ, the observational setup still blocks the leap from "home teams are called for fewer fouls" to "refs favor the home team." Any of the mechanisms the Think About It asked you to generate could produce the gap on its own. (We return to association vs. causation in [Chapter 18](lec18-causal-inference-1.qmd).)
 
-So far we've counted permutations extreme in *either* direction. That's the right default when effects in both directions matter — a harmful drug and a helpful one; home teams scoring noticeably more *or* less than away teams. But sometimes the scientific question is inherently one-directional. **"Do home teams score *more* than away teams?"** is narrower than **"do the two groups score differently?"** — and the narrower question calls for a **one-sided test**.
+## One-sided vs two-sided tests
 
-Let's compute both p-values on the NBA data and compare.
+So far we've counted permutations extreme in *either* direction. That is the right default when effects in both directions matter — a harmful drug and a helpful one. But sometimes the scientific question is inherently one-directional. We motivated the NBA analysis with a directional folk hypothesis: **home teams get called for *fewer* fouls**. "Home foul count is *lower* than away" is narrower than "the two foul counts differ," and the narrower question calls for a **one-sided test**.
+
+Let's compute both p-values on the same NBA permutation distribution and compare.
 
 ```{python}
-# Two-sided: |fake diff| as large as |observed diff|
+# Two-sided: |fake diff| at least as large as |observed diff|
 two_sided = (np.sum(np.abs(perm_diffs) >= np.abs(obs_diff_nba)) + 1) / (len(perm_diffs) + 1)
 
-# One-sided (upper): fake diff as large as observed, in the positive direction only
-one_sided = (np.sum(perm_diffs >= obs_diff_nba) + 1) / (len(perm_diffs) + 1)
+# One-sided (lower tail): fake diff as negative as observed or more so
+# Pre-registered hypothesis: home teams commit fewer fouls, so home − away < 0.
+one_sided = (np.sum(perm_diffs <= obs_diff_nba) + 1) / (len(perm_diffs) + 1)
 
 print(f"Two-sided p-value:  {two_sided:.4f}")
-print(f"One-sided p-value:  {one_sided:.4f}")
+print(f"One-sided p-value:  {one_sided:.4f}  (hypothesis: home < away)")
 ```
 
-Both came in at 0.0001. Remember the conservative estimator: $(n_{\text{extreme}} + 1)/(n_{\text{perms}} + 1)$. When *zero* of the 10,000 shuffles are extreme, both formulas give $1 / 10{,}001 \approx 0.0001$ — the smallest value this simulation can ever produce. That's the **simulation floor**: with 10,000 permutations you can see p-values down to $\approx 10^{-4}$, but not smaller.
+The one-sided number is about half the two-sided number, as the math predicts for an (approximately) symmetric null. What is striking is what this does to the verdict at the conventional threshold $\alpha = 0.05$: **the two-sided test fails to reject, and the one-sided test rejects**. Same data, different conclusion, driven entirely by an analytic choice.
 
-Normally the one-sided p-value is *exactly half* the two-sided one (under a symmetric null). Here, the observed 2.12-point gap is so far out that neither tail contains *any* of the 10,000 fake differences — both formulas floor out at the same value. To see the factor-of-two ratio empirically we'd either need many more permutations or a less extreme observed effect. Below is the tail-counting structure on a generic symmetric null, where the factor-of-two is easy to see:
+That is exactly why the direction has to be chosen *before* seeing the data. If the study's pre-registered protocol said "we expect home teams to get called for fewer fouls, test one-sided," the one-sided p-value is honest. If the analyst looked at the data, noticed that home foul counts were lower, and *then* declared the test one-sided, the one-sided p-value is a factor-of-two free lunch — the rate of falsely rejecting a true null is actually $2\alpha$, not $\alpha$. The picture below makes the counting rule visible on the same null distribution we already built.
 
 ```{python}
-#| fig-cap: "Which permutations count as surprising? Left: two-sided — both tails. Right: one-sided — upper tail only. Dashed: observed. Dotted: reflected cutoff (used by two-sided only)."
-from scipy.stats import norm
+#| fig-cap: "Same null distribution, same observed statistic, two counting rules. Left — two-sided: both tails count. Right — one-sided (lower): only the tail of the hypothesized direction counts."
 
-x = np.linspace(-4, 4, 400)
-y = norm.pdf(x)
-obs = 2.0
+fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
 
-fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
-
-# Two-sided
+# Left panel: two-sided counting rule
 ax = axes[0]
-ax.plot(x, y, color='gray', lw=1.5, label='Null distribution')
-ax.fill_between(x, y, where=(x >= obs),  color='#d7263d', alpha=0.6,
-                label='"At least as extreme"')
-ax.fill_between(x, y, where=(x <= -obs), color='#d7263d', alpha=0.6)
-ax.axvline(obs, color='#d7263d', lw=1.5, ls='--', label='Observed')
-ax.axvline(-obs, color='#d7263d', lw=1.5, ls=':', label='Reflected cutoff')
-ax.set_title('Two-sided test')
-ax.set_xlabel('Test statistic under null')
+counts, edges, _ = ax.hist(perm_diffs, bins=50, density=True,
+                           color='lightgray', edgecolor='white')
+# Select bins whose right edge crosses the positive cutoff OR whose
+# left edge crosses the negative cutoff — uses edges (not centers) so
+# partial tail bins aren't dropped.
+in_right_tail = edges[:-1] >= abs(obs_diff_nba)
+in_left_tail  = edges[1:]  <= -abs(obs_diff_nba)
+in_tail = in_right_tail | in_left_tail
+ax.bar(edges[:-1][in_tail], counts[in_tail],
+       width=edges[1] - edges[0], align='edge',
+       color='#d7263d', alpha=0.7)
+ax.axvline( obs_diff_nba, color='#d7263d', lw=1.5, ls='--', label='observed')
+ax.axvline(-obs_diff_nba, color='#d7263d', lw=1.5, ls=':', alpha=1.0,
+           label='reflected cutoff')
+ax.set_title(f'Two-sided (p = {two_sided:.4f})')
+ax.set_xlabel('Fake diff under null (home − away)')
 ax.set_ylabel('Density')
-ax.legend(loc='upper left', fontsize=9)
+ax.legend(loc='upper right', fontsize=9)
 
-# One-sided (upper)
+# Right panel: one-sided (lower) counting rule
 ax = axes[1]
-ax.plot(x, y, color='gray', lw=1.5)
-ax.fill_between(x, y, where=(x >= obs), color='#d7263d', alpha=0.6)
-ax.axvline(obs, color='#d7263d', lw=1.5, ls='--')
-ax.set_title('One-sided test (upper tail)')
-ax.set_xlabel('Test statistic under null')
-
-for ax in axes:
-    ax.set_xlim(-4, 4)
-    ax.set_ylim(0, 0.45)
+counts, edges, _ = ax.hist(perm_diffs, bins=50, density=True,
+                           color='lightgray', edgecolor='white')
+# Select bins whose right edge is below the observed statistic.
+in_tail = edges[1:] <= obs_diff_nba
+ax.bar(edges[:-1][in_tail], counts[in_tail],
+       width=edges[1] - edges[0], align='edge',
+       color='#d7263d', alpha=0.7)
+ax.axvline(obs_diff_nba, color='#d7263d', lw=1.5, ls='--', label='observed')
+ax.set_title(f'One-sided lower (p = {one_sided:.4f})')
+ax.set_xlabel('Fake diff under null (home − away)')
 
 plt.tight_layout()
 plt.show()
@@ -373,12 +410,52 @@ plt.show()
 :::{.callout-important}
 ## Definition: One-sided and two-sided tests
 
-A **two-sided test** counts permutations extreme in **either direction**: $|t_{\text{perm}}| \ge |t_{\text{obs}}|$. Use when effects in either direction would be noteworthy.
+A **two-sided test** counts permutations extreme in **either direction**: $|T_{\text{perm}}| \ge |T_{\text{obs}}|$. Use when effects in either direction would be noteworthy.
 
-A **one-sided test** counts permutations in **one direction only**: $t_{\text{perm}} \ge t_{\text{obs}}$ (or $\le$, depending on the alternative). Use when only one direction is of scientific or practical interest — and **only when the direction was chosen before seeing the data.**
+A **one-sided test** counts permutations in **one direction only**: $T_{\text{perm}} \ge T_{\text{obs}}$ (or $\le$, depending on the alternative). Use when only one direction is of scientific or practical interest — and **only when the direction was chosen before seeing the data.**
 :::
 
-When the null distribution is symmetric, the two-sided p-value is *exactly* double the one-sided. So "going one-sided" halves your p-value — which is why the direction must be chosen *before* looking at the data. Picking the tail after seeing which way the observed statistic fell inflates the Type I error: a test nominally at $\alpha = 0.05$ rejects at rate 0.10 under the null.
+When the null distribution is symmetric and continuous, the two-sided p-value is roughly double the one-sided. So "going one-sided" roughly halves your p-value — which is why the direction must be chosen *before* looking at the data. Picking the tail after seeing which way the observed statistic fell inflates the false-positive rate (what [Chapter 10](lec10-hypothesis-testing.qmd) will call the **Type I error rate**): a test nominally at $\alpha = 0.05$ rejects at rate $\approx 0.10$ under the null.
+
+:::{.callout-note}
+## A high-profile example: Deflategate
+
+At halftime of the 2015 AFC Championship game, NFL officials measured the air pressure in the game footballs. The Patriots' balls came in below the legal minimum; the Colts' did not. Cooling physics explains *some* pressure drop — both teams played in the same cold weather on the same field — but the accusation was **directional**: the Patriots' balls had dropped *more* than the Colts', and by more than cooling alone could account for.
+
+A Patriots ball that dropped *less* than the Colts' would have exonerated them, not indicted them. Only one direction counts as damaging — which is exactly what a one-sided test encodes.
+:::
+
+:::{.callout-tip}
+## Think About It: pick the test
+
+For each scenario, **state the null hypothesis precisely** in plain language and pick one-sided or two-sided. The phrasing matters: "the new curriculum doesn't *increase* scores" is a different null from "the new curriculum doesn't *change* scores," and they pick out different tests. For each answer, ask: *what decision rides on the result, and would a result in the other direction change it?*
+
+1. A biotech company is running a Phase III trial of a new cholesterol drug, hoping it lowers LDL relative to standard care. The team must declare the test type before the trial begins.
+
+2. A factory ships widgets under a contract that specifies a *minimum* mean weight: shipments below spec incur penalties; shipments above spec do not (heavy shipments just give the buyer extra product). The factory tests weekly samples to confirm compliance.
+
+3. A school district rolled out a new math curriculum last year. They need to decide whether to keep it next year, roll back to the previous curriculum, or revise.
+
+4. An airline is piloting a new boarding procedure on 50 flights to learn how it affects average boarding time.
+
+<details><summary>Answers</summary>
+(1) **Two-sided — a trap.** Null: $\mu_{\text{new}} = \mu_{\text{control}}$ (the drug doesn't *change* LDL). It is tempting to go one-sided since the team *hopes* LDL drops — but a drug that *raises* LDL is a safety signal, and that result would absolutely change the launch decision. Hoping for a direction is not the same as only one direction mattering.
+
+<details><summary>Aside: what the FDA actually does</summary>
+In real practice, FDA Phase III efficacy trials sometimes use a one-sided test at $\alpha = 0.025$ — which is equivalent in decision-theoretic terms to a two-sided test at $\alpha = 0.05$. The one-sidedness there is a regulatory convention paired with a separate safety-monitoring process, not a free halving of the p-value.
+</details>
+
+(2) **One-sided.** Null: $\mu \ge w_{\min}$ (the shipment meets the contract minimum); alternative: $\mu < w_{\min}$. The contract penalizes only under-weight shipments — over-weight is logically exculpatory, not noteworthy. The direction is fixed by the contract, not by the data. Same structure as Deflategate.
+
+(3) **Two-sided.** Null: $\mu_{\text{new}} = \mu_{\text{old}}$ (the new curriculum doesn't *change* scores). The right framing is "no change," not "no increase": scores that *drop* drive the rollback decision, so the test has to be able to detect them. A one-sided "doesn't increase" null would silently treat a score drop as just another way to fail to detect an improvement, discarding evidence the district would act on.
+
+(4) **Two-sided.** Null: $\mu_{\text{new}} = \mu_{\text{old}}$ (the new procedure doesn't change average boarding time). A slower procedure matters to operations as much as a faster one does.
+
+Notice: three of four were two-sided, and the "trap" scenario (biotech) was too. One-sided tests are rare outside contract-compliance or tamper-detection contexts. Reserve them for cases where the other direction is *logically* irrelevant (not merely undesired), and pre-register the choice before looking at the data.
+</details>
+:::
+
+Pulling the four scenarios together:
 
 :::{.callout-warning}
 ## Prefer two-sided by default
@@ -386,36 +463,7 @@ When the null distribution is symmetric, the two-sided p-value is *exactly* doub
 If you are not sure which one to use, use a two-sided test. It is the honest default. A one-sided test is justified only when effects in the other direction are genuinely uninteresting or impossible — and that judgment must be pre-registered, not chosen after seeing which way the data pointed.
 :::
 
-:::{.callout-note}
-## The canonical story: Deflategate
-
-The one-sided test has a famous case study: the 2015 NFL **Deflategate** controversy. At halftime of the AFC Championship game, officials measured air pressure in 11 Patriots footballs and 4 Colts footballs (halftime ran out before all the Colts' balls could be gauged) and found the Patriots' balls below the legal minimum. Cooling physics predicts both teams' balls should have lost pressure, but the accusation was directional: the Patriots' balls had dropped *more* than the Colts'. A Patriots ball that dropped *less* would have exonerated them — it would not have been evidence of cheating. That asymmetry is what a one-sided test encodes. (The real analysis of the case was complicated by small differences in the two teams' starting pressures — roughly 12.5 vs. 13.0 psi — and the order in which the balls were gauged.)
-:::
-
-:::{.callout-tip}
-## Think About It: pick the test
-
-For each scenario, decide whether you'd set up a one-sided or two-sided test. For each answer, ask: *what decision rides on the result, and would the other direction change it?* Write your answers down before unfolding the response.
-
-1. A biotech company is testing a new cholesterol drug in a trial. The team is considering whether to set up the test as one-sided or two-sided before the trial begins.
-2. A factory ships widgets to a customer that contractually require the widgets' mean weight to meet a specified minimum. The factory runs weekly tests on a sample of widgets to confirm the shipments meet spec.
-3. A school district rolled out a new math curriculum last year. They need to decide whether to keep it for next year, roll back to the previous curriculum, or revise.
-4. An airline is piloting a new boarding procedure on 50 flights to learn how it affects average boarding time.
-
-<details><summary>Answers</summary>
-(1) **Two-sided — a trap.** It may be tempting to go one-sided on the grounds that the team "hopes" LDL will drop. But a drug that *raises* LDL is a safety signal, and would absolutely change the launch decision — so the other direction is not uninteresting. Hoping for a direction is not the same as only one direction mattering.
-
-*(Aside: in real practice, FDA Phase III efficacy trials sometimes use a one-sided test at $\alpha = 0.025$ — which is equivalent in decision-theoretic terms to a two-sided test at $\alpha = 0.05$. The one-sidedness there is a regulatory convention paired with a separate safety-monitoring process, not a free halving of the p-value.)*
-
-(2) **One-sided.** Only weights *below* the minimum are a contract violation; weights above the minimum are fine. The direction is fixed by the contract, not by looking at the data. This is the Deflategate structure: the other direction is logically exculpatory.
-(3) **Two-sided.** Scores that drop are as relevant to the decision as scores that rise.
-(4) **Two-sided.** A slower procedure matters to operations as much as a faster one does.
-
-Notice: three of the four were two-sided, and the "trap" scenario (biotech) was too. That's the typical pattern in practice — one-sided tests are rare outside contract-compliance or tamper-detection contexts. Reserve them for cases where the other direction is *logically* irrelevant (not merely undesired), and pre-register the choice before looking at the data.
-</details>
-:::
-
-## Bootstrap vs Permutation: When to Use Which
+## Bootstrap vs permutation: when to use which
 
 These two simulation-based tools answer different questions:
 
@@ -436,52 +484,11 @@ These two simulation-based tools answer different questions:
 Your bootstrap 95% CI for a treatment effect is [15, 85] — it excludes zero. Without computing anything, do you expect the permutation p-value to be above or below 0.05? Why?
 
 <details><summary>Answer</summary>
-Below 0.05. The CI contains the parameter values the data are *consistent* with at the 5% level; excluding zero means zero is inconsistent at that level — equivalent to rejecting "effect = 0" in a two-sided test at $\alpha = 0.05$. The next section makes this equivalence explicit.
+Below 0.05. A 95% CI is built to contain the parameter values the data are *consistent* with at the 5% level. If zero is outside the CI, the data have ruled out "effect = 0" at that level — which is exactly what a two-sided test at $\alpha = 0.05$ reports. [Chapter 10](lec10-hypothesis-testing.qmd) makes this correspondence — the **CI/hypothesis test duality** — formal.
 </details>
 :::
 
-### The CI/Hypothesis Test Duality
-
-The agreement between bootstrap CIs and hypothesis tests is not a coincidence — it follows from how a confidence interval is defined. A 95% CI is built to contain every value of the parameter that the data would *not* rule out at the 5% level. So a 95% CI that excludes zero and a two-sided p-value below 0.05 are two descriptions of the same fact — asked from different directions.
-
-:::{.callout-important}
-## Confidence intervals and hypothesis tests are two sides of the same coin
-
-If a 95% confidence interval excludes zero, a two-sided test of "effect = 0" rejects at the 5% level. If the interval includes zero, the test does not reject. The same correspondence holds for any confidence level: a 99% CI pairs with a 1%-level test, and so on.
-
-The CI is strictly more informative: it tells you the *range* of plausible effects, not just whether zero is among them.
-:::
-
-[Chapter 10](lec10-hypothesis-testing.qmd) formalizes the hypothesis-testing notation ($H_0$, $\alpha$, reject / fail to reject) that makes this equivalence easy to state symbolically.
-
-:::{.callout-note collapse="true"}
-## Going deeper: verifying the duality
-
-Let's verify with the ACTG 175 data. We recompute the bootstrap CI from [Chapter 8](lec08-sampling.qmd) and check whether it excludes zero, then compare to the permutation p-value.
-
-```{python}
-# Bootstrap 95% CI for the treatment effect
-n_boot = 10_000
-boot_effects = np.empty(n_boot)
-for i in range(n_boot):
-    boot_ctrl = np.random.choice(control, size=len(control), replace=True)
-    boot_trt = np.random.choice(treatment, size=len(treatment), replace=True)
-    boot_effects[i] = boot_trt.mean() - boot_ctrl.mean()
-
-ci_lower, ci_upper = np.percentile(boot_effects, [2.5, 97.5])
-
-ci_excludes_zero = ci_lower > 0
-reject_h0 = p_value < 0.05
-
-print(f"Bootstrap 95% CI: [{ci_lower:.1f}, {ci_upper:.1f}]")
-print(f"CI excludes 0:    {ci_excludes_zero}")
-print(f"Permutation p:    {p_value:.4f}")
-print(f"Reject H0 at 5%:  {reject_h0}")
-print(f"Both agree?       {ci_excludes_zero == reject_h0}")
-```
-
-The CI excludes zero and the p-value is tiny — the two tools agree that the treatment effect is real. The equivalence is exact for parametric tools (a normal-approximation CI paired with a z-test) and near-exact for simulation-based tools (bootstrap CI paired with permutation p-value), with any small disagreement attributable to Monte Carlo error in the two simulations.
-:::
+The agreement we just derived — bootstrap CI and permutation p-value pointing at the same answer — is not a coincidence. [Chapter 10](lec10-hypothesis-testing.qmd) formalizes it as the **CI/hypothesis test duality**: if a 95% CI excludes zero, the corresponding two-sided test rejects at the 5% level, and vice versa. For now the takeaway is practical: **if you already have a CI from Chapter 8, you have most of what a test would tell you**.
 
 :::{.callout-note collapse="true"}
 ## Going deeper: the t-test as the parametric analog
@@ -494,40 +501,55 @@ print(f"Two-sample t-test p-value: {t_pvalue:.6f}")
 print(f"Permutation p-value:       {p_value:.4f}")
 ```
 
-Both are tiny — same conclusion. The permutation test is assumption-free but needs simulation; the t-test is fast but assumes the CLT has kicked in. For large samples like these, either is fine; for small or heavily skewed samples, prefer the permutation test.
+Both are tiny — same conclusion. The permutation test is distribution-free (it only needs exchangeability under the null) but requires simulation; the t-test is fast but assumes the CLT has kicked in. For large samples like these, either is fine; for small or heavily skewed samples, prefer the permutation test.
 :::
 
-## Key Takeaways
+## Key takeaways
 
 - **Permutation test**: shuffle group labels to simulate the null hypothesis, then measure how often chance produces something as extreme as what you observed.
 - **The p-value** measures surprise under the null — it is NOT the probability the null is true.
 - Permutation tests work for comparing groups **without distributional assumptions** — they only require exchangeability under the null (which random assignment guarantees).
 - **Two-sided by default.** A one-sided test is appropriate only when only one direction is of interest, and the direction is chosen *before* looking at the data.
-- **Random assignment licenses causal claims.** Without it (NBA home/away, Airbnb borough), a significant permutation test shows the groups differ but cannot decompose *why*.
-- **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). A 95% CI that excludes zero and a p-value below 0.05 are two sides of the same coin.
+- **Random assignment licenses causal claims.** Without it (NBA home/away), a significant permutation test shows the groups differ but cannot decompose *why*.
+- **Overwhelming vs marginal evidence.** A p-value of $10^{-4}$ (ACTG) and a p-value of $0.05$ (NBA fouls) are both "small," but they support very different statements. Report the number, not a yes/no verdict.
+- **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). They agree in a precise way — a 95% CI excluding zero and a p-value below 0.05 are two views of the same evidence — which [Chapter 10](lec10-hypothesis-testing.qmd) formalizes as the **CI/hypothesis test duality**.
 - **Next**: [Chapter 10](lec10-hypothesis-testing.qmd) formalizes hypothesis testing — $H_0$, $H_1$, $\alpha$, Type I/II errors, and power.
 
 ## Study guide
 
 ### Key ideas
 
+- **Null hypothesis**: The default claim being tested — typically "there is no effect" or "no difference between groups."
+- **Test statistic**: The quantity computed from the data to measure the effect (here, difference in means).
 - **Permutation test**: A hypothesis test that builds the null distribution by shuffling group labels and recomputing the test statistic. Requires exchangeability under the null (e.g., random assignment).
 - **Null distribution**: The distribution of a test statistic under the assumption that the null hypothesis is true.
-- **Null hypothesis**: The default claim being tested — typically "there is no effect" or "no difference between groups."
 - **p-value**: The fraction of permutation samples producing a test statistic as extreme as observed (in absolute value, for a two-sided test). Equivalently, the probability of data this extreme under the null.
 - **Exchangeability**: The property that swapping labels between groups does not change the joint distribution under the null. Random assignment guarantees exchangeability.
 - **Two-sided test**: A test that counts extreme values in both tails — effects large in absolute value. Use when effects in either direction are noteworthy; this is the honest default.
-- **One-sided test**: A test that counts extreme values in one tail only. Appropriate when only one direction of effect is of interest and the direction is chosen *before* seeing the data. Deflategate is a canonical example: only under-inflation, not over-inflation, could indict the Patriots.
-- **Test statistic**: The quantity computed from the data to measure the effect (here, difference in means).
+- **One-sided test**: A test that counts extreme values in one tail only. Appropriate when only one direction of effect is of interest and the direction is chosen *before* seeing the data. Contract compliance and tamper-detection settings are the classic use cases; Deflategate is a vivid one-sided story (only under-inflation, not over-inflation, could indict the Patriots).
 - **Bootstrap vs. permutation**: Bootstrap resamples **within each group** (with replacement) to measure precision. Permutation shuffles labels **across groups** (without replacement) to test significance.
-- **CI/test duality**: A 95% confidence interval that excludes zero corresponds to a two-sided p-value below 0.05. The equivalence is exact for parametric pairs (normal-approximation CI ↔ z-test) and near-exact for simulation-based pairs (bootstrap ↔ permutation), with any gap attributable to Monte Carlo error.
+- **CI/test duality** (preview; formalized in [Chapter 10](lec10-hypothesis-testing.qmd)): a 95% CI that excludes zero corresponds to a two-sided p-value below 0.05 — the two tools are two views of the same evidence.
 - **Association vs. causation**: a permutation test can detect that two groups differ. Whether that difference is *caused* by group membership depends on whether the labels were randomly assigned.
+- **Simulation-based inference**: The umbrella term for methods that build reference distributions by resampling (bootstrap, permutation test) rather than deriving them from a closed-form formula.
+
+:::{.callout-tip}
+## Worked example: p-value by hand
+
+A tiny null distribution: `{-6, -3, -1, 0, 1, 2, 4, 5, 5, 7}`. Observed statistic: **4**.
+
+- Two-sided count: permutations with $|v| \ge 4$ → $\{-6, 5, 5, 7\}$ → 4 permutations.
+- Two-sided p-value: $(4 + 1)/(10 + 1) = 5/11 \approx 0.455$.
+- One-sided (upper) count: permutations with $v \ge 4$ → $\{5, 5, 7\}$ → 3 permutations.
+- One-sided p-value: $(3 + 1)/(10 + 1) = 4/11 \approx 0.364$.
+
+Factor of 2-ish relationship preserved (not exact because the null isn't symmetric about 0 and the $+1$ corrections aren't symmetric either).
+:::
 
 ### Computational tools
 
 - `np.random.permutation(data)` — shuffle an array (for permutation tests)
 - `np.sum(np.abs(perm_effects) >= np.abs(observed))` — count extreme permutations
-- `(n_extreme + 1) / (n_perms + 1)` — conservative p-value estimator (the +1 counts the observed data as a permutation, preventing p = 0 from finite simulation)
+- `(n_extreme + 1) / (n_perms + 1)` — conservative p-value estimator (the +1 counts the observed data as one of the permutations, preventing p = 0 from finite simulation)
 - `stats.ttest_ind(group1, group2)` — two-sample t-test (parametric analog; see Going deeper box)
 
 ### For the quiz
