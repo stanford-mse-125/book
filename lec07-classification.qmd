@@ -556,7 +556,7 @@ If we set the threshold to 0.3 — flag anyone with >30% predicted CHD risk — 
 
 ```{python}
 # Compare thresholds
-thresholds_to_try = [0.5, 0.4, 0.3, 0.2, 0.1]
+thresholds_to_try = [0.5, 0.3, 0.1, 0.05, 0.02, 0.01]
 
 print(f"{'Threshold':>10s} {'Precision':>10s} {'Recall':>10s} {'Accuracy':>10s} {'Flagged':>10s}")
 print("=" * 55)
@@ -583,9 +583,29 @@ There's no free lunch. The right threshold depends on the **cost of each mistake
 
 If a follow-up test costs \$500 and a missed CHD case costs \$50,000 in emergency care, what threshold minimizes expected cost? In medicine, missing a heart disease case is far worse than ordering an extra test, so we'd choose a low threshold. In spam filtering, false positives (real email in spam) are worse, so we'd choose a high threshold.
 
+### Break-even precision: when is a flag worth it?
+
+We can make this quantitative. Suppose a missed case costs $C_{FN}$ and a false alarm costs $C_{FP}$. Consider one patient whose predicted disease probability is $p$. The expected cost of flagging is $(1-p) \cdot C_{FP}$ — we pay the false-alarm cost only if the patient is actually healthy. The expected cost of *not* flagging is $p \cdot C_{FN}$ — we pay the missed-case cost only if the patient is actually sick. Flag whenever the first is smaller:
+
+$$p > \frac{C_{FP}}{C_{FP} + C_{FN}} = \frac{1}{k+1}, \qquad k = \frac{C_{FN}}{C_{FP}}.$$
+
+Call this the **break-even precision** $p^*$. With our CHD numbers ($C_{FN}=\$50{,}000$, $C_{FP}=\$500$), $k=100$ and $p^* \approx 1\%$. With spam, $C_{FP}$ (a real email in the junk folder) dwarfs $C_{FN}$ (one extra spam in the inbox), so $k \ll 1$ and $p^*$ is close to $1$ — flag only when you're nearly certain.
+
+Now connect $p^*$ to the PR curve. By definition, **precision at an operating point is exactly $P(\text{disease} \mid \text{flagged})$** — the average disease-probability among flagged patients. Because the model flags the most-confident cases first, lowering the threshold one notch adds patients whose disease probability is *lower* than the current precision. So once an operating point's precision approaches $p^*$, the next batch of flags is net-negative in expectation.
+
+**Rule:** push the threshold down until precision approaches $p^*$, and stop.
+
+Look back at the threshold sweep above. With $k=100$ and $p^* \approx 1\%$, every row in the table sits well above break-even — the rule says we should push the threshold even *lower* than 0.01. In a real deployment we'd keep going until the marginal predicted-probability hits $p^*$.
+
+:::{.callout-note collapse="true"}
+## Going deeper: marginal vs. average
+
+The rule above uses the *average* precision at an operating point as a stand-in for the *marginal* precision of the next flag. Because precision can only decrease as you flag more, the marginal precision sits below the average — so "stop near $p^*$" is slightly conservative relative to the true optimum (which is "stop where the *marginal* precision equals $p^*$"). The cost ratio $k$ is itself an estimate, so a conservative margin is welcome. For an exact optimum, work directly with confusion-matrix counts at each candidate threshold and minimize $C_{FP} \cdot \text{FP} + C_{FN} \cdot \text{FN}$.
+:::
+
 :::{.callout-tip}
 ## Think About It
-If you're the hospital administrator and you have budget for follow-up appointments with 200 patients per month, which threshold would you choose? This choice isn't a statistics question — it's a resource allocation question.
+If you're the hospital administrator and you have budget for follow-up appointments with 200 patients per month, which threshold would you choose? The break-even rule says "push to $p^* \approx 1\%$" — but capacity is finite. How do you reconcile a clinical break-even with a hard staffing constraint?
 :::
 
 ```{python}
