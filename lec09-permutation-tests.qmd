@@ -493,15 +493,15 @@ The agreement we just derived — bootstrap CI and permutation p-value pointing 
 :::{.callout-note collapse="true"}
 ## Going deeper: the t-test as the parametric analog
 
-Just as the bootstrap has a normal-approximation analog (the CLT-based CI from [Chapter 8](lec08-sampling.qmd)), the permutation test has one too: the **two-sample t-test**. The t-test assumes each group's mean is approximately normal (guaranteed by the CLT for large samples with finite variance) and computes a p-value from a t-distribution. For ACTG 175:
+Just as the bootstrap has a normal-approximation analog (the CLT-based CI from [Chapter 8](lec08-sampling.qmd)), the permutation test has one too: the **two-sample t-test**. The t-test assumes each group's mean is approximately normal (guaranteed by the CLT for large samples with finite variance) and computes a p-value from a t-distribution. [Chapter 10](lec10-hypothesis-testing.qmd) formalizes it as **Welch's t-test** and works through the design-based assumptions in detail; here we just check that the parametric analog and the permutation test agree on ACTG 175:
 
 ```{python}
 t_stat, t_pvalue = stats.ttest_ind(treatment, control)
-print(f"Two-sample t-test p-value: {t_pvalue:.6f}")
+print(f"Two-sample t-test p-value: {t_pvalue:.3e}")
 print(f"Permutation p-value:       {p_value:.4f}")
 ```
 
-Both are tiny — same conclusion. The permutation test is distribution-free (it only needs exchangeability under the null) but requires simulation; the t-test is fast but assumes the CLT has kicked in. For large samples like these, either is fine; for small or heavily skewed samples, prefer the permutation test.
+The t-test p-value is astronomically small — same conclusion as the permutation test, whose 0.0001 is the **simulation floor**: the true tail probability is even smaller, but a finite simulation can't see below $1/(m+1)$. The permutation test is distribution-free (it only needs exchangeability under the null) but requires simulation; the t-test is fast but assumes the CLT has kicked in. For large samples like these, either is fine; for small or heavily skewed samples, prefer the permutation test.
 :::
 
 ## Key takeaways
