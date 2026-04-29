@@ -368,7 +368,6 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Association vs. causation: random assignment (ACTG 175) licenses causal claims; observational comparisons (NBA home/away) detect differences but cannot decompose the confounded mechanisms
 - Connection: bootstrap (Lec 8) = precision of estimate; permutation = significance of effect
 - Conservative p-value estimator: (count + 1) / (n_perms + 1) (Phipson & Smyth 2010)
-- CI/hypothesis test duality: a 95% CI excluding 0 corresponds to a two-sided p < 0.05
 
 **Key vocabulary:**
 - Permutation test (shuffle labels)
@@ -378,7 +377,6 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Exchangeability
 - One-sided / two-sided tests
 - Simulation-based inference
-- CI/hypothesis test duality
 
 **Running examples:**
 - ACTG 175 clinical trial (randomized → causal interpretation)
@@ -406,6 +404,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Type I error (false positive) and Type II error (false negative)
 - Power = 1 − P(Type II error) — ability to detect a real effect
 - p-value distribution under H₀ is Uniform(0,1)
+- CI/hypothesis test duality: a 95% CI excluding $\theta_0$ ↔ two-sided test of $\theta = \theta_0$ rejecting at α = 0.05
 - Statistical significance ≠ practical importance
 - $$ decision: what significance level is appropriate given the stakes?
 - Chi-squared test for categorical data: goodness of fit and independence
@@ -425,6 +424,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Power, power analysis, sample size planning
 - p-value
 - Chi-squared test, chi-squared distribution
+- CI/hypothesis test duality
 
 **Key formulas:**
 - Welch's t-test statistic

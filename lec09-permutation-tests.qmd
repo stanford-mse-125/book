@@ -484,11 +484,11 @@ These two simulation-based tools answer different questions:
 Your bootstrap 95% CI for a treatment effect is [15, 85] — it excludes zero. Without computing anything, do you expect the permutation p-value to be above or below 0.05? Why?
 
 <details><summary>Answer</summary>
-Below 0.05. A 95% CI is built to contain the parameter values the data are *consistent* with at the 5% level. If zero is outside the CI, the data have ruled out "effect = 0" at that level — which is exactly what a two-sided test at $\alpha = 0.05$ reports. [Chapter 10](lec10-hypothesis-testing.qmd) makes this correspondence — the **CI/hypothesis test duality** — formal.
+Below 0.05. A 95% CI is built to contain the parameter values the data are *consistent* with at the 5% level. If zero is outside the CI, the data have ruled out "effect = 0" at that level — which is exactly what a two-sided test at $\alpha = 0.05$ reports. [Chapter 10](lec10-hypothesis-testing.qmd) makes this correspondence precise.
 </details>
 :::
 
-The agreement we just derived — bootstrap CI and permutation p-value pointing at the same answer — is not a coincidence. [Chapter 10](lec10-hypothesis-testing.qmd) formalizes it as the **CI/hypothesis test duality**: if a 95% CI excludes zero, the corresponding two-sided test rejects at the 5% level, and vice versa. For now the takeaway is practical: **if you already have a CI from Chapter 8, you have most of what a test would tell you**.
+The agreement we just derived — bootstrap CI and permutation p-value pointing at the same answer — is not a coincidence; [Chapter 10](lec10-hypothesis-testing.qmd) makes the link precise. For now the takeaway is practical: **if you already have a CI from Chapter 8, you have most of what a test would tell you**.
 
 :::{.callout-note collapse="true"}
 ## Going deeper: the t-test as the parametric analog
@@ -512,7 +512,7 @@ The t-test p-value is astronomically small — same conclusion as the permutatio
 - **Two-sided by default.** A one-sided test is appropriate only when only one direction is of interest, and the direction is chosen *before* looking at the data.
 - **Random assignment licenses causal claims.** Without it (NBA home/away), a significant permutation test shows the groups differ but cannot decompose *why*.
 - **Overwhelming vs marginal evidence.** A p-value of $10^{-4}$ (ACTG) and a p-value of $0.05$ (NBA fouls) are both "small," but they support very different statements. Report the number, not a yes/no verdict.
-- **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). They agree in a precise way — a 95% CI excluding zero and a p-value below 0.05 are two views of the same evidence — which [Chapter 10](lec10-hypothesis-testing.qmd) formalizes as the **CI/hypothesis test duality**.
+- **Bootstrap measures precision** (confidence interval); **permutation measures significance** (p-value). They agree on the same evidence — a 95% CI excluding zero and a p-value below 0.05 say the same thing — which [Chapter 10](lec10-hypothesis-testing.qmd) makes precise.
 - **Next**: [Chapter 10](lec10-hypothesis-testing.qmd) formalizes hypothesis testing — $H_0$, $H_1$, $\alpha$, Type I/II errors, and power.
 
 ## Study guide
@@ -528,7 +528,6 @@ The t-test p-value is astronomically small — same conclusion as the permutatio
 - **Two-sided test**: A test that counts extreme values in both tails — effects large in absolute value. Use when effects in either direction are noteworthy; this is the honest default.
 - **One-sided test**: A test that counts extreme values in one tail only. Appropriate when only one direction of effect is of interest and the direction is chosen *before* seeing the data. Contract compliance and tamper-detection settings are the classic use cases; Deflategate is a vivid one-sided story (only under-inflation, not over-inflation, could indict the Patriots).
 - **Bootstrap vs. permutation**: Bootstrap resamples **within each group** (with replacement) to measure precision. Permutation shuffles labels **across groups** (without replacement) to test significance.
-- **CI/test duality** (preview; formalized in [Chapter 10](lec10-hypothesis-testing.qmd)): a 95% CI that excludes zero corresponds to a two-sided p-value below 0.05 — the two tools are two views of the same evidence.
 - **Association vs. causation**: a permutation test can detect that two groups differ. Whether that difference is *caused* by group membership depends on whether the labels were randomly assigned.
 - **Simulation-based inference**: The umbrella term for methods that build reference distributions by resampling (bootstrap, permutation test) rather than deriving them from a closed-form formula.
 
@@ -554,4 +553,4 @@ Factor of 2-ish relationship preserved (not exact because the null isn't symmetr
 
 ### For the quiz
 
-You are responsible for: the permutation test procedure, null distributions, p-value computation (given a null distribution), two-sided vs one-sided reasoning, when a permutation test is valid (exchangeability), the CI/hypothesis test duality, and distinguishing bootstrap from permutation tests. You are NOT responsible for: exact exchangeability proofs or t-test derivations.
+You are responsible for: the permutation test procedure, null distributions, p-value computation (given a null distribution), two-sided vs one-sided reasoning, when a permutation test is valid (exchangeability), and distinguishing bootstrap from permutation tests. You are NOT responsible for: exact exchangeability proofs or t-test derivations.
