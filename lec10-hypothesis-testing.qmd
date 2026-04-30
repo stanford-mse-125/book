@@ -156,6 +156,51 @@ In Chapter 9, we built the null distribution by shuffling labels — 10,000 fake
 
 The closed-form alternative was worked out a century before electronic computers — at a brewery, by someone facing exactly this problem in miniature. In 1908, William Sealy Gosset, a chemist at the Guinness brewery in Dublin, needed to compare barley varieties and yeast strains with only a handful of samples per batch. The normal approximation was unreliable at $n = 5$ or $10$, and he could not bootstrap or simulate — those tools were decades from existing. So he derived analytically the exact distribution of the sample mean divided by its standard deviation. He published in 1908 under the pseudonym "Student" — Guinness forbade employees from publishing under their real names, fearing competitors would learn they were using statistics. (See Salsburg, *The Lady Tasting Tea*, Ch. 2.) The result is what we now call **Student's $t$-distribution**.
 
+### What does the t distribution look like?
+
+Before we bolt the formula onto a two-sample test, pause to look at the distribution Gosset derived. If his analytical work is right, the studentized statistic $\bar X / (s/\sqrt n)$ — computed on samples drawn from a known $N(0, 1)$ population — should match $t_{n-1}$ exactly, and converge to $N(0, 1)$ as $n$ grows.
+
+```{python}
+n_reps = 10_000
+sample_sizes = [5, 30, 100]
+rng = np.random.default_rng(seed=42)
+
+x = np.linspace(-5, 5, 400)
+fig, axes = plt.subplots(3, 1, figsize=(7, 8), sharex=True)
+
+for ax, n in zip(axes, sample_sizes):
+    samples = rng.standard_normal(size=(n_reps, n))
+    t_stats = samples.mean(axis=1) / (samples.std(axis=1, ddof=1) / np.sqrt(n))
+
+    ax.hist(t_stats, bins=80, range=(-5, 5), density=True,
+            color='lightgray', edgecolor='white', label='simulated')
+    ax.plot(x, stats.t.pdf(x, df=n-1), color='C0', lw=2,
+            label=f'$t_{{{n-1}}}$')
+    ax.plot(x, stats.norm.pdf(x), color='C3', lw=2, ls='--',
+            label='$N(0,1)$')
+
+    t_cut = stats.t.ppf(0.975, df=n-1)
+    z_cut = 1.96
+    for c in (-t_cut, t_cut):
+        ax.axvline(c, color='C0', ls=':', alpha=0.8)
+    for c in (-z_cut, z_cut):
+        ax.axvline(c, color='C3', ls=':', alpha=0.8)
+
+    ax.set_title(f'$n = {n}$', loc='left')
+    ax.set_ylabel('density')
+
+axes[0].legend(loc='upper right', fontsize=9)
+axes[-1].set_xlabel(r'$\bar X / (s/\sqrt{n})$')
+plt.tight_layout()
+plt.show()
+```
+
+At $n = 5$, the simulated histogram has visibly fatter tails than $N(0, 1)$, and Gosset's $t_4$ threads through the histogram exactly. The reason: $s$ is a noisy estimate of $\sigma$ when $n$ is small, so the denominator $s/\sqrt n$ varies more than $\sigma/\sqrt n$ would, and that extra variability fattens the ratio's tails. By $n = 30$, the studentized statistic and the normal are visually almost identical; by $n = 100$ they coincide for any practical purpose.
+
+The dotted vertical lines mark the two-sided 5% cutoffs of each distribution. At $n = 5$ the t-cutoffs sit well outside the normal cutoffs at $\pm 1.96$ — using the normal cutoffs would over-reject under $H_0$. By $n = 100$ the cutoffs coincide. Gosset's correction matters precisely where the normal approximation is unreliable, and fades to nothing where it isn't.
+
+### Welch's two-sample formula
+
 The two-sample version — for "do these two groups have the same mean?" — is **Welch's t-test**, a refinement of Gosset's that drops the equal-variance assumption. Using the same notation as the Chapter 8 CLT — let $\bar X_T$, $\bar X_C$ be the **sample means** of the two groups, $s_T^2$, $s_C^2$ the **sample variances** (with the standard $n-1$ divisor), and $n_T$, $n_C$ the sample sizes — the test statistic is
 
 $$t \;=\; \frac{\bar{X}_T - \bar{X}_C}{\sqrt{s_T^2/n_T \;+\; s_C^2/n_C}}.$$
