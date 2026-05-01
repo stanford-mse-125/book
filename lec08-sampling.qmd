@@ -258,7 +258,23 @@ The key insight: **the estimate changes every time you draw a new sample, but th
 
 The **percentile method** builds a CI from the middle 95% of bootstrap values — the 2.5th and 97.5th percentiles. The method works well when the bootstrap distribution is roughly symmetric.
 
-*Note:* the intuition and the formal definition are not the same statement. The estimand is a fixed number; the *interval* is what varies from study to study. So we cannot say "the estimand has a 95% chance of being in [45, 60]" — that would require treating the estimand as random, which it isn't. We can say "if we repeated the study, 95% of the intervals we'd build would contain the estimand."
+*Note:* the formal definition makes a probability statement about the *procedure*, not the *parameter*. The estimand is fixed; the interval varies from study to study. So "the estimand has a 95% chance of being in [45, 60]" misreads the procedure — the bootstrap percentile CI never treats the estimand as random. The Bayesian framework sketched below makes that phrasing coherent at the cost of choosing a prior.
+:::
+
+:::{.callout-note collapse="true"}
+## Going deeper: two epistemologies of probability
+
+Treating the truth as fixed and the data as random is a *modeling stance*, not a metaphysical claim. Two coherent epistemologies sit underneath statistical inference, and they support different readings of the same interval.
+
+**Frequentist.** The estimand $\theta$ is fixed; the data $X$ is random. A 95% CI is a procedure $f(X) \mapsto [L, U]$ satisfying $P_\theta(L \leq \theta \leq U) \geq 0.95$, where the probability is over $X$ with $\theta$ held fixed. Once you observe data and compute $[1.2, 6.8]$, the randomness is gone — that one interval either covers $\theta$ or it doesn't. The "95%" lives in the procedure, not in any particular interval.
+
+**Bayesian.** The parameter $\theta$ is treated as a random variable — not because nature flipped a coin to set its value, but because uncertainty about a fixed value can be modeled as a probability distribution. With a prior $p(\theta)$ and likelihood $p(X \mid \theta)$, Bayes' rule produces a posterior $p(\theta \mid X)$. A 95% *credible interval* $[L, U]$ satisfies $P(\theta \in [L, U] \mid X) = 0.95$ — a probability statement about the truth, conditional on the observed data.
+
+The two frameworks attach the "95%" to different objects: the frequentist places it on the procedure (random over hypothetical repeats), the Bayesian on the parameter (random under the posterior).
+
+Both frameworks are mathematically coherent. For weak priors and large samples they usually agree to within rounding; the gap between them is largest at small samples, strong priors, or in interpreting a single interval.
+
+A lens for students who find frequentist coverage slippery: the **many-worlds interpretation** of quantum mechanics promotes "across many hypothetical repeats of the study" from a thought experiment to a literal ensemble — every probabilistic outcome happens in some branch, and 95% of branches running this study build intervals that cover the truth. You don't need MWI to do statistics; if the hypothetical-repetition language ever feels groundless, MWI gives it a referent.
 :::
 
 :::{.callout-note collapse="true"}
