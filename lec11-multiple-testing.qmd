@@ -5,21 +5,14 @@ execute:
 jupyter: python3
 ---
 
-## The intern who "discovered" load management
+## Which NBA players really shoot better than league average?
 
-An NBA analytics intern tests whether each player performs better after rest.
-They find several dozen "significant" results and write a report:
-*"These players benefit from load management."*
+The 2023--24 NBA season averaged 47.7% shooting from the field across rotation players. Some players were far above: Jarrett Allen at 63%, Rudy Gobert at 66%. Some were far below: Jevon Carter at 38%. Are those gaps real, or could a season's worth of shots produce that much variation by chance? And if Aaron Gordon comes in at 55.7%, is he genuinely a better shooter than Klay Thompson at 43.3%?
 
-Their boss isn't convinced. What did the intern miss?
+We answer these questions twice. First we run a hypothesis test for every player and run into the **multiple testing** problem: when you do hundreds of tests, some come back significant by chance alone. Second, we revisit Gordon vs Thompson and find that even when an aggregate difference is statistically real, it can still mislead — that's **confounding**, which we formalize through correlation and Simpson's paradox.
 
 > *"If you torture the data long enough, it will confess to anything."*
 > — Ronald Coase
-
-:::{.callout-note}
-## Why most published research findings are false
-In a landmark 2005 paper, the statistician John Ioannidis argued that [most published research findings are false](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124). His central insight: when researchers test many hypotheses and studies are underpowered, Bayes' theorem guarantees that a majority of "significant" results are false positives — even without any p-hacking. The paper has been cited over 10,000 times and reshaped how scientists think about statistical significance. The intern's hundreds of tests are a textbook case.
-:::
 
 ```{python}
 import numpy as np
@@ -36,609 +29,429 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-## The setup: hundreds of hypothesis tests
+## The data: shots by zone
 
-Recall from Chapter 10 that we test at significance level $\alpha = 0.05$, accepting a 5% false positive rate for a *single* test. But what happens when we run hundreds of tests?
+`shot_zones_2023-24.csv` records every NBA player's makes (`FGM`) and attempts (`FGA`) in each of six shot zones during the 2023--24 regular season, from NBA.com Stats. The six zones, ordered from the rim outward:
 
-We have three seasons of NBA game logs (2021--2024). For each player, we can compute how many
-days of rest they had before each game. The question: *does rest help?*
-
-Let's load the data and take a look.
-
-```{python}
-# Load NBA load management data
-nba = pd.read_csv(f'{DATA_DIR}/nba/nba_load_management.csv')
-nba['GAME_DATE'] = pd.to_datetime(nba['GAME_DATE'])
-print(f"Shape: {nba.shape}")
-print(f"Unique players: {nba['PLAYER_NAME'].nunique()}")
-print(f"Games with rest info: {nba['REST_DAYS'].notna().sum():,}")
-nba[['PLAYER_NAME', 'GAME_DATE', 'PTS', 'REST_DAYS', 'REST_CATEGORY']].head(8)
-```
-
-Each row is one player-game. The `REST_DAYS` column records how many days elapsed since that player's previous game. Let's see how rest days are distributed using a histogram.
+- `RA` — restricted area (the small arc under the basket; mostly dunks and layups)
+- `PAINT` — the rest of the painted lane (close shots not under the basket)
+- `MID` — mid-range jumpers (inside the three-point line)
+- `LC3`, `RC3` — left and right corner three-pointers
+- `ATB3` — above-the-break three-pointers
 
 ```{python}
-# How are rest days distributed?
-df = nba.dropna(subset=['REST_DAYS']).copy()
-
-fig, ax = plt.subplots(figsize=(8, 4))
-rest_capped = df['REST_DAYS'].clip(upper=10)
-ax.hist(rest_capped, bins=range(1, 12), edgecolor='black', alpha=0.7, color='steelblue')
-ax.set_xlabel('Days Since Previous Game')
-ax.set_ylabel('Count')
-ax.set_title('Distribution of Rest Days')
-ax.set_xticks(range(1, 11))
-plt.tight_layout()
-plt.show()
-
-print(f"Most games follow a normal 2-day schedule ({(df['REST_DAYS']==2).mean():.0%} of games)")
+shots = pd.read_csv(f'{DATA_DIR}/nba/shot_zones_2023-24.csv')
+print(f"Players: {len(shots)}")
+shots.head()
 ```
 
-## The intern's analysis: one t-test per player
-
-The intern's approach is straightforward:
-1. For each player with enough games, split into "back-to-back" (1 day rest) vs "rested" (2+ days)
-2. Run a two-sample t-test on points scored
-3. If $p < 0.05$, declare the player "benefits from rest"
-
-This scenario illustrates the **multiple testing** problem: running many hypothesis tests on the same dataset. Let's do exactly what the intern did.
+We filter to rotation players with at least 200 shots — the minimum for individual hypothesis tests to have meaningful power.
 
 ```{python}
-# Run a Welch's t-test for each player with >= 20 games in each category
-min_games = 20
-
-results = []
-for player_id, group in df.groupby('PLAYER_ID'):
-    btb = group[group['REST_DAYS'] == 1]['PTS']
-    rested = group[group['REST_DAYS'] >= 2]['PTS']
-
-    if len(btb) >= min_games and len(rested) >= min_games:
-        t_stat, p_val = stats.ttest_ind(rested, btb)  # Welch's t-test (no equal-variance assumption)
-        results.append({
-            'PLAYER_NAME': group['PLAYER_NAME'].iloc[0],
-            'n_btb': len(btb), 'n_rested': len(rested),
-            'mean_btb': btb.mean(), 'mean_rested': rested.mean(),
-            'diff': rested.mean() - btb.mean(),
-            't_stat': t_stat, 'p_value': p_val
-        })
-
-results_df = pd.DataFrame(results).sort_values('p_value')
+qual = shots[shots['FGA'] >= 200].copy()
+qual['FG_PCT'] = qual['FGM'] / qual['FGA']
+print(f"Qualified players (FGA >= 200): {len(qual)}")
 ```
 
-How many players show a "significant" rest effect at the conventional $\alpha = 0.05$ threshold?
+## First analysis: one z-test per player
+
+For each player, we ask: *is this player's true shooting percentage different from the league baseline?* The natural test is a one-sample two-sided z-test for a proportion.
+
+Let $p_0$ be the league baseline FG% across all qualified shots, and $\hat p_i = \text{FGM}_i / \text{FGA}_i$ be player $i$'s observed FG%. Under $H_0: p_i = p_0$,
+
+$$z_i = \frac{\hat p_i - p_0}{\sqrt{p_0(1-p_0) / \text{FGA}_i}} \sim \mathcal{N}(0, 1).$$
+
+We run this test for every qualified player.
 
 ```{python}
-n_players = len(results_df)
-n_sig = (results_df['p_value'] < 0.05).sum()
+p0 = qual['FGM'].sum() / qual['FGA'].sum()
+print(f"League baseline FG%: {p0:.4f}")
 
-print(f"Players tested: {n_players}")
-print(f"'Significant' at p < 0.05: {n_sig} ({n_sig/n_players*100:.1f}%)")
-print(f"\nThe intern's report: '{n_sig} players benefit from load management!'")
+qual['z'] = (qual['FG_PCT'] - p0) / np.sqrt(p0 * (1 - p0) / qual['FGA'])
+qual['p_value'] = 2 * (1 - stats.norm.cdf(np.abs(qual['z'])))
+
+m = len(qual)
+n_unc = (qual['p_value'] < 0.05).sum()
+print(f"Tests run:                     {m}")
+print(f"Significant at p < 0.05:       {n_unc}")
 ```
 
-## Wait — how many should we *expect* by chance?
+About 141 of the 317 players come back significant. That can't be right — we haven't just discovered that 45% of NBA players are statistically distinguishable from average. Many of these rejections are real, but we don't yet know which ones.
 
-:::{.callout-tip}
+## Wait — how many should we expect by chance?
+
+::: {.callout-tip}
 ## Think About It
-If rest has zero effect on *every* player, how many of our tests would you expect to come back "significant" at $\alpha = 0.05$?
+If every player's true FG% equaled the league baseline, how many of our 317 tests would you expect to come back significant at $\alpha = 0.05$?
 :::
 
-Here's the key insight. If rest has **no effect on any player**, the expected number of false positives is:
+If $H_0$ holds for every player, the expected number of false positives is
 
-$$\text{Expected false positives} = m \times \alpha$$
+$$\mathbb{E}[\text{false positives}] = m \times \alpha.$$
 
-where $m$ is the number of tests. (Linearity of expectation holds even for dependent random variables — a useful fact from your probability course — so this expected count is valid regardless of dependence between tests. The Binomial distribution tells us exactly how many false positives to expect when running $m$ independent tests, and the standard deviation used below assumes that independence — an approximation, since player performances share common opponents and schedules.)
+Linearity of expectation holds even when tests are correlated, so this expected count is valid regardless of dependence.
 
 ```{python}
-expected_false_positives = n_players * 0.05
-sd_under_null = np.sqrt(n_players * 0.05 * 0.95)
-
-print(f"Number of tests: {n_players}")
-print(f"Expected false positives under the null: {expected_false_positives:.1f}")
-print(f"Std dev under null (Binomial, assuming independence): {sd_under_null:.1f}")
-print(f"Actual 'significant' results: {n_sig}")
-print(f"\nGetting {n_sig} is only ~{(n_sig - expected_false_positives)/sd_under_null:.1f} SDs above {expected_false_positives:.0f}.")
-print(f"The intern's 'discovery' is probably noise.")
+expected_false = m * 0.05
+sd_under_null = np.sqrt(m * 0.05 * 0.95)
+print(f"Tests:                {m}")
+print(f"Expected false +ves:  {expected_false:.1f}")
+print(f"SD under null:        {sd_under_null:.1f}")
+print(f"Observed significant: {n_unc}")
+print(f"Excess over null:     {n_unc - expected_false:.0f}  ({(n_unc - expected_false) / sd_under_null:.1f} SDs)")
 ```
 
-:::{.callout-important}
-## The intern's conclusion is likely false
-Multiple testing drove up the count of apparent discoveries. Among the players the intern flagged, most are probably false positives — we'd expect nearly that many just by chance, even if rest has zero effect on every player.
-:::
+The excess of about 125 rejections is overwhelming evidence that *something* real is going on. The challenge is sorting the genuine from the spurious. This is the **multiple testing** problem.
 
-Multiple testing dramatically inflates false positives: with hundreds of players tested, we'd expect roughly 5% to appear significant by chance alone, even if rest helps nobody. The p-value histogram makes this pattern visible.
+When many hypothesis tests are run, a predictable fraction will clear $\alpha = 0.05$ by chance alone. Here we run all the tests ourselves — the easiest case to see — but the same arithmetic applies across studies. If a thousand labs each run a single underpowered test at $\alpha = 0.05$, roughly fifty will publish a false positive even with no fraud and no p-hacking. That's the engine of the **replicability crisis** in science.
 
 ## The p-value histogram: a powerful diagnostic
 
-:::{.callout-tip}
-## Think About It
-Your p-value histogram is perfectly flat — except for one value at 0.003. Your manager says "we found one! That player is definitely streaky." Do you agree? Under the null, what distribution should p-values follow — and if you test 50 players, how many p-values below 0.01 would you *expect* by chance alone?
-:::
-
-Under the null hypothesis (no effect for any player), p-values should follow a **Uniform(0, 1)** distribution.
-Why uniform? A p-value is defined as the probability of seeing a result at least as extreme as the observed one, assuming the null is true. If the null *is* true, there's exactly a 5% chance the p-value falls below 0.05, a 10% chance it falls below 0.10, and so on — by definition, the p-value is equally likely to land anywhere between 0 and 1. (Formally, the **probability integral transform** guarantees that applying a continuous CDF to its own random variable produces a Uniform(0, 1) draw.) As a consequence, each equal-width bin in a histogram of null p-values gets an equal share.
-That means the **p-value histogram** should be flat.
-
-If there are real effects, we'll see a spike near 0 — those are the genuine discoveries hiding
-among the noise. Let's look.
+Under the null hypothesis, p-values follow a Uniform(0, 1) distribution: applying any continuous CDF to its own random variable produces a uniform draw (the **probability integral transform**). So a histogram of null p-values is flat. If real effects are present, the histogram develops a spike near zero — those are the genuine discoveries. The flatness in the rest of the histogram bounds how many of the small p-values came from chance.
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
-ax.hist(results_df['p_value'], bins=20, edgecolor='black', alpha=0.7, color='steelblue')
-ax.axhline(y=n_players/20, color='red', linestyle='--', linewidth=2,
-           label=f'Expected under null ({n_players/20:.0f} per bin)')
+ax.hist(qual['p_value'], bins=20, edgecolor='black', alpha=0.7, color='steelblue')
+ax.axhline(y=m/20, color='red', linestyle='--', linewidth=2,
+           label=f'Expected under null ({m/20:.0f} per bin)')
 ax.axvspan(0, 0.05, alpha=0.15, color='red', label='Rejection region (p < 0.05)')
 ax.set_xlabel('p-value')
 ax.set_ylabel('Count')
-ax.set_title(f'Distribution of {n_players} p-values\n'
-             f'(Flat = no real effect; spike near 0 = real effects)')
+ax.set_title(f'p-values from {m} per-player z-tests of FG% vs league')
 ax.legend()
 plt.tight_layout()
 plt.show()
-
-print("The histogram is approximately uniform — consistent with NO widespread rest effect.")
-print("The slight bump near 0 could be a few real effects, or just sampling variability.")
 ```
+
+The first bin towers over the rest. Real signal is unmistakable. Now we need procedures that turn that signal into a defensible list of discoveries.
 
 ## Correction 1: Bonferroni
 
 The simplest fix: if you run $m$ tests, divide your significance level by $m$.
 
-:::{.callout-important}
-## Definition: Bonferroni Correction and FWER
+**Intuition.** Start with a "false-positive budget" of $\alpha$ — say, a 5% chance of *any* wrong rejection. Spread that budget evenly across the $m$ tests, giving each one $\alpha/m$. By the union bound, the probability that *any* test fires a false positive is at most $m \cdot (\alpha/m) = \alpha$. The total budget is preserved no matter how the tests are correlated.
+
+::: {.callout-important}
+## Definition: Bonferroni correction and FWER
 The **Bonferroni correction** sets
 
-$$\alpha_{\text{Bonferroni}} = \frac{\alpha}{m}$$
+$$\alpha_{\text{Bonferroni}} = \frac{\alpha}{m}.$$
 
-It controls the **family-wise error rate (FWER)** — the probability of *any* false positive across all $m$ tests. It's conservative — meaning it may miss real effects — but it guarantees the probability of *any* false positive stays below $\alpha$, no matter how the tests are correlated.
+It controls the **family-wise error rate (FWER)** — the probability of *any* false positive across all $m$ tests. It is conservative: it may miss real effects, but it guarantees the probability of any false positive stays below $\alpha$.
 :::
 
 ```{python}
 alpha = 0.05
-bonferroni_threshold = alpha / n_players
+bonf_threshold = alpha / m
+n_bonf = (qual['p_value'] < bonf_threshold).sum()
 
-print(f"Original threshold: {alpha}")
-print(f"Bonferroni threshold: {bonferroni_threshold:.6f}")
-print(f"That's {1/bonferroni_threshold:.0f}x more stringent!\n")
+print(f"Original threshold:    {alpha}")
+print(f"Bonferroni threshold:  {bonf_threshold:.6f}  ({1/bonf_threshold:.0f}x stricter)")
+print(f"Significant after Bonferroni: {n_bonf}  (down from {n_unc})")
 
-n_bonf = (results_df['p_value'] < bonferroni_threshold).sum()
-print(f"Significant after Bonferroni: {n_bonf} (down from {n_sig})")
-
-if n_bonf > 0:
-    survivors = results_df[results_df['p_value'] < bonferroni_threshold]
-    print("\nSurvivors:")
-    print(survivors[['PLAYER_NAME', 'mean_btb', 'mean_rested', 'diff', 'p_value']].to_string(index=False))
-else:
-    print("\nNone survive. The intern's entire report just evaporated.")
+print("\nMost extreme survivors:")
+print(qual.nsmallest(8, 'p_value')[['PLAYER_NAME', 'FGM', 'FGA', 'FG_PCT', 'p_value']].to_string(index=False))
 ```
+
+The Bonferroni survivors are the obvious extremes: rim-feasting big men hitting 60--70% (Allen, Gobert, Lively, Gafford, Giannis) and the worst-shooting outliers. These are real, but Bonferroni's strictness leaves a lot on the table. Damian Lillard at 42.6% on 1,270 attempts is plausibly below league average — but his p-value, around $3 \times 10^{-4}$, doesn't clear the $1.6 \times 10^{-4}$ threshold.
 
 ## Correction 2: Benjamini-Hochberg (FDR control)
 
-Bonferroni killed every result. But is that too aggressive? Maybe some players really do benefit from rest — we just can't tell — Bonferroni demands an extremely low p-value for each test. Can we find a middle ground that allows a controlled fraction of false discoveries?
+Bonferroni is willing to miss real effects to guarantee zero false positives. Most analyses don't need that guarantee. If we are screening a few hundred players for further study, we can tolerate a controlled fraction of false positives in exchange for finding more real effects.
 
-:::{.callout-important}
-## Definition: Benjamini-Hochberg Procedure and FDR
-The **Benjamini-Hochberg (BH) procedure** controls the **false discovery rate (FDR)** —
-the expected *proportion* of false positives among rejected hypotheses.
+**Intuition.** Sort the p-values smallest to largest. Bonferroni asks every one of them to clear the same strict bar, $\alpha/m$. BH instead lets the bar rise with rank: $\alpha/m$ for the first, $2\alpha/m$ for the second, all the way up to $\alpha$ for the last. If you end up calling $k$ results discoveries, then roughly $k\alpha$ of those are expected to be null (since under the null, p-values are uniform), so the false-discovery *fraction* is about $\alpha$. You exchange Bonferroni's "no false positives at all" for "only $\alpha$ of my discoveries are wrong on average," and gain power to detect real effects.
+
+::: {.callout-important}
+## Definition: Benjamini-Hochberg procedure and FDR
+The **Benjamini-Hochberg (BH) procedure** controls the **false discovery rate (FDR)** — the expected *proportion* of false positives among rejected hypotheses.
 
 The BH procedure:
 
-1. Sort p-values: $p_{(1)} \le p_{(2)} \le \cdots \le p_{(m)}$
-2. Find the largest $k$ such that $p_{(k)} \le \frac{k}{m} \alpha$
-3. Reject all hypotheses whose p-values are among the $k$ smallest (i.e., hypotheses $1, 2, \ldots, k$ in the sorted order)
+1. Sort p-values: $p_{(1)} \le p_{(2)} \le \cdots \le p_{(m)}$.
+2. Find the largest $k$ such that $p_{(k)} \le \frac{k}{m} \alpha$.
+3. Reject all hypotheses whose p-values are among the $k$ smallest.
 
-In expectation, a fraction $\alpha$ of your "discoveries" are false.
+In expectation, a fraction $\alpha$ of your discoveries are false.
 :::
 
 ```{python}
-# Step-by-step Benjamini-Hochberg
-sorted_pvals = results_df.sort_values('p_value').copy()
-sorted_pvals['rank'] = range(1, len(sorted_pvals) + 1)
-sorted_pvals['BH_threshold'] = sorted_pvals['rank'] / n_players * alpha
-
-# Step-up rule: find the largest k where p_(k) <= k/m * alpha,
-# then reject ALL hypotheses 1 through k
-reject_mask = sorted_pvals['p_value'] <= sorted_pvals['BH_threshold']
-if reject_mask.any():
-    max_k = sorted_pvals.loc[reject_mask, 'rank'].max()
-    sorted_pvals['reject_BH'] = sorted_pvals['rank'] <= max_k
+sorted_q = qual.sort_values('p_value').reset_index(drop=True)
+sorted_q['rank'] = np.arange(1, m + 1)
+sorted_q['bh_thresh'] = sorted_q['rank'] / m * alpha
+mask = sorted_q['p_value'] <= sorted_q['bh_thresh']
+if mask.any():
+    k_max = sorted_q.loc[mask, 'rank'].max()
+    sorted_q['reject_BH'] = sorted_q['rank'] <= k_max
 else:
-    sorted_pvals['reject_BH'] = False
+    sorted_q['reject_BH'] = False
+sorted_q['reject_Bonf'] = sorted_q['p_value'] < bonf_threshold
+
+n_bh = sorted_q['reject_BH'].sum()
+print(f"Uncorrected (p < 0.05):  {n_unc}")
+print(f"Bonferroni (FWER):       {n_bonf}")
+print(f"BH (FDR <= 0.05):        {n_bh}")
+print(f"\nGap (BH but not Bonferroni): {n_bh - n_bonf}")
 ```
 
-Let's display the sorted p-values alongside their BH thresholds to see the step-up rule in action.
+Bonferroni rejected 47, BH rejects 117, a gap of 70 players. Who are the seventy?
 
 ```{python}
-# Show the procedure for the top 15 p-values
-display_cols = ['PLAYER_NAME', 'p_value', 'rank', 'BH_threshold', 'reject_BH']
-print("Benjamini-Hochberg procedure (first 15 sorted p-values):")
-print(sorted_pvals.head(15)[display_cols].to_string(index=False))
-
-n_bh = sorted_pvals['reject_BH'].sum()
-print(f"\nSignificant after BH correction: {n_bh}")
-print(f"  Uncorrected:  {n_sig}")
-print(f"  Bonferroni:   {n_bonf}")
-print(f"  BH (FDR):     {n_bh}")
+gap = sorted_q[sorted_q['reject_BH'] & ~sorted_q['reject_Bonf']].sort_values('p_value')
+print("Sample players caught by BH but not by Bonferroni:")
+print(gap[['PLAYER_NAME', 'FGM', 'FGA', 'FG_PCT', 'p_value']].head(10).to_string(index=False))
 ```
 
-The two corrections answer different questions. FWER asks: *did I make any mistake at all?* FDR asks: *among the things I called discoveries, what fraction are wrong?* Use Bonferroni when *any* false positive is costly (e.g., drug safety). Use BH when you can tolerate some false discoveries (e.g., screening genes for further study). A sportsbook evaluating hundreds of player props per night faces this same multiple testing problem. The stakes determine the correction — a connection to the consequential decisions from Chapter 10.
+These are recognizable names with moderate effects — Lillard, VanVleet, Durant, Holmgren — the kind of "this player shoots two or three points off league average" findings that Bonferroni's strict threshold rejects on principle but BH is willing to flag, accepting that a small fraction will be wrong.
+
+::: {.callout-note}
+## When Bonferroni gives up
+NBA shot data is friendly to Bonferroni: a handful of players (the rim-only big men) deviate so far from league average that their p-values are essentially zero, sailing past any threshold. In other domains the picture is harsher.
+
+The canonical example is the [Hedenfalk et al. (2001) breast-cancer microarray study](https://www.nejm.org/doi/full/10.1056/NEJM200102223440801): for each of $m = 3{,}170$ genes, a t-test of expression in BRCA1 vs BRCA2 tumors. With only 7 vs 8 samples per gene, no individual test has enough power to clear the Bonferroni threshold of $\alpha/m \approx 1.6 \times 10^{-5}$ — Bonferroni rejects roughly **one** gene at $\alpha = 0.05$. Yet the p-value histogram has a clear spike near zero: many genes have moderate effects. BH at $q = 0.05$ rejects roughly **94 genes** (Storey, 2002). This regime — many moderate effects, no extreme ones — is exactly where Bonferroni gives up and BH's step-up rule does the real work. FDR was invented for it.
+:::
+
+The two corrections answer different questions. FWER asks: *did I make any mistake at all?* FDR asks: *among the things I called discoveries, what fraction are wrong?* Use Bonferroni when *any* false positive is costly (drug safety, criminal trials). Use BH when you can tolerate some false discoveries (screening genes, ranking candidates for further study). The stakes determine the correction.
 
 ```{python}
-# Visualize the BH procedure
 fig, ax = plt.subplots(figsize=(8, 5))
-top_n = 50  # show first 50 sorted p-values
-subset = sorted_pvals.head(top_n)
+top_n = 150
+sub = sorted_q.head(top_n)
 
-ax.scatter(subset['rank'], subset['p_value'], color='steelblue', s=30, label='Observed p-values')
-ax.plot(subset['rank'], subset['BH_threshold'], 'r--', linewidth=2, label='BH threshold (i/m × α)')
-ax.axhline(y=bonferroni_threshold, color='orange', linestyle=':', linewidth=2, label='Bonferroni threshold')
-ax.annotate(f'Bonferroni = {bonferroni_threshold:.5f}', xy=(top_n*0.6, bonferroni_threshold),
-            xytext=(top_n*0.6, bonferroni_threshold + 0.01),
-            arrowprops=dict(arrowstyle='->', color='orange'), fontsize=9, color='orange')
+colors = ['#e74c3c' if r else 'steelblue' for r in sub['reject_BH']]
+ax.scatter(sub['rank'], sub['p_value'], c=colors, s=25, zorder=3, label='_nolegend_')
+ax.plot(sub['rank'], sub['bh_thresh'], 'r--', linewidth=2, label='BH threshold ($k/m \\cdot \\alpha$)')
+ax.axhline(y=bonf_threshold, color='orange', linestyle=':', linewidth=2,
+           label=f'Bonferroni threshold ({bonf_threshold:.5f})')
+ax.scatter([], [], c='#e74c3c', s=25, label='Rejected by BH')
+ax.scatter([], [], c='steelblue', s=25, label='Not rejected')
 ax.set_xlabel('Rank (sorted by p-value)')
 ax.set_ylabel('p-value')
-ax.set_title('Benjamini-Hochberg Procedure')
+ax.set_title('Bonferroni\'s flat bar vs BH\'s rising bar')
 ax.legend()
 plt.tight_layout()
 plt.show()
 ```
-
-### When does BH outperform Bonferroni?
-
-In the NBA rest data, both corrections gave the same answer: no discoveries. The p-value histogram was flat — the data contained no real signal to find. But that coincidence obscures *why* BH exists. The two methods diverge when some effects are genuine and some are null. To see the difference, we'll simulate a scenario calibrated to the NBA setting.
-
-Imagine 200 players, each with 60 back-to-back games and 60 rested games. For 180 players, rest has zero effect (null). For 20 players, rest genuinely boosts scoring by 3 points on average — a realistic effect for a star who benefits from load management.
-
-```{python}
-# Simulate a mix of real and null effects
-np.random.seed(42)
-m_sim = 200       # players tested
-n_real = 20       # players with a real rest benefit
-n_games = 60      # games per condition
-effect_pts = 3.0  # points gained from rest (real-effect players only)
-
-sim_results = []
-for i in range(m_sim):
-    btb = np.random.normal(15, 5, n_games)
-    if i < n_real:
-        rested = np.random.normal(15 + effect_pts, 5, n_games)
-        truth = 'real effect'
-    else:
-        rested = np.random.normal(15, 5, n_games)
-        truth = 'null'
-    _, p = stats.ttest_ind(rested, btb)
-    sim_results.append({'player': i + 1, 'p_value': p, 'truth': truth})
-
-sim_df = pd.DataFrame(sim_results).sort_values('p_value').reset_index(drop=True)
-```
-
-Now apply both corrections to the simulated p-values.
-
-```{python}
-# Bonferroni
-bonf_sim = alpha / m_sim
-sim_df['reject_bonf'] = sim_df['p_value'] < bonf_sim
-
-# BH
-sim_df['rank'] = range(1, m_sim + 1)
-sim_df['bh_thresh'] = sim_df['rank'] / m_sim * alpha
-bh_mask = sim_df['p_value'] <= sim_df['bh_thresh']
-if bh_mask.any():
-    bh_k = sim_df.loc[bh_mask, 'rank'].max()
-    sim_df['reject_bh'] = sim_df['rank'] <= bh_k
-else:
-    sim_df['reject_bh'] = False
-
-n_bonf_sim = sim_df['reject_bonf'].sum()
-n_bh_sim = sim_df['reject_bh'].sum()
-
-# Break down by truth
-bonf_tp = (sim_df['reject_bonf'] & (sim_df['truth'] == 'real effect')).sum()
-bonf_fp = (sim_df['reject_bonf'] & (sim_df['truth'] == 'null')).sum()
-bh_tp = (sim_df['reject_bh'] & (sim_df['truth'] == 'real effect')).sum()
-bh_fp = (sim_df['reject_bh'] & (sim_df['truth'] == 'null')).sum()
-
-print(f"{'Method':<14} {'Discoveries':>12} {'True positives':>16} {'False positives':>17}")
-print(f"{'─'*14} {'─'*12} {'─'*16} {'─'*17}")
-print(f"{'Uncorrected':<14} {(sim_df['p_value'] < 0.05).sum():>12} {'—':>16} {'—':>17}")
-print(f"{'Bonferroni':<14} {n_bonf_sim:>12} {bonf_tp:>16} {bonf_fp:>17}")
-print(f"{'BH (FDR)':<14} {n_bh_sim:>12} {bh_tp:>16} {bh_fp:>17}")
-print(f"\nBH finds {n_bh_sim - n_bonf_sim} additional true effects that Bonferroni missed.")
-```
-
-The visualization below shows why. BH's threshold line rises with rank, giving borderline p-values a chance — exactly the ones from real effects that aren't extreme enough for Bonferroni's flat, stringent cutoff.
-
-```{python}
-fig, ax = plt.subplots(figsize=(8, 5))
-top_n_sim = 40
-sub = sim_df.head(top_n_sim)
-
-colors = ['#e74c3c' if t == 'real effect' else 'steelblue' for t in sub['truth']]
-ax.scatter(sub['rank'], sub['p_value'], c=colors, s=40, zorder=3,
-           label='_nolegend_')
-ax.plot(sub['rank'], sub['bh_thresh'], 'r--', linewidth=2, label='BH threshold (i/m × α)')
-ax.axhline(y=bonf_sim, color='orange', linestyle=':', linewidth=2, label=f'Bonferroni threshold ({bonf_sim:.4f})')
-
-# Legend entries for point colors
-ax.scatter([], [], c='#e74c3c', s=40, label='Real effect')
-ax.scatter([], [], c='steelblue', s=40, label='Null (no effect)')
-
-ax.set_xlabel('Rank (sorted by p-value)')
-ax.set_ylabel('p-value')
-ax.set_title('BH recovers real effects that Bonferroni misses')
-ax.legend()
-plt.tight_layout()
-plt.show()
-```
-
-When the data contains genuine signal, BH discovers more real effects while keeping the false discovery proportion controlled. Bonferroni's stronger guarantee — no false positives at all — comes at the cost of missing real findings.
-
-This same problem arises whenever you run many tests: a genomics lab testing 20,000 genes for association with a disease, a tech company running hundreds of A/B tests per week, or a pharmaceutical trial measuring many endpoints. Any time you run many tests, you need **multiple testing correction**.
 
 ## The reproducibility crisis
 
 Multiple testing corrections fix the problem when you *know* how many tests you ran. But what happens when the multiplicity is hidden — spread across months of exploratory analysis, dozens of researcher choices, and the publication process itself?
 
-:::{.callout-note}
+::: {.callout-note}
 ## The replication crisis in psychology
-In 2011, the psychologist Daryl Bem published a paper in a top journal claiming to find evidence for *precognition* — that people could sense future events before they happened. The paper used standard methods and passed peer review. The embarrassment lay not in the result being wrong (it almost certainly was), but in the fact that standard methods *allowed* it.
+In 2011, the psychologist Daryl Bem published a paper in a top journal claiming evidence for *precognition* — that people could sense future events before they happened. The paper used standard methods and passed peer review. The embarrassment lay not in the result being wrong (it almost certainly was), but in the fact that standard methods *allowed* it.
 
-This embarrassment helped spark the **Reproducibility Project** (Open Science Collaboration, 2015), which attempted to replicate 100 published psychology studies. The results were sobering: only about **36%** of the studies replicated with a statistically significant result, and effect sizes were roughly half the originals. Social psychology was hit hardest. The crisis wasn't limited to psychology — similar problems surfaced in cancer biology, economics, and other fields — but psychology became the most visible case.
+That embarrassment helped spark the **Reproducibility Project** (Open Science Collaboration, 2015), which attempted to replicate 100 published psychology studies. Only about **36%** replicated with a statistically significant result, and effect sizes were roughly half the originals.
 
-A decade later, the picture solidified. The **SCORE project** (Collaborative Assessment for Trustworthy Science, [*Nature* 2026](https://www.nature.com/articles/s41586-025-10078-y)) attempted to replicate 274 claims from 164 papers published between 2009 and 2018 across 54 social- and behavioral-science journals, with over 850 researchers contributing. Replications showed statistically significant effects in the original direction for **55%** of claims, and about half of the papers (49%) had at least one claim replicate. The variation across disciplines was modest (43–63%). Companion studies found that only **54%** of papers were precisely computationally reproducible, and that independent analysts given the same data and hypothesis agreed with the original result only **34%** of the time — rising to 57% with a broader tolerance for effect size. Economics and political science fared better: over 85% computationally reproducible, and 72% of significant estimates survived reanalysis. The lesson: the crisis is real, broad, and not limited to a few bad actors — it reflects structural features of how research is done.
+A decade later, the **SCORE project** ([*Nature* 2026](https://www.nature.com/articles/s41586-025-10078-y)) attempted 274 claims across 164 papers from 54 social- and behavioral-science journals. Replications showed significant effects in the original direction for **55%** of claims; only **54%** of papers were precisely computationally reproducible; independent analysts given the same data and hypothesis agreed with the original result only **34%** of the time. Economics and political science fared better (over 85% computationally reproducible, 72% of significant estimates surviving reanalysis). The crisis is real, broad, and not limited to a few bad actors — it reflects structural features of how research is done.
 :::
 
-How did so many false findings get published? The answer connects directly to what we just learned about multiple testing.
+How did so many false findings get published? The answer connects directly to multiple testing.
 
-:::{.callout-warning}
+::: {.callout-warning}
 ## P-hacking and researcher degrees of freedom
-**P-hacking** (also called **data dredging**) means trying many analyses and reporting the one that produces $p < 0.05$. This practice includes: excluding "outlier" participants until significance appears, testing many outcome variables and reporting only the significant one, collecting data until $p$ dips below 0.05, or splitting groups in various ways until a comparison "works."
+**P-hacking** (also called **data dredging**) means trying many analyses and reporting the one that produces $p < 0.05$. This includes excluding outlier participants until significance appears, testing many outcome variables and reporting only the significant one, collecting data until $p$ dips below 0.05, or splitting groups in various ways until a comparison works.
 
-The statistician Andrew Gelman calls these **researcher degrees of freedom** — the garden of forking paths. At each fork (which variable? which subset? which test?), the researcher makes a choice, and each choice is an implicit hypothesis test. The final reported p-value *looks* like it came from a single test, but it is really the survivor of many. This structure is exactly the multiple testing problem, except the multiplicity is invisible: it doesn't appear in the paper.
+The statistician Andrew Gelman calls these **researcher degrees of freedom** — the garden of forking paths. At each fork (which variable? which subset? which test?), the researcher makes a choice, and each choice is an implicit hypothesis test. The final reported p-value *looks* like it came from a single test, but it is really the survivor of many.
 
 Simmons, Nelson, and Simonsohn (2011) demonstrated that exploiting just a few common degrees of freedom — optional stopping, controlling for gender, dropping a condition — could produce $p < 0.05$ for a completely nonexistent effect over 60% of the time.
 :::
 
 Two structural features of science make the problem worse:
 
-- **The file drawer problem.** Studies with $p > 0.05$ are hard to publish, so they go in the "file drawer." If 20 labs independently test the same false hypothesis, one will get $p < 0.05$ by chance — and that's the only one you'll read about. The published literature is a biased sample of all the research ever conducted.
-- **Incentive misalignment.** Careers are built on novel, statistically significant findings. Null results don't get published, don't earn grants, and don't lead to promotions. This misalignment creates strong pressure (often unconscious) to find significance.
+- **The file drawer problem.** Studies with $p > 0.05$ are hard to publish, so they go in the "file drawer." If 20 labs independently test the same false hypothesis, one will get $p < 0.05$ by chance — and that's the only one you'll read about. The published literature is a biased sample of all research conducted.
+- **Incentive misalignment.** Careers are built on novel, statistically significant findings. Null results don't get published, don't earn grants, and don't lead to promotions. This pressure (often unconscious) pushes researchers toward significance.
 
-:::{.callout-important}
-## Definition: Pre-registration
-**Pre-registration** means publicly committing to your research question, data collection plan, and analysis plan *before* looking at the data. This commitment eliminates researcher degrees of freedom by fixing the garden of forking paths in advance. A pre-registered analysis is a single, pre-specified test — not the survivor of many. Pre-registration doesn't prevent exploratory analysis; it simply requires labeling it honestly as exploratory (hypothesis-generating) rather than confirmatory (hypothesis-testing).
+::: {.callout-important}
+## Definition: pre-registration
+**Pre-registration** means publicly committing to your research question, data collection plan, and analysis plan *before* looking at the data. This commitment eliminates researcher degrees of freedom by fixing the garden of forking paths in advance. A pre-registered analysis is a single, pre-specified test — not the survivor of many. Pre-registration doesn't prevent exploratory analysis; it requires labeling it honestly as exploratory rather than confirmatory.
 :::
 
-The lesson for this course: multiple testing corrections (Bonferroni, BH) handle the *known* multiplicity — the hundreds of tests the intern explicitly ran. Pre-registration and transparent reporting handle the *hidden* multiplicity — the choices a researcher makes before the final analysis ever appears. Both are manifestations of the same core problem: **if you test many things and cherry-pick, you will find "significance" whether or not anything is real.**
+The lesson: multiple testing corrections (Bonferroni, BH) handle the *known* multiplicity — the hundreds of tests you explicitly ran. Pre-registration and transparent reporting handle the *hidden* multiplicity — the choices made before the final analysis ever appears. Both are manifestations of the same core problem: **if you test many things and cherry-pick, you will find an apparent effect whether or not anything is real.**
 
-## From testing to correlation
+## From testing to relationships
 
-So far we've been testing each player separately — a binary question (*does rest help this player?*). But maybe we're asking the wrong question. Instead of hundreds of yes/no answers, can we measure one continuous relationship: how does rest relate to performance across all players?
+We've identified 117 players whose FG% is unlikely to be league-average noise. But before we celebrate, look back at the Bonferroni survivors — the most overwhelmingly significant cases — and notice something. Aaron Gordon at 55.7% is confidently above league. Klay Thompson at 43.3% is confidently below. Are these two findings about *shooting skill*?
 
-> *"Correlation is not causation."*
-
-Let's see this in action. First, the picture.
+To answer, let's compute, for each player, the share of their shots that come from the restricted area — the easiest zone in basketball.
 
 ```{python}
-# Cap rest at 7 days to avoid long injury absences
-games_corr = df[df['REST_DAYS'] <= 7].copy()
+qual['rim_share'] = qual['RA_FGA'] / qual['FGA']
 
-# Violin plot by rest day (avoids overplotting vs raw scatter)
 fig, ax = plt.subplots(figsize=(8, 5))
-rest_vals = sorted(games_corr['REST_DAYS'].unique())
-bp_data = [games_corr[games_corr['REST_DAYS'] == d]['PTS'].values for d in rest_vals]
-parts = ax.violinplot(bp_data, positions=rest_vals, showmedians=True, widths=0.7)
-for pc in parts['bodies']:
-    pc.set_facecolor('steelblue')
-    pc.set_alpha(0.5)
-
-# Overlay mean points by rest day
-means = games_corr.groupby('REST_DAYS')['PTS'].mean()
-ax.plot(means.index, means.values, 'ro-', markersize=8, linewidth=2, label='Mean PTS')
-ax.set_xlabel('Rest Days')
-ax.set_ylabel('Points Scored')
-ax.set_title('Rest Days vs Points Scored')
+ax.scatter(qual['rim_share'], qual['FG_PCT'], alpha=0.5, s=25, color='steelblue')
+ax.axhline(p0, color='black', linewidth=0.7, linestyle='--', label=f'League FG% = {p0:.3f}')
+ax.set_xlabel('Share of shots from restricted area')
+ax.set_ylabel('Overall FG%')
+ax.set_title('Rim share predicts overall FG%')
 ax.legend()
 plt.tight_layout()
 plt.show()
 
-print("Notice: the means trend DOWNWARD. More rest → fewer points?!")
-print("That can't be right... or can it?")
+r, p = stats.pearsonr(qual['rim_share'], qual['FG_PCT'])
+print(f"Pearson correlation r(rim_share, FG_PCT) = {r:.3f}  (p = {p:.2e})")
 ```
 
-:::{.callout-important}
-## Definition: Pearson Correlation Coefficient
-The **Pearson correlation** $r$ measures the *linear* association between two variables — you derived this in your probability course when studying covariance:
+A strong positive correlation: players who take a larger fraction of their shots near the rim post higher overall FG%. Recall from [Chapter 4](lec04-regression.qmd#correlation) that Pearson's $r$ measures the linear association between two variables, taking values from $-1$ to $+1$ and unitless under any rescaling. Here $r \approx 0.80$ — most of the variation in players' aggregate FG% is captured by where they shoot from.
 
-$$r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2 \sum (y_i - \bar{y})^2}}$$
-
-$r$ ranges from $-1$ to $+1$. It is unitless and symmetric: $r(x, y) = r(y, x)$. Important: $r = 0$ means no *linear* relationship, not no relationship at all. Two variables can be strongly related (e.g., quadratic) and still have $r$ near 0. Outliers can also strongly distort $r$.
+::: {.callout-warning}
+## Ecological correlation
+Correlations computed on group averages (one point per state, per team, per player) can be much stronger than correlations computed on individual observations. These **ecological correlations** are misleading — averaging hides within-group variation. Always check whether a correlation is based on individual data or aggregated summaries.
 :::
+
+## Correlation is not causation: shot selection
+
+The rim-share-vs-FG% correlation is real, but read it carefully. It does not say "if Klay Thompson started attacking the rim, his FG% would rise to Gordon's." It says "the players who shoot more from the rim happen to also have higher overall FG%." The reason is mechanical, not skillful: the league averages 67% from the restricted area but only 36% from above-the-break threes. Whoever takes the easier shots posts the better aggregate number.
+
+So when we tested Aaron Gordon's 55.7% against league baseline 47.7% and rejected $H_0$ at vanishingly small $p$, what did we learn? That his shot mix differs from the league's. *Not* that he is a better shooter. The test gave us a true answer to a question that turns out to be the wrong question.
+
+The variable that drives this — shot location — is a **confounder**. It influences both the input (which player is taking the shot) and the output (whether it goes in), creating an aggregate association that doesn't reflect what we actually want to measure: shooting skill. We will formalize confounders using causal diagrams (DAGs) in [Chapter 18](lec18-causal-inference-1.qmd).
+
+## Simpson's paradox: Klay Thompson vs Aaron Gordon
+
+The aggregate gap between Gordon (55.7%) and Thompson (43.3%) is 12 percentage points. Now break it down by zone.
 
 ```{python}
-r, p = stats.pearsonr(games_corr['REST_DAYS'], games_corr['PTS'])
-print(f"Correlation (rest days vs points): r = {r:.4f}")
-print(f"p-value: {p:.6f}")
-print(f"\nWith n = {len(games_corr):,} observations, even tiny correlations are")
-print(f"*statistically* significant — but that doesn't mean the correlation is meaningful.")
+def zone_table(name):
+    row = qual[qual['PLAYER_NAME'] == name].iloc[0]
+    return pd.Series({
+        'RA':    row['RA_FGM']    / row['RA_FGA'],
+        'PAINT': row['PAINT_FGM'] / row['PAINT_FGA'],
+        'MID':   row['MID_FGM']   / row['MID_FGA'],
+        'LC3':   row['LC3_FGM']   / row['LC3_FGA'],
+        'RC3':   row['RC3_FGM']   / row['RC3_FGA'],
+        'ATB3':  row['ATB3_FGM']  / row['ATB3_FGA'],
+        'TOTAL': row['FGM']       / row['FGA'],
+    })
+
+comparison = pd.DataFrame({
+    'Klay Thompson': zone_table('Klay Thompson'),
+    'Aaron Gordon':  zone_table('Aaron Gordon'),
+})
+comparison['Klay - Gordon'] = comparison['Klay Thompson'] - comparison['Aaron Gordon']
+print((comparison * 100).round(1).to_string())
 ```
 
-:::{.callout-warning}
-## Ecological Correlation Fallacy
-Correlations computed on group averages (e.g., one point per state or per team) can be much stronger than correlations computed on individual observations. These **ecological correlations** are misleading — averaging hides within-group variation. Always check whether a correlation is based on individual data or aggregated summaries.
-:::
+In every single zone, Klay shoots better than Aaron Gordon. In aggregate, Gordon shoots better than Klay. The aggregate flips the within-zone story.
 
-## Correlation is not causation: the confounding problem
+This is **Simpson's paradox** (named after Edward Simpson, 1951): an association reverses when you look inside subgroups. The mechanism here is shot selection. Gordon takes 65% of his shots from the restricted area where the league shoots 67%; Thompson takes 53% of his shots from above the break where the league shoots 36%. Gordon's high FG% is not shooting skill — it's where he shoots from.
 
-That negative correlation seems backward. Rest *hurts* performance?
+```{python}
+def shot_mix(name):
+    row = qual[qual['PLAYER_NAME'] == name].iloc[0]
+    return {z: row[f'{z}_FGA'] / row['FGA'] for z in ['RA', 'PAINT', 'MID', 'LC3', 'RC3', 'ATB3']}
 
-:::{.callout-tip}
+mix = pd.DataFrame({'Klay Thompson': shot_mix('Klay Thompson'),
+                    'Aaron Gordon':  shot_mix('Aaron Gordon')})
+print("Share of shots taken in each zone:")
+print((mix * 100).round(1).to_string())
+```
+
+::: {.callout-tip}
 ## Think About It
-Before reading on — why might more rest be associated with fewer points? What's different about players who get extended rest? Discuss with your neighbor.
+Bonferroni rejected $H_0$ for both Aaron Gordon (high) and Klay Thompson (low). Both rejections are statistically real — neither player shoots league average. But what *kind* of question would each rejection answer correctly, and what kind would it answer wrongly?
 :::
 
-Coaches don't randomly assign rest. Consider:
+A statistically significant aggregate effect can still be confounded. Multiple testing corrections (Bonferroni, BH) protect against finding effects that aren't there. They do nothing to protect against finding effects that *are* there but reflect the wrong mechanism.
 
-- Star players play almost every game (short rest, high points)
-- Bench players are more likely to miss games (extended rest, low points)
-- Players returning from minor injuries get extended rest
-- Back-to-backs cluster during road trips (schedule-driven)
+## Within-zone comparison
 
-The **reason** for rest is **confounded** with the **outcome** of rest. We'll formalize this idea in Chapter 18 using causal diagrams (DAGs), which make it precise to say exactly which variables are confounders.
+The fix is to compare each shot to the league baseline *for that zone*. A player whose shots beat the zone-specific baseline really is a better shooter than league average; one whose shots match the baseline is league-average regardless of where they shoot.
 
 ```{python}
-# Who gets extended rest? Compare player quality across rest categories.
-player_stats = df.groupby('PLAYER_NAME').agg(
-    ppg=('PTS', 'mean'),
-    games=('PTS', 'count'),
-    mean_rest=('REST_DAYS', 'mean')
-).query('games >= 50')
+zone_baseline = {z: qual[f'{z}_FGM'].sum() / qual[f'{z}_FGA'].sum() for z in ['RA','PAINT','MID','LC3','RC3','ATB3']}
+print("League FG% by zone:")
+for z, p in zone_baseline.items():
+    print(f"  {z:6s} {p:.3f}")
 
-ext_rest = df[df['REST_DAYS'] >= 4].groupby('PLAYER_NAME').size().reset_index(name='ext_rest_games')
-player_stats = player_stats.reset_index().merge(ext_rest, on='PLAYER_NAME', how='left')
-player_stats['ext_rest_games'] = player_stats['ext_rest_games'].fillna(0)
-player_stats['ext_rest_frac'] = player_stats['ext_rest_games'] / player_stats['games']
+# Expected makes if each player shot at league rate for their actual shot mix
+def expected_makes(row):
+    return sum(row[f'{z}_FGA'] * zone_baseline[z] for z in ['RA','PAINT','MID','LC3','RC3','ATB3'])
+
+qual['expected_FGM'] = qual.apply(expected_makes, axis=1)
+qual['shot_mix_FG_PCT'] = qual['expected_FGM'] / qual['FGA']
+qual['skill_above_league'] = qual['FG_PCT'] - qual['shot_mix_FG_PCT']
+
+cmp = qual[qual['PLAYER_NAME'].isin(['Klay Thompson', 'Aaron Gordon'])][
+    ['PLAYER_NAME', 'FG_PCT', 'shot_mix_FG_PCT', 'skill_above_league']]
+print("\nDecomposing aggregate FG% into shot-mix expectation and skill-above-mix:")
+print(cmp.to_string(index=False))
 ```
 
-Now we can plot each player's scoring average against the fraction of their games with extended rest (4+ days). The `.merge()` call joins the extended-rest counts back to each player's summary row.
+`shot_mix_FG_PCT` is what each player would have shot if they hit at league rate in every zone — pure shot selection. `skill_above_league` is the residual: how much the player exceeds (or falls short of) the league rate *given their shot mix*. By this measure, Klay is **above** league average and Gordon is **below**, the opposite of the raw FG% comparison.
 
 ```{python}
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.scatter(player_stats['ppg'], player_stats['ext_rest_frac'],
-           alpha=0.4, s=player_stats['games']/5, color='steelblue')
-ax.set_xlabel('Points Per Game (player quality)')
-ax.set_ylabel('Fraction of Games with Extended Rest (4+ days)')
-ax.set_title('Who Gets Extended Rest?\n(size = number of games)')
-plt.tight_layout()
-plt.show()
-
-r_qual, p_qual = stats.pearsonr(player_stats['ppg'], player_stats['ext_rest_frac'])
-print(f"Correlation between PPG and extended rest fraction: r = {r_qual:.3f}")
-print("Low-scoring players have MORE extended rest — they're the ones sitting out!")
-```
-
-## Simpson's paradox in rest data
-
-This reversal is **Simpson's paradox** (named after Edward Simpson, 1951): the aggregate comparison shows rest *hurts* by nearly four points, but within individual players, the effect is less than a point. Most of the aggregate pattern was driven by *who* gets rest, not by rest itself.
-
-Let's see this directly.
-
-```{python}
-# Aggregate comparison (MISLEADING)
-print("=== Aggregate Comparison (MISLEADING) ===")
-agg_means = df.groupby('REST_CATEGORY')['PTS'].mean()
-print(agg_means.round(2))
-print(f"\nExtended rest: {agg_means.loc['Extended (4+d)']:.1f} PPG  vs  Back-to-back: {agg_means.loc['Back-to-back (1d)']:.1f} PPG")
-print(f"Looks like rest HURTS by {agg_means.loc['Back-to-back (1d)'] - agg_means.loc['Extended (4+d)']:.1f} points!")
-```
-
-The fix is to compare each player to *themselves*. For each player-season, we subtract their average points. Now a value of +2 means "this player scored 2 points above their own average." This transformation removes player quality from the comparison.
-
-```{python}
-# Compute each player-season's average points
-player_season_avg = df.groupby(['PLAYER_ID', 'SEASON'])['PTS'].transform('mean')
-# Subtract to get within-player deviation
-df['PTS_DEMEANED'] = df['PTS'] - player_season_avg
-
-print("=== Within-Player Comparison (CORRECT) ===")
-within_means = df.dropna(subset=['REST_CATEGORY']).groupby('REST_CATEGORY')['PTS_DEMEANED'].mean()
-print(within_means.round(3))
-print(f"\nWithin-player, extended rest effect: {within_means.loc['Extended (4+d)']:+.3f} points")
-print("Less than a point! Most of the aggregate effect was driven by WHO gets rest.")
-```
-
-The side-by-side visualization below makes the paradox vivid: the left panel shows the misleading aggregate comparison, and the right panel shows the within-player story with 95% confidence intervals.
-
-```{python}
-# Visualize the paradox
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
+players = ['Klay Thompson', 'Aaron Gordon']
+colors = ['#3498db', '#e74c3c']
 
-# Left: aggregate (misleading)
-axes[0].bar(range(len(agg_means)), agg_means.values, color=colors, edgecolor='black')
-axes[0].set_xticks(range(len(agg_means)))
-axes[0].set_xticklabels(agg_means.index, rotation=15, fontsize=9)
-axes[0].set_ylabel('Mean Points')
-axes[0].set_ylim(bottom=0)
-axes[0].set_title('Aggregate: Rest Looks Harmful\n(Simpson\'s paradox!)')
+axes[0].bar(players, [qual[qual['PLAYER_NAME']==p]['FG_PCT'].iloc[0] for p in players],
+            color=colors, edgecolor='black')
+axes[0].axhline(p0, color='black', linewidth=0.7, linestyle='--', label='League average')
+axes[0].set_ylabel('Aggregate FG%')
+axes[0].set_title('Raw FG%: Gordon looks better')
+axes[0].set_ylim(0, 0.65)
+axes[0].legend()
 
-# Right: within-player (correct)
-sems = df.dropna(subset=['REST_CATEGORY']).groupby('REST_CATEGORY')['PTS_DEMEANED'].sem()
-axes[1].bar(range(len(within_means)), within_means.values,
-            yerr=sems.values * 1.96, color=colors, edgecolor='black', capsize=5)
-axes[1].set_xticks(range(len(within_means)))
-axes[1].set_xticklabels(within_means.index, rotation=15, fontsize=9)
-axes[1].axhline(y=0, color='black', linewidth=0.5)
-axes[1].set_ylabel('Mean Points (relative to player avg)')
-axes[1].set_title('Within-Player: Almost No Effect\n(error bars = 95% CI)')
+skills = [qual[qual['PLAYER_NAME']==p]['skill_above_league'].iloc[0] for p in players]
+axes[1].bar(players, skills, color=colors, edgecolor='black')
+axes[1].axhline(0, color='black', linewidth=0.7)
+axes[1].set_ylabel('Skill above league (given shot mix)')
+axes[1].set_title('Adjusted: Klay actually shoots better')
+
 plt.tight_layout()
 plt.show()
-
-print("Left: misleading. Right: the real story.")
-print("Always ask: WHY were these groups different to begin with?")
 ```
+
+The left panel is what the multiple-testing arc hands us as a discovery. The right panel is the answer to the question we actually meant to ask. Aggregate stats lie not because the test was wrong but because the test answered the wrong question.
 
 ## Key takeaways
 
-Both halves of this chapter share a theme: statistical results can be deeply misleading when you don't account for the structure of your analysis.
+This chapter has two halves linked by one theme: statistical results can be misleading even when the math is right.
 
-**Multiple testing:**
+**Multiple testing.**
 
-1. **Multiple testing inflates false positives.** If you test $m$ hypotheses at level $\alpha$,
-   you expect $m \alpha$ false positives. Testing about 280 players guarantees ~14 "significant" results
-   even when rest has zero effect.
+1. Running $m$ tests at $\alpha$ produces $\sim m\alpha$ false positives even when nothing is real.
+2. Bonferroni divides $\alpha$ across tests to control FWER (any false positive). It is conservative but bulletproof.
+3. BH lets the threshold rise with rank to control FDR (the *fraction* of false positives among rejections). It catches moderate effects Bonferroni misses.
+4. The choice of correction is driven by the cost of a single false positive vs. the cost of missing real effects.
+5. The p-value histogram is your diagnostic: flat under the null, spike near zero when real effects exist.
 
-2. **Always correct for multiple comparisons.** Bonferroni ($\alpha/m$) controls the family-wise
-   error rate; Benjamini-Hochberg controls the false discovery rate. Both dramatically reduce
-   spurious findings.
+**Confounding and Simpson's paradox.**
 
-3. **The p-value histogram is your friend.** Under the null, p-values are uniform. A spike near 0
-   suggests real effects; a flat histogram suggests noise.
+6. A correlation between two variables can be driven entirely by a third variable (a confounder). For NBA players, shot location confounds the FG%-vs-skill question.
+7. Simpson's paradox is the strong form of confounding: aggregate trends can reverse inside subgroups.
+8. A statistically significant aggregate effect can still answer the wrong question. Correction procedures protect against false discoveries; they do not protect against confounded ones.
 
-**Correlation and confounding:**
-
-4. **Correlation is not causation.** The negative correlation between rest and points reflects
-   *who* gets rest, not the effect of rest itself. Confounding variables drive the pattern.
-
-5. **Simpson's paradox is real and common.** Aggregate comparisons can reverse the individual-level
-   story when groups are heterogeneous. Always ask what's driving the comparison.
-
-In Chapter 12, we'll use regression to estimate the effect of rest while controlling for player quality, schedule difficulty, and fatigue — and we'll test whether that coefficient is statistically significant.
+In Chapter 12 we extend hypothesis testing into regression, where we can adjust for confounders directly by including them in the model.
 
 ## Study guide
 
 ### Key ideas
 
-- **Multiple testing (multiple comparisons):** Running many hypothesis tests on the same data, inflating the chance of false positives.
-- **Family-wise error rate (FWER):** The probability of making *any* false positive across all tests. Bonferroni controls this.
+- **Multiple testing (multiple comparisons):** Running many hypothesis tests inflates the chance of false positives. The arithmetic applies whether the tests are run by one analyst or across the entire scientific literature.
+- **Family-wise error rate (FWER):** The probability of *any* false positive across all tests. Bonferroni controls this.
 - **False discovery rate (FDR):** The expected *proportion* of rejected hypotheses that are false. BH controls this.
-- **Bonferroni correction:** Test each hypothesis at $\alpha / m$ instead of $\alpha$.
-- **Benjamini-Hochberg (BH) procedure:** Sort p-values; find the largest $k$ where $p_{(k)} \le (k/m) \alpha$; reject hypotheses $1, \ldots, k$.
-- **p-value histogram:** Diagnostic tool; uniform under the null, spike near 0 if signal exists.
-- **Pearson correlation ($r$):** Measures linear association between two variables. Ranges from $-1$ to $+1$. Unitless and symmetric.
-- **Confounding:** When a third variable influences both the treatment and the outcome, creating a spurious association.
-- **Simpson's paradox:** An aggregate trend reverses (or disappears) when you look within subgroups.
-- **Ecological correlation:** Correlations computed on group averages can be much stronger than individual-level correlations; always check the unit of analysis.
-- **Reproducibility crisis:** Bem's precognition paper (2011) exposed how standard methods could validate implausible claims. The Reproducibility Project (2015) found only ~36% of 100 psychology studies replicated.
+- **Bonferroni correction:** Test each hypothesis at $\alpha / m$ instead of $\alpha$. Justified by the union bound.
+- **Benjamini-Hochberg (BH) procedure:** Sort p-values; find the largest $k$ where $p_{(k)} \le (k/m) \alpha$; reject hypotheses $1, \ldots, k$. Controls FDR at $\alpha$.
+- **p-value histogram:** Diagnostic. Uniform under the null, spike near zero if signal exists.
+- **Pearson correlation $r$:** Linear association, range $[-1, +1]$, unitless and symmetric. Defined in Chapter 4.
+- **Confounding:** A third variable influencing both an input and an outcome, creating a spurious or magnified association.
+- **Simpson's paradox:** An aggregate trend reverses (or disappears) when looked at within subgroups. A strong form of confounding.
+- **Ecological correlation:** Correlations on group averages can be much stronger than individual-level correlations. Always check the unit of analysis.
+- **Reproducibility crisis:** Bem's precognition paper (2011); Reproducibility Project (2015) found ~36% replication; SCORE (2026) found ~55% replication of 274 social-science claims with high cross-discipline variance.
 - **P-hacking (data dredging):** Trying many analyses and reporting only the one that produces $p < 0.05$. Researcher degrees of freedom (Simmons et al., 2011) make invisible multiplicity.
-- **Pre-registration:** Publicly committing to research question, data collection, and analysis plan before seeing data — eliminating researcher degrees of freedom.
-- Running $m$ tests at $\alpha = 0.05$ produces $\sim m \times 0.05$ false positives even when nothing is real.
-- Bonferroni is safe but conservative; BH is more powerful but allows a controlled fraction of false discoveries.
-- A flat p-value histogram means no widespread effect; a spike near 0 means some discoveries are real.
-- Correlation between two variables can be driven entirely by a confounder — always ask *who* is in each group.
-- Within-group analysis (demeaning) removes confounders that differ between groups.
+- **Pre-registration:** Publicly committing to research question, data, and analysis plan before seeing data.
 
 ### Computational tools
 
-- `scipy.stats.ttest_ind(a, b)` — Welch's two-sample t-test
-- `scipy.stats.pearsonr(x, y)` — Pearson correlation and p-value
-- BH procedure: sort p-values, compute thresholds $k/m \times \alpha$, apply step-up rule
-- `.groupby().transform('mean')` — compute group means aligned to original rows (for demeaning)
+- `scipy.stats.norm` — z-test machinery for one-sample proportion tests.
+- `scipy.stats.pearsonr(x, y)` — Pearson correlation and p-value.
+- BH procedure: sort p-values, compute thresholds $k/m \cdot \alpha$, apply step-up rule.
 
 ### For the quiz
 
-- Be able to compute the expected number of false positives given $m$ and $\alpha$.
+- Compute the expected number of false positives given $m$ and $\alpha$.
 - Know when to use Bonferroni vs. BH (stakes determine the correction).
-- Be able to interpret a p-value histogram.
+- Interpret a p-value histogram.
 - Explain why a correlation can be misleading due to confounding.
 - Recognize Simpson's paradox: aggregate trend differs from within-group trend.
