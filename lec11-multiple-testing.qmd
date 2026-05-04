@@ -1,5 +1,5 @@
 ---
-title: "Multiple Testing and Correlation"
+title: "Multiple Testing"
 execute:
   enabled: true
 jupyter: python3
@@ -31,7 +31,7 @@ DATA_DIR = 'data'
 
 ## The data: shots by zone
 
-`shot_zones_2023-24.csv` records every NBA player's makes (`FGM`) and attempts (`FGA`) in each of six shot zones during the 2023--24 regular season, from NBA.com Stats. The six zones, ordered from the rim outward:
+`shot_zones_2023-24.csv` records every NBA player's makes (`FGM`) and attempts (`FGA`) in each of six shot zones during the 2023--24 regular season, from NBA.com Stats. Throughout the chapter, "FGA" and "FG%" mean the totals across these six zones; back-court heaves and a small handful of unclassified shots are excluded, so the numbers here run a few percentage points off Basketball-Reference totals (which include every attempt). The six zones, ordered from the rim outward:
 
 - `RA` — restricted area (the small arc under the basket; mostly dunks and layups)
 - `PAINT` — the rest of the painted lane (close shots not under the basket)
@@ -56,6 +56,25 @@ print(f"Qualified players (FGA >= 200): {len(qual)}")
 ## First analysis: one z-test per player
 
 For each player, we ask: *is this player's true shooting percentage different from the league baseline?* The natural test is a one-sample two-sided z-test for a proportion.
+
+::: {.callout-note}
+## How is this different from the t-test?
+The t-test from [Chapter 10](lec10-hypothesis-testing.qmd) and the z-test for a proportion are the **same recipe**: take the standardized distance from the null,
+
+$$\frac{\text{statistic} - \text{null value}}{\text{SE under null}},$$
+
+and look up its tail probability in a reference distribution. They differ in two places.
+
+**The standard error.** For a sample mean of a continuous variable, you have to *estimate* the standard error from the data: $\hat\sigma / \sqrt{n}$, where $\hat\sigma$ is the sample standard deviation. That extra estimation step is the reason the reference distribution is $t_{n-1}$ rather than the standard normal — the $t$ distribution accounts for the noise in $\hat\sigma$ itself, and approaches the standard normal as $n$ grows.
+
+For a proportion, the null hypothesis $p = p_0$ pins the standard error for free: $\sqrt{p_0(1-p_0)/n}$. There is nothing to estimate from the data, so the standardized statistic is asymptotically standard normal — no $t$ correction needed. (Equivalently, you can run an *exact* binomial test that doesn't depend on the normal approximation at all; for $n$ as large as our 200+ shots per player, the two agree to several decimals.)
+
+**The reference distribution.** $t_{n-1}$ for the t-test, $\mathcal{N}(0, 1)$ for the z-test for a proportion.
+
+**Both are CLT-driven shortcuts to the bootstrap.** The bootstrap from [Chapter 8](lec08-sampling.qmd) resamples the data and looks at the empirical distribution of the test statistic. As $n \to \infty$, both the bootstrap distribution of a sample mean and that of a sample proportion become normal. The t and z formulas are the closed-form versions of that limit — z for proportions (where $H_0$ specifies the variance) and t for means (where you have to estimate it).
+
+**When to use which.** A continuous outcome compared to a fixed value: t-test. A binary outcome compared to a fixed proportion: z-test (or its exact binomial sibling). A continuous outcome with huge $n$ and known $\sigma$: technically a z-test works, but in practice you'd reach for the t-test anyway.
+:::
 
 Let $p_0$ be the league baseline FG% across all qualified shots, and $\hat p_i = \text{FGM}_i / \text{FGA}_i$ be player $i$'s observed FG%. Under $H_0: p_i = p_0$,
 
@@ -146,14 +165,14 @@ bonf_threshold = alpha / m
 n_bonf = (qual['p_value'] < bonf_threshold).sum()
 
 print(f"Original threshold:    {alpha}")
-print(f"Bonferroni threshold:  {bonf_threshold:.6f}  ({1/bonf_threshold:.0f}x stricter)")
+print(f"Bonferroni threshold:  {bonf_threshold:.6f}  ({m}x stricter)")
 print(f"Significant after Bonferroni: {n_bonf}  (down from {n_unc})")
 
 print("\nMost extreme survivors:")
 print(qual.nsmallest(8, 'p_value')[['PLAYER_NAME', 'FGM', 'FGA', 'FG_PCT', 'p_value']].to_string(index=False))
 ```
 
-The Bonferroni survivors are the obvious extremes: rim-feasting big men hitting 60--70% (Allen, Gobert, Lively, Gafford, Giannis) and the worst-shooting outliers. These are real, but Bonferroni's strictness leaves a lot on the table. Damian Lillard at 42.6% on 1,270 attempts is plausibly below league average — but his p-value, around $3 \times 10^{-4}$, doesn't clear the $1.6 \times 10^{-4}$ threshold.
+The Bonferroni survivors are the obvious extremes: rim-feasting big men hitting 60--75% (Allen, Gobert, Lively, Gafford, Giannis) and the worst-shooting outliers. These are real, but Bonferroni's strictness leaves a lot on the table. Damian Lillard at 42.6% on 1,270 attempts is plausibly below league average — but his p-value, around $3 \times 10^{-4}$, doesn't clear the $1.6 \times 10^{-4}$ threshold.
 
 ## Correction 2: Benjamini-Hochberg (FDR control)
 
@@ -201,16 +220,30 @@ print("Sample players caught by BH but not by Bonferroni:")
 print(gap[['PLAYER_NAME', 'FGM', 'FGA', 'FG_PCT', 'p_value']].head(10).to_string(index=False))
 ```
 
-These are recognizable names with moderate effects — Lillard, VanVleet, Durant, Holmgren — the kind of "this player shoots two or three points off league average" findings that Bonferroni's strict threshold rejects on principle but BH is willing to flag, accepting that a small fraction will be wrong.
+These are recognizable names with moderate effects — Lillard, VanVleet, Durant, Holmgren — the kind of "this player shoots about five points off league average" findings that Bonferroni's strict threshold rejects on principle but BH is willing to flag, accepting that a small fraction will be wrong.
 
 ::: {.callout-note}
 ## When Bonferroni gives up
 NBA shot data is friendly to Bonferroni: a handful of players (the rim-only big men) deviate so far from league average that their p-values are essentially zero, sailing past any threshold. In other domains the picture is harsher.
 
-The canonical example is the [Hedenfalk et al. (2001) breast-cancer microarray study](https://www.nejm.org/doi/full/10.1056/NEJM200102223440801): for each of $m = 3{,}170$ genes, a t-test of expression in BRCA1 vs BRCA2 tumors. With only 7 vs 8 samples per gene, no individual test has enough power to clear the Bonferroni threshold of $\alpha/m \approx 1.6 \times 10^{-5}$ — Bonferroni rejects roughly **one** gene at $\alpha = 0.05$. Yet the p-value histogram has a clear spike near zero: many genes have moderate effects. BH at $q = 0.05$ rejects roughly **94 genes** (Storey, 2002). This regime — many moderate effects, no extreme ones — is exactly where Bonferroni gives up and BH's step-up rule does the real work. FDR was invented for it.
+The canonical example is the [Hedenfalk et al. (2001) breast-cancer microarray study](https://www.nejm.org/doi/full/10.1056/NEJM200102223440801): for each of $m = 3{,}170$ genes, a t-test of expression in BRCA1 vs BRCA2 tumors. With only 7 vs 8 samples per gene, no individual test has enough power to clear the Bonferroni threshold of $\alpha/m \approx 1.6 \times 10^{-5}$ — Bonferroni rejects roughly **one** gene at $\alpha = 0.05$. Yet the p-value histogram has a clear spike near zero: many genes have moderate effects. BH at $q = 0.05$ rejects roughly **94 genes** (Storey & Tibshirani, 2003). This regime — many moderate effects, no extreme ones — is exactly where Bonferroni gives up and BH's step-up rule does the real work. FDR was invented for it.
 :::
 
 The two corrections answer different questions. FWER asks: *did I make any mistake at all?* FDR asks: *among the things I called discoveries, what fraction are wrong?* Use Bonferroni when *any* false positive is costly (drug safety, criminal trials). Use BH when you can tolerate some false discoveries (screening genes, ranking candidates for further study). The stakes determine the correction.
+
+::: {.callout-note collapse="true"}
+## Going deeper: when your budget $K$ is fixed
+A subtler point: both Bonferroni and BH preserve the p-value ranking. They differ only in where the threshold falls. So when the number of items you act on is fixed by your budget — "the wet lab can run 100 follow-ups," "we have 50 scholarships," "ship the top 5 features" — the correction *doesn't change which items you pick*. You take the top-$K$ by p-value either way.
+
+This splits the use of corrections into two cases:
+
+- **Threshold-driven action** (data determines $K$). The classic case. A regulator approving one drug, a GWAS reporting every SNP that clears $5 \times 10^{-8}$, a published paper claiming "we found 47 significant departures." Here the correction *is* the decision rule, and the choice of FWER vs FDR matters a great deal.
+- **Budget-driven action** ($K$ is fixed by resources). The wet lab, the scholarship committee, the feature shortlist. The correction does not change which items make the cut. What it can still do is *characterize* the cut — tell you what fraction of your top-$K$ is expected to be noise.
+
+For the budget-driven case, [Storey (2002)](https://academic.oup.com/jrsssb/article-abstract/64/3/479/7098576) introduced the **q-value**: an FDR-style estimate attached to each rejected hypothesis, defined as the expected proportion of false discoveries among all hypotheses with p-value at most as small as that one. With q-values you can read off "if I take the top 100, the expected FDR is 4.2%" without committing to a threshold rule, and adjust your $K$ to match a tolerance you specify rather than the other way around. This is now the dominant idiom in genomics shortlisting work.
+
+The simpler takeaway: when someone gives you a multiple-testing problem, the *first* question to ask is whether $K$ is data-driven or budget-driven. If it's budget-driven, the right framing is rarely "Bonferroni or BH" — it's "what guarantee do I want to attach to the top-$K$ I was always going to ship?"
+:::
 
 ```{python}
 fig, ax = plt.subplots(figsize=(8, 5))
@@ -236,6 +269,14 @@ plt.show()
 
 Multiple testing corrections fix the problem when you *know* how many tests you ran. But what happens when the multiplicity is hidden — spread across months of exploratory analysis, dozens of researcher choices, and the publication process itself?
 
+A published false positive doesn't sit on a shelf. Someone *acts* on it.
+
+- **In medicine.** When the biotech company Amgen tried to replicate 53 "landmark" preclinical cancer studies before building drug programs on them, they could confirm only 6 — about 11% (Begley & Ellis, *Nature* 2012). A parallel effort at Bayer found roughly the same rate (Prinz et al., *Nature Reviews Drug Discovery* 2011). Each downstream phase II/III oncology trial costs hundreds of millions of dollars and enrolls hundreds of patients. When the underlying biology doesn't reproduce, the trial fails and the patients took experimental risks for nothing. Freedman, Cockburn, and Simcoe (*PLOS Biology* 2015) estimate that irreproducible preclinical research costs about **\$28 billion per year** in the United States alone.
+- **In psychology and policy.** Power posing (Carney, Cuddy, & Yap, 2010) claimed that one-minute "high-power" poses changed cortisol and testosterone. The follow-up TED talk has over 50 million views, and the intervention spread through corporate training programs. The original co-author publicly disavowed it as unreplicable in 2016. Growth-mindset interventions, based on Carol Dweck's research, were deployed in tens of thousands of K-12 classrooms; large-scale randomized trials and meta-analyses (Sisk et al., 2018; Yeager et al., 2019) found average effects near zero. School districts spent millions on programs whose population-level benefit is now in serious doubt.
+- **In the public record.** A retracted paper still gets cited. A failed replication takes years to surface. By the time the field has corrected itself, journalists have written headlines, foundations have funded follow-up work, and clinicians have adjusted their practice. The cost compounds.
+
+Replicability is not academic hygiene. It determines what diseases get treated, what students get taught, and what policies get adopted. So how did so many false findings get published in the first place? The answer connects directly to multiple testing.
+
 ::: {.callout-note}
 ## The replication crisis in psychology
 In 2011, the psychologist Daryl Bem published a paper in a top journal claiming evidence for *precognition* — that people could sense future events before they happened. The paper used standard methods and passed peer review. The embarrassment lay not in the result being wrong (it almost certainly was), but in the fact that standard methods *allowed* it.
@@ -245,7 +286,7 @@ That embarrassment helped spark the **Reproducibility Project** (Open Science Co
 A decade later, the **SCORE project** ([*Nature* 2026](https://www.nature.com/articles/s41586-025-10078-y)) attempted 274 claims across 164 papers from 54 social- and behavioral-science journals. Replications showed significant effects in the original direction for **55%** of claims; only **54%** of papers were precisely computationally reproducible; independent analysts given the same data and hypothesis agreed with the original result only **34%** of the time. Economics and political science fared better (over 85% computationally reproducible, 72% of significant estimates surviving reanalysis). The crisis is real, broad, and not limited to a few bad actors — it reflects structural features of how research is done.
 :::
 
-How did so many false findings get published? The answer connects directly to multiple testing.
+How did so many false findings get published?
 
 ::: {.callout-warning}
 ## P-hacking and researcher degrees of freedom
@@ -272,7 +313,36 @@ The lesson: multiple testing corrections (Bonferroni, BH) handle the *known* mul
 
 We've identified 117 players whose FG% is unlikely to be league-average noise. But before we celebrate, look back at the Bonferroni survivors — the most overwhelmingly significant cases — and notice something. Aaron Gordon at 55.7% is confidently above league. Klay Thompson at 43.3% is confidently below. Are these two findings about *shooting skill*?
 
-To answer, let's compute, for each player, the share of their shots that come from the restricted area — the easiest zone in basketball.
+The aggregate gap is 12 percentage points in Gordon's favor. Before reasoning about it, just break it down by zone.
+
+```{python}
+def zone_table(name):
+    row = qual[qual['PLAYER_NAME'] == name].iloc[0]
+    return pd.Series({
+        'RA':    row['RA_FGM']    / row['RA_FGA'],
+        'PAINT': row['PAINT_FGM'] / row['PAINT_FGA'],
+        'MID':   row['MID_FGM']   / row['MID_FGA'],
+        'LC3':   row['LC3_FGM']   / row['LC3_FGA'],
+        'RC3':   row['RC3_FGM']   / row['RC3_FGA'],
+        'ATB3':  row['ATB3_FGM']  / row['ATB3_FGA'],
+        'TOTAL': row['FGM']       / row['FGA'],
+    })
+
+comparison = pd.DataFrame({
+    'Klay Thompson': zone_table('Klay Thompson'),
+    'Aaron Gordon':  zone_table('Aaron Gordon'),
+})
+comparison['Klay - Gordon'] = comparison['Klay Thompson'] - comparison['Aaron Gordon']
+print((comparison * 100).round(1).to_string())
+```
+
+In every single zone, Klay shoots better than Aaron Gordon. In aggregate, Gordon shoots better than Klay. The aggregate flips the within-zone story.
+
+This is **Simpson's paradox** (named after Edward Simpson, 1951): an association reverses when you look inside subgroups. The math isn't wrong — both the aggregate and the within-zone numbers are correctly computed from the same data. They give opposite answers because they answer different questions.
+
+## Why? A lurking variable: shot location
+
+The reversal has a mechanism. Compute, for each player, the share of their shots that come from the restricted area — the easiest zone in basketball.
 
 ```{python}
 qual['rim_share'] = qual['RA_FGA'] / qual['FGA']
@@ -302,39 +372,6 @@ Correlations computed on group averages (one point per state, per team, per play
 
 The rim-share-vs-FG% correlation is real, but read it carefully. It does not say "if Klay Thompson started attacking the rim, his FG% would rise to Gordon's." It says "the players who shoot more from the rim happen to also have higher overall FG%." The reason is mechanical, not skillful: the league averages 67% from the restricted area but only 36% from above-the-break threes. Whoever takes the easier shots posts the better aggregate number.
 
-So when we tested Aaron Gordon's 55.7% against league baseline 47.7% and rejected $H_0$ at vanishingly small $p$, what did we learn? That his shot mix differs from the league's. *Not* that he is a better shooter. The test gave us a true answer to a question that turns out to be the wrong question.
-
-The variable that drives this — shot location — is a **confounder**. It influences both the input (which player is taking the shot) and the output (whether it goes in), creating an aggregate association that doesn't reflect what we actually want to measure: shooting skill. We will formalize confounders using causal diagrams (DAGs) in [Chapter 18](lec18-causal-inference-1.qmd).
-
-## Simpson's paradox: Klay Thompson vs Aaron Gordon
-
-The aggregate gap between Gordon (55.7%) and Thompson (43.3%) is 12 percentage points. Now break it down by zone.
-
-```{python}
-def zone_table(name):
-    row = qual[qual['PLAYER_NAME'] == name].iloc[0]
-    return pd.Series({
-        'RA':    row['RA_FGM']    / row['RA_FGA'],
-        'PAINT': row['PAINT_FGM'] / row['PAINT_FGA'],
-        'MID':   row['MID_FGM']   / row['MID_FGA'],
-        'LC3':   row['LC3_FGM']   / row['LC3_FGA'],
-        'RC3':   row['RC3_FGM']   / row['RC3_FGA'],
-        'ATB3':  row['ATB3_FGM']  / row['ATB3_FGA'],
-        'TOTAL': row['FGM']       / row['FGA'],
-    })
-
-comparison = pd.DataFrame({
-    'Klay Thompson': zone_table('Klay Thompson'),
-    'Aaron Gordon':  zone_table('Aaron Gordon'),
-})
-comparison['Klay - Gordon'] = comparison['Klay Thompson'] - comparison['Aaron Gordon']
-print((comparison * 100).round(1).to_string())
-```
-
-In every single zone, Klay shoots better than Aaron Gordon. In aggregate, Gordon shoots better than Klay. The aggregate flips the within-zone story.
-
-This is **Simpson's paradox** (named after Edward Simpson, 1951): an association reverses when you look inside subgroups. The mechanism here is shot selection. Gordon takes 65% of his shots from the restricted area where the league shoots 67%; Thompson takes 53% of his shots from above the break where the league shoots 36%. Gordon's high FG% is not shooting skill — it's where he shoots from.
-
 ```{python}
 def shot_mix(name):
     row = qual[qual['PLAYER_NAME'] == name].iloc[0]
@@ -345,6 +382,12 @@ mix = pd.DataFrame({'Klay Thompson': shot_mix('Klay Thompson'),
 print("Share of shots taken in each zone:")
 print((mix * 100).round(1).to_string())
 ```
+
+Gordon takes 65% of his shots from the restricted area where the league shoots 67%; Thompson takes 53% of his shots from above the break where the league shoots 36%. Gordon's high aggregate FG% is not shooting skill — it's where he shoots from.
+
+So when we tested Aaron Gordon's 55.7% against league baseline 47.7% and rejected $H_0$ at vanishingly small $p$, what did we learn? That his shot mix differs from the league's. *Not* that he is a better shooter. The test gave us a true answer to a question that turns out to be the wrong question.
+
+The variable that drives this — shot location — is a **confounder**. It influences both the input (which player is taking the shot) and the output (whether it goes in), creating an aggregate association that doesn't reflect what we actually want to measure: shooting skill. We will formalize confounders using causal diagrams (DAGs) in [Chapter 18](lec18-causal-inference-1.qmd).
 
 ::: {.callout-tip}
 ## Think About It
