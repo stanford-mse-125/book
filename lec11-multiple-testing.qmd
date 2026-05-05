@@ -55,7 +55,7 @@ print(f"Qualified players (FGA >= 200): {len(qual)}")
 
 ## First analysis: one z-test per player
 
-[Lecture 10](lec10-hypothesis-testing.qmd) ran a two-sample t-test on continuous outcomes — two arms of the ACTG trial, $\sigma$ estimated from the data. Here we shift to one sample (one player) and a binary outcome (made or missed). Two changes at once, both riding on a single property of the Bernoulli distribution: **the mean determines the variance**. A shot taken with true probability $p$ has variance $p(1-p)$ — a function of $p$ alone. So the moment $H_0$ pins down the mean as $p_0$, the standard error is locked in at $\sqrt{p_0(1-p_0)/n}$. No control group is needed to estimate variability, and nothing in the player's own data is needed either. That free standard error — Bernoulli's gift — is what makes the one-sample z-test for a proportion work.
+[Lecture 10](lec10-hypothesis-testing.qmd) used a two-sample t-test, with $\sigma$ estimated from the data. Here we have one player, a binary outcome, and no control group. For a Bernoulli outcome the mean $p$ determines the variance $p(1-p)$, so under $H_0: p = p_0$ the standard error $\sqrt{p_0(1-p_0)/n}$ is known exactly.
 
 For each player, we ask: *is this player's true shooting percentage different from the league baseline?* The natural test is a one-sample two-sided z-test for a proportion.
 
