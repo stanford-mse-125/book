@@ -140,9 +140,11 @@ $$\min_{j,\, s} \left[ \sum_{x_i \in R_1(j,s)} (y_i - \bar{y}_1)^2 + \sum_{x_i \
 
 where $R_1(j,s) = \{x : x_j \le s\}$ and $R_2(j,s) = \{x : x_j > s\}$ are the two regions created by splitting feature $j$ at threshold $s$, and $\bar{y}_1, \bar{y}_2$ are the mean outcomes in each region. Each leaf predicts the mean of the training observations that fall into it.
 
-For classification, the criterion is **Gini impurity** instead of squared error. A node is "pure" if every observation in it has the same label. The Gini index $\hat{p}(1 - \hat{p})$ measures how mixed a node is, where $\hat{p}$ is the fraction of observations with label 1 (for binary classification; generalizes to $1 - \sum_k \hat{p}_k^2$ for multi-class). The algorithm greedily picks splits that maximize the total decrease in impurity.
+Concretely, picking the very first split looks like this. The algorithm enumerates every candidate (feature, threshold) pair: `bedrooms ≤ 0.5`, `bedrooms ≤ 1.5`, …, `bathrooms ≤ 1.5`, `room_type = Entire home`, and so on. (For a numeric feature, sklearn's candidate thresholds are midpoints between consecutive sorted values, so an integer feature like `bedrooms` produces thresholds at 0.5, 1.5, 2.5, …) For each candidate it would compute the total squared error in the resulting two child nodes — predicted by the mean price of listings on each side — and the candidate that drops total SSE the most wins. If `bedrooms ≤ 1.5` wins, studios and 1-bedrooms go left (predicted at their mean price); 2-bedrooms and up go right (predicted at theirs). The same scan then runs again inside each child node.
 
 The process is **recursive**: after the first split creates two child nodes, the algorithm splits each child independently, and so on. The tree grows until a stopping criterion is met — typically a maximum depth or a minimum number of samples per leaf.
+
+For classification, the only thing that changes is the splitting criterion: instead of squared error, the tree uses **Gini impurity** to score how mixed each child node is. We come back to it in §Classification trees below.
 
 ```{python}
 # Text representation of the tree structure
@@ -190,15 +192,15 @@ Training R² climbs from 0.30 toward 1.00 while test R² peaks around depth 7 an
 
 The pattern is the **bias-variance tradeoff** from [Chapter 6](lec06-validation.qmd) in action. A shallow tree has high bias (it underfits — too few splits to capture the real pattern) but low variance (it's stable across different training samples). A deep tree has low bias but high variance — it memorizes the noise in whatever training data it happens to see. The sweet spot balances these two forces. In Chapter 6 we saw this tradeoff with polynomial degree; here the "complexity knob" is tree depth. Extreme shallow trees have very low variance; moderate-depth trees already show meaningful sensitivity to the training set.
 
-Let's visualize the predictions from a shallow and deep tree to see what overfitting looks like.
+Let's visualize the predictions from a shallow and deep tree to see what overfitting looks like. Bedrooms is integer-valued in the data, so we plot the tree's prediction at each integer bedroom count, holding the other features fixed at their training-set medians.
 
 ```{python}
-# Compare shallow vs deep tree predictions along the bedrooms axis
+# Compare shallow vs deep tree predictions at each integer bedroom count
 fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
 
-# Create prediction grid: vary bedrooms, hold other features at median
+# Prediction grid: integer bedrooms only, other features at median
 median_features = X_train.median()
-bedroom_range = np.arange(0, 7, 0.1)
+bedroom_range = np.arange(0, 7)
 X_slice = pd.DataFrame(
     np.tile(median_features.values, (len(bedroom_range), 1)),
     columns=X_train.columns
@@ -214,18 +216,22 @@ for ax, depth, title in zip(axes,
 
     ax.scatter(df['bedrooms'] + np.random.normal(0, 0.05, len(df)),
                prices, alpha=0.02, s=3, color='gray', label='data')
-    ax.plot(bedroom_range, preds, color='orangered', linewidth=2.5, label=f'depth={depth}')
+    ax.plot(bedroom_range, preds, 'o', color='orangered', markersize=10,
+            label=f'depth={depth}')
     ax.set_xlabel('Bedrooms')
     ax.set_ylabel('Predicted price ($)')
     ax.set_title(title)
     ax.legend()
     ax.set_xlim(-0.5, 6.5)
+    ax.set_xticks(bedroom_range)
 
 plt.tight_layout()
 plt.show()
 ```
 
-The shallow tree produces smooth, interpretable predictions. The deep tree produces jagged step functions that jump wildly between adjacent bedroom counts — it has memorized the training data's quirks rather than learning the underlying pattern.
+The shallow tree's predictions march smoothly upward with bedroom count; the deep tree's predictions jump erratically — 3-bedroom listings are predicted *cheaper* than 2-bedroom listings, an artifact of memorizing a few unusual rows in the training set rather than learning the real pattern.
+
+**Why constant predictions, not a smooth curve?** A tree partitions the feature space into axis-aligned rectangles. Each rectangle (a leaf) gets a single number — the mean of the training observations that fall into it. As you slide along any one feature, the prediction stays flat until you cross a split threshold, then jumps to a new constant. Linear regression draws a continuous slope; trees produce predictions that are constant within neighborhoods of feature space. The deep tree carves out so many tiny rectangles that adjacent integer bedroom counts can land in different leaves with very different means, which is why its predictions look erratic instead of orderly.
 
 :::{.callout-tip}
 ## Think About It
@@ -297,6 +303,26 @@ Cross-validation picked the depth without ever touching the test set. The test-s
 ## Classification trees
 
 Everything above predicts a continuous price. But trees handle **classification** just as naturally. The splitting criterion changes from squared error to **Gini impurity**, but everything else --- greedy recursive partitioning, depth control, cross-validation --- stays the same.
+
+:::{.callout-note collapse="true"}
+## Going deeper: Gini impurity
+
+Squared error doesn't make sense when the target is a label rather than a number. We need a different way to ask "how mixed is this node?"
+
+The **Gini index** for a binary classification node with class proportion $\hat p$ is
+
+$$\text{Gini} = \hat p (1 - \hat p).$$
+
+Read it as a measure of impurity:
+- A **pure** node — all observations have the same label, so $\hat p = 0$ or $\hat p = 1$ — has Gini $= 0$.
+- A **maximally mixed** node — 50/50 — has Gini $= 0.25$, the largest value possible for binary classification.
+
+*Worked example.* A node containing 70 expensive listings and 30 not-expensive listings has $\hat p = 0.7$, so Gini $= 0.7 \times 0.3 = 0.21$. A second candidate split that produced one child with 90/10 (Gini $= 0.09$) and another with 50/50 (Gini $= 0.25$) would average to a weighted impurity that the algorithm compares against the parent's Gini to decide whether the split is worth taking.
+
+The multi-class version generalizes the same idea: $\text{Gini} = 1 - \sum_k \hat p_k^2$.
+
+The tree-fitting algorithm greedily picks splits that maximize the **decrease** in total weighted Gini from parent to children — the categorical analogue of "drop SSE the most" from regression.
+:::
 
 Let's create a binary target: is a listing "expensive" (price above $200)?
 
@@ -381,8 +407,6 @@ The classification tree learns the same kinds of splits as the regression tree �
 
 One tree overfits. What about averaging many trees?
 
-One tree overfits. What about averaging many trees?
-
 A **random forest** fits hundreds of decision trees, each on a random subset of the data and features, then averages their predictions. The randomness ensures the trees disagree on noise but agree on signal.
 
 ```{python}
@@ -411,6 +435,17 @@ A random forest combines two ideas:
 The ensemble prediction is the average of all individual tree predictions (for regression) or majority vote (for classification).
 
 Each individual tree is overfit — it has memorized the noise in its particular bootstrap sample. Different trees memorize *different* noise, so averaging cancels it.
+
+
+### Ensembles, more generally
+
+A random forest is one instance of an **ensemble**: a model built by aggregating many weaker learners into a stronger predictor. Two strategies dominate, distinguished by *how* the learners are produced.
+
+- **Bagging** (parallel) — what we just did. Train many learners independently, each on a different bootstrap sample of the data; combine by averaging or majority vote. The mechanism is *variance reduction*. Random forests = bagging trees + feature subsampling, so the trees disagree on noise as much as possible.
+
+- **Boosting** (sequential). Train learners one at a time, each focused on the previous ones' mistakes; combine as a weighted sum. The mechanism is *bias reduction* — each new learner peels off another layer of error. *Gradient boosting* — the variant that fits each new learner to the residuals of the current ensemble — is treated in [Chapter 17](lec17-automl-llms.qmd).
+
+The general lesson: ensembling is a recipe for turning a moderately good model into a much better one without hand-engineering features. It is the reason "use a random forest" is the strong default for tabular data, and the reason gradient-boosted trees win much of the Kaggle leaderboard.
 
 
 ### More trees never hurts
@@ -734,6 +769,7 @@ In practice, tree-based models (especially gradient-boosted trees like XGBoost) 
 - **Decision tree** — a model that recursively partitions the feature space by asking if/then questions about individual features, predicting the mean outcome (regression) or majority class (classification) in each leaf.
 - **Recursive splitting** — the greedy algorithm that builds a tree: at each node, choose the feature and threshold that minimize prediction error in the child nodes.
 - **Overfitting in trees** — a tree with no depth limit memorizes the training data (training R² ≈ 1) but performs poorly on new data. Controlling depth limits this memorization.
+- **Ensemble** — a model built by aggregating many weaker learners. Bagging (parallel, e.g. random forests) reduces variance; boosting (sequential, e.g. gradient boosting in Chapter 17) reduces bias.
 - **Bagging (bootstrap aggregating)** — training many models on different bootstrap samples of the data and averaging their predictions. Reduces variance without increasing bias.
 - **Feature subsampling** — at each split, considering only a random subset of features. This decorrelates the trees in the ensemble, making the average more effective.
 - **Random forest** — an ensemble of bagged decision trees with feature subsampling. More trees = better or flat, never worse.
