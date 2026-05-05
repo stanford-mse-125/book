@@ -473,30 +473,30 @@ In Chapter 12 we extend hypothesis testing into regression, where we can adjust 
 
 ### Key ideas
 
+- **One-sample z-test for a proportion:** Tests $H_0: p = p_0$ for a binary outcome. The standard error $\sqrt{p_0(1-p_0)/n}$ is *pinned by the null* — no $\hat\sigma$ to estimate from data — so the standardized statistic is asymptotically standard normal, not $t_{n-1}$.
+- **One-sample vs two-sample tests:** A *one-sample* test compares a single sample to a fixed null value (e.g., a known baseline rate). A *two-sample* test compares two groups against each other. The choice of test (z, t, permutation) follows from outcome type and scenario, not sample size.
 - **Multiple testing (multiple comparisons):** Running many hypothesis tests inflates the chance of false positives. The arithmetic applies whether the tests are run by one analyst or across the entire scientific literature.
 - **Family-wise error rate (FWER):** The probability of *any* false positive across all tests. Bonferroni controls this.
 - **False discovery rate (FDR):** The expected *proportion* of rejected hypotheses that are false. BH controls this.
 - **Bonferroni correction:** Test each hypothesis at $\alpha / m$ instead of $\alpha$. Justified by the union bound.
 - **Benjamini-Hochberg (BH) procedure:** Sort p-values; find the largest $k$ where $p_{(k)} \le (k/m) \alpha$; reject hypotheses $1, \ldots, k$. Controls FDR at $\alpha$.
 - **p-value histogram:** Diagnostic. Uniform under the null, spike near zero if signal exists.
-- **Pearson correlation $r$:** Linear association, range $[-1, +1]$, unitless and symmetric. Defined in Chapter 4.
-- **Confounding:** A third variable influencing both an input and an outcome, creating a spurious or magnified association.
-- **Simpson's paradox:** An aggregate trend reverses (or disappears) when looked at within subgroups. A strong form of confounding.
-- **Ecological correlation:** Correlations on group averages can be much stronger than individual-level correlations. Always check the unit of analysis.
-- **Reproducibility crisis:** Bem's precognition paper (2011); Reproducibility Project (2015) found ~36% replication; SCORE (2026) found ~55% replication of 274 social-science claims with high cross-discipline variance.
+- **Simpson's paradox:** An aggregate trend reverses (or disappears) when looked at within subgroups.
 - **P-hacking (data dredging):** Trying many analyses and reporting only the one that produces $p < 0.05$. Researcher degrees of freedom (Simmons et al., 2011) make invisible multiplicity.
 - **Pre-registration:** Publicly committing to research question, data, and analysis plan before seeing data.
 
 ### Computational tools
 
 - `scipy.stats.norm` — z-test machinery for one-sample proportion tests.
-- `scipy.stats.pearsonr(x, y)` — Pearson correlation and p-value.
 - BH procedure: sort p-values, compute thresholds $k/m \cdot \alpha$, apply step-up rule.
 
 ### For the quiz
 
-- Compute the expected number of false positives given $m$ and $\alpha$.
+- Identify the right test for a scenario: one-sample z-test for a proportion (binary outcome, fixed null), two-sample t-test (continuous outcome, two groups), or permutation test (group labels to shuffle).
+- Compute the expected number of false positives given $m$ tests and $\alpha$.
+- Compute the positive predictive value of a discovery list — real associations divided by total reported — and explain why most "significant" findings can be false at scale.
+- Derive the Bonferroni threshold $\alpha / m$ from the union bound; recognize the GWAS standard $5 \times 10^{-8}$ as $0.05/10^6$.
 - Know when to use Bonferroni vs. BH (stakes determine the correction).
 - Interpret a p-value histogram.
-- Explain why a correlation can be misleading due to confounding.
+- Name the cost of a stricter $\alpha$: lower power (more Type II error, missed real effects).
 - Recognize Simpson's paradox: aggregate trend differs from within-group trend.
