@@ -444,7 +444,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 ---
 
-## Lecture 11: Multiple Testing + Correlation
+## Lecture 11: Multiple Testing
 
 **Objectives addressed:** 9 (multiple testing — Bonferroni, FDR)
 
@@ -499,7 +499,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Residual plots: the primary diagnostic for model validity (moved from old Lec 6)
 - Heteroscedasticity: fan-shaped residuals mean unequal variance
 - Q-Q plot: checking normality of residuals
-- "Diagnostics first, inference second" — check model before testing coefficients
+- Inference and diagnostics together: same regression, two questions — is each coefficient distinguishable from noise (inference), and are the assumptions that justified the inference satisfied (diagnostics)
 - Bootstrap CIs for regression coefficients (callback to Lec 8): resample rows, refit, collect β̂
 - Formula-based CIs: t-distribution with n − p − 1 df
 - When bootstrap and formula CIs agree (normal residuals) and disagree (heavy tails, heteroscedasticity)
@@ -529,7 +529,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Forward: Ch 12.5 (classification meets inference — bootstrap CI for AUC, logistic coefficient tests), Lec 13 (trees apply regression and classification), Lec 18 (when does regression estimate a causal effect?)
 - Bridges Acts 1 and 2: combines modeling (regression from Act 1) with inference (testing from Act 2)
 
-**Surprise moment:** REST_DAYS is statistically significant (p ~ 0.04) but the effect is only 0.3 points — practically negligible
+**Surprise moment:** Same machinery, two regressions, two very different conclusions. The Airbnb bathroom premium is statistically significant *and* practically meaningful (~$60/night, decision-grade). The NBA REST_DAYS coefficient is statistically significant at p < 0.001 *yet* the standardized effect is essentially zero — a textbook demonstration that with n in the tens of thousands, "significant" stops meaning "important."
 
 ---
 
