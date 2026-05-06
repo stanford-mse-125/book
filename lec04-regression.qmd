@@ -757,7 +757,7 @@ The flat green dashes are the constant prediction $\beta_0 \mathbf{1} = \bar{y}$
 :::{.callout-warning}
 ## Association, not causation
 
-The regression coefficient measures a statistical association: listings with more bedrooms tend to cost more. The coefficient does not tell us that *adding* a bedroom to a fixed listing would increase its price by this amount. Larger listings differ from smaller ones in many ways — location, amenities, quality — and the bedroom coefficient may be absorbing some of those differences. We return to causal reasoning in [Chapter 18](lec18-causal-inference.qmd).
+The regression coefficient measures a statistical association: listings with more bedrooms tend to cost more. The coefficient does not tell us that *adding* a bedroom to a fixed listing would increase its price by this amount. Larger listings differ from smaller ones in many ways — location, amenities, quality — and the bedroom coefficient may be absorbing some of those differences. We return to causal reasoning in [Chapter 18](lec18-causal-inference-1.qmd).
 :::
 
 ## Verifying orthogonality

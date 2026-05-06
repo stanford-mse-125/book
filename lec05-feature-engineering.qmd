@@ -175,7 +175,7 @@ Bedrooms and bathrooms travel together: apartments with more bedrooms tend to ha
 :::{.callout-tip}
 ## Think About It
 
-When you compare two listings with the same number of bathrooms, the one with an extra bedroom costs about \$58 more (according to the two-feature model). When you compare two listings with the same number of bedrooms, the one with an extra bathroom costs about \$34 more. Notice that the simple regression said each bedroom was worth \$66 — the coefficient dropped when we controlled for bathrooms. These coefficients measure **association**, not causation — we'll revisit that distinction in [Chapter 18](lec18-causal.qmd).
+When you compare two listings with the same number of bathrooms, the one with an extra bedroom costs about \$58 more (according to the two-feature model). When you compare two listings with the same number of bedrooms, the one with an extra bathroom costs about \$34 more. Notice that the simple regression said each bedroom was worth \$66 — the coefficient dropped when we controlled for bathrooms. These coefficients measure **association**, not causation — we'll revisit that distinction in [Chapter 18](lec18-causal-inference-1.qmd).
 :::
 
 # One-hot encoding and categorical features
@@ -364,7 +364,7 @@ The coefficient on `number_of_reviews` is *negative*. The association is real: l
 
 The regression faithfully reports the downward association but has no window into which of these stories is generating it. An analyst who stops at the coefficient — or worse, recommends a host strategy based on it — has confused association with causation.
 
-A good habit: when a coefficient surprises you, ask *could the response plausibly influence this feature?* Here, high price discourages bookings, and fewer bookings mean fewer reviews — so $y$ (price) causally affects $x$ (reviews), not the other way around. Multiple regression cannot untangle this from observational data alone; we develop tools that can in [Chapter 18](lec18-causal.qmd).
+A good habit: when a coefficient surprises you, ask *could the response plausibly influence this feature?* Here, high price discourages bookings, and fewer bookings mean fewer reviews — so $y$ (price) causally affects $x$ (reviews), not the other way around. Multiple regression cannot untangle this from observational data alone; we develop tools that can in [Chapter 18](lec18-causal-inference-1.qmd).
 :::
 
 # Feature engineering: transforming X
@@ -1121,7 +1121,7 @@ Three questions remain open:
 
 1. **Is the coefficient real or noise?** The bathrooms coefficient is about \$43, but with a different sample it might be \$39 or \$47. Quantifying that uncertainty requires confidence intervals, and interpreting residual patterns formally (including the fan-shape case from the diagnostics section) requires additional assumptions about the noise process. Both live in [Chapter 12](lec12-regression-inference.qmd).
 2. **Does the model generalize to new data?** Training $R^2$ always increases with more features, even noise features. We'll develop train-test splits and cross-validation in [Chapter 6](lec06-validation.qmd).
-3. **Does adding a bathroom *cause* higher prices?** Regression coefficients measure association. Causation requires a different framework — [Chapter 18](lec18-causal.qmd).
+3. **Does adding a bathroom *cause* higher prices?** Regression coefficients measure association. Causation requires a different framework — [Chapter 18](lec18-causal-inference-1.qmd).
 
 ## Study guide
 
