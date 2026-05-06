@@ -9,7 +9,15 @@ jupyter: python3
 
 A New York City Airbnb host is considering spending about \$50,000 to add a second bathroom. Listings with more bathrooms post higher nightly rates -- but is that premium real, large enough to recoup the investment, and stable enough to bet on? Act 1 fit regression models to *predict* prices; Act 2 introduced *inference* -- hypothesis tests and confidence intervals. This chapter combines them: it asks not "what price would a new listing fetch" but "what would happen if I changed something." We will run the analysis with the same machinery you saw in Chapter 5, settle the question, and then turn the same tools on a second one where the answer is much less encouraging: does extra rest improve NBA performance?
 
-Three questions organize the chapter: **(1) coefficient inference** -- is each predictor distinguishable from noise, or could we drop it without loss? **(2) uncertainty quantification** -- what is the range of plausible effect sizes, both for individual coefficients and for predictions at a new $x$? **(3) regression diagnostics** -- do the model's assumptions hold well enough to trust the inference at all? Parsimony favors the simplest model that adequately fits the data (sometimes called *Occam's razor*), but only after diagnostics confirm the inference is trustworthy.
+Three questions organize the chapter, applied to every coefficient we will estimate:
+
+| | Question | Tool | What it does NOT answer |
+|---|---|---|---|
+| **Q1** | Is $\hat{\beta}_j$ **nonzero**? (distinguishable from sample noise) | t-test, p-value, CI excludes 0 | how big the effect is |
+| **Q2** | Is the effect **big enough** to matter? | coefficient magnitude, CI width, Cohen's d | whether assumptions hold |
+| **Q3** | Is the inference **trustworthy**? | residual plot, Q-Q plot, LINE conditions | confounding (systematic error) |
+
+The Airbnb regression in block 1 walks Q1 → Q2 → Q3 once, end to end, and lands on a clean decision. The NBA regression in block 2 reuses the same machinery and gets a "yes" on Q1 — but failing Q2 and a warning on Q3 mean we should NOT act on it. The chapter's pedagogical spine is the gap between Q1 and Q2 ("statistical significance is no substitute for practical importance") and the boundary at Q3 ("diagnostics catch *statistical* problems, not *systematic* ones").
 
 :::{.callout-note collapse="true"}
 ## Going deeper: prediction vs inference vs causality
@@ -141,6 +149,16 @@ The output above is the standard OLS summary from `statsmodels`. Every regressio
 The summary also reports an `F-statistic` and `Prob (F-statistic)`. These test whether the model as a whole explains more than an intercept-only baseline -- a single hypothesis covering all predictors at once. We do not lean on this test in this course (when each individual coefficient already has its own t-test, the omnibus version rarely changes a decision), but you will see it in any regression output, so know that it exists.
 :::
 
+:::{.callout-note collapse="true"}
+## Going deeper: multicollinearity
+
+Two predictors are **collinear** when one is approximately a linear combination of the other (and possibly the intercept) -- e.g., bathrooms and bedrooms are correlated because bigger places tend to have more of both. Multicollinearity does NOT bias the coefficient estimates: $\hat\beta$ remains unbiased and consistent. What it inflates is **standard errors**: when two columns of $X$ are nearly redundant, the regression cannot tell which one is doing the work, so it reports wider CIs on both. The footer's `Cond. No.` is a global summary; for a per-predictor diagnostic, the **variance inflation factor** (VIF) of $x_j$ is $\mathrm{VIF}_j = 1/(1 - R^2_j)$, where $R^2_j$ is from regressing $x_j$ on the *other* predictors. VIF $> 10$ is a common rule-of-thumb red flag.
+
+In our Airbnb model, bathrooms and bedrooms are correlated but not pathologically so (Cond. No. 35, just over the 30 "moderate" threshold). Both coefficients survive their t-tests with margin to spare. If we had fit a regression with `bathrooms`, `bedrooms`, AND `total_rooms` (= sum of the two), the design matrix would be singular and the regression would refuse to fit -- the perfect-collinearity boundary case.
+
+The fix when multicollinearity is severe: drop one of the redundant predictors, combine them (e.g., a single `rooms` total), or accept the wider CIs and report them honestly.
+:::
+
 We will read every regression table in this textbook off this same template.
 
 ## Interpreting the Airbnb coefficients
@@ -163,7 +181,7 @@ Read the signs:
 The coefficient on `bedrooms` is about \$34 per night. Does that mean adding a bedroom to your listing would increase your nightly rate by that amount? What other factors might change when you add a bedroom — and how would that affect the interpretation?
 :::
 
-## Which coefficients matter? The null hypothesis
+## Q1: is the bathroom coefficient nonzero?
 
 For each coefficient, the **null hypothesis** states that predictor $j$ contributes nothing *beyond what the other predictors in this model already contribute*:
 
@@ -381,7 +399,7 @@ print("The PI says a *single new* listing could fall anywhere in a much wider ra
 print("reflecting the large variation among individual Airbnb listings.")
 ```
 
-## A cautionary tale: NBA rest
+## Q1 says yes — but is the effect big enough? (NBA cautionary tale)
 
 The Airbnb story was tidy: the bathrooms coefficient is large, statistically distinguishable from zero, and stable enough to drive a renovation decision. Regression inference is not always so encouraging. We now turn the same machinery on a different question -- and watch the same machinery flag trouble.
 
@@ -430,11 +448,9 @@ print(f"  BACK_TO_BACK: {nba_games['BACK_TO_BACK'].mean():.2%} of games")
 print(f"  PREV_MIN: mean={nba_games['PREV_MIN'].mean():.1f} (previous game minutes)")
 ```
 
-### The regression and what it says
+### Fit, then read
 
-We predict game score from rest days plus three controls -- player season average, home/away, and the porousness of the opposing defense:
-
-$$\text{GAME\_SCORE}_i = \beta_0 + \beta_1 \cdot \text{REST\_DAYS}_i + \beta_2 \cdot \text{PLAYER\_SEASON\_AVG}_i + \beta_3 \cdot \text{HOME}_i + \beta_4 \cdot \text{OPP\_GS\_ALLOWED}_i + \varepsilon_i$$
+We predict `GAME_SCORE` from `REST_DAYS` plus three controls -- player season average, home/away, and the porousness of the opposing defense (`OPP_GS_ALLOWED`, the mean game score players post against that opponent; high = porous defense).
 
 ```{python}
 model_full = smf.ols(
@@ -445,26 +461,18 @@ model_full = smf.ols(
 print(model_full.summary())
 ```
 
-Read this table off the same template you used for Airbnb. The `REST_DAYS` row is the one that should drive the front-office decision: its coefficient is small (a fraction of a point per day), but with $n > 70{,}000$ even a tiny coefficient gets a tiny SE, and the t-statistic flags it as "statistically significant" at $p < 0.001$. **That is the surprise of the chapter -- the same machinery that gave a clean, decision-grade answer on Airbnb declares the rest effect "significant" at $p<0.001$ even though the coefficient is essentially zero in standardized units.** Significance and importance are different questions; the rest of this section pulls them apart.
+Read this table off the same template as Airbnb. The `REST_DAYS` row jumps out: coefficient $-0.15$, $p<0.001$, CI $[-0.20, -0.11]$ excludes zero comfortably. By the **Q1** criterion of block 1 -- "is the coefficient distinguishable from zero?" -- we have a winner.
 
-### Interpreting the coefficients in context
-
-Read the four signs one at a time. Some are mechanical, some are surprising, and one is a trap.
-
-- **`PLAYER_SEASON_AVG` (positive, near 1):** unsurprising and *mechanical*. We built this variable as the in-sample average of `GAME_SCORE` over the player-season -- the very game we are predicting is part of that average. So a coefficient near 1 is almost a tautology: each unit increase in season average must move the predicted game score by ~1 unit, because the season average IS the predicted game score plus a tiny bit of game-to-game variation. If this coefficient were anywhere far from 1, something would be off in how we built the variable.
-- **`HOME` (positive):** the home-court bump every NBA fan knows. Players post slightly higher game scores at home than on the road, after controlling for who they are and who they are playing.
-- **`REST_DAYS` (small, possibly negative):** the surprise. After controlling for player quality, an extra rest day does almost nothing. We will revisit whether this small estimate is *practically* meaningful (separately from whether it is *statistically* distinguishable from zero).
-- **`OPP_GS_ALLOWED` (positive, also near 1):** at first glance this looks paradoxical. Shouldn't a "stronger opponent" *lower* a player's score? Read the variable definition carefully: `OPP_GS_ALLOWED` is the average game score *allowed* by that opponent -- their porousness on defense. A high value means players post big numbers against this team; a low value means the team is stingy. So a positive coefficient is mechanical: facing a porous defense → higher game score. And like `PLAYER_SEASON_AVG`, this variable averages `GAME_SCORE` in-sample (across all games against that opponent), so its coefficient sitting near 1 has a similar built-in pull -- the regression is partly fitting "your score equals the opponent average plus deviations." The variable's name (had we called it `OPP_STRENGTH`) would have lied about the direction on top of all that.
+**That is the surprise of the chapter.** Block 1 said a tight CI excluding zero meant decision-grade. Here, taking that seriously would say "rest hurts performance, $p<0.001$ -- cut rest days." That conclusion is wrong, and the next two questions tell us why.
 
 :::{.callout-warning}
 ## Variable names can deceive
+The `OPP_GS_ALLOWED` coefficient sits near $+1$, which looks paradoxical -- shouldn't a "stronger opponent" *lower* a player's score? Read the variable definition carefully: `OPP_GS_ALLOWED` is the average game score *allowed* by that opponent. High = porous defense. So a positive coefficient is mechanical: facing a porous defense → higher game score. The variable's name (had we called it `OPP_STRENGTH`) would have lied about the direction.
 
-This is a real failure mode in applied work, not just a textbook example: a coefficient's sign is only interpretable if you know exactly how the variable was *constructed*. A teammate named the column "opp strength," but the encoding makes high values mean "weak defense." The positive coefficient was sensible all along; the name was misleading.
-
-When a coefficient sign surprises you, before you write up "regression confirms X," look at how the variable is computed. The most common source of a "surprising" sign is not a deep finding -- it is a sign convention you missed. The same lens applies to a coefficient that surprises in the *opposite* direction: a binary indicator coded `1 = no` rather than `1 = yes` flips the sign of its coefficient with no change in the underlying relationship.
+When a coefficient sign surprises you, before you write up "regression confirms X," look at how the variable was *constructed*. The most common source of a "surprising" sign is not a deep finding -- it is a sign convention you missed. The same lens applies to a coefficient that surprises in the *opposite* direction: a binary indicator coded `1 = no` rather than `1 = yes` flips the sign with no change in the underlying relationship.
 :::
 
-### Comparing effect sizes on a common scale
+### Q2: is the effect large enough to matter?
 
 Raw coefficients are hard to compare across predictors with different units. **Standardized coefficients** multiply each coefficient by its predictor's standard deviation, putting all effects on a common scale: "the effect of a one-SD change."
 
@@ -514,16 +522,12 @@ print("Left: player quality dwarfs everything else.")
 print("Right: rest_days CI is fully visible — and it barely clears zero.")
 ```
 
-The bar that should drive a strategic decision is a sliver next to the bars for the variables we already understood.
-
-### "Significant" does not mean "important"
-
-A small p-value does not mean a large effect. With $n = 70{,}000$, the coefficient t-test is sensitive enough to flag effects too small to act on. The distinction has two formal names worth introducing:
+The bar that should drive a strategic decision is a sliver next to the bars for the variables we already understood. With $n = 70{,}000$, the coefficient t-test is sensitive enough to flag effects too small to act on. The distinction has two formal names worth introducing:
 
 - **Statistical significance**: the coefficient is distinguishable from zero given the sample (a property of the t-test, not the world).
 - **Practical significance** (or **practical importance**): the coefficient is large enough to matter for a decision in the relevant domain (a property of the world, not the test).
 
-To put effect sizes on a unitless scale that is comparable across problems, we use **Cohen's d** -- the coefficient divided by the response variable's standard deviation. The number you get is "how many SDs of the outcome does a one-unit change in the predictor move the prediction." Whether a given $d$ is "important" depends entirely on context: a tiny $d$ on something high-stakes (mortality, election margins) can matter; a "large" $d$ on something low-stakes can fail to. The benchmarks below are a backstop, not a substitute for asking "does this number change a decision?"
+To put effect sizes on a unitless scale comparable across problems, we use **Cohen's d** -- the coefficient divided by the response variable's standard deviation. The number you get is "how many SDs of the outcome does a one-unit change in the predictor move the prediction." Whether a given $d$ is "important" depends entirely on context: a tiny $d$ on something high-stakes (mortality, election margins) can matter; a "large" $d$ on something low-stakes can fail to. The benchmarks below are a backstop, not a substitute for asking "does this number change a decision?"
 
 ```{python}
 # Effect size for REST_DAYS in NBA model
@@ -603,39 +607,12 @@ plt.show()
 
 The four colored within-bucket lines are nearly flat: once we compare like-to-like, extra rest barely moves game score. The dashed aggregate line moves more, because it picks up the compositional effect of which players are at each rest value. Adding `PLAYER_SEASON_AVG` to the regression is the algebraic version of switching from the dashed line to the colored ones. This is **Simpson's paradox in regression form**: an aggregate association that flips or shrinks once we condition on the right covariate. Here the *signs* are the same -- aggregate and within-bucket slopes both trend slightly down -- but the aggregate is much steeper. So this example is the *attenuation* flavor of Simpson's, not a sign-flip; the lesson is the same either way: an unadjusted regression of game score on rest days alone would have reported a misleadingly large coefficient.
 
-### Could other covariates rescue the rest effect?
-
-The `REST_DAYS` coefficient is small. Could adding more covariates -- say, a back-to-back indicator, or fatigue-from-previous-game minutes -- change the story?
-
-```{python}
-# Extended model with additional covariates
-nba_extended = nba_games.dropna(subset=['PREV_MIN']).copy()
-
-model_extended = smf.ols(
-    'GAME_SCORE ~ REST_DAYS + PLAYER_SEASON_AVG + HOME + OPP_GS_ALLOWED + BACK_TO_BACK + PREV_MIN',
-    data=nba_extended
-).fit()
-
-print("REST_DAYS coefficient across model specifications:")
-print(f"  Base model (4 predictors):     {model_full.params['REST_DAYS']:+.4f}  (p = {format_pvalue(model_full.pvalues['REST_DAYS'])})")
-print(f"  Extended model (6 predictors): {model_extended.params['REST_DAYS']:+.4f}  (p = {format_pvalue(model_extended.pvalues['REST_DAYS'])})")
-print()
-print("Extended model coefficients:")
-for var in ['REST_DAYS', 'BACK_TO_BACK', 'PREV_MIN', 'PLAYER_SEASON_AVG', 'HOME', 'OPP_GS_ALLOWED']:
-    print(f"  {var:25s} {model_extended.params[var]:+.4f}  (p = {format_pvalue(model_extended.pvalues[var])})")
-print()
-print("The coefficient for REST_DAYS remains negative (or near zero) regardless of")
-print("which covariates we include. Additional rest does not appear to improve performance")
-print("in this dataset — a genuine finding, not an artifact of omitted variables.")
-print("Sometimes the data simply do not support the hypothesis we hoped for.")
-```
-
 :::{.callout-warning}
 ## Association, not causation
 Our regression controls for measured covariates -- player quality, home court, opponent porousness -- but it does NOT estimate a *causal* effect of rest. Coaches choose when to rest players for strategic reasons we cannot observe (a DNP after a soft loss differs from a DNP before a back-to-back). Chapter 18 introduces directed acyclic graphs (DAGs), the framework that lets you draw which paths a regression closes and which it leaves open -- and decide whether "controlling for" was enough.
 :::
 
-## Regression diagnostics: applied to each model
+## Q3: is the inference trustworthy?
 
 You met residual plots in Chapter 5 as a tool for spotting missing model structure (curves, clusters, fans). Here we use the same plots for a sharper purpose: deciding whether the t-tests and confidence intervals above can be trusted at all. We have run the same machinery on two regressions and gotten very different answers; before we trust either, we have to check that the formula-based inference rests on a sound foundation. The diagnostics below apply to BOTH models in turn.
 
@@ -692,41 +669,20 @@ print("Expensive listings vary more in absolute dollars than cheap ones do, so t
 print("constant-variance assumption (the 'E' in LINE) is mildly violated. Options below.")
 ```
 
-The NBA residuals tell a different version of the same story. Look first at the residual scatter (left panel), then at the scale-location plot (right panel) -- the two together usually agree on whether variance is constant.
+:::{.callout-note collapse="true"}
+## Going deeper: NBA residual diagnostics
 
-```{python}
-# Residual plot for the NBA model
+The NBA model has the same E-violation in a different form. The residuals look roughly symmetric around zero, but the scale-location LOWESS rises from ~0.2 at low fitted scores to ~1.0 at high ones — players projected to score low have less room to deviate; high-projection stars have wider game-to-game swings. The plotting code is parallel to the Airbnb diagnostic above; just substitute `model_full` for `airbnb_model`.
+
+```python
 fitted_nba = model_full.fittedvalues
 resid_nba = model_full.resid
-
 fig, axes = plt.subplots(1, 2, figsize=(8, 3.5))
-
 axes[0].scatter(fitted_nba, resid_nba, alpha=0.02, s=5, color='steelblue')
 axes[0].axhline(y=0, color='red', linestyle='--', linewidth=1)
-axes[0].set_xlabel('Fitted Values (ŷ)')
-axes[0].set_ylabel('Residuals')
-axes[0].set_title('NBA: Residuals vs Fitted Values')
-smooth_nba = lowess(resid_nba, fitted_nba, frac=0.1)
-axes[0].plot(smooth_nba[:, 0], smooth_nba[:, 1], color='orange', linewidth=2, label='LOWESS smooth')
-axes[0].legend()
-
-std_resid_nba = model_full.get_influence().resid_studentized_internal
-axes[1].scatter(fitted_nba, np.sqrt(np.abs(std_resid_nba)), alpha=0.02, s=5, color='steelblue')
-axes[1].set_xlabel('Fitted Values')
-axes[1].set_ylabel(r'$\sqrt{|\mathrm{Standardized\ Residuals}|}$')
-axes[1].set_title('NBA: Scale-Location Plot')
-smooth_nba2 = lowess(np.sqrt(np.abs(std_resid_nba)), fitted_nba, frac=0.1)
-axes[1].plot(smooth_nba2[:, 0], smooth_nba2[:, 1], color='orange', linewidth=2)
-
-plt.tight_layout()
-plt.show()
-
-print("NBA: the residuals look roughly symmetric around zero, but the scale-location plot")
-print("shows the spread GROWING with fitted value (sqrt|standardized residual| rises from")
-print("~0.2 at low fitted scores to ~1.0 at high ones). Players projected to score low")
-print("have less room to deviate; high-projection stars have wider game-to-game swings.")
-print("Mild heteroscedasticity — the same E-violation as Airbnb, in a different form.")
+# ... (same as Airbnb residual plot)
 ```
+:::
 
 ### Q-Q plot: are residuals approximately normal?
 
@@ -752,35 +708,14 @@ print("up; the left side tracks the line. Combined with the heteroscedasticity a
 print("suggests a log-price transformation would clean both problems up.")
 ```
 
-The NBA Q-Q tells a similar but milder story.
+:::{.callout-note collapse="true"}
+## Going deeper: NBA Q-Q plot
 
-```{python}
-# Q-Q plot for the NBA model
-fig, ax = plt.subplots(figsize=(6, 6))
-(tq_nba, ord_nba), (slope_nba, intercept_nba, _) = stats.probplot(resid_nba, dist='norm')
-ax.scatter(tq_nba, ord_nba, alpha=0.02, s=5, color='steelblue')
-ref_x = np.array([tq_nba.min(), tq_nba.max()])
-ax.plot(ref_x, intercept_nba + slope_nba * ref_x, 'r-', linewidth=1.5, label='Normal reference line')
-ax.set_xlabel('Theoretical Quantiles (Normal)')
-ax.set_ylabel('Sample Quantiles (Residuals)')
-ax.set_title('Q-Q Plot of Residuals\n(NBA regression model)')
-ax.legend()
-plt.tight_layout()
-plt.show()
+The NBA Q-Q tells a milder version of the same right-skew story. Read it one tail at a time: the left tail is closer to the normal line than the right tail is, though not perfectly so (mild deviation in the moderate-negative range). The right tail bows above the line — the biggest games (a star going 12-for-15 from three) happen more often than a normal would allow. With $n > 70{,}000$ the CLT rescues formula-based inference on the coefficients; a *prediction interval* for an individual game score would be too narrow on the high end.
+:::
 
-print("Read the NBA plot one tail at a time:")
-print("  - The left tail is closer to the normal line than the right tail is, though")
-print("    not perfectly so (mild deviation in the moderate-negative range).")
-print("  - The right tail bows ABOVE the line: the highest residuals are larger than a")
-print("    normal would predict. The biggest games (a star going 12-for-15 from three)")
-print("    happen more often than a normal would allow.")
-print()
-print("The asymmetry — heavier right tail, lighter left tail — is the signature of right-skew.")
-print("With n > 70,000 the CLT still rescues formula-based inference on the *coefficients*,")
-print("but a *prediction interval* for an individual game score would be too narrow on the high end.")
-```
-
-### Reading a Q-Q plot: a visual gallery
+:::{.callout-note collapse="true"}
+## Going deeper: Q-Q gallery — reading other departures from normality
 
 Both Airbnb and NBA residuals showed right-skew (the right tail bows up while the left tail tracks the line). What do other departures from normality look like? The gallery below pairs each residual distribution (top row of each block) with its Q-Q plot (bottom row), so you can read directly from distribution shape to Q-Q shape.
 
@@ -868,8 +803,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-:::{.callout-note}
-## How to read the gallery
+**How to read the gallery:**
 
 | Q-Q shape | What it means | Example cause |
 |:--|:--|:--|
@@ -879,8 +813,6 @@ plt.show()
 | S-shaped | Heavy tails — more extreme values than normal | Outlier-prone measurements |
 | Reverse-S | Light tails — fewer extreme values than normal | Bounded or truncated data |
 | Staircase or gap | Multimodal residuals — distinct subgroups | Missing categorical predictor |
-
-Each Q-Q pattern maps to a specific distribution shape. A concave curve (bowing down) means the left tail is more spread out than a normal -- the distribution is left-skewed. A convex curve (bowing up) means the right tail is stretched -- right-skewed. An S-shape means both tails extend further than normal -- heavy-tailed. A reverse-S means the data are more concentrated than normal -- light-tailed. Gaps or staircases indicate distinct subgroups.
 
 The key diagnostic reflex: when the Q-Q plot bows or bends, ask *why* the residuals deviate from normality. The shape often points directly to a modeling fix (a log transform, a missing predictor, or an outlier filter).
 :::
@@ -929,7 +861,11 @@ print("Both are 'statistically significant.' Only one is large enough to act on.
 
 ## Inference for logistic regression
 
-Chapter 7 introduced logistic regression: coefficients live on the log-odds scale, and $e^{\hat{\beta}_j}$ is the **odds ratio** — the multiplicative change in odds per unit increase in $x_j$. The same inference machinery from linear regression applies to the $\hat{\beta}_j$: standard errors, test statistics, p-values, and confidence intervals. Only two things change:
+Chapter 7 introduced logistic regression: coefficients live on the log-odds scale, and $e^{\hat{\beta}_j}$ is the **odds ratio** — the multiplicative change in odds per unit increase in $x_j$.
+
+If you have ever looked at sports betting lines, you already have intuition for odds ratios. A betting line of "+200" on Stanford football means a winning \$1 bet pays \$2, implying the bookmaker's odds against Stanford are 2-to-1, or odds of 1/3 on Stanford winning. If a coaching change moves the line from +200 to +100 (1-to-1), the odds against Stanford have *halved* — an odds ratio of $1/2$. The OR is the multiplicative shift in betting odds you would see on the board. Logistic regression is the same accounting, computed from data: each $e^{\hat\beta_j}$ tells you how much the odds of the outcome change when $x_j$ moves by one unit, holding everything else fixed.
+
+The same inference machinery from linear regression applies to the $\hat{\beta}_j$: standard errors, test statistics, p-values, and confidence intervals. Only two things change:
 
 - The test statistic is labeled **z** instead of **t**, because logistic regression uses the **Wald test**: a maximum-likelihood-based statistic that is *asymptotically normal* by general MLE theory. There is no exact small-sample distribution analogous to the OLS $t_{n-p-1}$, so software always returns a $z$ and a normal-based p-value -- accurate at the sample sizes you will encounter in this course, less reliable for rare-event outcomes or near-perfect separation.
 - A 95% CI $[a, b]$ on $\hat{\beta}_j$ exponentiates directly to a 95% CI $[e^a, e^b]$ on the odds ratio (the exponential function is monotone).

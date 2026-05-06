@@ -483,11 +483,11 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Connections:**
 - Backward: Lec 10 (hypothesis testing)
 - Forward: Lec 12 (regression inference — are coefficients "significant"?), Lec 18 (confounding formalized via DAGs)
-- $$ hook: NBA analytics intern "discovers" 30 players benefit from rest — but ~22 are expected by chance
+- $$ hook: NBA analytics intern runs 317 shooter-vs-league tests; 141 reject at α = 0.05 — but ~16 are expected by chance under H₀ for everyone
 
 **Aphorisms:** "If you torture the data long enough, it will confess to anything" (Coase); "Correlation is not causation"
 
-**Surprise moment:** Simpson's paradox in NBA rest data — extended-rest players score *fewer* points overall because bench players dominate the extended-rest group
+**Surprise moment:** Simpson's paradox in NBA shot-zone data — Aaron Gordon outshoots Klay Thompson aggregate (55.7% vs 43.3%) but is *worse* zone-by-zone, because Gordon takes 65% of his shots from the restricted area (league avg 67%) while Thompson takes 53% from above-the-break threes (league avg 36%). Where you shoot dominates how well you shoot.
 
 ---
 
