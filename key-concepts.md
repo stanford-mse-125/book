@@ -24,6 +24,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 | "With four parameters I can fit an elephant, and with five I can make him wiggle his trunk" | John von Neumann | Lec 6 | Overfitting / bias-variance |
 | "Prediction is very difficult, especially about the future" | Niels Bohr (attr.) | Lec 16 | Backtesting / non-stationarity |
 | "Correlation is not causation" | (common) | Lec 11, 18 | Confounding |
+| "Wisdom of the crowd, even of overfit trees" | (course) | Lec 13 | Bagging / variance reduction |
 
 ---
 
@@ -582,6 +583,8 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Surprise moment:** A single deep tree gets perfect training R² but terrible test R². Average 100 of them and test R² beats everything.
 
+**Aphorism:** "Wisdom of the crowd, even of overfit trees" (course) — anchors bagging / variance reduction.
+
 ---
 
 ## Lecture 14: PCA / Dimensionality Reduction
@@ -857,7 +860,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 | 19 | AI coding assistants | **Lec 17** | |
 | 20 | AI failure modes | **Lec 17** | Lec 1, 3 |
 | 21 | Prompt decomposition | **Lec 17** | |
-| 22 | Reports with visualizations | **Lec 2** | Lec 13 |
+| 22 | Reports with visualizations | **Lec 2** | |
 | 23 | Present/defend findings | *Not in lectures — addressed via HW review sessions and project* | |
 
 ### Gaps and notes

@@ -5,21 +5,19 @@ execute:
 jupyter: python3
 ---
 
-You're building a pricing tool for Airbnb hosts. In [Chapter 5](lec05-feature-engineering.qmd), feature engineering got you to a reasonable R² — but you had to choose which interactions to include, which polynomial degree, and how to encode dozens of neighborhoods. Every choice required judgment.
+You're building a pricing tool for Airbnb hosts and your manager wants a working prototype by Friday. Feature engineering ([Chapter 5](lec05-feature-engineering.qmd)) got you a reasonable R² — but you had to pick which interactions to include, which polynomial degree, and how to encode dozens of neighborhoods. **Do you spend the week hand-engineering features, or is there a model that figures out where to split on its own?**
 
-What if the model could figure out where to split on its own? Decision trees do exactly that: they find the splits automatically. No encoding, no polynomial terms, no missing-value imputation. The model looks at the data and decides where to cut.
+Decision trees do exactly that: they find the splits automatically. No encoding, no polynomial terms, no missing-value imputation. Today: how a tree splits, why a single tree overfits, how a forest fixes that by averaging, and when (despite all that) you should still reach for logistic regression instead.
 
 :::{.callout-tip}
 ## Two model families × two tasks
-
-In Chapters 4--6, you used **linear models** for regression (predicting prices). In [Chapter 7](lec07-classification.qmd), you used a linear model for classification (logistic regression). Today introduces a completely different model family --- **trees** --- that handles both tasks:
 
 |              | Regression | Classification |
 |--------------|-----------|----------------|
 | **Linear models** | Linear regression (Ch 4--5) | Logistic regression (Ch 7) |
 | **Trees** | Regression tree (today) | Classification tree (today) |
 
-Logistic regression is much more complex to optimize than linear regression (gradient descent vs. closed-form normal equations). For trees, regression and classification are equally simple --- just change the splitting criterion.
+For trees, regression and classification differ only in the splitting criterion.
 :::
 
 ```{python}
@@ -30,9 +28,8 @@ import seaborn as sns
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, plot_tree, export_text
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import (r2_score, mean_squared_error, confusion_matrix,
+from sklearn.metrics import (r2_score, confusion_matrix,
                              precision_score, recall_score, f1_score,
                              roc_curve, roc_auc_score, ConfusionMatrixDisplay)
 import warnings
@@ -53,11 +50,7 @@ cols = ['id', 'name', 'description', 'price', 'bedrooms', 'bathrooms', 'room_typ
         'latitude', 'longitude']
 df = listings[cols].dropna(subset=['price', 'bedrooms', 'bathrooms']).copy()
 df = df.rename(columns={'neighbourhood_group_cleansed': 'borough'})
-
-# Convert price to numeric
 df['price'] = pd.to_numeric(df['price'].astype(str).str.replace('[$,]', '', regex=True), errors='coerce')
-
-# Focus on reasonable prices (filter out near-free and luxury outliers)
 df = df[df['price'].between(10, 500)].reset_index(drop=True)
 prices = df['price']
 
@@ -65,12 +58,9 @@ print(f"Working with {len(df):,} listings")
 df[['name', 'price', 'bedrooms', 'bathrooms', 'room_type', 'borough']].head()
 ```
 
-We prepare the same feature matrix used in [Chapter 5](lec05-feature-engineering.qmd): numeric features plus one-hot encoded categoricals via `pd.get_dummies()`.
+Same feature matrix as [Chapter 5](lec05-feature-engineering.qmd): numeric features plus one-hot encoded categoricals.
 
 ```{python}
-# One-hot encode categorical features; include continuous features
-# (latitude, longitude, accommodates, number_of_reviews) so trees have
-# real numeric signal to split on
 cat_features = pd.get_dummies(df[['room_type', 'borough']], drop_first=True)
 num_features = df[['bedrooms', 'bathrooms', 'accommodates', 'number_of_reviews',
                    'latitude', 'longitude']]
@@ -82,21 +72,28 @@ print("Features:", feature_names)
 ```
 
 
-## A different approach — decision trees
+## Decision trees: automatic splitting
 
-Engineering features by hand is creative but tedious. What if the model could find the right splits on its own?
+A **decision tree** splits the feature space into regions and predicts the mean price in each region. Each internal node asks an if/then question about one feature ("Is bedrooms > 2?", "Is borough = Manhattan?") and routes the observation left or right.
 
-A **decision tree** splits the feature space into regions and predicts the mean price in each region. Each internal node asks an if/then question about one feature: "Is bedrooms > 2?" or "Is borough = Manhattan?" The tree learns which questions to ask and where to split — no manual feature engineering needed.
+:::{.callout-important}
+## Tree vocabulary
 
-We hold out 30% of listings as a test set so we can measure honest generalization, following the train/test split from [Chapter 6](lec06-validation.qmd).
+A decision tree is a flowchart drawn upside down:
+
+- **Root** — the topmost node, where the first split happens.
+- **Internal node** — any node that asks a yes/no question and routes the observation to one of its two children.
+- **Leaf** — a terminal node where splitting stops. Every leaf carries a prediction (a price for regression, a class label for classification).
+- **Depth** — the length of the longest root-to-leaf path. Controlled by `max_depth`.
+:::
+
+We hold out 30% of listings for honest evaluation ([Chapter 6](lec06-validation.qmd)).
 
 ```{python}
-# Hold out 30% of listings for honest evaluation
 X_train, X_test, y_train, y_test = train_test_split(
     X_base, prices, test_size=0.3, random_state=42
 )
 
-# Decision tree with limited depth to prevent overfitting
 tree = DecisionTreeRegressor(max_depth=4, random_state=42)
 tree.fit(X_train, y_train)
 
@@ -107,189 +104,220 @@ print(f"Decision Tree (depth=4):")
 print(f"  Train R² = {tree_train_r2:.3f}  |  Test R² = {tree_test_r2:.3f}")
 ```
 
-Let's visualize what the tree learned using `plot_tree`.
+:::{.callout-tip}
+## Think About It
+Before running the next cell, predict: which feature lands at the root — `bedrooms`, `room_type`, or `borough`? Which appears second on the more expensive side?
+:::
 
 ```{python}
-# Visualize the tree (using max_depth=3 for readability)
+# Refit at depth=3 just for readability; depth-4 above is what we evaluate
 tree_viz = DecisionTreeRegressor(max_depth=3, random_state=42)
 tree_viz.fit(X_train, y_train)
 
-fig, ax = plt.subplots(figsize=(16, 8))
-plot_tree(tree_viz, feature_names=feature_names, filled=True, fontsize=8,
+fig, ax = plt.subplots(figsize=(20, 10))
+plot_tree(tree_viz, feature_names=feature_names, filled=True, fontsize=14,
           rounded=True, ax=ax, impurity=False, proportion=False)
-ax.set_title('Decision tree for Airbnb price prediction (depth=3)', fontsize=14)
+ax.set_title('Decision tree for Airbnb price prediction (depth=3)', fontsize=18)
 plt.tight_layout()
 plt.show()
 ```
 
-Each leaf shows the predicted price (the mean of training examples that land there) and how many samples it contains. The tree automatically discovers that room type and borough matter — no one-hot encoding intuition required.
-
-:::{.callout-tip}
-## Think About It
-The tree picks its own split points. Look at the first split — does it match your intuition about what matters most for price?
-:::
+Each leaf shows the predicted price and the sample count. The tree discovers that room type and borough matter without any one-hot encoding intuition. (Sklearn's trees need numeric input, so we one-hot encoded; CART/XGBoost/LightGBM split on raw categories directly.)
 
 
 ### How a decision tree splits
 
-A decision tree partitions the feature space using a **greedy** algorithm (**greedy**: chooses the locally best split at each step without planning ahead). At each node, it considers every feature and every possible threshold, choosing the split that produces the most homogeneous child nodes.
-
-For regression, "homogeneous" means low variance. The algorithm picks the split that minimizes the total squared error in the two child nodes:
+A decision tree partitions the feature space using a **greedy recursive** algorithm. At each node, it picks a feature $j$ and threshold $s$ to minimize total squared error in the two child regions:
 
 $$\min_{j,\, s} \left[ \sum_{x_i \in R_1(j,s)} (y_i - \bar{y}_1)^2 + \sum_{x_i \in R_2(j,s)} (y_i - \bar{y}_2)^2 \right]$$
 
-where $R_1(j,s) = \{x : x_j \le s\}$ and $R_2(j,s) = \{x : x_j > s\}$ are the two regions created by splitting feature $j$ at threshold $s$, and $\bar{y}_1, \bar{y}_2$ are the mean outcomes in each region. Each leaf predicts the mean of the training observations that fall into it.
+where each leaf predicts the mean $\bar{y}$ of its training observations. The algorithm enumerates every candidate (feature, threshold) pair (for `bedrooms`: thresholds at 0.5, 1.5, 2.5, …) and picks the one that drops SSE most. The same scan runs again inside each child until a stopping criterion (max depth, minimum leaf size) kicks in.
 
-Concretely, picking the very first split looks like this. The algorithm enumerates every candidate (feature, threshold) pair: `bedrooms ≤ 0.5`, `bedrooms ≤ 1.5`, …, `bathrooms ≤ 1.5`, `room_type = Entire home`, and so on. (For a numeric feature, sklearn's candidate thresholds are midpoints between consecutive sorted values, so an integer feature like `bedrooms` produces thresholds at 0.5, 1.5, 2.5, …) For each candidate it would compute the total squared error in the resulting two child nodes — predicted by the mean price of listings on each side — and the candidate that drops total SSE the most wins. If `bedrooms ≤ 1.5` wins, studios and 1-bedrooms go left (predicted at their mean price); 2-bedrooms and up go right (predicted at theirs). The same scan then runs again inside each child node.
+For classification, the splitting criterion swaps to **Gini impurity** — a measure of how mixed each child is, formally defined in §Classification trees below.
 
-The process is **recursive**: after the first split creates two child nodes, the algorithm splits each child independently, and so on. The tree grows until a stopping criterion is met — typically a maximum depth or a minimum number of samples per leaf.
+#### A worked example on a tiny dataset
 
-For classification, the only thing that changes is the splitting criterion: instead of squared error, the tree uses **Gini impurity** to score how mixed each child node is. We come back to it in §Classification trees below.
+Easier to *see* recursive partitioning than to read it. A 2-feature classification toy with 22 points — class-0 strip along the bottom, class-0 cluster upper-left, class-1 cluster upper-right. Fit a depth-2 tree and watch it split.
 
 ```{python}
-# Text representation of the tree structure
+#| code-fold: true
+toy_X = np.array([
+    [0.4, 0.4], [0.8, 0.7], [1.2, 0.3], [1.5, 1.2], [1.8, 0.9],   # bottom strip
+    [2.2, 1.1], [2.5, 0.5], [2.8, 0.8], [3.2, 1.3], [3.5, 0.4],
+    [3.8, 1.0], [0.6, 1.5],
+    [0.5, 2.5], [1.0, 3.2], [1.4, 2.7], [1.7, 3.5],               # upper-left
+    [2.3, 2.5], [2.7, 3.0], [3.1, 2.4], [3.4, 3.4], [3.7, 2.8], [2.9, 3.6],  # upper-right
+])
+toy_y = np.array([0]*12 + [0]*4 + [1]*6)
+toy_clf = DecisionTreeClassifier(max_depth=2, random_state=42).fit(toy_X, toy_y)
+
+tt = toy_clf.tree_
+root_feat, root_thr = tt.feature[0], tt.threshold[0]
+right_node = tt.children_right[0]
+right_feat, right_thr = tt.feature[right_node], tt.threshold[right_node]
+
+fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+def scatter_pts(ax):
+    ax.scatter(toy_X[toy_y==0, 0], toy_X[toy_y==0, 1], s=80, c='#fde68a',
+               edgecolors='black', linewidth=1, label='class 0')
+    ax.scatter(toy_X[toy_y==1, 0], toy_X[toy_y==1, 1], s=80, c='#86efac',
+               edgecolors='black', linewidth=1, label='class 1')
+    ax.set_xlim(0, 4); ax.set_ylim(0, 4)
+    ax.set_xlabel('$x_1$'); ax.set_ylabel('$x_2$')
+
+scatter_pts(axes[0])
+axes[0].set_title('Step 1: pick the first split')
+
+scatter_pts(axes[1])
+axes[1].axhline(root_thr, color='#dc2626', linewidth=2.5,
+                label=f'split: $x_{root_feat+1} \\leq {root_thr:.2f}$')
+axes[1].set_title('Step 2: first split chosen')
+axes[1].legend(loc='lower right', fontsize=9)
+
+scatter_pts(axes[2])
+axes[2].axhline(root_thr, color='#dc2626', linewidth=2.5)
+axes[2].plot([right_thr, right_thr], [root_thr, 4], color='#2563eb', linewidth=2.5,
+             label=f'split: $x_{right_feat+1} \\leq {right_thr:.2f}$')
+axes[2].set_title('Step 3: split upper region')
+axes[2].legend(loc='lower right', fontsize=9)
+
+axes[3].fill_between([0, 4], 0, root_thr, color='#fde68a', alpha=0.5)
+axes[3].fill_between([0, right_thr], root_thr, 4, color='#fde68a', alpha=0.5)
+axes[3].fill_between([right_thr, 4], root_thr, 4, color='#86efac', alpha=0.5)
+scatter_pts(axes[3])
+axes[3].axhline(root_thr, color='#dc2626', linewidth=2.5)
+axes[3].plot([right_thr, right_thr], [root_thr, 4], color='#2563eb', linewidth=2.5)
+axes[3].set_title('Final: 3 leaves')
+
+plt.tight_layout()
+plt.show()
+```
+
+The first split (`x_2 ≤ 1.95`) peels the bottom strip off — that child is pure. The upper child still mixes classes, so it gets a second split (`x_1 ≤ 2.00`) separating the upper-left class-0 cluster from the upper-right class-1 cluster. Three pure leaves.
+
+Two things to notice. The algorithm is **greedy** — at each node it commits to the best split right now and never reconsiders. Greedy splitting is fast and standard practice, but not guaranteed optimal (the optimization is NP-hard in general). The splits are **axis-aligned** — every cut is parallel to an axis, so a single tree approximates a diagonal boundary with a staircase. We come back to this in §Trees vs. logistic regression.
+
+The same depth-3 tree as text:
+
+```{python}
 print(export_text(tree_viz, feature_names=feature_names, max_depth=3))
 ```
 
 
 ## Overfitting a single tree
 
-A decision tree with no depth limit will keep splitting until every leaf contains a single training observation. The result: perfect training accuracy and terrible generalization.
+With no depth limit, a tree keeps splitting until every leaf holds a single observation. The next cell sweeps depth from 1 to None and tracks train vs. test R².
+
+:::{.callout-tip}
+## Predict before you verify
+Sketch what you expect train R² to look like as depth grows, and what you expect test R² to look like. At what depth do you predict test R² peaks?
+:::
 
 ```{python}
-# Fit trees at increasing depths and track train vs test R²
+#| code-fold: true
 depths = [1, 2, 3, 4, 5, 7, 10, 15, 20, None]
 depth_labels = [str(d) if d else 'None' for d in depths]
-train_r2s = []
-test_r2s = []
+train_r2s, test_r2s = [], []
 
 for d in depths:
-    t = DecisionTreeRegressor(max_depth=d, random_state=42)
-    t.fit(X_train, y_train)
+    t = DecisionTreeRegressor(max_depth=d, random_state=42).fit(X_train, y_train)
     train_r2s.append(t.score(X_train, y_train))
     test_r2s.append(t.score(X_test, y_test))
-    label = f"depth={str(d):>4s}"
-    print(f"{label}:  Train R² = {train_r2s[-1]:.3f}  |  Test R² = {test_r2s[-1]:.3f}")
-```
+    print(f"depth={str(d):>4s}:  Train R² = {train_r2s[-1]:.3f}  |  Test R² = {test_r2s[-1]:.3f}")
 
-```{python}
 fig, ax = plt.subplots(figsize=(10, 5))
 x_pos = range(len(depths))
 ax.plot(x_pos, train_r2s, 'o-', color='steelblue', linewidth=2, markersize=8, label='Train R²')
 ax.plot(x_pos, test_r2s, 's-', color='orangered', linewidth=2, markersize=8, label='Test R²')
-ax.set_xticks(x_pos)
-ax.set_xticklabels(depth_labels)
-ax.set_xlabel('Tree depth (max_depth)')
-ax.set_ylabel('R²')
+ax.set_xticks(x_pos); ax.set_xticklabels(depth_labels)
+ax.set_xlabel('Tree depth (max_depth)'); ax.set_ylabel('R²')
 ax.set_title('A single tree overfits as depth increases')
-ax.legend(fontsize=12)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
+ax.legend(fontsize=12); ax.grid(True, alpha=0.3)
+plt.tight_layout(); plt.show()
 ```
 
-Training R² climbs from 0.30 toward 1.00 while test R² peaks around depth 7 and then collapses.
+Train R² climbs toward 1.0 while test R² peaks near depth 7 and collapses — the **bias-variance tradeoff** from [Chapter 6](lec06-validation.qmd). Shallow trees underfit (high bias, low variance); deep trees memorize noise (low bias, high variance). The "complexity knob" is now `max_depth` instead of polynomial degree.
 
-The pattern is the **bias-variance tradeoff** from [Chapter 6](lec06-validation.qmd) in action. A shallow tree has high bias (it underfits — too few splits to capture the real pattern) but low variance (it's stable across different training samples). A deep tree has low bias but high variance — it memorizes the noise in whatever training data it happens to see. The sweet spot balances these two forces. In Chapter 6 we saw this tradeoff with polynomial degree; here the "complexity knob" is tree depth. Extreme shallow trees have very low variance; moderate-depth trees already show meaningful sensitivity to the training set.
-
-Let's visualize the predictions from a shallow and deep tree to see what overfitting looks like. Bedrooms is integer-valued in the data, so we plot the tree's prediction at each integer bedroom count, holding the other features fixed at their training-set medians.
+To see what shallow and deep trees actually predict, train each on just `bedrooms` and `bathrooms` and color a 2D grid by the predicted price.
 
 ```{python}
-# Compare shallow vs deep tree predictions at each integer bedroom count
-fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+X_2d_train = X_train[['bedrooms', 'bathrooms']]
 
-# Prediction grid: integer bedrooms only, other features at median
-median_features = X_train.median()
-bedroom_range = np.arange(0, 7)
-X_slice = pd.DataFrame(
-    np.tile(median_features.values, (len(bedroom_range), 1)),
-    columns=X_train.columns
-)
-X_slice['bedrooms'] = bedroom_range
+bed_grid  = np.arange(0, 7)
+bath_grid = np.arange(0, 4.5, 0.25)
+BB, AA = np.meshgrid(bed_grid, bath_grid)
+X_grid_2d = pd.DataFrame({'bedrooms': BB.ravel(), 'bathrooms': AA.ravel()})
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+vmin, vmax = 80, 320  # shared price scale so the panels are comparable
 
 for ax, depth, title in zip(axes,
-                             [3, 20],
-                             ['Shallow tree (depth=3)', 'Deep tree (depth=20)']):
+                            [3, 20],
+                            ['Shallow tree (depth=3)', 'Deep tree (depth=20)']):
     t = DecisionTreeRegressor(max_depth=depth, random_state=42)
-    t.fit(X_train, y_train)
-    preds = t.predict(X_slice)
+    t.fit(X_2d_train, y_train)
+    preds = t.predict(X_grid_2d).reshape(BB.shape)
+    im = ax.imshow(preds, origin='lower', aspect='auto', cmap='viridis',
+                   vmin=vmin, vmax=vmax,
+                   extent=[bed_grid.min() - 0.5, bed_grid.max() + 0.5,
+                           bath_grid.min() - 0.125, bath_grid.max() + 0.125])
+    ax.set_xlabel('Bedrooms'); ax.set_ylabel('Bathrooms'); ax.set_title(title)
+    ax.set_xticks(bed_grid); ax.set_yticks(np.arange(0, 4.5, 0.5))
 
-    ax.scatter(df['bedrooms'] + np.random.normal(0, 0.05, len(df)),
-               prices, alpha=0.02, s=3, color='gray', label='data')
-    ax.plot(bedroom_range, preds, 'o', color='orangered', markersize=10,
-            label=f'depth={depth}')
-    ax.set_xlabel('Bedrooms')
-    ax.set_ylabel('Predicted price ($)')
-    ax.set_title(title)
-    ax.legend()
-    ax.set_xlim(-0.5, 6.5)
-    ax.set_xticks(bedroom_range)
+axes[1].annotate('non-monotone',
+                 xy=(5.5, 1.75), xytext=(3.2, 0.45),
+                 fontsize=14, color='white', fontweight='bold',
+                 arrowprops=dict(arrowstyle='->', color='white', lw=2),
+                 ha='center')
 
-plt.tight_layout()
+fig.colorbar(im, ax=axes.ravel().tolist(), label='Predicted price ($)',
+             fraction=0.025, pad=0.02)
 plt.show()
 ```
 
-The shallow tree's predictions march smoothly upward with bedroom count; the deep tree's predictions jump erratically — 3-bedroom listings are predicted *cheaper* than 2-bedroom listings, an artifact of memorizing a few unusual rows in the training set rather than learning the real pattern.
-
-**Why constant predictions, not a smooth curve?** A tree partitions the feature space into axis-aligned rectangles. Each rectangle (a leaf) gets a single number — the mean of the training observations that fall into it. As you slide along any one feature, the prediction stays flat until you cross a split threshold, then jumps to a new constant. Linear regression draws a continuous slope; trees produce predictions that are constant within neighborhoods of feature space. The deep tree carves out so many tiny rectangles that adjacent integer bedroom counts can land in different leaves with very different means, which is why its predictions look erratic instead of orderly.
+Both predictions are **rectangular blocks** of constant color — the tree's signature. (A linear model would render the same plot as a smooth gradient.) The shallow tree carves a few orderly blocks: bigger listings cost more, every step of the way. The deep tree is a quilt of small rectangles where the gradient breaks — adjacent cells where adding a bedroom *lowers* the prediction (highlighted), the visible symptom of memorizing a handful of training listings.
 
 :::{.callout-tip}
 ## Think About It
-A deep tree achieves a training R² close to 1.0. Why doesn't that make it a good model? What would you look at to decide when to stop growing the tree?
+A coworker proposes shipping a tree at `max_depth=20` because "deeper is more flexible." Using only the depth-vs-R² plot above, write a one-sentence rebuttal. Which depth would you ship instead, and what would you measure to defend the choice?
 :::
 
 
 ## Choosing tree depth by cross-validation
 
-The depth experiment above shows that deeper isn't always better. How do we pick the right depth? The same tool from [Chapter 6](lec06-validation.qmd): **cross-validation**. We fit a decision tree at each candidate depth, score it with 5-fold CV, and pick the depth with the best average test performance.
-
-You might ask: the depth experiment above already showed test R² peaking around depth 7. Why do we need CV? Two reasons. First, a single train/test split is noisy; CV averages over 5 splits for a stabler estimate. Second — more importantly — if you tune the depth by peeking at the test set, the test set is no longer a clean held-out estimate of deployment performance. Cross-validation does the tuning on the training data, keeping the test set untouched for a final honest report.
+How do we pick the right depth? The same tool from [Chapter 6](lec06-validation.qmd): **cross-validation**. Sweep candidate depths, score each with 5-fold CV, take the best. Picking depth by peeking at the test set would burn the test set — CV does the tuning on training data, keeping the test set clean for a final honest report.
 
 ```{python}
+#| code-fold: true
 depths_cv = [1, 2, 3, 4, 5, 7, 10, 15, 20]
-cv_means = []
-cv_stds = []
+cv_means, cv_stds = [], []
 
 for d in depths_cv:
-    tree_cv = DecisionTreeRegressor(max_depth=d, random_state=42)
-    scores = cross_val_score(tree_cv, X_train, y_train, cv=5, scoring='r2')
-    cv_means.append(scores.mean())
-    cv_stds.append(scores.std())
+    scores = cross_val_score(DecisionTreeRegressor(max_depth=d, random_state=42),
+                             X_train, y_train, cv=5, scoring='r2')
+    cv_means.append(scores.mean()); cv_stds.append(scores.std())
     print(f"depth={d:>2d}: CV R² = {scores.mean():.4f} ± {scores.std():.4f}")
 
 best_depth = depths_cv[np.argmax(cv_means)]
 print(f"\nBest depth by CV: {best_depth}")
-```
 
-```{python}
 fig, ax = plt.subplots(figsize=(10, 5))
 ax.errorbar(depths_cv, cv_means, yerr=cv_stds, fmt='o-', color='steelblue',
             linewidth=2, markersize=8, capsize=5, label='CV R² ± 1 std')
 ax.axvline(best_depth, color='orangered', linestyle='--', linewidth=2,
            label=f'Best depth = {best_depth}')
-ax.set_xlabel('Tree depth (max_depth)')
-ax.set_ylabel('Cross-validated R²')
+ax.set_xlabel('Tree depth (max_depth)'); ax.set_ylabel('Cross-validated R²')
 ax.set_title('Choosing tree depth by cross-validation')
-ax.legend(fontsize=12)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
+ax.legend(fontsize=12); ax.grid(True, alpha=0.3)
+plt.tight_layout(); plt.show()
 ```
 
-The U-shaped CV curve mirrors the polynomial experiment from [Chapter 6](lec06-validation.qmd): too shallow underfits, too deep overfits, and cross-validation finds the sweet spot.
-
-:::{.callout-tip}
-## Same framework, different model
-
-In [Chapter 6](lec06-validation.qmd), you used 5-fold cross-validation to pick the best polynomial degree. Here you just used the same workflow — `cross_val_score` with a 5-fold CV — to pick the best tree depth. **The same framework generalizes to any hyperparameter.** Lasso $\alpha$, polynomial degree, tree depth, number of neighbors, regularization strength — all are picked by the same mechanical procedure: sweep candidate values, score each by CV, take the best.
-:::
+The U-shaped CV curve mirrors the polynomial experiment from [Chapter 6](lec06-validation.qmd). The same workflow picks any hyperparameter: lasso $\alpha$, polynomial degree, tree depth, number of neighbors — sweep, score by CV, take the best.
 
 :::{.callout-tip}
 ## Think About It
-Compare this CV curve to the polynomial degree CV curve from Chapter 6. Both show a peak followed by decline. What's the "complexity knob" in each case, and why does test performance decline past the peak?
+The next section runs CV for *classification* instead of regression. **Before reading on**, predict the two substitutions you'd need to make in the loop above.
 :::
-
-Let's refit a tree at the best CV depth and evaluate on the held-out test set for an honest final score.
 
 ```{python}
 best_tree = DecisionTreeRegressor(max_depth=best_depth, random_state=42)
@@ -297,37 +325,24 @@ best_tree.fit(X_train, y_train)
 print(f"Tree at CV-best depth={best_depth}: Test R² = {best_tree.score(X_test, y_test):.3f}")
 ```
 
-Cross-validation picked the depth without ever touching the test set. The test-set score reported above is an honest estimate of how this tree will perform on new listings.
-
 
 ## Classification trees
 
-Everything above predicts a continuous price. But trees handle **classification** just as naturally. The splitting criterion changes from squared error to **Gini impurity**, but everything else --- greedy recursive partitioning, depth control, cross-validation --- stays the same.
+Trees handle **classification** just as naturally. Swap squared error for **Gini impurity**; everything else — greedy recursive partitioning, depth control, cross-validation — is identical. Evaluation metrics (confusion matrix, precision, recall, ROC, AUC) are the same ones you used for logistic regression in [Chapter 7](lec07-classification.qmd).
 
 :::{.callout-note collapse="true"}
 ## Going deeper: Gini impurity
 
-Squared error doesn't make sense when the target is a label rather than a number. We need a different way to ask "how mixed is this node?"
+For a node with $K$ classes and class proportions $\hat p_1, \dots, \hat p_K$, the **Gini index** is
 
-The **Gini index** for a binary classification node with class proportion $\hat p$ is
+$$\text{Gini} = 1 - \sum_{k=1}^{K} \hat p_k^2,$$
 
-$$\text{Gini} = \hat p (1 - \hat p).$$
-
-Read it as a measure of impurity:
-- A **pure** node — all observations have the same label, so $\hat p = 0$ or $\hat p = 1$ — has Gini $= 0$.
-- A **maximally mixed** node — 50/50 — has Gini $= 0.25$, the largest value possible for binary classification.
-
-*Worked example.* A node containing 70 expensive listings and 30 not-expensive listings has $\hat p = 0.7$, so Gini $= 0.7 \times 0.3 = 0.21$. A second candidate split that produced one child with 90/10 (Gini $= 0.09$) and another with 50/50 (Gini $= 0.25$) would average to a weighted impurity that the algorithm compares against the parent's Gini to decide whether the split is worth taking.
-
-The multi-class version generalizes the same idea: $\text{Gini} = 1 - \sum_k \hat p_k^2$.
-
-The tree-fitting algorithm greedily picks splits that maximize the **decrease** in total weighted Gini from parent to children — the categorical analogue of "drop SSE the most" from regression.
+which simplifies to $2\hat p(1-\hat p)$ in the binary case. A pure node has Gini = 0; a 50/50 binary node has Gini = 0.5. The tree picks splits that maximize the impurity drop $\text{Gini}_{\text{parent}} - p_L\, \text{Gini}_L - p_R\, \text{Gini}_R$ — the categorical analogue of "drop SSE the most."
 :::
 
-Let's create a binary target: is a listing "expensive" (price above $200)?
+Create a binary target: is a listing "expensive" (price above \$200)?
 
 ```{python}
-# Binary target: expensive = price > $200
 y_train_exp = (y_train > 200).astype(int)
 y_test_exp = (y_test > 200).astype(int)
 
@@ -335,15 +350,15 @@ print(f"Expensive listings: {y_train_exp.mean():.1%} of training set, "
       f"{y_test_exp.mean():.1%} of test set")
 ```
 
-We pick the tree depth by cross-validation, just as we did for regression.
+Pick depth by cross-validation, same recipe as regression.
 
 ```{python}
+#| code-fold: true
 depths_clf = [1, 2, 3, 4, 5, 7, 10, 15, 20]
 cv_means_clf = []
-
 for d in depths_clf:
-    clf_cv = DecisionTreeClassifier(max_depth=d, random_state=42)
-    scores = cross_val_score(clf_cv, X_train, y_train_exp, cv=5, scoring='accuracy')
+    scores = cross_val_score(DecisionTreeClassifier(max_depth=d, random_state=42),
+                             X_train, y_train_exp, cv=5, scoring='accuracy')
     cv_means_clf.append(scores.mean())
     print(f"depth={d:>2d}: CV accuracy = {scores.mean():.4f} ± {scores.std():.4f}")
 
@@ -352,10 +367,7 @@ print(f"\nBest depth by CV: {best_depth_clf}")
 ```
 
 ```{python}
-# Fit classification tree at best depth
-clf_tree = DecisionTreeClassifier(max_depth=best_depth_clf, random_state=42)
-clf_tree.fit(X_train, y_train_exp)
-
+clf_tree = DecisionTreeClassifier(max_depth=best_depth_clf, random_state=42).fit(X_train, y_train_exp)
 y_pred_tree = clf_tree.predict(X_test)
 y_prob_tree = clf_tree.predict_proba(X_test)[:, 1]
 
@@ -367,53 +379,36 @@ print(f"  F1        = {f1_score(y_test_exp, y_pred_tree):.3f}")
 print(f"  AUC       = {roc_auc_score(y_test_exp, y_prob_tree):.3f}")
 ```
 
-The confusion matrix shows how the tree's predictions break down.
-
-```{python}
-#| code-fold: true
-fig, ax = plt.subplots(figsize=(6, 5))
-cm = confusion_matrix(y_test_exp, y_pred_tree)
-disp = ConfusionMatrixDisplay(cm, display_labels=['< $200', '≥ $200'])
-disp.plot(ax=ax, cmap='Blues', values_format='d')
-ax.set_title(f'Classification tree (depth={best_depth_clf})')
-plt.tight_layout()
-plt.show()
-```
-
-The ROC curve plots the tradeoff between true positive rate (recall) and false positive rate as we vary the classification threshold.
-
 ```{python}
 #| code-fold: true
 fpr_tree, tpr_tree, _ = roc_curve(y_test_exp, y_prob_tree)
 auc_tree = roc_auc_score(y_test_exp, y_prob_tree)
 
-fig, ax = plt.subplots(figsize=(7, 6))
-ax.plot(fpr_tree, tpr_tree, color='steelblue', linewidth=2.5,
-        label=f'Classification tree (AUC = {auc_tree:.3f})')
-ax.plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random guess')
-ax.set_xlabel('False positive rate')
-ax.set_ylabel('True positive rate (recall)')
-ax.set_title('ROC curve — classification tree')
-ax.legend(fontsize=11)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+cm = confusion_matrix(y_test_exp, y_pred_tree)
+ConfusionMatrixDisplay(cm, display_labels=['< $200', '≥ $200']).plot(
+    ax=axes[0], cmap='Blues', values_format='d')
+axes[0].set_title(f'Classification tree (depth={best_depth_clf})')
+
+axes[1].plot(fpr_tree, tpr_tree, color='steelblue', linewidth=2.5,
+             label=f'Classification tree (AUC = {auc_tree:.3f})')
+axes[1].plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random guess')
+axes[1].set_xlabel('False positive rate'); axes[1].set_ylabel('True positive rate (recall)')
+axes[1].set_title('ROC curve — classification tree')
+axes[1].legend(fontsize=11); axes[1].grid(True, alpha=0.3)
+plt.tight_layout(); plt.show()
 ```
 
-The classification tree learns the same kinds of splits as the regression tree — room type, borough, bedrooms — but now it routes listings to "expensive" or "not expensive" leaves instead of predicting a dollar amount. If you already understand regression trees, you understand classification trees.
+If you understand regression trees, you understand classification trees — same splits (room type, borough, bedrooms), now routing to "expensive" or "not expensive" leaves.
 
 
 ## Random forests
 
-One tree overfits. What about averaging many trees?
-
-A **random forest** fits hundreds of decision trees, each on a random subset of the data and features, then averages their predictions. The randomness ensures the trees disagree on noise but agree on signal.
+A **random forest** fits hundreds of decision trees, each on a random subset of the data and features, and averages their predictions. The randomness ensures trees disagree on noise but agree on signal.
 
 ```{python}
-rf = RandomForestRegressor(n_estimators=100, random_state=42)
-rf.fit(X_train, y_train)
-
-rf_train_r2 = rf.score(X_train, y_train)
+rf = RandomForestRegressor(n_estimators=100, min_samples_leaf=5,
+                           random_state=42, n_jobs=-1).fit(X_train, y_train)
 rf_test_r2 = rf.score(X_test, y_test)
 
 print("Model comparison (test R²):")
@@ -421,82 +416,123 @@ print(f"  Decision Tree (depth=4):     {tree_test_r2:.3f}")
 print(f"  Random Forest (100 trees):   {rf_test_r2:.3f}")
 ```
 
-The forest beats the single tree — with no hyperparameter tuning beyond the tree count.
+The forest beats the single tree. `n_estimators=100` is the number of trees; `min_samples_leaf=5` caps each tree's depth near $\log_2(n/5)$, deep enough to capture structure but not so deep that a leaf depends on two or three quirky bootstrap rows.
 
 
 ### How random forests work: bagging + feature subsampling
 
-A random forest combines two ideas:
+Two ideas combine:
 
-1. **Bagging** (bootstrap aggregating): each tree trains on a different bootstrap sample — a random draw (with replacement) from the training data. Each sample is the same size as the original dataset but contains some observations multiple times and omits others. For example, if the original dataset has 3 observations $(A, B, C)$, a bootstrap sample might be $(A, B, B)$ or $(C, C, A)$ — same size, random draws with replacement.
+1. **Bagging** (bootstrap aggregating): each tree trains on a bootstrap sample — same size as the original dataset, drawn with replacement. So a 3-row dataset $(A, B, C)$ might yield $(A, B, B)$ or $(C, C, A)$.
 
-2. **Feature subsampling**: at each split, the tree considers only a random subset of features (typically $\sqrt{p}$ out of $p$ total features). This forces the trees to find different splits, reducing the correlation between trees.
+2. **Feature subsampling**: at each split, the tree considers only a random subset of features (default $\sqrt{p}$ for classification, a larger fraction for regression).[^breiman] Limiting each split forces trees to find different splits, decorrelating them.
 
-The ensemble prediction is the average of all individual tree predictions (for regression) or majority vote (for classification).
+[^breiman]: Leo Breiman introduced random forests in 2001 ("Random Forests", *Machine Learning* 45:5–32) and coined "bagging" in 1996.
 
-Each individual tree is overfit — it has memorized the noise in its particular bootstrap sample. Different trees memorize *different* noise, so averaging cancels it.
+The ensemble prediction averages tree predictions (regression) or takes majority vote (classification). Each tree memorizes *different* noise from its own bootstrap sample, so averaging cancels it.
+
+:::{.callout-note collapse="true"}
+## Going deeper: out-of-bag samples
+
+A bootstrap sample of size $n$ from $n$ rows includes ~63% of distinct rows; the other 37% are *out-of-bag* (OOB). Each tree's error on its OOB rows averages to a near-unbiased estimate of generalization error — cross-validation for free. Set `oob_score=True` in `RandomForestRegressor`.
+:::
 
 
 ### Ensembles, more generally
 
-A random forest is one instance of an **ensemble**: a model built by aggregating many weaker learners into a stronger predictor. Two strategies dominate, distinguished by *how* the learners are produced.
+A random forest is one **ensemble**: many weaker learners aggregated into a stronger predictor. Two strategies dominate:
 
-- **Bagging** (parallel) — what we just did. Train many learners independently, each on a different bootstrap sample of the data; combine by averaging or majority vote. The mechanism is *variance reduction*. Random forests = bagging trees + feature subsampling, so the trees disagree on noise as much as possible.
+- **Bagging** (parallel) — train learners independently on bootstrap samples; average. Mechanism: *variance reduction*.
+- **Boosting** (sequential) — train learners one at a time, each focused on previous mistakes; combine as a weighted sum. Mechanism: *bias reduction*. *Gradient boosting* — fits each new learner to the residuals — is treated in [Chapter 17](lec17-automl-llms.qmd).
 
-- **Boosting** (sequential). Train learners one at a time, each focused on the previous ones' mistakes; combine as a weighted sum. The mechanism is *bias reduction* — each new learner peels off another layer of error. *Gradient boosting* — the variant that fits each new learner to the residuals of the current ensemble — is treated in [Chapter 17](lec17-automl-llms.qmd).
-
-The general lesson: ensembling is a recipe for turning a moderately good model into a much better one without hand-engineering features. It is the reason "use a random forest" is the strong default for tabular data, and the reason gradient-boosted trees win much of the Kaggle leaderboard.
+Ensembling turns a moderately good model into a much better one without hand-engineering features. It is the reason "use a random forest" is the strong tabular-data default.
 
 
-### More trees never hurts
+### More trees rarely hurt
 
-Let's train random forests with increasing numbers of trees and track test performance.
+Train random forests with increasing numbers of trees and track test performance.
 
 ```{python}
-# Build feature matrix for the full train/test sets
+#| code-fold: true
 n_trees_list = [1, 5, 10, 25, 50, 100, 200, 500]
 rf_test_scores = []
 
 for n_trees in n_trees_list:
-    rf_temp = RandomForestRegressor(n_estimators=n_trees, random_state=42, n_jobs=-1)
-    rf_temp.fit(X_train, y_train)
-    score = rf_temp.score(X_test, y_test)
-    rf_test_scores.append(score)
-    print(f"n_estimators = {n_trees:>3d}: Test R² = {score:.4f}")
-```
+    rf_temp = RandomForestRegressor(n_estimators=n_trees, min_samples_leaf=5,
+                                    random_state=42, n_jobs=-1).fit(X_train, y_train)
+    rf_test_scores.append(rf_temp.score(X_test, y_test))
+    print(f"n_estimators = {n_trees:>3d}: Test R² = {rf_test_scores[-1]:.4f}")
 
-```{python}
 fig, ax = plt.subplots(figsize=(10, 5))
-
 ax.plot(n_trees_list, rf_test_scores, 'o-', color='forestgreen', linewidth=2.5, markersize=10)
-ax.set_xlabel('Number of trees (n_estimators)')
-ax.set_ylabel('Test R²')
-ax.set_title('Random forest: more trees = better or flat — never worse')
-ax.set_xscale('log')
-ax.set_xticks(n_trees_list)
-ax.set_xticklabels(n_trees_list)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
+ax.set_xlabel('Number of trees (n_estimators)'); ax.set_ylabel('Test R²')
+ax.set_title('Random forest: test R² rises then plateaus')
+ax.set_xscale('log'); ax.set_xticks(n_trees_list); ax.set_xticklabels(n_trees_list)
+ax.grid(True, alpha=0.3); plt.tight_layout(); plt.show()
 ```
 
-No U-shape! The test R² increases and then plateaus. Adding more trees never hurts — it just stops helping. The pattern is fundamentally different from the polynomial and tree-depth experiments in [Chapter 6](lec06-validation.qmd), where more complexity eventually *destroyed* test performance. (Caveat: this "more is never worse" property is specific to bagging/random forests. For *gradient boosting*, which we'll meet in [Chapter 17](lec17-automl-llms.qmd), adding too many trees *can* overfit.)
+No U-shape — test R² rises and plateaus. **In expectation**, adding more trees improves or matches performance; you may see tiny dips in any one run from finite-sample noise. (Caveat: this is specific to bagging. For *gradient boosting* (Chapter 17), too many trees *can* overfit.)
 
 :::{.callout-note}
 ## Escaping the classical U-curve
 
-This is the "one known escape" that [Chapter 6](lec06-validation.qmd) promised in its *Beyond the classical tradeoff* callout. The classical bias-variance curve says test error is U-shaped in model complexity: simple models underfit, complex models overfit, and you have to choose the sweet spot by cross-validation. That story assumes you are fitting a *single* model. The forest is not a single model — it is an average over hundreds of them. Averaging changes the rules: as long as individual trees' errors are sufficiently uncorrelated, adding more trees drives variance down without pushing bias up. There is no sweet spot to find on the `n_estimators` axis — "more" is monotonically at-least-as-good. The U-curve you saw for polynomial degree in Chapter 6 has been replaced by a one-sided staircase.
+This is the "one known escape" promised by [Chapter 6](lec06-validation.qmd)'s *Beyond the classical tradeoff* callout. The classical U-shape assumes you are fitting a *single* model. A forest is an average over hundreds: as long as individual trees' errors are sufficiently uncorrelated, adding more trees drives variance down without pushing bias up. The U-curve in `max_depth` is replaced by a one-sided staircase in `n_estimators`.
 :::
 
 
-### Individual trees are overfit; their average is smooth
+### Individual trees are overfit; their average has lower variance
 
-To understand why averaging works, let's look at what individual trees actually predict. We'll train 5 decision trees on bootstrap samples and plot their predictions along a 1D slice: price vs. bedrooms, holding other features at their median values.
+In 1906, Francis Galton watched 787 villagers guess the weight of an ox at a country fair. Their median guess was 1207 pounds; the actual weight was 1198 — within 1%, even though individual guesses varied wildly.[^galton] Bagging plays the same trick on overfit trees: each tree memorizes different noise from its own bootstrap sample, and averaging cancels it.
+
+[^galton]: Galton, "Vox Populi", *Nature* 75, 450–451 (1907).
 
 ```{python}
-# Create a 1D prediction slice: vary bedrooms, hold everything else at median
-median_features = X_train.median()
+#| code-fold: true
+#| fig-cap: "Each tree sees a different bootstrap sample of the rows; some rows appear multiple times, some not at all."
+n_rows, n_samples = 10, 4
+rng = np.random.default_rng(7)
+bag_idx = rng.integers(0, n_rows, size=(n_samples, n_rows))
 
+fig, ax = plt.subplots(figsize=(8, 4))
+colors = {0: 'white', 1: '#9ecae1', 2: '#3182bd', 3: '#08519c'}
+for s in range(n_samples):
+    counts = np.bincount(bag_idx[s], minlength=n_rows)
+    for r, c in enumerate(counts):
+        c_clip = min(int(c), 3)
+        ax.add_patch(plt.Rectangle((r, n_samples - 1 - s), 1, 1,
+                                   facecolor=colors[c_clip], edgecolor='gray', linewidth=0.7))
+        if c >= 1:
+            ax.text(r + 0.5, n_samples - 1 - s + 0.5, f'×{c}',
+                    ha='center', va='center', fontsize=10,
+                    color='white' if c >= 2 else 'black')
+
+ax.set_xlim(0, n_rows); ax.set_ylim(0, n_samples)
+ax.set_xticks(np.arange(n_rows) + 0.5)
+ax.set_xticklabels([f'row {i+1}' for i in range(n_rows)], fontsize=9)
+ax.set_yticks(np.arange(n_samples) + 0.5)
+ax.set_yticklabels([f'tree {n_samples - i}' for i in range(n_samples)], fontsize=10)
+ax.set_xlabel('Original training rows')
+ax.set_title('Bagging: 4 bootstrap samples of 10 rows each (with replacement)')
+ax.set_aspect('equal')
+for spine in ax.spines.values(): spine.set_visible(False)
+ax.tick_params(axis='both', length=0)
+
+from matplotlib.patches import Patch
+legend_elems = [Patch(facecolor='white', edgecolor='gray', label='not in sample'),
+                Patch(facecolor='#9ecae1', edgecolor='gray', label='appears once'),
+                Patch(facecolor='#3182bd', edgecolor='gray', label='twice'),
+                Patch(facecolor='#08519c', edgecolor='gray', label='3+ times')]
+ax.legend(handles=legend_elems, loc='upper center',
+          bbox_to_anchor=(0.5, -0.18), ncol=4, fontsize=9, frameon=False)
+plt.tight_layout()
+plt.show()
+```
+
+To see this on actual trees, train 25 deep trees on bootstrap samples and plot their predictions along a 1D slice (price vs. bedrooms, other features at median).
+
+```{python}
+#| code-fold: true
+median_features = X_train.median()
 bedroom_range = np.arange(0, 7, 0.1)
 X_slice = pd.DataFrame(
     np.tile(median_features.values, (len(bedroom_range), 1)),
@@ -504,53 +540,72 @@ X_slice = pd.DataFrame(
 )
 X_slice['bedrooms'] = bedroom_range
 
-# Train 5 individual trees on bootstrap samples
-np.random.seed(42)
-fig, ax = plt.subplots(figsize=(10, 6))
-
-individual_preds = []
-for i in range(5):
-    # Bootstrap sample
-    boot_idx = np.random.choice(len(X_train), size=len(X_train), replace=True)
-    X_boot = X_train.iloc[boot_idx]
-    y_boot = y_train.iloc[boot_idx]
-
+rng = np.random.default_rng(42)
+pool_size, n_show = 200, 25
+pool_preds = np.empty((pool_size, len(bedroom_range)))
+for i in range(pool_size):
+    boot_idx = rng.integers(0, len(X_train), size=len(X_train))
     tree_i = DecisionTreeRegressor(max_depth=None, random_state=i)
-    tree_i.fit(X_boot, y_boot)
-    preds = tree_i.predict(X_slice)
-    individual_preds.append(preds)
-    ax.plot(bedroom_range, preds, alpha=0.4, linewidth=1.2, label=f'Tree {i+1}')
+    tree_i.fit(X_train.iloc[boot_idx], y_train.iloc[boot_idx])
+    pool_preds[i] = tree_i.predict(X_slice)
 
-# Average prediction
-avg_preds = np.mean(individual_preds, axis=0)
-ax.plot(bedroom_range, avg_preds, color='black', linewidth=3, label='Average (5 trees)', zorder=5)
+# Vertical stack: panels share the bedrooms x-axis.
+fig, axes = plt.subplots(2, 1, figsize=(13, 10), sharex=True)
 
-ax.set_xlabel('Bedrooms')
+ax = axes[0]
+for i in range(n_show):
+    ax.plot(bedroom_range, pool_preds[i], alpha=0.5, linewidth=1.2, color='#6baed6')
+ax.plot(bedroom_range, pool_preds[:n_show].mean(axis=0), color='black', linewidth=3,
+        label=f'Average of {n_show} trees', zorder=5)
 ax.set_ylabel('Predicted price ($)')
-ax.set_title('Each tree is overfit and wiggly. Their average is smooth.')
-ax.legend(fontsize=10, loc='upper left')
-ax.set_xlim(0, 6)
-ax.grid(True, alpha=0.3)
+ax.set_title('Individual trees (thin) vs. their average (thick)')
+ax.legend(loc='upper left'); ax.set_xlim(0, 6); ax.grid(True, alpha=0.3)
+
+# For each B, compute std across the means of B trees sampled with replacement.
+def stability(B, preds, n_groups=200, seed=0):
+    rng_ = np.random.default_rng(seed)
+    group_means = np.stack([
+        preds[rng_.choice(preds.shape[0], size=B, replace=True)].mean(axis=0)
+        for _ in range(n_groups)
+    ])
+    return group_means.std(axis=0)
+
+ax = axes[1]
+B_styles = [(1, '#1f77b4', 'o', 1.6), (5, '#2ca02c', 's', 1.6),
+            (25, '#d62728', '^', 2.0), (100, '#9467bd', 'D', 2.0)]
+for B, color, marker, lw in B_styles:
+    ax.plot(bedroom_range, stability(B, pool_preds),
+            color=color, linewidth=lw, marker=marker, markevery=8, markersize=7,
+            label=f'Average of {B} tree' + ('s' if B > 1 else ''))
+ax.set_xlabel('Bedrooms')
+ax.set_ylabel('Std. dev. ($)')
+ax.set_title('Std. dev. of prediction across resampled forests — averaging shrinks variance')
+ax.legend(loc='upper right'); ax.set_xlim(0, 6); ax.grid(True, alpha=0.3)
+
 plt.tight_layout()
 plt.show()
 ```
 
-Each individual tree (thin colored lines) is wiggly and overfit — it has memorized the quirks of its particular bootstrap sample. But their *errors point in different directions*. One tree might predict too high for 3-bedroom listings while another predicts too low. When we average them, the noise cancels out, and what remains is the genuine signal.
+The top panel shows 25 deep trees and their thick-line average. Individual trees wiggle; the average is steadier. The bottom panel makes "steadier" precise: each curve is the standard deviation of the prediction across resampled forests of size $B$. A single tree swings by tens of dollars across bootstrap samples; each $4\times$ more trees roughly halves the spread, and the curves bend toward a floor as the trees become correlated.
 
-The core insight of **bagging** (bootstrap aggregating): averaging many overfit models reduces variance without increasing bias. It's the same principle behind asking 100 people to estimate the weight of a cow at a county fair — individual guesses vary wildly, but the average is remarkably accurate.
+That floor is the punchline. If two trees almost always make the same mistake, averaging them barely helps; if they make *independent* mistakes, averaging cancels the noise. **Feature subsampling** decorrelates trees by forcing different splits, so the variance floor drops.
 
-:::{.callout-note}
-## The bias-variance decomposition, revisited
+:::{.callout-note collapse="true"}
+## Going deeper: the variance-of-an-average formula
 
-[Chapter 6](lec06-validation.qmd) wrote expected test error as $\text{bias}^2 + \text{variance} + \sigma^2$. A single deep tree is a *low-bias, high-variance* estimator: given enough depth, it can approximate any function (low bias), but it is exquisitely sensitive to the particular training sample (high variance). Regularizing a single tree — pruning it, capping its depth — lowers variance at the cost of raising bias, and that is the tradeoff Chapter 6 taught us to navigate with cross-validation.
+The variance of an average of $B$ trees, where $\sigma^2$ is one tree's prediction variance and $\rho$ is the average pairwise correlation, is
 
-A random forest does something structurally different. It keeps every tree deep (bias stays low) and reduces variance by *averaging*. If the individual trees had perfectly correlated errors, averaging would do nothing. The bootstrap sampling and feature subsampling are there precisely to de-correlate their mistakes, so that averaging can work. The net effect: the forest inherits the low bias of a deep tree and the low variance of a stable estimator, without paying bias to get there. This is why random forests are a go-to benchmark — they sidestep the tuning dance that individual models require, and they do it by engineering a favorable bias-variance decomposition, not by finding a sweet spot on a U-curve.
+$$\text{Var}(\bar f_B) = \rho \sigma^2 + \frac{1-\rho}{B}\sigma^2.$$
+
+The $1-\rho$ term shrinks like $1/B$ (so the standard deviation shrinks like $1/\sqrt{B}$ — what the bottom panel plots). The $\rho \sigma^2$ floor does not depend on $B$; feature subsampling beats it down by lowering $\rho$. Returns in [Chapter 17](lec17-automl-llms.qmd).
 :::
+
+Averaging shrinks the *spread* of the prediction without pulling its center anywhere — the bottom panel curves shrink vertically as $B$ grows, but none drift left or right. A random forest keeps each tree deep (low bias) and reduces variance by *averaging* — sidestepping the complexity-tuning dance, replacing the U-curve in `max_depth` with a one-sided staircase in `n_estimators`.
 
 
 ## Random forest as benchmark
 
-How does the random forest compare to the hand-engineered linear model from [Chapter 5](lec05-feature-engineering.qmd)? Compare their test R².
+Compare the random forest's test R² to the hand-engineered linear model from [Chapter 5](lec05-feature-engineering.qmd). To make the comparison interesting, hand the linear model the *bedrooms × borough* interactions from Chapter 5; the forest gets only the raw feature matrix.
 
 ```{python}
 # Linear model with interactions (same as Chapter 5)
@@ -559,100 +614,134 @@ interactions = borough_dummies.multiply(df['bedrooms'], axis=0)
 interactions.columns = [f'bedrooms_x_{col}' for col in interactions.columns]
 X_interact = pd.concat([X_base, interactions], axis=1)
 
+lm_simple = LinearRegression().fit(X_train, y_train)
+lm_simple_test_r2 = r2_score(y_test, lm_simple.predict(X_test))
+
 lm_interact = LinearRegression().fit(
     X_interact.loc[X_train.index], y_train
 )
-lm_test_r2 = r2_score(y_test, lm_interact.predict(X_interact.loc[X_test.index]))
+lm_interact_test_r2 = r2_score(y_test, lm_interact.predict(X_interact.loc[X_test.index]))
 
-# Random forest (already fit above)
 print("Test R² comparison:")
-print(f"  Linear model (bedrooms + bath + room + borough):         {r2_score(y_test, LinearRegression().fit(X_train, y_train).predict(X_test)):.3f}")
-print(f"  Linear model + interactions:                             {lm_test_r2:.3f}")
-print(f"  Decision tree (depth=4):                                 {tree_test_r2:.3f}")
-print(f"  Random forest (100 trees):                               {rf_test_r2:.3f}")
+print(f"  Linear model (bedrooms + bath + room + borough):  {lm_simple_test_r2:.3f}")
+print(f"  Linear model + interactions:                      {lm_interact_test_r2:.3f}")
+print(f"  Decision tree (depth=4):                          {tree_test_r2:.3f}")
+print(f"  Random forest (100 trees):                        {rf_test_r2:.3f}")
 ```
 
-The random forest wins — and required zero feature engineering. No polynomial terms, no interaction terms, no decisions about which features to cross. For tabular prediction tasks, a random forest is a strong default benchmark: if your hand-crafted model can't beat it, the engineering effort may not be worthwhile.
+:::{.callout-important}
+## Surprise
+
+The random forest wins with zero feature engineering — no polynomial terms, no interactions, no decisions about which features to cross. For tabular prediction, a forest is a strong default benchmark: if your hand-crafted model can't beat it, the engineering effort may not be worthwhile.
+:::
 
 :::{.callout-tip}
 ## Think About It
-The random forest beats the linear model with interactions. Does that mean linear models are useless? What advantages might a linear model still have? (Hint: think about interpretability and coefficient meaning.)
+The forest beats the linear model with interactions. Does that mean linear models are useless? What advantages might a linear model still have?
 :::
 
 
 ### Random forest classifier
 
-Same story for classification. A random forest classifier fits many classification trees on bootstrap samples and takes a majority vote.
-
-```{python}
-rf_clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-rf_clf.fit(X_train, y_train_exp)
-
-y_pred_rf = rf_clf.predict(X_test)
-y_prob_rf = rf_clf.predict_proba(X_test)[:, 1]
-
-print(f"Random forest classifier (100 trees):")
-print(f"  Accuracy  = {rf_clf.score(X_test, y_test_exp):.3f}")
-print(f"  Precision = {precision_score(y_test_exp, y_pred_rf):.3f}")
-print(f"  Recall    = {recall_score(y_test_exp, y_pred_rf):.3f}")
-print(f"  F1        = {f1_score(y_test_exp, y_pred_rf):.3f}")
-print(f"  AUC       = {roc_auc_score(y_test_exp, y_prob_rf):.3f}")
-```
+Same recipe for classification: bag deep trees, average their probability estimates. Swap MSE for log-loss; evaluate with AUC.
 
 ```{python}
 #| code-fold: true
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-# Confusion matrix
-cm_rf = confusion_matrix(y_test_exp, y_pred_rf)
-disp_rf = ConfusionMatrixDisplay(cm_rf, display_labels=['< $200', '≥ $200'])
-disp_rf.plot(ax=axes[0], cmap='Greens', values_format='d')
-axes[0].set_title('Random forest classifier (100 trees)')
-
-# ROC comparison: single tree vs forest
+rf_clf = RandomForestClassifier(n_estimators=100, min_samples_leaf=5,
+                                random_state=42, n_jobs=-1).fit(X_train, y_train_exp)
+y_pred_rf = rf_clf.predict(X_test)
+y_prob_rf = rf_clf.predict_proba(X_test)[:, 1]
 fpr_rf, tpr_rf, _ = roc_curve(y_test_exp, y_prob_rf)
 auc_rf = roc_auc_score(y_test_exp, y_prob_rf)
 
-axes[1].plot(fpr_tree, tpr_tree, color='steelblue', linewidth=2,
-             label=f'Single tree (AUC = {auc_tree:.3f})')
-axes[1].plot(fpr_rf, tpr_rf, color='forestgreen', linewidth=2.5,
-             label=f'Random forest (AUC = {auc_rf:.3f})')
-axes[1].plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random guess')
-axes[1].set_xlabel('False positive rate')
-axes[1].set_ylabel('True positive rate (recall)')
-axes[1].set_title('ROC: single tree vs. random forest')
-axes[1].legend(fontsize=10)
-axes[1].grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.show()
+fig, ax = plt.subplots(figsize=(7, 6))
+ax.plot(fpr_tree, tpr_tree, color='steelblue', linewidth=2,
+        label=f'Single tree (AUC = {auc_tree:.3f})')
+ax.plot(fpr_rf, tpr_rf, color='forestgreen', linewidth=2.5,
+        label=f'Random forest (AUC = {auc_rf:.3f})')
+ax.plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random guess')
+ax.set_xlabel('False positive rate'); ax.set_ylabel('True positive rate (recall)')
+ax.set_title('ROC: single tree vs. random forest')
+ax.legend(fontsize=10); ax.grid(True, alpha=0.3)
+plt.tight_layout(); plt.show()
 ```
 
-Same story as regression: averaging reduces variance. The forest's ROC curve sits above the single tree's at nearly every threshold, and its AUC is higher. The forest gets more of the expensive listings right without flagging too many cheap ones.
+AUC rises from `{python} f"{auc_tree:.3f}"` (single tree) to `{python} f"{auc_rf:.3f}"` (forest) — the forest's ROC sits above the single tree's at nearly every threshold.
 
 
 ## Trees vs. logistic regression
 
-We now have two classification approaches for the same task: trees and logistic regression from [Chapter 7](lec07-classification.qmd). How do they compare?
+We now have two classification approaches: trees and logistic regression from [Chapter 7](lec07-classification.qmd). The right model is *a property of the data*, not the model family. Below: two synthetic problems — a linear boundary (top) and an axis-aligned rectangle (bottom) — fit with logistic regression and a depth-4 tree.
 
 ```{python}
-# Logistic regression on the same binary target
-lr = LogisticRegression(max_iter=1000, random_state=42)
-lr.fit(X_train, y_train_exp)
+#| code-fold: true
+rng = np.random.default_rng(42)
+
+# Linear: y=1 above x1+x2=0, with a small noise band.
+X_lin = rng.uniform(-2, 2, size=(300, 2))
+y_lin = ((X_lin[:, 0] + X_lin[:, 1] + 0.3 * rng.standard_normal(300)) > 0).astype(int)
+
+# Box: y=1 inside the unit square, with 5% label flips.
+X_box = rng.uniform(-2, 2, size=(300, 2))
+y_box = ((X_box[:, 0] > -1) & (X_box[:, 0] < 1) &
+        (X_box[:, 1] > -1) & (X_box[:, 1] < 1)).astype(int)
+y_box = np.where(rng.random(300) < 0.05, 1 - y_box, y_box)
+
+xx, yy = np.meshgrid(np.linspace(-2.2, 2.2, 200), np.linspace(-2.2, 2.2, 200))
+grid = np.c_[xx.ravel(), yy.ravel()]
+
+fig, axes = plt.subplots(2, 2, figsize=(11, 10))
+rows = [(X_lin, y_lin, 'Linear boundary'),
+        (X_box, y_box, 'Axis-aligned rectangle')]
+cols = [('Logistic regression', LogisticRegression(max_iter=1000)),
+        ('Decision tree (depth 4)', DecisionTreeClassifier(max_depth=4, random_state=42))]
+
+for i, (X_dat, y_dat, dname) in enumerate(rows):
+    for j, (mname, mdl) in enumerate(cols):
+        ax = axes[i, j]
+        m = mdl.__class__(**mdl.get_params()).fit(X_dat, y_dat)
+        Z = m.predict(grid).reshape(xx.shape)
+        ax.contourf(xx, yy, Z, levels=[-0.5, 0.5, 1.5],
+                    colors=['#fde68a', '#bbf7d0'], alpha=0.7)
+        ax.scatter(X_dat[y_dat == 0, 0], X_dat[y_dat == 0, 1],
+                   s=22, c='#d97706', edgecolors='black', linewidth=0.4,
+                   label='class 0' if (i == 0 and j == 0) else None)
+        ax.scatter(X_dat[y_dat == 1, 0], X_dat[y_dat == 1, 1],
+                   s=22, c='#16a34a', edgecolors='black', linewidth=0.4,
+                   label='class 1' if (i == 0 and j == 0) else None)
+        if i == 0: ax.set_title(mname, fontsize=13)
+        ax.set_ylabel(f'{dname}\n\n$x_2$' if j == 0 else '$x_2$', fontsize=12 if j == 0 else None)
+        ax.set_xlabel('$x_1$')
+
+axes[0, 0].legend(loc='lower right', fontsize=9, framealpha=0.9)
+plt.tight_layout()
+plt.show()
+```
+
+Linear loses on the rectangle; tree loses on the diagonal. **Linear models** are good at smooth, monotone effects, bad at corners and interactions. **Trees** are good at corners, thresholds, and interactions, bad at smooth diagonals (a single slope becomes a staircase). On real data you don't know which geometry the truth has — fit both and compare held-out performance.
+
+Now the same comparison on Airbnb.
+
+```{python}
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+
+# Logistic regression with L2 needs scaled inputs (our features mix scales).
+lr = Pipeline([
+    ('scale', StandardScaler()),
+    ('logreg', LogisticRegression(max_iter=1000, random_state=42)),
+]).fit(X_train, y_train_exp)
 
 y_pred_lr = lr.predict(X_test)
 y_prob_lr = lr.predict_proba(X_test)[:, 1]
-
 fpr_lr, tpr_lr, _ = roc_curve(y_test_exp, y_prob_lr)
 auc_lr = roc_auc_score(y_test_exp, y_prob_lr)
 ```
 
 ```{python}
-# Side-by-side comparison
 print(f"{'Metric':<12} {'Logistic Reg':>14} {'Tree (d={})'.format(best_depth_clf):>14} {'RF (100)':>14}")
 print("-" * 58)
-for name, fn in [('Precision', precision_score), ('Recall', recall_score),
-                 ('F1', f1_score)]:
+for name, fn in [('Precision', precision_score), ('Recall', recall_score), ('F1', f1_score)]:
     print(f"{name:<12} {fn(y_test_exp, y_pred_lr):>14.3f} "
           f"{fn(y_test_exp, y_pred_tree):>14.3f} "
           f"{fn(y_test_exp, y_pred_rf):>14.3f}")
@@ -680,122 +769,178 @@ plt.show()
 
 Each approach has distinct strengths:
 
-- **Logistic regression** produces interpretable coefficients (log-odds per feature). You can say "each additional bedroom increases the odds of being expensive by a factor of $e^{\beta}$." The model is fast, stable, and works well when the true decision boundary is roughly linear.
+- **Logistic regression** — interpretable coefficients (log-odds per feature: each bedroom multiplies the odds of expensive by $e^{\beta}$). Fast, stable, works when the true boundary is roughly linear.
+- **Decision trees** — capture nonlinearities and interactions without feature engineering. A tree can learn "Manhattan + 2+ bedrooms = expensive" on its own. Easy to visualize.
+- **Random forests** — nonlinear power plus variance reduction. Harder to interpret, but consistently strong on tabular data with minimal tuning.
 
-- **Decision trees** capture nonlinear relationships and interactions without manual feature engineering. A tree can learn that "Manhattan listings with 2+ bedrooms are expensive" without you specifying the interaction. The tree structure is easy to visualize and explain to non-technical stakeholders.
-
-- **Random forests** combine the nonlinear power of trees with the variance reduction of ensembling. They're harder to interpret than either single model, but they consistently perform well on tabular data with minimal tuning.
-
-When to prefer each: use logistic regression when you need interpretable coefficients or when the dataset is small and you want a stable model. Use trees or forests when you have many features with potential interactions and don't need per-feature coefficient interpretations.
+Prefer logistic regression for interpretability or small datasets; prefer trees/forests for many features with potential interactions when per-feature coefficients aren't needed.
 
 :::{.callout-tip}
-## The 2×2 matrix, completed
+## Think About It
+You've now seen all four cells of the linear-vs-trees × regression-vs-classification grid. Pick one of these scenarios and decide which model family you'd reach for first, and why:
 
-We started this chapter with a 2×2 table: linear models and trees, each applied to regression and classification. You've now seen all four cells. The key lesson: model families (linear vs. tree-based) and tasks (regression vs. classification) are independent choices. Once you learn a model family, applying it to either task is straightforward.
+1. A health-insurance underwriter wants to price policies and produce, for each applicant, a one-line explanation of which factors moved their premium up or down.
+2. A music app suspects that users who listened to 5+ artists in a particular genre AND created 2+ playlists are upgrade-prone — but only on certain device types. The team wants a model that can discover this kind of behavioral threshold-and-interaction rule from hundreds of usage signals without specifying the cuts in advance.
+3. A small clinic wants to flag charts likely to contain a coding error before billing, working from 40 fields where most patients are missing 5–10 of them.
 :::
 
 
 ## Feature importance
 
-A random forest is harder to interpret than a linear regression — you can't point to a single coefficient and say "each bedroom adds \$X." But the forest does tell you which features it relies on most.
+A random forest is harder to interpret than linear regression — no single coefficient says "each bedroom adds \$X." But it does report which features it relies on most.
 
-**Feature importance** measures how much each feature contributes to reducing prediction error across all trees in the forest. Specifically, scikit-learn's `feature_importances_` reports the **mean decrease in impurity (MDI)**: for each feature, it averages the total reduction in squared error (or Gini impurity) across every split in every tree that uses that feature.
+**Feature importance** measures how much each feature contributes to reducing prediction error across all trees. Sklearn's `feature_importances_` reports **mean decrease in impurity (MDI)**: for each split, the impurity drop is weighted by the share of samples flowing through that node, summed within each tree, averaged, and normalized to sum to 1.
 
 ```{python}
-# Feature importance from the random forest
 importances = pd.Series(rf.feature_importances_, index=feature_names)
 importances_sorted = importances.sort_values()
 
+# Color by feature type to preview the MDI-bias warning below.
+numeric_features = {'latitude', 'longitude', 'accommodates', 'bedrooms',
+                    'bathrooms', 'number_of_reviews'}
+bar_colors = ['steelblue' if f in numeric_features else 'salmon'
+              for f in importances_sorted.index]
+
 fig, ax = plt.subplots(figsize=(10, 6))
-colors = ['#2171b5' if v > importances.median() else '#aec7e8' for v in importances_sorted]
-importances_sorted.plot(kind='barh', ax=ax, color=colors, edgecolor='white')
-ax.set_xlabel('Feature importance (mean decrease in impurity)')
+importances_sorted.plot(kind='barh', ax=ax, color=bar_colors, edgecolor='white')
+ax.set_xlabel('Mean decrease in impurity')
 ax.set_title('Random forest feature importance')
+
+from matplotlib.patches import Patch
+ax.legend(handles=[Patch(facecolor='steelblue', label='numeric'),
+                   Patch(facecolor='salmon', label='one-hot encoded')],
+          loc='lower right', fontsize=10)
 plt.tight_layout()
 plt.show()
 ```
 
-Compare this to a linear regression's coefficients. In a linear model, the coefficient on `bedrooms` tells you the marginal effect of one additional bedroom, holding all else equal — a causal-flavored interpretation (though only valid under strong assumptions). Feature importance tells you something different: how much the forest *uses* a feature for splitting, which reflects both direct effects and interactions. A feature can be important without having a simple linear relationship with the outcome.
+Linear regression's `bedrooms` coefficient tells you the marginal effect of one extra bedroom — a causal-flavored interpretation (under strong assumptions). Feature importance tells you something different: how much the forest *uses* a feature for splitting, reflecting direct effects *and* interactions. A feature can be important without a simple linear relationship.
 
-:::{.callout-warning}
-## MDI can be misleading
-Mean decrease in impurity is biased toward features with many possible split points (high-cardinality features). A feature with 100 unique values gets more chances to be selected than a binary feature, even if both are equally predictive. **Permutation importance** — measuring how much test accuracy drops when a feature is randomly shuffled — is a more reliable alternative for comparing features on different scales.
+:::{.callout-note collapse="true"}
+## Going deeper: permutation importance
+
+MDI has a known bias: it favors high-cardinality features (a continuous column has hundreds of split-point chances; a binary one has one). Two features with equal predictive signal can rank very differently on MDI just because of cardinality.
+
+**Permutation importance** is model-agnostic: *if I randomly shuffle column $j$, how much worse does the model do on held-out data?* Shuffling a useful column hurts; shuffling a useless one doesn't.
+
+```{python}
+from sklearn.inspection import permutation_importance
+
+# Use held-out test set so the score reflects generalization.
+perm = permutation_importance(rf, X_test, y_test, n_repeats=10,
+                              random_state=42, n_jobs=-1, scoring='r2')
+
+imp_df = pd.DataFrame({'feature': feature_names,
+                       'mdi': rf.feature_importances_,
+                       'perm_mean': perm.importances_mean,
+                       'perm_std': perm.importances_std})
+
+# Each panel sorted by its own metric so rank-disagreement is visible.
+mdi_sorted = imp_df.sort_values('mdi')
+perm_sorted = imp_df.sort_values('perm_mean')
+
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+axes[0].barh(mdi_sorted['feature'], mdi_sorted['mdi'],
+             color='#9ecae1', edgecolor='white')
+axes[0].set_xlabel('Mean decrease in impurity')
+axes[0].set_title('Mean decrease in impurity (sorted by MDI)')
+
+axes[1].barh(perm_sorted['feature'], perm_sorted['perm_mean'],
+             xerr=perm_sorted['perm_std'],
+             color='#fcae91', edgecolor='white')
+axes[1].set_xlabel('Drop in test R² when feature is shuffled')
+axes[1].set_title('Permutation importance (sorted by permutation)')
+
+plt.tight_layout()
+plt.show()
+```
+
+Compare the two panels: features re-rank. `accommodates` rises under permutation, `bedrooms` slips. MDI credits every split equally; permutation only credits features that actually drive generalization. Two practical rules: compute permutation importance **on held-out data**, and **watch correlated features** — if two columns share signal, shuffling either alone can look unimportant since the model leans on the other. Drop correlated groups in or out together.
 :::
 
 
-### How trees handle missing data
+## How trees handle missing data
 
-Unlike linear regression, which requires complete data for every row, decision trees can handle missing values directly. Different implementations use different strategies:
+Unlike linear regression — which needs complete data for every row — trees handle missing values directly. A tree's yes/no questions just need a rule for which branch missing values follow; linear models break entirely without a numeric value to multiply.
 
-**Surrogate splits.** When a tree encounters a missing value at a split node, it looks for an alternative feature that produces a similar partition. If the best split is on `bedrooms` and a row has a missing bedroom count, the tree might split on `accommodates` instead (a correlated feature). The original CART algorithm uses this approach. (Note: scikit-learn's `DecisionTreeClassifier` does *not* implement surrogate splits — it requires complete data. Use `HistGradientBoostingClassifier` for native missing-value support.)
+**Native missing-value handling.** XGBoost, LightGBM, and (since scikit-learn 1.3) sklearn's `DecisionTreeRegressor`/`Classifier` learn at each split which child missing-valued rows go to, picking whichever direction reduces the loss more. No imputation needed.
 
-**Native missing-value handling.** XGBoost and LightGBM go further: during training, they learn which branch (left or right) missing values should follow at each split, choosing whichever direction reduces the loss more. No imputation needed — the algorithm treats "missing" as just another value to route.
+**Surrogate splits** (the original CART approach) instead route missing values via a backup feature with a similar partition. Not implemented in sklearn.
 
-**Why trees handle this well.** A decision tree asks a yes/no question at each node. Missing values simply need a rule for which branch to follow. Linear models, by contrast, need a numeric value to multiply by a coefficient — a missing value breaks the computation entirely.
+:::{.callout-note collapse="true"}
+## Going deeper: XGBoost vs. LightGBM
+
+Both fit gradient-boosted trees, both handle missing values natively, both win Kaggle leaderboards. They differ in *how* they grow each tree.
+
+- **XGBoost** grows trees *level by level* (balanced trees, predictable training time, forgiving defaults). The conservative default — start here.
+- **LightGBM** grows trees *leaf by leaf* (asymmetric, deeper trees, more aggressive fitting) and bins continuous features into histograms — dramatically faster on large datasets.
+
+Rule of thumb: reach for XGBoost first; switch to LightGBM when training time hurts (millions of rows or hundreds of features → often 5–10× faster). Either beats `RandomForestRegressor` on most tabular benchmarks because boosting reduces bias (Chapter 17). Sklearn's `HistGradientBoostingRegressor`/`Classifier` is a fine third option that ships in sklearn — one fewer install.
+:::
 
 :::{.callout-tip}
 ## Think About It
-If 30% of your `bedrooms` column is missing and you impute with the median before fitting a tree, what information have you destroyed? Would the tree have been better off seeing the missingness directly?
+If 30% of `bedrooms` is missing and you impute with the median before fitting a tree, what information have you destroyed? Would the tree have been better off seeing the missingness?
 :::
 
-In practice, tree-based models (especially gradient-boosted trees like XGBoost) are the most popular choice for tabular data with missing values — precisely because they don't require the analyst to make imputation decisions that could introduce bias.
+In practice, tree-based models (especially gradient-boosted) are the standard choice for tabular data with missing values — they don't force the analyst into imputation decisions that could bias the answer.
+
+
+## When to doubt the forest
+
+Forests look strong on tabular benchmarks, but "the forest wins, ship it" hides three failure modes:
+
+- **Distribution shift.** A forest predicts by interpolating between training leaves. A listing in a region the forest never saw — a new neighborhood, a post-pandemic price regime, a new apartment type — gets a prediction that is fundamentally an interpolation between unrelated training points. [Chapter 6](lec06-validation.qmd)'s distribution-shift point applies here too.
+
+- **Feature importance is descriptive, not causal.** High MDI on `accommodates` doesn't mean adding capacity raises price; it means the forest splits on `accommodates` often, because that variable correlates with neighborhood, room type, and season the forest hasn't separated. Same caveat for permutation importance.
+
+- **Correlated features share their importance.** If `bedrooms` and `accommodates` carry overlapping signal, dropping either barely hurts — each one's importance is split between them. Name the *group*, not a single winner.
+
+The forest is a strong default benchmark, not a finished answer. Trust it on inputs that look like training data, distrust the importance chart as a causal claim.
+
+:::{.callout-tip}
+## Back to the host
+
+Friday's prototype: ship the forest. It beats your hand-engineered linear model with no manual feature crosses, and it handles missing rooms, boroughs, and review counts without imputation choices that bias the answer. Set up drift monitoring on the inputs — a forest blind-extrapolates into new neighborhoods or new price regimes. And don't sell the importance chart as causal: it tells the host *what the model used*, not *what raises a price*. Wisdom of the crowd, even of overfit trees.
+:::
 
 
 ## Key takeaways
 
-- **Decision trees find splits automatically — no manual feature engineering.** The model examines every feature and every threshold, choosing splits that minimize prediction error. No need for one-hot encoding, polynomial terms, or interaction terms.
+- **Decision trees find splits automatically — no manual feature engineering.** The model examines every feature and every threshold, choosing greedy axis-aligned splits that minimize prediction error. The same algorithm — swap squared error for Gini impurity — handles classification.
 
-- **A single deep tree overfits: perfect training score, poor test score.** With no depth limit, a tree memorizes the training data. The training R² approaches 1 while the test R² deteriorates.
+- **A single deep tree overfits.** With no depth limit, a tree memorizes the training data: training R² climbs toward 1.0 while test R² collapses.
 
-- **Cross-validation picks the best hyperparameter.** Sweep candidate tree depths, score each by 5-fold CV on the training set, and pick the depth with the highest CV R². The same procedure selects polynomial degree, lasso α, and any other complexity knob.
+- **Cross-validation picks the depth.** The same 5-fold CV recipe used for polynomial degree and lasso $\alpha$ — sweep candidate values, score each, take the best — selects tree depth too.
 
-- **Random forests average many overfit trees; the average is stable.** Each tree sees different bootstrap data and different feature subsets. The noise cancels; the signal persists.
+- **Random forests average overfit trees, and the average is stable.** Bagging plus feature subsampling decorrelates the trees, so averaging them cancels the noise without raising bias. Adding more trees rarely hurts — no U-curve in `n_estimators`.
 
-- **More trees never hurts (unlike more polynomial features).** Test R² improves and then plateaus as we add trees — no U-shaped overfitting curve.
-
-- **Trees handle missing data and categories natively.** Surrogate splits and native missing-value routing make imputation unnecessary. Categories can be split directly without one-hot encoding.
-
-- **Feature importance ranks which variables the forest relies on.** Mean decrease in impurity (MDI) measures how much each feature contributes to reducing prediction error, but beware of bias toward high-cardinality features.
-
-- **Classification trees use Gini impurity instead of squared error, but everything else stays the same.** Greedy splitting, depth control by CV, random forest ensembling — the entire framework transfers from regression to classification by swapping the splitting criterion.
-
-- **Trees vs. logistic regression is a real design choice.** Logistic regression gives interpretable coefficients (log-odds). Trees capture nonlinear patterns without manual feature engineering. Random forests trade interpretability for consistently strong performance.
+- **Trees vs. linear models is a geometry choice.** Linear models excel on smooth, monotone effects; trees excel on corners, thresholds, and interactions. Forests beat hand-crafted linear models on prediction, but pay for it in interpretability — and the feature importance chart is *descriptive*, not causal.
 
 
 ## Study guide
 
 ### Key ideas
 
-- **Decision tree** — a model that recursively partitions the feature space by asking if/then questions about individual features, predicting the mean outcome (regression) or majority class (classification) in each leaf.
-- **Recursive splitting** — the greedy algorithm that builds a tree: at each node, choose the feature and threshold that minimize prediction error in the child nodes.
-- **Overfitting in trees** — a tree with no depth limit memorizes the training data (training R² ≈ 1) but performs poorly on new data. Controlling depth limits this memorization.
-- **Ensemble** — a model built by aggregating many weaker learners. Bagging (parallel, e.g. random forests) reduces variance; boosting (sequential, e.g. gradient boosting in Chapter 17) reduces bias.
-- **Bagging (bootstrap aggregating)** — training many models on different bootstrap samples of the data and averaging their predictions. Reduces variance without increasing bias.
-- **Feature subsampling** — at each split, considering only a random subset of features. This decorrelates the trees in the ensemble, making the average more effective.
-- **Random forest** — an ensemble of bagged decision trees with feature subsampling. More trees = better or flat, never worse.
-- **Feature importance (MDI)** — mean decrease in impurity: the average reduction in squared error (or Gini impurity) across all splits using a given feature. Biased toward high-cardinality features; permutation importance is a more robust alternative.
-- **Missing data in trees** — trees handle missing values natively via surrogate splits or learned missing-value routing, unlike linear models that require imputation.
-- **Cross-validation for tree depth** — applying 5-fold CV to select the best `max_depth`, the same way we selected polynomial degree and lasso penalty in Chapter 6.
-- **Gini impurity** — the classification splitting criterion $\hat{p}(1-\hat{p})$; measures how mixed a node is. Replaces squared error when the target is categorical.
-- **Classification tree** — a decision tree that predicts the majority class in each leaf, using Gini impurity to choose splits. Same greedy recursive algorithm as regression trees.
-- **Random forest classifier** — an ensemble of classification trees using bagging and feature subsampling. Uses majority vote (or averaged predicted probabilities) instead of averaging predictions.
-- **Trees vs. logistic regression** — logistic regression gives interpretable coefficients (log-odds); trees capture nonlinear patterns without feature engineering. Random forests trade interpretability for strong default performance.
+- **Decision tree** — recursively partitions feature space by greedy if/then splits; predicts mean outcome (regression) or majority class (classification) per leaf.
+- **Gini impurity** — classification splitting criterion $1 - \sum_k \hat p_k^2$ (binary: $2\hat p(1-\hat p)$); replaces squared error when the target is categorical.
+- **Bagging** — train many models on bootstrap samples, average. Reduces variance without raising bias.
+- **Feature subsampling** — restrict each split to a random subset of features. Decorrelates trees so averaging works harder.
+- **Random forest** — bagged trees with feature subsampling. In expectation, more trees improves or matches performance — no U-curve in `n_estimators`.
+- **Ensembles** — bagging (parallel, variance reduction) vs. boosting (sequential, bias reduction; Chapter 17).
+- **Feature importance (MDI)** — mean decrease in impurity per feature, averaged across trees. Biased toward high-cardinality features; permutation importance is more robust.
+- **Missing data in trees** — handled natively via learned routing (XGBoost, LightGBM, recent sklearn) or surrogate splits (CART).
+- **Trees vs. logistic regression** — logistic gives interpretable coefficients; trees capture nonlinearities and interactions without feature engineering. Forests trade interpretability for strong default performance.
 
 ### Computational tools
 
-- `DecisionTreeRegressor(max_depth=4).fit(X, y)` — fits a regression tree with controlled depth
-- `DecisionTreeClassifier(max_depth=5).fit(X, y)` — fits a classification tree; uses Gini impurity
-- `RandomForestRegressor(n_estimators=100).fit(X, y)` — fits a random forest; more trees = better or flat, never worse
-- `RandomForestClassifier(n_estimators=100).fit(X, y)` — fits a classification forest; uses majority vote
-- `plot_tree(tree, feature_names=..., filled=True)` — visualizes a fitted decision tree
-- `export_text(tree, feature_names=...)` — prints the tree's decision rules as text
-- `rf.feature_importances_` — array of feature importance scores (mean decrease in impurity)
-- `confusion_matrix(y_true, y_pred)` — 2×2 matrix of true/false positives and negatives
-- `roc_curve(y_true, y_prob)` — computes FPR/TPR pairs for plotting the ROC curve
-- `roc_auc_score(y_true, y_prob)` — area under the ROC curve; higher = better discrimination
-- `train_test_split(X, y, test_size=0.3)` — splits data into training and test sets for honest evaluation
-- `cross_val_score(model, X, y, cv=5)` — 5-fold cross-validation; use to choose tree depth
+- `DecisionTreeRegressor(max_depth=4).fit(X, y)` / `DecisionTreeClassifier(max_depth=5).fit(X, y)` — fits a tree with controlled depth.
+- `RandomForestRegressor(n_estimators=100).fit(X, y)` / `RandomForestClassifier(...)` — fits a forest.
+- `plot_tree(tree, feature_names=..., filled=True)` / `export_text(tree, ...)` — visualize/print tree rules.
+- `rf.feature_importances_` — MDI scores.
+- `confusion_matrix`, `roc_curve`, `roc_auc_score` — classifier evaluation (Chapter 7).
+- `train_test_split(X, y, test_size=0.3)` and `cross_val_score(model, X, y, cv=5)` — for honest evaluation and depth selection.
 
 ### For the quiz
 
-You are responsible for: how a decision tree splits (greedy recursive partitioning), why deep trees overfit, how bagging and feature subsampling combine to form a random forest, why adding more trees never hurts, feature importance interpretation, the advantages of trees over linear models for handling missing data and categorical features, how to use cross-validation to choose tree depth (same principle as choosing polynomial degree or lasso $\alpha$), classification trees and Gini impurity, confusion matrices and ROC curves for tree classifiers, and the tradeoffs between trees and logistic regression.
+You are responsible for: how a decision tree splits, why deep trees overfit, how bagging and feature subsampling combine to form a random forest, why more trees rarely hurts, feature importance interpretation, how trees handle missing data, cross-validation for tree depth, Gini impurity, and the tradeoffs between trees and logistic regression.
