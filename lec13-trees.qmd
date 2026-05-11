@@ -918,6 +918,71 @@ A strong test score on tabular data does not address three limitations.
 
 - **Correlated features share importance.** If `bedrooms` and `accommodates` carry overlapping signal, the forest can lean on either, so each one's importance is split between them. Interpret correlated features as a group.
 
+### Distribution shift: linear extrapolates, forest flatlines
+
+To see how a forest behaves outside its training range, fit both a linear regression and a random forest on the same 1D training data, then ask each to predict on a wider range.
+
+```{python}
+#| code-fold: true
+rng_ext = np.random.default_rng(42)
+n = 80
+x_demo = rng_ext.uniform(0, 5, size=n).reshape(-1, 1)
+y_demo = 2 * x_demo.ravel() + rng_ext.normal(0, 1, n)
+
+lr_demo = LinearRegression().fit(x_demo, y_demo)
+rf_demo = RandomForestRegressor(n_estimators=200, min_samples_leaf=5,
+                                random_state=42, n_jobs=-1).fit(x_demo, y_demo)
+
+x_wide = np.linspace(-2, 8, 300).reshape(-1, 1)
+fig, ax = plt.subplots(figsize=(9, 4.5))
+ax.axvspan(0, 5, color='#fef3c7', alpha=0.6, label='training range', zorder=0)
+ax.scatter(x_demo, y_demo, s=30, color='gray', alpha=0.6,
+           label='training data', zorder=3)
+ax.plot(x_wide, lr_demo.predict(x_wide), color='darkorange', linewidth=2.5,
+        label='linear regression')
+ax.plot(x_wide, rf_demo.predict(x_wide), color='forestgreen', linewidth=2.5,
+        label='random forest')
+ax.set_xlabel('feature'); ax.set_ylabel('prediction')
+ax.set_title('Outside the training range: linear extrapolates, forest flatlines')
+ax.legend(loc='upper left', fontsize=11)
+ax.grid(True, alpha=0.3)
+plt.tight_layout(); plt.show()
+```
+
+The linear model extends its fitted slope past the training range. The forest predicts a constant — the mean training $y$ of whichever leaf the input routes into. Whether the linear extrapolation is right depends on whether the underlying relationship really is linear outside the training range; the forest's flatline is *never* right outside, by construction.
+
+### Correlated features in numbers
+
+`bedrooms` and `accommodates` are strongly correlated on Airbnb — most multi-bedroom listings also accommodate more guests. Permutation importance shuffles one feature and measures the drop in test $R^2$. Shuffling one of a correlated pair barely hurts, because the forest leans on the other.
+
+```{python}
+#| code-fold: true
+def shuffle_drop(cols, X, y, model, n_repeats=10, base_seed=0):
+    drops = []
+    for r in range(n_repeats):
+        rng_ = np.random.default_rng(base_seed + r)
+        X_shuf = X.copy()
+        for c in cols:
+            X_shuf[c] = rng_.permutation(X_shuf[c].values)
+        drops.append(model.score(X, y) - model.score(X_shuf, y))
+    return float(np.mean(drops))
+
+corr_bed_acc = X_train['bedrooms'].corr(X_train['accommodates'])
+drop_bed = shuffle_drop(['bedrooms'], X_test, y_test, rf)
+drop_acc = shuffle_drop(['accommodates'], X_test, y_test, rf)
+drop_both = shuffle_drop(['bedrooms', 'accommodates'], X_test, y_test, rf)
+
+print(f"Correlation(bedrooms, accommodates) = {corr_bed_acc:.2f}\n")
+print(f"Drop in test R² when we shuffle:")
+print(f"  bedrooms only:                       {drop_bed:.3f}")
+print(f"  accommodates only:                   {drop_acc:.3f}")
+print(f"  bedrooms AND accommodates together:  {drop_both:.3f}")
+print(f"\nSum of individual drops:           {drop_bed + drop_acc:.3f}")
+print(f"Group drop / sum of individual:    {drop_both / (drop_bed + drop_acc):.1f}×")
+```
+
+Shuffling either feature alone costs the forest some R², because each carries unique signal beyond the other. But shuffling both together costs *more* than the sum: the shared signal hides when measured one-at-a-time, since the forest can lean on whichever feature isn't shuffled. With more strongly correlated features (near-duplicates), the effect gets dramatic — each one looks nearly useless alone, while the group is essential. The fix is to read importance for correlated *groups*, not single columns.
+
 Trust the predictions only on inputs that resemble the training data, and read the importance chart as a description of model usage, not a causal claim.
 
 :::{.callout-tip}
