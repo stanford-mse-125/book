@@ -570,18 +570,23 @@ for i in range(pool_size):
     tree_i.fit(X_train.iloc[boot_idx], y_train.iloc[boot_idx])
     pool_preds[i] = tree_i.predict(X_slice)
 
-# Vertical stack: panels share the bedrooms x-axis.
-fig, axes = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
-
-ax = axes[0]
+fig, ax = plt.subplots(figsize=(9, 4.5))
 for i in range(n_show):
     ax.plot(bedroom_range, pool_preds[i], alpha=0.5, linewidth=1.2, color='#6baed6')
 ax.plot(bedroom_range, pool_preds[:n_show].mean(axis=0), color='black', linewidth=3,
         label=f'Average of {n_show} trees', zorder=5)
-ax.set_ylabel('Predicted price ($)')
+ax.set_xlabel('Bedrooms'); ax.set_ylabel('Predicted price ($)')
 ax.set_title('Individual trees (thin) vs. their average (thick)')
 ax.legend(loc='upper left'); ax.set_xlim(0, 6); ax.grid(True, alpha=0.3)
+plt.tight_layout(); plt.show()
+```
 
+Individual trees wiggle as the bedroom count changes — each one memorizes different noise from its own bootstrap sample. The thick black line, their average, is much steadier: where the individual trees disagree, the disagreements partly cancel.
+
+To make "steadier" precise, repeat the experiment for forests of different sizes. For each $B \in \{1, 5, 25, 100\}$, sample $B$ trees with replacement, average their predictions, and record the standard deviation across many such samples.
+
+```{python}
+#| code-fold: true
 # For each B, compute std across the means of B trees sampled with replacement.
 def stability(B, preds, n_groups=200, seed=0):
     rng_ = np.random.default_rng(seed)
@@ -591,7 +596,7 @@ def stability(B, preds, n_groups=200, seed=0):
     ])
     return group_means.std(axis=0)
 
-ax = axes[1]
+fig, ax = plt.subplots(figsize=(9, 4.5))
 B_styles = [(1, '#1f77b4', 'o', 1.6), (5, '#2ca02c', 's', 1.6),
             (25, '#d62728', '^', 2.0), (100, '#9467bd', 'D', 2.0)]
 for B, color, marker, lw in B_styles:
@@ -602,12 +607,10 @@ ax.set_xlabel('Bedrooms')
 ax.set_ylabel('Std. dev. ($)')
 ax.set_title('Std. dev. of prediction across resampled forests — averaging shrinks variance')
 ax.legend(loc='upper right'); ax.set_xlim(0, 6); ax.grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.show()
+plt.tight_layout(); plt.show()
 ```
 
-The top panel shows 25 deep trees and their thick-line average. Individual trees wiggle; the average is steadier. The bottom panel makes "steadier" precise: each curve is the standard deviation of the prediction across resampled forests of size $B$. A single tree swings by tens of dollars across bootstrap samples; each $4\times$ more trees roughly halves the spread, and the curves bend toward a floor as the trees become correlated.
+A single tree swings by tens of dollars across bootstrap samples; each $4\times$ more trees roughly halves the spread, and the curves bend toward a floor as the trees become correlated.
 
 The floor is the punchline: averaging only helps when trees make *independent* mistakes. **Feature subsampling** forces trees to find different splits, decorrelating them and lowering the floor.
 
@@ -653,7 +656,7 @@ print(f"  Random forest (100 trees):                        {rf_test_r2:.3f}")
 :::{.callout-important}
 ## Surprise
 
-The random forest wins with zero feature engineering — no polynomial terms, no interactions, no decisions about which features to cross. For tabular prediction, a forest is a strong default benchmark: if your hand-crafted model can't beat it, the engineering effort may not be worthwhile.
+The random forest wins with no manual feature engineering — no hand-crafted polynomial terms, no interactions the analyst had to pick. (Trees do build interactions internally: each split refines the partition produced by the splits above it. The point is that the forest discovers which features and combinations to use without analyst guidance.) For tabular prediction, a forest is a strong default benchmark: if your hand-crafted model can't beat it, the engineering effort may not be worthwhile.
 :::
 
 :::{.callout-tip}
