@@ -17,6 +17,8 @@ declare -A FILES=(
   ["daily_aqi_by_county_2024.csv"]="data/epa-air-quality/daily_aqi_by_county_2024.csv"
   ["nba_load_management.csv"]="data/nba/nba_load_management.csv"
   ["nba_game_logs_2022_2024.csv"]="data/nba/nba_game_logs_2022_2024.csv"
+  ["sp100_daily_returns_2014_2024.csv"]="data/stocks/sp100_daily_returns_2014_2024.csv"
+  ["description_embeddings.npy"]="data/airbnb/description_embeddings.npy"
 )
 
 downloaded=0
