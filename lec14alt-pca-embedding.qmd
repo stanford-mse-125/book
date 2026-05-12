@@ -1,0 +1,805 @@
+---
+title: "PCA — Dimensionality Reduction (alternative: text embeddings)"
+draft: true
+execute:
+  enabled: true
+jupyter: python3
+format:
+  html:
+    html-math-method: katex
+---
+
+::: {.callout-note}
+**This is an alternative version of the PCA chapter.** The canonical Lec 14 uses S&P 100 equity returns and portfolio construction as its killer-app. This alternative version uses Airbnb listing descriptions, sentence-transformer embeddings, and price prediction — a useful parallel workflow that demonstrates PCA on learned representations. It is not part of the book TOC; it is preserved for instructors and curious readers who want to see the embedding-based approach. Cross-referenced from the canonical chapter's "Going deeper" callout.
+:::
+
+## 96 columns. Can we get away with 5?
+
+The Airbnb dataset has 96 columns. Bedrooms, bathrooms, price, review scores, availability, latitude, longitude... it's a lot. If you're building a model or a dashboard, feeding in 96 columns is slow, noisy, and expensive.
+
+Can we compress all of this into just 5 numbers per listing — without losing what matters? **PCA** (**Principal Component Analysis**) finds the "best" 5-dimensional summary, and the linear algebra we learned tells us exactly what "best" means.
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+sns.set_style('whitegrid')
+plt.rcParams['figure.figsize'] = (7, 4.5)
+plt.rcParams['font.size'] = 12
+np.random.seed(42)
+
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+# Load data
+DATA_DIR = 'data'
+```
+
+## The picture behind PCA
+
+The idea behind PCA is more than a century old. Karl Pearson described it in 1901 in a paper called *On Lines and Planes of Closest Fit to Systems of Points in Space* (Pearson, *Philosophical Magazine*, 1901). The picture in his paper is essentially the picture below: a cloud of points, an ellipse summarizing their spread, and a line through the long axis of that ellipse. That line is the first principal component.
+
+```{python}
+#| fig-cap: "After Pearson (1901). The cloud of points has an obvious long axis (PC1) and a shorter perpendicular axis (PC2). The dashed segment shows the perpendicular distance from one point to PC1 — its reconstruction error if we summarize this point by its PC1 score alone."
+
+# A 2D Gaussian cloud with clear elliptical structure
+rng = np.random.default_rng(0)
+n = 200
+cov = np.array([[3.0, 1.6], [1.6, 1.2]])
+X_demo = rng.multivariate_normal([0.0, 0.0], cov, size=n)
+
+pca_demo = PCA(n_components=2).fit(X_demo)
+center = pca_demo.mean_
+comps = pca_demo.components_
+svals = np.sqrt(pca_demo.explained_variance_)
+
+fig, ax = plt.subplots(figsize=(6.5, 5))
+ax.scatter(X_demo[:, 0], X_demo[:, 1], s=18, alpha=0.55,
+           color='#4a6fa5', edgecolor='white', linewidth=0.4)
+
+arrow_scale = 2.4
+for i, c in enumerate(['#c44e52', '#55a868']):
+    v = comps[i] * svals[i] * arrow_scale
+    ax.annotate('', xy=center + v, xytext=center,
+                arrowprops=dict(arrowstyle='->', color=c, lw=2.4))
+    offset = v / np.linalg.norm(v) * 0.6
+    ax.text(center[0] + v[0] + offset[0],
+            center[1] + v[1] + offset[1],
+            f'PC{i+1}', color=c, fontsize=14, fontweight='bold',
+            ha='center', va='center')
+
+# Highlight one point and its perpendicular projection onto PC1
+p = X_demo[7]
+pc1 = comps[0]
+p_proj = center + np.dot(p - center, pc1) * pc1
+ax.scatter([p[0]], [p[1]], s=90, color='black', zorder=4,
+           edgecolor='white', linewidth=1.0)
+ax.plot([p[0], p_proj[0]], [p[1], p_proj[1]],
+        color='black', lw=1.4, ls='--', zorder=3)
+ax.scatter([p_proj[0]], [p_proj[1]], s=55, color='black',
+           marker='x', zorder=4)
+ax.annotate('reconstruction\nerror',
+            xy=((p[0]+p_proj[0])/2, (p[1]+p_proj[1])/2),
+            xytext=(p[0]+1.6, p[1]+0.9),
+            fontsize=10, ha='left',
+            arrowprops=dict(arrowstyle='-', color='black', lw=0.8))
+
+ax.set_xlabel('$x_1$')
+ax.set_ylabel('$x_2$')
+ax.set_title('After Pearson (1901): the long axis of the cloud is PC1')
+ax.set_aspect('equal')
+ax.grid(True, alpha=0.25)
+plt.tight_layout()
+plt.show()
+```
+
+PCA returns the direction in which the cloud is most spread out, then the direction of maximum remaining spread orthogonal to that, and so on. The names follow the order of spread.
+
+:::{.callout-important}
+## Definition: Principal Component Analysis (PCA)
+**PCA finds the directions of maximum variance.** The first **principal component** (PC1) is the direction of maximum spread. PC2 is the direction of maximum spread *orthogonal* (perpendicular) to PC1. And so on.
+
+PCA finds the best $k$-dimensional subspace to project your data onto. "Best" means it minimizes the total squared distance between the original points and their projections — the same idea as regression minimizing squared residuals, but now the residuals are *perpendicular* to the fitted subspace, not vertical.
+:::
+
+There are two equivalent ways to describe what PCA does — and they give the same answer:
+
+:::{.callout-important}
+## Two views of PCA
+1. **Maximize variance captured along the chosen axis.** Among all unit directions, PC1 is the one along which the projected points have the largest variance.
+2. **Minimize squared perpendicular distance from points to the axis.** Among all lines through the data, PC1 is the one with the smallest total squared distance from points to the line.
+
+These two views are equivalent — the *same* line solves both problems. The formal statement is the Eckart-Young-Mirsky theorem, which we'll meet when we get to the SVD.
+:::
+
+A short contrast with regression keeps the geometry straight. Regression (Chapter 5) minimizes the *vertical* distance from points to a fitted line — the gap between $y_i$ and its prediction. PCA minimizes the *perpendicular* distance. Different objectives, different lines: the regression line of $x_2$ on $x_1$ is not the same as PC1.
+
+## Loading and preparing the data
+
+Let's load the Airbnb data and select the numeric columns that make sense for PCA. We'll drop IDs, URLs, and columns that are mostly missing.
+
+```{python}
+# low_memory=False avoids mixed-type warnings on large CSVs
+airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
+print(f"Raw data: {airbnb.shape[0]:,} rows x {airbnb.shape[1]} columns")
+```
+
+Before selecting numeric columns, we clean the price and bathrooms columns, which require type conversion.
+
+```{python}
+# Clean price column (stored as string like "$150.00" in many Airbnb exports)
+if airbnb['price'].dtype == object:
+    airbnb['price'] = airbnb['price'].replace('[\\$,]', '', regex=True).astype(float)
+
+# Handle bathrooms column (newer Airbnb exports use bathrooms_text instead)
+if 'bathrooms' not in airbnb.columns and 'bathrooms_text' in airbnb.columns:
+    airbnb['bathrooms'] = (
+        airbnb['bathrooms_text']
+        .str.extract(r'(\d+\.?\d*)')[0]
+        .astype(float)
+    )
+```
+
+Now we select the 23 numeric columns and drop rows with missing values. Note that `.dropna()` silently removes any row with at least one NaN — we print the count so the loss is visible.
+
+```{python}
+# Select numeric columns suitable for PCA
+numeric_cols = [
+    'accommodates', 'bathrooms', 'bedrooms', 'beds', 'price',
+    'minimum_nights', 'maximum_nights', 'number_of_reviews',
+    'reviews_per_month', 'review_scores_rating', 'review_scores_accuracy',
+    'review_scores_cleanliness', 'review_scores_checkin',
+    'review_scores_communication', 'review_scores_location',
+    'review_scores_value', 'availability_30', 'availability_60',
+    'availability_90', 'availability_365',
+    'calculated_host_listings_count',
+    'latitude', 'longitude'
+]
+
+df = airbnb[numeric_cols].dropna()
+print(f"After selecting {len(numeric_cols)} numeric columns and dropping NaN:")
+print(f"  {len(df):,} rows x {len(numeric_cols)} columns")
+print(f"  (Dropped {len(airbnb) - len(df):,} rows with missing values)")
+```
+
+We went from 96 columns to 23 numeric ones. But 23 dimensions is still a lot. Can we find a smaller set of "super-features" that captures most of the information?
+
+## First attempt: PCA without standardization
+
+Let's see what happens if we run PCA on the raw (unstandardized) data — the fastest path, and an easy default to fall into.
+
+:::{.callout-tip}
+## Think About It
+Before looking at the output — which feature do you think PC1 will pick up, and why?
+:::
+
+```{python}
+# PCA without standardization
+pca_raw = PCA()
+scores_raw = pca_raw.fit_transform(df)
+
+# What does PC1 look like?
+loadings_raw = pd.Series(pca_raw.components_[0], index=numeric_cols)
+print("PC1 loadings (unstandardized data) — top 5 by absolute value:")
+print(loadings_raw.abs().sort_values(ascending=False).head())
+```
+
+PC1 explains almost all the variance — suspiciously so. Let's check which features have the largest raw variance.
+
+```{python}
+# Variance explained
+print(f"PC1 explains {pca_raw.explained_variance_ratio_[0]*100:.1f}% of all variance")
+print(f"PC2 explains {pca_raw.explained_variance_ratio_[1]*100:.1f}% of all variance")
+print()
+print("What's going on? Let's look at the raw feature variances:")
+print()
+raw_var = df.var().sort_values(ascending=False)
+for col in raw_var.head(5).index:
+    print(f"  {col:>35s}: variance = {raw_var[col]:>15,.1f}")
+```
+
+**There it is.** `maximum_nights` has a variance in the trillions — some listings allow stays of 1,000+ nights, creating enormous outliers. `availability_365` ranges up to 365. Meanwhile, `bathrooms` ranges from 0 to 10.
+
+PCA on unstandardized data just picks up whichever column has the biggest numbers. PC1 is basically "maximum_nights" — that's not a useful summary of anything.
+
+:::{.callout-warning}
+## PCA is dominated by scale
+Without standardization, PCA is dominated by whichever feature has the largest scale.
+:::
+
+## The fix: standardize first
+
+We need every feature on the same scale before PCA can find meaningful directions. **Standardization** (subtracting the mean and dividing by the standard deviation — the **z-score** transformation) puts all features on equal footing.
+
+Here's why this matters at a deeper level: PCA on raw centered data decomposes the **covariance matrix**. PCA on standardized data decomposes the **correlation matrix**. Since correlation puts all features on equal footing, this is usually what we want.
+
+```{python}
+# Standardize
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(df)
+
+# PCA on standardized data
+pca = PCA()
+scores = pca.fit_transform(X_scaled)
+```
+
+How much variance does each PC capture now?
+
+```{python}
+print("Variance explained by each PC (standardized):")
+for i in range(5):
+    print(f"  PC{i+1}: {pca.explained_variance_ratio_[i]*100:.1f}%")
+print(f"  ...total for first 5: {pca.explained_variance_ratio_[:5].sum()*100:.1f}%")
+```
+
+## The scree plot: how many components do we need?
+
+The **scree plot** shows how much variance each PC explains. We look for an **elbow** — the point where adding more PCs doesn't help much. This heuristic is called the **elbow method**.
+
+```{python}
+# Scree plot: individual and cumulative variance explained
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+
+axes[0].bar(range(1, len(pca.explained_variance_ratio_)+1),
+            pca.explained_variance_ratio_ * 100,
+            color='steelblue', edgecolor='white')
+axes[0].set_xlabel('Principal Component')
+axes[0].set_ylabel('Variance Explained (%)')
+axes[0].set_title('Scree Plot')
+axes[0].set_xlim(0.5, 15.5)
+
+cumvar = np.cumsum(pca.explained_variance_ratio_) * 100
+axes[1].plot(range(1, len(cumvar)+1), cumvar, 'o-', color='steelblue')
+axes[1].axhline(y=80, color='red', linestyle='--', alpha=0.5, label='80% threshold')
+axes[1].axhline(y=90, color='orange', linestyle='--', alpha=0.5, label='90% threshold')
+axes[1].set_xlabel('Number of Components')
+axes[1].set_ylabel('Cumulative Variance Explained (%)')
+axes[1].set_title('Cumulative Variance Explained')
+axes[1].legend()
+axes[1].set_xlim(0.5, 15.5)
+
+plt.tight_layout()
+plt.show()
+```
+
+How many PCs do we need to reach common variance thresholds?
+
+```{python}
+# How many PCs for various thresholds?
+for threshold in [0.7, 0.8, 0.9]:
+    n_needed = np.argmax(cumvar >= threshold*100) + 1
+    print(f"  {threshold*100:.0f}% variance: need {n_needed} PCs (out of {len(numeric_cols)})")
+```
+
+We need a handful of PCs to capture most of the variance — a real reduction from 23 columns, though not as dramatic as "just 5 PCs capture everything." Real data is messy, and the variance is spread out.
+
+Still, the first few PCs do capture meaningful structure. Let's interpret them.
+
+## Interpreting the principal components
+
+Each PC is a weighted combination of the original features. The **loadings** — the weights — tell us what each PC represents.
+
+:::{.callout-tip}
+## Think About It
+Now that we've standardized, what groupings of features do you expect PCA to find? Think about which Airbnb features tend to be correlated with each other.
+:::
+
+```{python}
+# PC loadings heatmap for first 5 PCs
+loadings = pd.DataFrame(
+    pca.components_[:5].T,
+    index=numeric_cols,
+    columns=[f'PC{i+1}' for i in range(5)]
+)
+
+fig, ax = plt.subplots(figsize=(10, 10))
+sns.heatmap(loadings, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
+            ax=ax, linewidths=0.5)
+ax.set_title('PCA Loadings — What Does Each Component Represent?')
+plt.tight_layout()
+plt.show()
+```
+
+Let's look at the strongest contributors to PC1 and PC2.
+
+```{python}
+# Interpret PC1: show top positive and negative loadings
+print("PC1: Top loadings")
+pc1 = loadings['PC1'].sort_values()
+print("  Most negative:")
+for feat, val in pc1.head(3).items():
+    print(f"    {feat:>35s}: {val:+.3f}")
+print("  Most positive:")
+for feat, val in pc1.tail(3).items():
+    print(f"    {feat:>35s}: {val:+.3f}")
+```
+
+Now PC2:
+
+```{python}
+print("PC2: Top loadings")
+pc2 = loadings['PC2'].sort_values()
+print("  Most negative:")
+for feat, val in pc2.head(3).items():
+    print(f"    {feat:>35s}: {val:+.3f}")
+print("  Most positive:")
+for feat, val in pc2.tail(3).items():
+    print(f"    {feat:>35s}: {val:+.3f}")
+```
+
+**Telling the story of each PC:**
+
+- **PC1** contrasts review scores (positive: rating, value, accuracy) against availability windows (negative: availability_30, _60, _90). Listings that score high on PC1 have strong reviews but low availability — popular, booked-up places. Listings that score low on PC1 have lots of open dates but weaker reviews.
+
+- **PC2** loads heavily on availability_30, _60, and _90 (all positive), with weak negative loadings on latitude, minimum_nights, and maximum_nights. This component captures a "calendar openness" factor — listings with many available dates in the near term score high on PC2, regardless of review quality.
+
+Notice how PCA automatically discovered these natural groupings. We didn't tell it about "review quality" or "calendar availability" — it found these dimensions by following the variance.
+
+### Tracing one listing through PCA
+
+Let's pick one listing and trace it through the entire PCA pipeline. This exercise makes the loadings concrete.
+
+```{python}
+# Pick a listing and show its original features and PC scores
+example_idx = df.index[0]
+example_features = df.loc[example_idx]
+example_scores = scores[0]
+
+print(f"Listing #{example_idx}:")
+print(f"\nOriginal features (a few):")
+for col in ['accommodates', 'bedrooms', 'review_scores_rating',
+            'review_scores_cleanliness', 'price']:
+    print(f"  {col:>30s}: {example_features[col]:>8.1f}")
+print(f"\nPC scores:")
+for i in range(3):
+    print(f"  PC{i+1}: {example_scores[i]:+.2f}")
+```
+
+What do those scores tell us about this listing?
+
+```{python}
+# What does this listing's PC1 score mean?
+print("PC1 is the 'popular & booked-up' factor (high reviews, low availability).")
+print(f"This listing's PC1 score = {example_scores[0]:+.2f}")
+if example_scores[0] > 0:
+    print("  → Positive: strong reviews, limited availability.")
+else:
+    print("  → Negative: weaker reviews or lots of open dates.")
+print(f"\nPC2 is the 'calendar openness' factor (high near-term availability).")
+print(f"This listing's PC2 score = {example_scores[1]:+.2f}")
+if example_scores[1] > 0:
+    print("  → Positive: many available dates in the next 30-90 days.")
+else:
+    print("  → Negative: fewer available dates in the near term.")
+```
+
+## The math behind PCA: SVD
+
+To understand what the SVD produces, two definitions from linear algebra are needed. These definitions build on the vector and span concepts from Chapter 4.
+
+:::{.callout-important}
+## Definition: Basis and Orthonormal Basis
+A **basis** for a subspace is a minimal set of linearly independent vectors that spans it. The number of vectors in any basis equals the **dimension** of the subspace.
+
+An **orthonormal basis** is a basis where every vector has norm 1 and every pair of vectors is orthogonal (inner product = 0). Orthonormal bases are especially convenient: to find the coordinates of a point, you just take dot products — no matrix inversion needed. PCA finds an orthonormal basis aligned with the directions of maximum variance.
+:::
+
+Now that you've seen PCA work, let's look under the hood. PCA is powered by the **SVD** (**Singular Value Decomposition**). The assigned reading (VanderPlas Ch 5.09) covers the sklearn implementation. For a deeper linear-algebra treatment, see Strang (*Introduction to Linear Algebra*, 6th ed., §7.3) or Hastie, Tibshirani & Friedman (*Elements of Statistical Learning*, §14.5).
+
+The exact SVD of the standardized (centered and scaled) data matrix is:
+
+$$X = U S V^T$$
+
+PCA keeps only the first $k$ components, giving a rank-$k$ approximation:
+
+$$X \approx U_k S_k V_k^T$$
+
+- The columns of $V$ are the **principal component directions** (the new axes)
+- The diagonal of $S$ contains the **singular values** — the fraction of total variance captured by PC$i$ is $\sigma_i^2 / \sum_j \sigma_j^2$
+- The rows of $US$ are the **PC scores** — row $i$ gives listing $i$'s coordinates in the new basis
+
+:::{.callout-important}
+## Definition: Eckart-Young-Mirsky Theorem
+Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest total squared error (Frobenius norm). No other $k$-dimensional summary can do better.
+:::
+
+## PCA as regression onto optimal covariates
+
+Here's the key insight that connects PCA to everything we've learned.
+
+In regression (Chapter 5), we had a fixed set of features $X$ and found the best weights $w$ to minimize $\|y - Xw\|^2$. We chose the features; the math found the coefficients.
+
+PCA is the same optimization, except we also get to choose $X$. We're minimizing $\|Y - XW\|_F^2$ over *both* the scores $X$ ($= U_k S_k$) and the directions $W$ ($= V_k^T$) simultaneously. PCA finds the best covariates AND the best coefficients.
+
+These two views — maximizing variance captured and minimizing reconstruction error — are mathematically equivalent. This equivalence explains why PCA feels like a natural extension of regression: it IS regression, but with the freedom to pick the best possible features.
+
+## The payoff: predicting price from listing descriptions
+
+So far we've used PCA to summarize 23 numeric columns. That's a reasonable tour of the mechanics, but it isn't a case where PCA is *necessary* — a determined student could keep all 23 columns and lose little. The pressure to compress only really shows up when a feature space is huge compared to the number of examples we have.
+
+Every Airbnb listing comes with a free-text `description` field that we've been ignoring. The description carries a lot of information — words like *"luxury"*, *"quiet"*, *"walk to subway"*, *"renovated"*, *"shared bathroom"* are informative about price. To use these words in a regression we need to turn each description into a vector of numbers.
+
+A **text embedding model** is a neural network that maps a piece of text to a fixed-length numeric vector. Distances between vectors approximate semantic similarity: two descriptions about "quiet East Village studios" sit close together; a description of a "luxury Tribeca loft" sits far away. The dimensions of the vector are individually meaningless — they're internal features of the model — but the geometry of distances is meaningful.
+
+We precomputed embeddings for every listing in our working dataframe using **all-mpnet-base-v2**, an open-source sentence embedding model from the sentence-transformers library. Each description becomes a vector of 768 numbers. The vectors are L2-normalized (unit length).
+
+:::{.callout-note}
+## Going deeper: how the embeddings were computed
+The precompute script lives at `scripts/compute_description_embeddings.py`. It loads the model once on a local GPU, runs every description through it, and saves the resulting matrix. You don't need to run it — the .npy file is already on disk. Model details and a hash of the run are stored in `data/airbnb/description_embeddings_meta.json` so future regenerations are traceable.
+:::
+
+Let's load the embeddings and align them to our working dataframe.
+
+```{python}
+# Load precomputed description embeddings
+emb_all = np.load(f'{DATA_DIR}/airbnb/description_embeddings.npy')
+emb_index = pd.read_csv(f'{DATA_DIR}/airbnb/description_embeddings_index.csv')
+print(f"Embedding matrix: {emb_all.shape[0]:,} rows x {emb_all.shape[1]} dims")
+print(f"L2-normalized: first three norms = {np.linalg.norm(emb_all[:3], axis=1)}")
+```
+
+Now align embeddings to the rows of `df` (our filtered numeric dataframe) using listing `id`.
+
+```{python}
+# Map listing_id -> row index in the embedding matrix
+id_to_emb_row = {lid: i for i, lid in enumerate(emb_index['listing_id'].values)}
+
+# For each row in df, find the matching embedding
+df_ids = airbnb.loc[df.index, 'id'].values
+emb_rows = np.array([id_to_emb_row.get(lid, -1) for lid in df_ids])
+
+keep_mask = emb_rows >= 0
+df_emb = df.loc[keep_mask].copy()
+E = emb_all[emb_rows[keep_mask]]
+print(f"Listings with both numeric features and an embedding: {len(df_emb):,}")
+print(f"Embedding feature matrix shape: {E.shape}")
+```
+
+### Why naive regression fails on this feature space
+
+We have 768 embedding features per listing. To make the failure mode of running regression on too-wide a feature space visible, we work with a small training set — a realistic size for a niche subset of the data (think: a single neighborhood, or a single host's portfolio). We sample 700 listings and hold out 30% as a final test set.
+
+```{python}
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(42)
+sample_idx = rng.choice(len(df_emb), size=700, replace=False)
+
+df_s = df_emb.iloc[sample_idx].copy()
+E_s = E[sample_idx]
+y_s = np.log(df_s['price'].clip(lower=1).values)
+X_num = df_s.drop(columns=['price']).values  # numeric features minus price
+
+(X_num_tr, X_num_te,
+ E_tr, E_te,
+ y_tr, y_te) = train_test_split(
+    X_num, E_s, y_s, test_size=0.30, random_state=0
+)
+print(f"Train: {len(y_tr)} listings, Test: {len(y_te)} listings")
+print(f"Numeric features: {X_num.shape[1]}, Embedding features: {E_s.shape[1]}")
+```
+
+Our training set has 490 listings and 768 embedding features. We have *more features than examples*. In this regime, ordinary least squares isn't even uniquely defined — there are infinitely many solutions that fit the training data exactly. Predictive models trained here overfit dramatically: they memorize the training set and fail on new listings.
+
+The target is `log(price)`. We use the log because price is heavily right-skewed and prediction errors are multiplicative — a $20 error on a $50 listing matters more than a $20 error on a $500 listing. Working in log-space makes RMSE a sensible thing to compare across listings.
+
+### Four models
+
+We compare four ways to predict log-price.
+
+1. **Numerics only.** Linear regression on the 22 numeric features (price excluded). The honest baseline.
+2. **Raw embeddings.** Linear regression on all 768 embedding features plus the 22 numerics. Demonstrates overfitting when the feature space is wider than the training set.
+3. **Random projection.** Project the 768 embeddings to $k$ dimensions via a fixed Gaussian random matrix, then regress. This shows whether *any* dimensionality reduction helps — or whether PCA's specific choice of directions matters.
+4. **PCA reduction.** Project the embeddings to $k$ principal components, then regress.
+
+We pick $k$ for the PCA and random-projection models by 5-fold cross-validation on the training set.
+
+```{python}
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.random_projection import GaussianRandomProjection
+from sklearn.model_selection import KFold
+
+def rmse(a, b):
+    return float(np.sqrt(np.mean((a - b)**2)))
+
+# Standardize numeric features (fit on train only)
+num_scaler = StandardScaler().fit(X_num_tr)
+X_num_tr_s = num_scaler.transform(X_num_tr)
+X_num_te_s = num_scaler.transform(X_num_te)
+```
+
+**Baseline: numerics-only linear regression.**
+
+```{python}
+lr_num = LinearRegression().fit(X_num_tr_s, y_tr)
+rmse_baseline_tr = rmse(y_tr, lr_num.predict(X_num_tr_s))
+rmse_baseline_te = rmse(y_te, lr_num.predict(X_num_te_s))
+print(f"Numerics-only:    train RMSE = {rmse_baseline_tr:.3f}, "
+      f"test RMSE = {rmse_baseline_te:.3f}")
+```
+
+**Raw embeddings (plus numerics).** Predicting log-price from 768 embedding features plus the 22 numerics.
+
+```{python}
+X_raw_tr = np.hstack([X_num_tr_s, E_tr])
+X_raw_te = np.hstack([X_num_te_s, E_te])
+lr_raw = LinearRegression().fit(X_raw_tr, y_tr)
+rmse_raw_tr = rmse(y_tr, lr_raw.predict(X_raw_tr))
+rmse_raw_te = rmse(y_te, lr_raw.predict(X_raw_te))
+print(f"Raw embeddings:   train RMSE = {rmse_raw_tr:.3f}, "
+      f"test RMSE = {rmse_raw_te:.3f}")
+```
+
+Look at the train vs. test gap. The raw-embedding model fits the training set far tighter than the baseline does — but its test error tells a different story.
+
+### Choosing $k$ by cross-validation
+
+The PCA and random-projection models both need a choice of $k$ — how many dimensions to keep. We pick $k$ using 5-fold cross-validation on the training set: for each candidate $k$, fit the pipeline on 4 folds, predict the 5th, average across folds. The best $k$ minimizes mean CV RMSE.
+
+```{python}
+ks = [2, 5, 10, 20, 50, 100, 200]
+kf = KFold(n_splits=5, shuffle=True, random_state=1)
+
+def cv_rmse(reduce_fn, k):
+    """Return mean CV RMSE for the pipeline that reduces embeddings to k
+    via reduce_fn(k), concatenates with numerics, and fits linear regression."""
+    fold_rmses = []
+    for tr_idx, va_idx in kf.split(X_num_tr_s):
+        num_tr, num_va = X_num_tr_s[tr_idx], X_num_tr_s[va_idx]
+        emb_tr, emb_va = E_tr[tr_idx], E_tr[va_idx]
+        ytr, yva = y_tr[tr_idx], y_tr[va_idx]
+        reducer = reduce_fn(k)
+        emb_tr_r = reducer.fit_transform(emb_tr)
+        emb_va_r = reducer.transform(emb_va)
+        X_tr_full = np.hstack([num_tr, emb_tr_r])
+        X_va_full = np.hstack([num_va, emb_va_r])
+        m = LinearRegression().fit(X_tr_full, ytr)
+        fold_rmses.append(rmse(yva, m.predict(X_va_full)))
+    return float(np.mean(fold_rmses))
+
+pca_cv = [cv_rmse(lambda k: PCA(n_components=k, random_state=0), k) for k in ks]
+rp_cv  = [cv_rmse(lambda k: GaussianRandomProjection(n_components=k,
+                                                    random_state=0), k)
+          for k in ks]
+
+k_pca = ks[int(np.argmin(pca_cv))]
+k_rp  = ks[int(np.argmin(rp_cv))]
+print(f"PCA: best k = {k_pca} (CV RMSE = {min(pca_cv):.3f})")
+print(f"Random projection: best k = {k_rp} (CV RMSE = {min(rp_cv):.3f})")
+```
+
+Now fit each method at its CV-chosen $k$ on the full training set and evaluate on the held-out test set.
+
+```{python}
+# PCA at chosen k
+pca_red = PCA(n_components=k_pca, random_state=0).fit(E_tr)
+X_pca_tr = np.hstack([X_num_tr_s, pca_red.transform(E_tr)])
+X_pca_te = np.hstack([X_num_te_s, pca_red.transform(E_te)])
+lr_pca = LinearRegression().fit(X_pca_tr, y_tr)
+rmse_pca_tr = rmse(y_tr, lr_pca.predict(X_pca_tr))
+rmse_pca_te = rmse(y_te, lr_pca.predict(X_pca_te))
+
+# Random projection at chosen k
+rp_red = GaussianRandomProjection(n_components=k_rp, random_state=0).fit(E_tr)
+X_rp_tr = np.hstack([X_num_tr_s, rp_red.transform(E_tr)])
+X_rp_te = np.hstack([X_num_te_s, rp_red.transform(E_te)])
+lr_rp = LinearRegression().fit(X_rp_tr, y_tr)
+rmse_rp_tr = rmse(y_tr, lr_rp.predict(X_rp_tr))
+rmse_rp_te = rmse(y_te, lr_rp.predict(X_rp_te))
+
+print(f"PCA (k={k_pca}):         train = {rmse_pca_tr:.3f}, test = {rmse_pca_te:.3f}")
+print(f"Random proj (k={k_rp}): train = {rmse_rp_tr:.3f}, test = {rmse_rp_te:.3f}")
+```
+
+### The plot
+
+A two-panel figure makes the comparison visible. The left panel is the CV curve: mean CV RMSE versus $k$ for PCA and random projection, with the baseline and the raw-embedding test RMSE as horizontal references. The right panel is a bar chart of train vs. test RMSE for the four final models.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+
+ax = axes[0]
+ax.plot(ks, pca_cv, 'o-', color='#c44e52', label='PCA (CV RMSE)')
+ax.plot(ks, rp_cv,  's-', color='#4a6fa5', label='random projection (CV RMSE)')
+ax.axhline(rmse_baseline_te, color='gray', linestyle='--',
+           label=f'numerics-only test RMSE = {rmse_baseline_te:.2f}')
+ax.axhline(rmse_raw_te, color='black', linestyle=':',
+           label=f'raw-embedding test RMSE = {rmse_raw_te:.2f}')
+ax.scatter([k_pca], [min(pca_cv)], s=140, facecolors='none',
+           edgecolors='#c44e52', linewidths=2.0, zorder=5,
+           label=f'PCA chose k={k_pca}')
+ax.scatter([k_rp], [min(rp_cv)], s=140, facecolors='none',
+           edgecolors='#4a6fa5', linewidths=2.0, zorder=5,
+           label=f'RP chose k={k_rp}')
+ax.set_xscale('log')
+ax.set_xlabel('k (number of components)')
+ax.set_ylabel('RMSE (log price)')
+ax.set_title('5-fold CV: pick k to minimize held-out error')
+ax.legend(fontsize=8, loc='upper left')
+
+ax = axes[1]
+labels = ['numerics\nonly', 'raw\nembeddings',
+          f'random proj\n(k={k_rp})', f'PCA\n(k={k_pca})']
+trains = [rmse_baseline_tr, rmse_raw_tr, rmse_rp_tr, rmse_pca_tr]
+tests  = [rmse_baseline_te, rmse_raw_te, rmse_rp_te, rmse_pca_te]
+xpos = np.arange(len(labels))
+w = 0.38
+ax.bar(xpos - w/2, trains, w, label='train', color='#9bc4e2')
+ax.bar(xpos + w/2, tests,  w, label='test',  color='#c44e52')
+ax.set_xticks(xpos)
+ax.set_xticklabels(labels, fontsize=10)
+ax.set_ylabel('RMSE (log price)')
+ax.set_title('Train vs. test RMSE — overfitting visible')
+ax.legend()
+
+plt.tight_layout()
+plt.show()
+```
+
+A few things to read off this figure.
+
+The **raw-embedding** bar pair on the right panel shows the classic overfitting signature: a near-zero train RMSE next to a much larger test RMSE. With 768 features and a few hundred training listings, ordinary least squares fits the training data *exactly* and predicts new listings worse than the numerics-only baseline.
+
+The **random-projection** and **PCA** models both undo this damage. Reducing dimension at all — even with a random matrix — is the dominant fix: it caps the model's capacity below the size of the training set. PCA does this with a smaller test RMSE in CV and tolerates a larger $k$ on the training set, because PCA's directions are aligned with where the variance actually lives. Random projection has to stop sooner before it lets too many noisy directions in.
+
+In this experiment, the dimension-reduced models roughly *match* the numerics-only baseline on test — they don't beat it. The 22 numeric features were already doing most of the work; the text adds little once the wide-feature overfit is cured. That outcome is honest: PCA didn't unlock new signal here, but it did rescue a regression that the raw embeddings would have ruined. And we know what happened because we measured held-out test error — not by inspecting variance or loadings.
+
+### The loadings detour: components are anonymous
+
+Earlier we found that PC1 of the numeric features had an interpretable meaning — "review quality vs availability." We told a story about it. Now let's look at the top features (by absolute loading) of PC1 of the embedding matrix.
+
+```{python}
+emb_pca_full = PCA(n_components=10, random_state=0).fit(E_tr)
+top_dims = np.argsort(np.abs(emb_pca_full.components_[0]))[::-1][:8]
+print("PC1 of embeddings — top 8 feature dimensions by |loading|:")
+for d in top_dims:
+    print(f"  emb_{d:>3d}: loading = {emb_pca_full.components_[0, d]:+.3f}")
+```
+
+Anonymous dimension numbers. There is no human-readable meaning here — these are internal coordinates of the neural network that produced the embeddings. The component itself tells us nothing about what makes a listing's description predictive of price.
+
+So how did we know PCA helped? Not by inspecting the components. We knew because the **downstream test error** got better.
+
+:::{.callout-important}
+## Unsupervised learning is judged by the supervised task it enables
+PCA, k-means, and other unsupervised methods cannot be judged on their own. Variance explained, cluster compactness, and "what the loadings look like" all depend on choices of scaling, metric, and what we happen to find interpretable.
+
+The honest test of a dimensionality reduction is whether **held-out predictions on a downstream supervised task improve**. The choice of $k$ is made by cross-validation against that downstream task, not by reading a scree-plot elbow.
+
+Unsupervised learning is a means to an end. The end is the supervised task.
+:::
+
+One caveat keeps the lesson honest. PCA doesn't always *add* signal — and in our experiment it didn't. The numeric Airbnb features were already strong predictors of price; the text embedding contributed little new information once we cured the overfit. PCA still *helped*, in the sense that the regularized prediction was no worse than the baseline despite using a 768-dimensional feature space. In other applications — where the text is the only signal — the same recipe wins outright. The right way to find out is the same: measure held-out test error.
+
+## Biplot: visualizing listings in PC space
+
+Let's project every listing into the first two PCs of the *numeric* features and see if patterns emerge. We'll color by room type to see if PCA captures that distinction.
+
+```{python}
+# Create a dataframe with PC scores and metadata
+# Use neighbourhood_group_cleansed (or neighbourhood_group as fallback)
+borough_col = ('neighbourhood_group_cleansed'
+               if 'neighbourhood_group_cleansed' in airbnb.columns
+               else 'neighbourhood_group')
+
+plot_df = pd.DataFrame({
+    'PC1': scores[:, 0],
+    'PC2': scores[:, 1],
+    'room_type': airbnb.loc[df.index, 'room_type'].values,
+    'borough': airbnb.loc[df.index, borough_col].values
+})
+```
+
+Let's plot every listing in PC space, coloring by room type and borough.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+
+# Color by room type
+for rt in plot_df['room_type'].unique():
+    mask = plot_df['room_type'] == rt
+    axes[0].scatter(plot_df.loc[mask, 'PC1'], plot_df.loc[mask, 'PC2'],
+                    alpha=0.4, s=10, label=rt)
+axes[0].set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% var)")
+axes[0].set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% var)")
+axes[0].set_title('Listings in PC Space — by Room Type')
+axes[0].legend(markerscale=5)
+
+# Color by borough
+for b in ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island']:
+    mask = plot_df['borough'] == b
+    axes[1].scatter(plot_df.loc[mask, 'PC1'], plot_df.loc[mask, 'PC2'],
+                    alpha=0.4, s=10, label=b)
+axes[1].set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% var)")
+axes[1].set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% var)")
+axes[1].set_title('Listings in PC Space — by Borough')
+axes[1].legend(markerscale=5)
+
+plt.tight_layout()
+plt.show()
+```
+
+Room types show some separation along the first two PCs, but there's a lot of overlap — PCA captures broad trends, not clean clusters.
+
+Boroughs show less separation in these first two PCs. Geography isn't the dominant source of variance in the standardized data — review patterns and availability matter more.
+
+## PCA vs. feature selection
+
+:::{.callout-tip}
+## Think About It
+Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Chapter 6)?
+:::
+
+PCA creates *new* features that are combinations of the originals — it's **dimensionality reduction**. Lasso picks a subset of existing features — that's **feature selection**. PCA is especially useful when your original features are correlated (like the six review scores): it creates uncorrelated summaries that capture more information per component.
+
+:::{.callout-warning}
+## PCA on mixed data
+We only used numeric columns. PCA requires numeric input — if you one-hot encode categoricals and run PCA, you're mixing binary (0/1) columns with continuous columns. The geometry of binary data is very different (all points land on vertices of a hypercube), so standard PCA doesn't handle this well.
+
+For this course, just use the numeric columns. If you're curious about mixed data, look up Multiple Correspondence Analysis — but that's beyond our scope.
+:::
+
+## Key Takeaways
+
+- **PCA finds the directions of maximum variance** in your data. Each principal component is a weighted combination of the original features.
+
+- **Unsupervised learning is judged by the supervised task it enables — not by variance explained, not by loadings interpretability, not by intrinsic merit.** Variance and loadings depend on scaling and metric choices. The only honest test of a dimensionality-reduction step is whether held-out predictions improve.
+
+- **The scree plot** tells you how many PCs you need *for variance coverage*. But when PCA is a preprocessing step for prediction, choose $k$ by cross-validation against the downstream task, not by reading an elbow.
+
+- **Interpret the components — when you can.** With the 23 numeric features, PC1 had a story ("review quality vs availability"). With 768-d text embeddings, the components are anonymous. Whether the loadings tell a story is a property of the original feature space, not of PCA.
+
+- **Always standardize first.** Without standardization, PCA is dominated by whichever feature has the largest scale.
+
+- **PCA finds the best *linear* summary.** If your data lies on a curved surface or has complex cluster shapes, PCA's linear approximation may miss important structure.
+
+## Coming up next
+
+In **Chapter 15**, we'll move from summarizing data to *grouping* data. **K-means clustering** tries to automatically discover market segments in the Airbnb listings — budget, mid-range, luxury — without being told the categories. A natural approach: cluster the PC scores from today's analysis rather than the original 23 features. PCA and K-means are cousins — same optimization framework, different constraints. The eval principle from today's chapter carries over: a clustering is judged by whether it helps a downstream decision, not by inspecting its centroids.
+
+## Study guide
+
+### Key ideas
+
+- **PCA (Principal Component Analysis)** finds the directions of maximum variance in high-dimensional data, producing a lower-dimensional summary.
+- **Principal component**: a new axis (direction) found by PCA. Each PC is a weighted combination of the original features.
+- **Loading**: the weight of an original feature in a principal component. High loadings tell you which features drive that PC — *when* the original features are individually meaningful.
+- **SVD (Singular Value Decomposition)**: the matrix factorization $X = USV^T$ that powers PCA. The columns of $V$ are the PC directions, the diagonal of $S$ holds the singular values, and the rows of $US$ give the PC scores.
+- **Singular value**: the $i$-th diagonal entry of $S$. Its square is proportional to the variance explained by PC$i$.
+- **Explained variance ratio**: the fraction of total variance captured by a given PC. Sum of all ratios = 1.
+- **Scree plot**: bar chart of explained variance by component, used as a quick check on how much variance the first few PCs cover.
+- **Elbow method**: choosing the number of PCs at the "elbow" where the scree plot levels off. A heuristic, not a substitute for held-out evaluation.
+- **Standardization (z-score)**: subtracting the mean and dividing by the standard deviation so all features have mean 0 and variance 1.
+- **Text embedding (preview)**: a language model maps a free-text field to a fixed-length numeric vector capturing semantic content. Each dimension is not individually meaningful, but distances between vectors approximate semantic similarity.
+- **PCA as a preprocessing step**: PCA is most useful when it enables a downstream supervised task. Use held-out test error to decide whether it helped, and cross-validation on the training set to choose $k$.
+- **Random projection**: an alternative dimensionality reduction that uses a random matrix (not data-driven). Helpful as a baseline — it tells you whether reducing dimension *at all* is the dominant fix, or whether PCA's choice of directions matters.
+- PCA finds the best low-dimensional linear summary of your data by maximizing captured variance (equivalently, minimizing reconstruction error).
+- PCA is regression where you also get to choose the features — it finds the optimal covariates AND coefficients simultaneously.
+- Always standardize before PCA, or the result is dominated by whichever column has the biggest numbers.
+- The Eckart-Young-Mirsky theorem guarantees that the SVD gives the best rank-$k$ approximation — no other $k$-dimensional summary can do better.
+- PCA creates new combined features (dimensionality reduction), while Lasso selects a subset of existing features (feature selection).
+
+### Computational tools
+
+- `StandardScaler()` — standardizes features to mean 0 and variance 1
+- `PCA()` — creates a PCA model; use `PCA(n_components=k)` to keep only $k$ components
+- `.fit_transform(X)` — fit the model and transform the data in one step
+- `.explained_variance_ratio_` — array of variance fractions for each PC
+- `.components_` — matrix of loadings (each row is a PC, each column is a feature)
+- `GaussianRandomProjection(n_components=k)` — random-projection baseline for dimensionality reduction
+- `KFold(n_splits=5)` — cross-validation splitter used to pick $k$ against a downstream task
+
+### For the quiz
+
+- Know what standardization does and why it matters for PCA (covariance vs. correlation matrix).
+- Be able to read a scree plot and estimate how many PCs capture a given fraction of variance.
+- Be able to interpret loadings: given a loadings table of *individually meaningful* features, describe what a PC represents in plain language.
+- Understand that running regression on more features than examples (e.g., 768 embeddings on a few hundred training listings) overfits — and that PCA is a standard fix.
+- Know that the "right" number of PCs for a downstream prediction task is chosen by cross-validation, not by reading a scree-plot elbow.
+- Know that PCA and random projection both reduce dimension, but PCA picks variance-aligned directions and typically does better.
+- Understand the difference between PCA (dimensionality reduction) and Lasso (feature selection).
+- Know the Eckart-Young-Mirsky theorem by name: SVD gives the best rank-$k$ approximation.

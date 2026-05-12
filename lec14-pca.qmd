@@ -3,460 +3,659 @@ title: "PCA — Dimensionality Reduction"
 execute:
   enabled: true
 jupyter: python3
+format:
+  html:
+    html-math-method: katex
 ---
 
-## 96 columns. Can we get away with 5?
+## 100 stocks, one market?
 
-The Airbnb dataset has 96 columns. Bedrooms, bathrooms, price, review scores, availability, latitude, longitude... it's a lot. If you're building a model or a dashboard, feeding in 96 columns is slow, noisy, and expensive.
+On most days in 2020, you could open the financial news and read that "the market" did something — up 2%, down 4%, recovering. But there is no such thing as "the market." There are individual stocks: Apple, JPMorgan, ExxonMobil, Coca-Cola. Each has its own customers, its own earnings, its own story. So why does the news talk as if there is one number?
 
-Can we compress all of this into just 5 numbers per listing — without losing what matters? **PCA** (**Principal Component Analysis**) finds the "best" 5-dimensional summary, and the linear algebra we learned tells us exactly what "best" means.
+Because on most days, they really do move together. The next plot shows five hand-picked S&P 100 names — a tech giant, a megabank, an energy major, a consumer staple, and a software company — over 2020. Watch what happens in mid-March.
 
 ```{python}
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
-sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (7, 4.5)
+plt.rcParams['figure.figsize'] = (8, 4.5)
 plt.rcParams['font.size'] = 12
 np.random.seed(42)
 
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-# Load data
 DATA_DIR = 'data'
+
+returns = pd.read_csv(
+    f'{DATA_DIR}/stocks/sp100_daily_returns_2014_2024.csv',
+    index_col=0, parse_dates=True,
+)
+metadata = pd.read_csv(f'{DATA_DIR}/stocks/sp100_metadata.csv')
+
+hook_tickers = ['AAPL', 'JPM', 'XOM', 'KO', 'MSFT']
+cumret_2020 = (1 + returns.loc['2020', hook_tickers]).cumprod()
+cumret_2020 = cumret_2020 / cumret_2020.iloc[0]
+
+fig, ax = plt.subplots(figsize=(8, 4.5))
+for tkr in hook_tickers:
+    ax.plot(cumret_2020.index, cumret_2020[tkr], label=tkr, linewidth=1.5)
+ax.axvline(pd.Timestamp('2020-03-16'), color='red', linestyle='--', alpha=0.4,
+           label='COVID shutdown')
+ax.set_ylabel('Cumulative return (Jan 2020 = 1)')
+ax.set_title('Five S&P 100 stocks across 2020')
+ax.legend(loc='lower right', ncol=2)
+plt.tight_layout()
+plt.show()
 ```
 
-## Loading and preparing the data
+For most of January and February the lines drift independently. Then in mid-March they all crash together. By summer they diverge again — tech runs up, energy lags, the bank rebounds slowly. **One hundred stocks have one hundred stories, but on most days the market moves them in lockstep.** How many *real* dimensions of variation are there in this dataset? PCA gives a quantitative answer.
 
-Let's load the Airbnb data and select the numeric columns that make sense for PCA. We'll drop IDs, URLs, and columns that are mostly missing.
-
-```{python}
-# low_memory=False avoids mixed-type warnings on large CSVs
-airbnb = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
-print(f"Raw data: {airbnb.shape[0]:,} rows x {airbnb.shape[1]} columns")
-```
-
-Before selecting numeric columns, we clean the price and bathrooms columns, which require type conversion.
-
-```{python}
-# Clean price column (stored as string like "$150.00" in many Airbnb exports)
-if airbnb['price'].dtype == object:
-    airbnb['price'] = airbnb['price'].replace('[\\$,]', '', regex=True).astype(float)
-
-# Handle bathrooms column (newer Airbnb exports use bathrooms_text instead)
-if 'bathrooms' not in airbnb.columns and 'bathrooms_text' in airbnb.columns:
-    airbnb['bathrooms'] = (
-        airbnb['bathrooms_text']
-        .str.extract(r'(\d+\.?\d*)')[0]
-        .astype(float)
-    )
-```
-
-Now we select the 23 numeric columns and drop rows with missing values. Note that `.dropna()` silently removes any row with at least one NaN — we print the count so the loss is visible.
-
-```{python}
-# Select numeric columns suitable for PCA
-numeric_cols = [
-    'accommodates', 'bathrooms', 'bedrooms', 'beds', 'price',
-    'minimum_nights', 'maximum_nights', 'number_of_reviews',
-    'reviews_per_month', 'review_scores_rating', 'review_scores_accuracy',
-    'review_scores_cleanliness', 'review_scores_checkin',
-    'review_scores_communication', 'review_scores_location',
-    'review_scores_value', 'availability_30', 'availability_60',
-    'availability_90', 'availability_365',
-    'calculated_host_listings_count',
-    'latitude', 'longitude'
-]
-
-df = airbnb[numeric_cols].dropna()
-print(f"After selecting {len(numeric_cols)} numeric columns and dropping NaN:")
-print(f"  {len(df):,} rows x {len(numeric_cols)} columns")
-print(f"  (Dropped {len(airbnb) - len(df):,} rows with missing values)")
-```
-
-We went from 96 columns to 23 numeric ones. But 23 dimensions is still a lot. Can we find a smaller set of "super-features" that captures most of the information?
-
-## The idea behind PCA
-
-Imagine plotting listings in 23-dimensional space (one axis per feature). The points form a cloud. Some directions in this cloud have lots of spread (variance) — those directions carry the most information. Other directions have very little spread — those are mostly noise.
-
-:::{.callout-important}
-## Definition: Principal Component Analysis (PCA)
-**PCA finds the directions of maximum variance.** The first **principal component** (PC1) is the direction of maximum spread. PC2 is the direction of maximum spread *orthogonal* (perpendicular) to PC1. And so on.
-
-PCA finds the best $k$-dimensional subspace to project your data onto. "Best" means it minimizes the total squared distance between the original points and their projections — the same idea as regression minimizing squared residuals, but now the residuals are *perpendicular* to the fitted subspace, not vertical.
+:::{.callout-warning}
+## Not investment advice
+This chapter is about dimensionality reduction. The portfolios we construct are pedagogical, evaluated on historical data, with no transaction costs, no constraints on shorting, and no thought given to taxes. Real portfolio construction involves orders of magnitude more care. Treat the dollar numbers as an *evaluation rubric for our statistical method*, not as a recommendation about anything.
 :::
 
-In Chapter 5, regression projected $y$ onto a fixed set of features $X$. PCA asks: what if we could *choose* the subspace to make that projection as good as possible?
+A note on the spine: this is the one chapter where the textbook's Airbnb backbone is set aside. PCA's natural home is the high-dimensional, low-sample-count regime, and equities give us that without manufacturing it. We return to Airbnb in Chapter 15 (clustering).
+
+## The picture behind PCA
+
+Long before computers, Karl Pearson described PCA geometrically. In 1901 he asked: given a cloud of points in the plane, what *line* minimizes the sum of perpendicular distances from points to the line? He answered the question in any number of dimensions, with no eigenvalues and no matrix factorizations — just elementary geometry (Pearson, "On Lines and Planes of Closest Fit to Systems of Points in Space," Philosophical Magazine, 1901).
+
+Here is the same picture, drawn with real data. Each point is one trading day's pair of returns for JPMorgan and Bank of America — two big U.S. banks. Their returns are not the same, but they are highly related: when the banking sector has a good day, both tend to rise together.
+
+```{python}
+pair = returns[['JPM', 'BAC']].dropna() * 100  # convert to %
+x = pair['JPM'].values
+y = pair['BAC'].values
+
+# Centered for PCA
+xc = x - x.mean(); yc = y - y.mean()
+M = np.column_stack([xc, yc])
+_, S, Vt = np.linalg.svd(M, full_matrices=False)
+pc1, pc2 = Vt[0], Vt[1]
+scale = 1.8 * S[0] / np.sqrt(len(M))
+
+fig, ax = plt.subplots(figsize=(6, 6))
+ax.scatter(x, y, s=4, alpha=0.25, color='steelblue')
+ax.set_xlabel('JPM daily return (%)')
+ax.set_ylabel('BAC daily return (%)')
+ax.set_title(f'JPM vs BAC daily returns, 2014--2024  (corr = {np.corrcoef(x,y)[0,1]:.2f})')
+
+# PC1 / PC2 axes through the mean
+mx, my = x.mean(), y.mean()
+ax.plot([mx - scale*pc1[0], mx + scale*pc1[0]],
+        [my - scale*pc1[1], my + scale*pc1[1]],
+        color='darkorange', linewidth=2.5, label='PC1')
+ax.plot([mx - 0.6*scale*pc2[0], mx + 0.6*scale*pc2[0]],
+        [my - 0.6*scale*pc2[1], my + 0.6*scale*pc2[1]],
+        color='green', linewidth=2.5, label='PC2')
+
+# Example point + its perpendicular projection onto PC1
+ex = np.array([6.0, 3.0])
+proj_scalar = (ex - np.array([mx, my])) @ pc1
+proj_point = np.array([mx, my]) + proj_scalar * pc1
+ax.plot([ex[0], proj_point[0]], [ex[1], proj_point[1]],
+        color='red', linewidth=1.2, linestyle=':')
+ax.scatter([ex[0]], [ex[1]], s=60, color='red', zorder=5)
+ax.annotate('one day\n(perpendicular\n  projection)', xy=ex, xytext=(7.5, 2.0),
+            fontsize=9, color='red')
+
+ax.set_xlim(-15, 15); ax.set_ylim(-15, 15)
+ax.set_aspect('equal')
+ax.legend(loc='upper left')
+plt.tight_layout()
+plt.show()
+```
+
+The cloud is genuinely elliptical. PC1 (orange) is the long axis: it captures the joint up-and-down movement of the two banks — call it the "banking sector" direction. PC2 (green) is the short axis: it captures the small idiosyncratic differences between the two stocks after their common movement is subtracted. The dotted red line shows one day's perpendicular drop onto PC1 — its length is what PCA minimizes, summed over all days.
+
+This is the picture behind every PCA: **find the line (or plane, or subspace) closest to the data in perpendicular distance.** In two dimensions you can see it. In one hundred dimensions you cannot, but the math is identical.
+
+:::{.callout-note collapse="true"}
+## Going deeper: the original Pearson paper
+
+Pearson's 1901 paper works the problem out in arbitrary dimensions using only Lagrange multipliers; the reformulation as an eigenvalue problem came later. The figure above is a modern reproduction of Pearson's geometric set-up, drawn with stock-return data instead of his original astronomical and biometric examples.
+:::
+
+## Loading the returns data
+
+Each row of the dataset is one trading day; each column is one stock; each entry is that stock's **daily log return** for that day. Log returns are convenient because they add across time: a 1% log return today and a 2% log return tomorrow combine to a 3% log return over two days.
+
+:::{.callout-important}
+## Definition: Daily log return
+For a stock with adjusted close price $P_t$ on day $t$, the daily log return is
+
+$$r_t = \log(P_t / P_{t-1}) = \log P_t - \log P_{t-1}.$$
+
+Adjusted close means dividends and stock splits have been folded in, so the price reflects total return to a buy-and-hold investor.
+:::
+
+```{python}
+print(f"Returns matrix shape: {returns.shape[0]:,} days x {returns.shape[1]} stocks")
+print(f"Date range: {returns.index.min().date()} to {returns.index.max().date()}")
+print(f"Tickers (first 10): {list(returns.columns[:10])}")
+```
+
+So we have eleven years of daily returns for 95 S&P 100 constituents — the rest of the original 100 names had to be dropped for data-quality reasons (delistings, IPOs, missing days).
+
+:::{.callout-warning}
+## Survivorship bias
+We use the *current* S&P 100 roster, frozen at the time the data were fetched. Companies that were in the index in 2014 but failed or were demoted before 2024 do not appear. This biases the dataset toward winners.
+
+For pedagogical purposes the bias is harmless — the structure of returns we find is qualitatively right. For real risk research, use a survivorship-bias-free source like CRSP, which records the point-in-time index membership.
+:::
 
 ## First attempt: PCA without standardization
 
-Let's see what happens if we run PCA on the raw (unstandardized) data — the fastest path, and an easy default to fall into.
+Different stocks have very different volatilities. Tesla can move 5% in a day; Coca-Cola rarely moves more than 1%. The variance of TSLA's daily returns is many times that of KO's. So what happens if we run PCA directly on the raw returns?
 
 :::{.callout-tip}
 ## Think About It
-Before looking at the output — which feature do you think PC1 will pick up, and why?
+Before reading on — which stocks do you expect to dominate PC1 when we skip standardization?
 :::
 
 ```{python}
-# PCA without standardization
 pca_raw = PCA()
-scores_raw = pca_raw.fit_transform(df)
+pca_raw.fit(returns.values)
+loadings_raw_pc1 = pd.Series(pca_raw.components_[0], index=returns.columns)
 
-# What does PC1 look like?
-loadings_raw = pd.Series(pca_raw.components_[0], index=numeric_cols)
-print("PC1 loadings (unstandardized data) — top 5 by absolute value:")
-print(loadings_raw.abs().sort_values(ascending=False).head())
+print(f"PC1 explains {pca_raw.explained_variance_ratio_[0]*100:.1f}% of total variance")
+print()
+print("Top 5 stocks by absolute PC1 loading (no standardization):")
+print(loadings_raw_pc1.abs().sort_values(ascending=False).head(5).round(3))
+print()
+print("Top 5 stocks by raw daily-return variance:")
+print(returns.var().sort_values(ascending=False).head(5).map(lambda v: f"{v:.5f}"))
 ```
 
-PC1 explains almost all the variance — suspiciously so. Let's check which features have the largest raw variance.
-
-```{python}
-# Variance explained
-print(f"PC1 explains {pca_raw.explained_variance_ratio_[0]*100:.1f}% of all variance")
-print(f"PC2 explains {pca_raw.explained_variance_ratio_[1]*100:.1f}% of all variance")
-print()
-print("What's going on? Let's look at the raw feature variances:")
-print()
-raw_var = df.var().sort_values(ascending=False)
-for col in raw_var.head(5).index:
-    print(f"  {col:>35s}: variance = {raw_var[col]:>15,.1f}")
-```
-
-**There it is.** `maximum_nights` has a variance in the trillions — some listings allow stays of 1,000+ nights, creating enormous outliers. `availability_365` ranges up to 365. Meanwhile, `bathrooms` ranges from 0 to 10.
-
-PCA on unstandardized data just picks up whichever column has the biggest numbers. PC1 is basically "maximum_nights" — that's not a useful summary of anything.
+The top-PC1 stocks are largely the highest-volatility names — four of the top five overlap with the highest-raw-variance list. PC1 is not "the market" — PC1 is "TSLA and the other big movers." We have rediscovered which stocks have the largest raw variance. Useful, but it is not what we wanted.
 
 :::{.callout-warning}
 ## PCA is dominated by scale
-Without standardization, PCA is dominated by whichever feature has the largest scale.
+Without standardization, PCA finds whichever features have the biggest variance, not whichever features carry the most structure.
 :::
 
 ## The fix: standardize first
 
-We need every feature on the same scale before PCA can find meaningful directions. **Standardization** (subtracting the mean and dividing by the standard deviation — the **z-score** transformation) puts all features on equal footing.
+To put every stock on equal footing we **standardize**: subtract each stock's mean return and divide by its standard deviation. After standardization, every stock has mean 0 and variance 1, and PCA is forced to find structure in the *correlations*, not the *magnitudes*.
 
-Here's why this matters at a deeper level: PCA on raw centered data decomposes the **covariance matrix**. PCA on standardized data decomposes the **correlation matrix**. Since correlation puts all features on equal footing, this is usually what we want.
+In matrix terms, PCA on raw centered data decomposes the **covariance matrix**; PCA on standardized data decomposes the **correlation matrix**. For returns, the correlation matrix is almost always what we want.
 
 ```{python}
-# Standardize
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(df)
-
-# PCA on standardized data
+Z = scaler.fit_transform(returns.values)
 pca = PCA()
-scores = pca.fit_transform(X_scaled)
+pca.fit(Z)
+
+print(f"After standardization:")
+print(f"  PC1 explains {pca.explained_variance_ratio_[0]*100:.1f}% of variance")
+print(f"  PC2 explains {pca.explained_variance_ratio_[1]*100:.1f}% of variance")
+print(f"  PC3 explains {pca.explained_variance_ratio_[2]*100:.1f}% of variance")
+
+loadings_pc1 = pd.Series(pca.components_[0], index=returns.columns)
+print()
+print(f"PC1 loadings — sign breakdown:")
+print(f"  positive on {(loadings_pc1 > 0).sum()} / {len(loadings_pc1)} stocks")
+print(f"  negative on {(loadings_pc1 < 0).sum()} / {len(loadings_pc1)} stocks")
+print(f"  mean loading: {loadings_pc1.mean():+.3f}")
 ```
 
-How much variance does each PC capture now?
+After standardization the picture flips completely. PC1 loads positively on essentially every stock in the universe. It is a single direction in which the entire S&P 100 moves up together (or down together). **This is the market factor.** It was always there in the data; raw-scale PCA could not see it.
+
+## The scree plot
+
+A **scree plot** shows the variance explained by each principal component. The shape tells us how the structure of the data decomposes.
 
 ```{python}
-print("Variance explained by each PC (standardized):")
-for i in range(5):
-    print(f"  PC{i+1}: {pca.explained_variance_ratio_[i]*100:.1f}%")
-print(f"  ...total for first 5: {pca.explained_variance_ratio_[:5].sum()*100:.1f}%")
-```
-
-## The scree plot: how many components do we need?
-
-The **scree plot** shows how much variance each PC explains. We look for an **elbow** — the point where adding more PCs doesn't help much. This heuristic is called the **elbow method**.
-
-```{python}
-# Scree plot: individual and cumulative variance explained
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+ratios = pca.explained_variance_ratio_ * 100
 
-axes[0].bar(range(1, len(pca.explained_variance_ratio_)+1),
-            pca.explained_variance_ratio_ * 100,
-            color='steelblue', edgecolor='white')
-axes[0].set_xlabel('Principal Component')
-axes[0].set_ylabel('Variance Explained (%)')
-axes[0].set_title('Scree Plot')
-axes[0].set_xlim(0.5, 15.5)
+axes[0].bar(range(1, 21), ratios[:20], color='steelblue', edgecolor='white')
+axes[0].set_xlabel('Principal component')
+axes[0].set_ylabel('Variance explained (%)')
+axes[0].set_title('Scree plot (first 20 PCs)')
 
-cumvar = np.cumsum(pca.explained_variance_ratio_) * 100
-axes[1].plot(range(1, len(cumvar)+1), cumvar, 'o-', color='steelblue')
-axes[1].axhline(y=80, color='red', linestyle='--', alpha=0.5, label='80% threshold')
-axes[1].axhline(y=90, color='orange', linestyle='--', alpha=0.5, label='90% threshold')
-axes[1].set_xlabel('Number of Components')
-axes[1].set_ylabel('Cumulative Variance Explained (%)')
-axes[1].set_title('Cumulative Variance Explained')
+cumvar = np.cumsum(ratios)
+axes[1].plot(range(1, 51), cumvar[:50], 'o-', color='steelblue', markersize=4)
+axes[1].axhline(70, color='red', linestyle='--', alpha=0.5, label='70%')
+axes[1].axhline(80, color='orange', linestyle='--', alpha=0.5, label='80%')
+axes[1].set_xlabel('Number of components')
+axes[1].set_ylabel('Cumulative variance explained (%)')
+axes[1].set_title('Cumulative variance')
 axes[1].legend()
-axes[1].set_xlim(0.5, 15.5)
 
 plt.tight_layout()
 plt.show()
+
+for threshold in (50, 70, 80, 90):
+    k = int(np.argmax(cumvar >= threshold)) + 1
+    print(f"  {threshold}% variance: need {k} PCs (of {len(ratios)})")
 ```
 
-How many PCs do we need to reach common variance thresholds?
-
-```{python}
-# How many PCs for various thresholds?
-for threshold in [0.7, 0.8, 0.9]:
-    n_needed = np.argmax(cumvar >= threshold*100) + 1
-    print(f"  {threshold*100:.0f}% variance: need {n_needed} PCs (out of {len(numeric_cols)})")
-```
-
-We need about 8-10 PCs to capture 70-80% of the variance, or 14 to reach 90%. That's a big reduction from 23 columns — but not as dramatic as "just 5 PCs capture everything." Real data is messy, and the variance is spread out.
-
-Still, the first few PCs do capture meaningful structure. Let's interpret them.
+PC1 dominates. After PC1 the variance falls off quickly, but there is no sharp elbow — the tail is long and gradual. In finance this is the typical shape: one large factor (the market), a handful of mid-sized factors (sectors, styles), and a long tail of idiosyncratic structure. The elbow heuristic gives a rough guide; the right answer for any specific use case depends on what we plan to do with the components. We will come back to this question in the payoff section below and answer it by cross-validation.
 
 ## Interpreting the principal components
 
-Each PC is a weighted combination of the original features. The **loadings** — the weights — tell us what each PC represents.
-
-:::{.callout-tip}
-## Think About It
-Now that we've standardized, what groupings of features do you expect PCA to find? Think about which Airbnb features tend to be correlated with each other.
-:::
+Each PC is a vector of weights, one per stock — the **loadings**. We can read off what each component "means" by looking at which stocks have the biggest loadings.
 
 ```{python}
-# PC loadings heatmap for first 5 PCs
 loadings = pd.DataFrame(
-    pca.components_[:5].T,
-    index=numeric_cols,
-    columns=[f'PC{i+1}' for i in range(5)]
+    pca.components_[:3].T,
+    index=returns.columns,
+    columns=['PC1', 'PC2', 'PC3'],
 )
 
-fig, ax = plt.subplots(figsize=(10, 10))
-sns.heatmap(loadings, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
-            ax=ax, linewidths=0.5)
-ax.set_title('PCA Loadings — What Does Each Component Represent?')
+# Bar chart of PC1 and PC2 loadings, sorted by PC1
+fig, axes = plt.subplots(2, 1, figsize=(11, 6), sharex=True)
+
+order = loadings['PC1'].sort_values(ascending=False).index
+axes[0].bar(range(len(order)), loadings.loc[order, 'PC1'],
+            color='steelblue', edgecolor='white', linewidth=0.3)
+axes[0].axhline(0, color='black', linewidth=0.5)
+axes[0].set_ylabel('PC1 loading')
+axes[0].set_title('PC1 loadings — sorted (the market factor)')
+
+axes[1].bar(range(len(order)), loadings.loc[order, 'PC2'],
+            color='indianred', edgecolor='white', linewidth=0.3)
+axes[1].axhline(0, color='black', linewidth=0.5)
+axes[1].set_ylabel('PC2 loading')
+axes[1].set_xlabel('Stock (sorted by PC1 loading)')
+axes[1].set_title('PC2 loadings — same x-axis ordering')
+
 plt.tight_layout()
 plt.show()
 ```
 
-Let's look at the strongest contributors to PC1 and PC2.
+**PC1 is the market factor.** Every loading is positive (or essentially so). A stock's PC1 loading is its sensitivity to the market: a stock with a large PC1 loading swings hard when the index swings; a stock with a small PC1 loading is a defensive name.
+
+**PC2 splits the universe into two camps.** To see what the camps are, look at the names with the largest positive and negative PC2 loadings together with their sectors:
 
 ```{python}
-# Interpret PC1: show top positive and negative loadings
-print("PC1: Top loadings")
-pc1 = loadings['PC1'].sort_values()
-print("  Most negative:")
-for feat, val in pc1.head(3).items():
-    print(f"    {feat:>35s}: {val:+.3f}")
-print("  Most positive:")
-for feat, val in pc1.tail(3).items():
-    print(f"    {feat:>35s}: {val:+.3f}")
+loadings_named = loadings.join(metadata.set_index('ticker')[['sector']])
+print("PC2 — top 8 positive loadings:")
+print(loadings_named.nlargest(8, 'PC2')[['PC2', 'sector']].round(2))
+print()
+print("PC2 — top 8 negative loadings:")
+print(loadings_named.nsmallest(8, 'PC2')[['PC2', 'sector']].round(2))
 ```
-
-Now PC2:
 
 ```{python}
-print("PC2: Top loadings")
-pc2 = loadings['PC2'].sort_values()
-print("  Most negative:")
-for feat, val in pc2.head(3).items():
-    print(f"    {feat:>35s}: {val:+.3f}")
-print("  Most positive:")
-for feat, val in pc2.tail(3).items():
-    print(f"    {feat:>35s}: {val:+.3f}")
+print("\nPC2 average loading by sector:")
+print(loadings_named.groupby('sector')['PC2'].mean().sort_values().round(3))
 ```
 
-**Telling the story of each PC:**
-
-- **PC1** contrasts review scores (positive: rating, value, accuracy) against availability windows (negative: availability_30, _60, _90). Listings that score high on PC1 have strong reviews but low availability — popular, booked-up places. Listings that score low on PC1 have lots of open dates but weaker reviews.
-
-- **PC2** loads heavily on availability_30, _60, and _90 (all positive), with weak negative loadings on latitude, minimum_nights, and maximum_nights. This component captures a "calendar openness" factor — listings with many available dates in the near term score high on PC2, regardless of review quality.
-
-Notice how PCA automatically discovered these natural groupings. We didn't tell it about "review quality" or "calendar availability" — it found these dimensions by following the variance.
-
-### Tracing one listing through PCA
-
-Let's pick one listing and trace it through the entire PCA pipeline. This exercise makes the loadings concrete.
+The pattern is sharp. One side of PC2 is dominated by Financials — JPMorgan, Bank of America, Wells Fargo, Citi, Capital One — with Energy close behind on the sector average. The other side is dominated by Consumer Staples and Utilities — Procter & Gamble, Colgate, Pepsi, NextEra, Walmart. **PC2 is the cyclical-versus-defensive contrast.** When banks and other cyclicals rally on a strong economy, PC2 is up; when investors pile into staples and utilities for safety, PC2 is down.
 
 ```{python}
-# Pick a listing and show its original features and PC scores
-example_idx = df.index[0]
-example_features = df.loc[example_idx]
-example_scores = scores[0]
-
-print(f"Listing #{example_idx}:")
-print(f"\nOriginal features (a few):")
-for col in ['accommodates', 'bedrooms', 'review_scores_rating',
-            'review_scores_cleanliness', 'price']:
-    print(f"  {col:>30s}: {example_features[col]:>8.1f}")
-print(f"\nPC scores:")
-for i in range(3):
-    print(f"  PC{i+1}: {example_scores[i]:+.2f}")
+print("PC3 — top 5 positive loadings:")
+print(loadings_named.nlargest(5, 'PC3')[['PC3', 'sector']].round(2))
+print()
+print("PC3 — top 5 negative loadings:")
+print(loadings_named.nsmallest(5, 'PC3')[['PC3', 'sector']].round(2))
 ```
 
-What do those scores tell us about this listing?
+PC3 turns out to be the growth-versus-yield contrast: Nvidia, Amazon, Meta, Adobe, Alphabet on one side; utilities (Duke, Southern), staples (Coca-Cola, Altria), and high-dividend telecom (Verizon) on the other. By PC5 or PC6, the loadings start looking arbitrary — the components explain real variance, but the economic story runs out.
 
-```{python}
-# What does this listing's PC1 score mean?
-print("PC1 is the 'popular & booked-up' factor (high reviews, low availability).")
-print(f"This listing's PC1 score = {example_scores[0]:+.2f}")
-if example_scores[0] > 0:
-    print("  → Positive: strong reviews, limited availability.")
-else:
-    print("  → Negative: weaker reviews or lots of open dates.")
-print(f"\nPC2 is the 'calendar openness' factor (high near-term availability).")
-print(f"This listing's PC2 score = {example_scores[1]:+.2f}")
-if example_scores[1] > 0:
-    print("  → Positive: many available dates in the next 30-90 days.")
-else:
-    print("  → Negative: fewer available dates in the near term.")
-```
+:::{.callout-tip}
+## Think About It
+If PC1 looks like the market and PC2 splits cyclicals from defensives — haven't we already proved that PCA "worked"?
+
+Hold that thought. We will revisit it in the payoff section below. *Interpretability is not validation.* The proof that PCA helps comes from a downstream task evaluated on data we never used to fit the components.
+:::
 
 ## The math behind PCA: SVD
 
-To understand what the SVD produces, two definitions from linear algebra are needed. These definitions build on the vector and span concepts from Chapter 4.
+PCA is powered by the **SVD** (**Singular Value Decomposition**). Two definitions first.
 
 :::{.callout-important}
-## Definition: Basis and Orthonormal Basis
-A **basis** for a subspace is a minimal set of linearly independent vectors that spans it. The number of vectors in any basis equals the **dimension** of the subspace.
+## Definition: Basis and orthonormal basis
+A **basis** for a subspace is a minimal set of linearly independent vectors that spans it. The number of basis vectors equals the **dimension** of the subspace.
 
-An **orthonormal basis** is a basis where every vector has norm 1 and every pair of vectors is orthogonal (inner product = 0). Orthonormal bases are especially convenient: to find the coordinates of a point, you just take dot products — no matrix inversion needed. PCA finds an orthonormal basis aligned with the directions of maximum variance.
+An **orthonormal basis** is a basis whose vectors all have norm 1 and are pairwise orthogonal (inner product 0). With an orthonormal basis, finding coordinates is just a dot product — no matrix inversion needed.
 :::
 
-Now that you've seen PCA work, let's look under the hood. PCA is powered by the **SVD** (**Singular Value Decomposition**). The assigned reading (VanderPlas Ch 5.09) covers the sklearn implementation. If you've taken EE103, see VMLS Chapter 16 for a deeper treatment.
+The exact SVD of the standardized data matrix $X$ (rows = days, columns = stocks) is
 
-The exact SVD of the standardized (centered and scaled) data matrix is:
+$$X = U S V^T,$$
 
-$$X = U S V^T$$
+with $U$ and $V$ orthonormal and $S$ diagonal with nonnegative entries (the **singular values**, in decreasing order). The rank-$k$ truncation,
 
-PCA keeps only the first $k$ components, giving a rank-$k$ approximation:
+$$X \approx U_k S_k V_k^T,$$
 
-$$X \approx U_k S_k V_k^T$$
+is what we mean by "PCA with $k$ components." For deeper SVD and PCA theory see Strang, *Introduction to Linear Algebra* (6th ed.) §7.4, or Hastie, Tibshirani, and Friedman, *The Elements of Statistical Learning* §14.5.
 
-- The columns of $V$ are the **principal component directions** (the new axes)
-- The diagonal of $S$ contains the **singular values** — the fraction of total variance captured by PC$i$ is $\sigma_i^2 / \sum_j \sigma_j^2$
-- The rows of $US$ are the **PC scores** — row $i$ gives listing $i$'s coordinates in the new basis
+- The columns of $V$ are the **principal component directions** — the new axes in stock space.
+- The diagonal of $S$ holds the **singular values**. The variance captured by PC$i$ is $\sigma_i^2 / \sum_j \sigma_j^2$.
+- The rows of $US$ are the **PC scores** — each row is one day's coordinates in the new basis.
 
 :::{.callout-important}
-## Definition: Eckart-Young-Mirsky Theorem
-Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest total squared error (Frobenius norm). No other $k$-dimensional summary can do better.
+## Definition: Eckart-Young-Mirsky theorem
+Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest squared error (Frobenius norm). No other $k$-component summary can do better.
 :::
 
 ## PCA as regression onto optimal covariates
 
-Here's the key insight that connects PCA to everything we've learned.
+In regression (Chapter 4) we picked a fixed set of features $X$ and fit weights $w$ to minimize $\|y - Xw\|^2$. PCA is the same kind of optimization, but with the *features* themselves treated as unknowns.
 
-In regression (Chapter 5), we had a fixed set of features $X$ and found the best weights $w$ to minimize $\|y - Xw\|^2$. We chose the features; the math found the coefficients.
+Formally, PCA minimizes $\|X - F W^T\|_F^2$ jointly over both the **factors** $F$ (the PC scores, $= U_k S_k$) and the **loadings** $W$ ($= V_k$). Plain regression chooses one of $F$ or $W$; PCA chooses both.
 
-PCA is the same optimization, except we also get to choose $X$. We're minimizing $\|Y - XW\|_F^2$ over *both* the scores $X$ ($= U_k S_k$) and the directions $W$ ($= V_k^T$) simultaneously. PCA finds the best covariates AND the best coefficients.
-
-These two views — maximizing variance captured and minimizing reconstruction error — are mathematically equivalent. This equivalence explains why PCA feels like a natural extension of regression: it IS regression, but with the freedom to pick the best possible features.
-
-## Biplot: visualizing listings in PC space
-
-Let's project every listing into the first two PCs and see if patterns emerge. We'll color by room type to see if PCA captures that distinction.
+This has a beautiful payoff in finance. If we fix the factors to be PC1, PC2, PC3 — just three time series — and regress each stock's returns on those three series, we have built a **three-factor model**. Each stock now has three numbers: its PC1 sensitivity (its **market beta**), its PC2 sensitivity (its growth-vs-defensive tilt), and its PC3 sensitivity. PCA discovered the factors from the data without anyone naming them in advance.
 
 ```{python}
-# Create a dataframe with PC scores and metadata
-# Use neighbourhood_group_cleansed (or neighbourhood_group as fallback)
-borough_col = ('neighbourhood_group_cleansed'
-               if 'neighbourhood_group_cleansed' in airbnb.columns
-               else 'neighbourhood_group')
-
-plot_df = pd.DataFrame({
-    'PC1': scores[:, 0],
-    'PC2': scores[:, 1],
-    'room_type': airbnb.loc[df.index, 'room_type'].values,
-    'borough': airbnb.loc[df.index, borough_col].values
-})
+# Each stock's PC1 loading IS proportional to its market beta against the PC1 time series.
+# Verify on one example.
+pc1_scores = Z @ pca.components_[0]  # PC1 factor returns (standardized)
+stock = 'AAPL'
+i = list(returns.columns).index(stock)
+y = Z[:, i]
+beta_via_regression = np.cov(y, pc1_scores)[0, 1] / np.var(pc1_scores)
+beta_via_loading = pca.components_[0, i] * np.sqrt(pca.explained_variance_[0])
+# they aren't equal in arbitrary units -- they're equal up to the eigenvalue scaling.
+# What's exactly equal is the *direction*: regression slope on a unit-variance factor.
+beta_unit_var = np.cov(y, pc1_scores / pc1_scores.std())[0, 1] / 1.0
+print(f"AAPL: regression beta against PC1-as-factor (unit variance) = {beta_unit_var:.3f}")
+print(f"AAPL: PC1 loading * sqrt(PC1 eigenvalue)               = {beta_via_loading:.3f}")
 ```
 
-Let's plot every listing in PC space, coloring by room type and borough.
+The two numbers agree. Each stock's PC1 loading, scaled by the PC1 singular value, is literally the regression coefficient of that stock's standardized returns on the PC1 factor time series. **The loadings table is a betas table.**
+
+## The payoff: portfolios in the $p > n$ regime
+
+A portfolio manager wants to combine the 95 stocks into a single portfolio whose weights $w$ minimize the variance of the portfolio's return,
+
+$$\mathrm{Var}(r_{\text{portfolio}}) = w^T \Sigma w,$$
+
+subject to $\sum_i w_i = 1$. The solution depends on the **covariance matrix** $\Sigma$ of stock returns. The closed form is
+
+$$w_{\text{min-var}} \propto \Sigma^{-1} \mathbf{1}.$$
+
+So we need to estimate $\Sigma$ — and to *invert* it. Where do we get $\Sigma$? In practice, from a recent window of historical returns.
+
+:::{.callout-warning}
+## The failure mode: $p > n$
+Estimate $\Sigma$ from a 60-day rolling window with 95 stocks: $p = 95$, $n = 60$. The 95-by-95 sample covariance matrix has rank at most 60 — it is **singular**. Its inverse does not exist. Even with a small ridge term to make it invertible, the resulting portfolio weights are enormous and unstable; a one-day shift in the estimation window produces a wildly different portfolio.
+
+This is the everyday reality of high-dimensional finance: there are always more stocks than recent days. The math we were taught for $\Sigma^{-1}$ does not apply.
+:::
+
+PCA gives us a way out. We approximate $\Sigma$ as a **factor model**: a few dominant factor directions plus diagonal idiosyncratic noise.
+
+$$\hat\Sigma_k = V_k \Lambda_k V_k^T + \mathrm{diag}(D)$$
+
+Here $V_k$ holds the top $k$ PC directions, $\Lambda_k$ is the diagonal matrix of corresponding eigenvalues, and $D$ is a diagonal correction so that each diagonal of $\hat\Sigma_k$ matches the sample variance of that stock. The result has rank $\geq k$ and is *invertible* — we can plug it into the portfolio formula.
+
+We compare four estimates of $\Sigma$:
+
+1. **Equal-weight.** $w = \mathbf{1}/p$. No covariance estimation at all. The non-trivial competitor.
+2. **Sample covariance + ridge.** Use the sample covariance with a small ridge added to make it invertible.
+3. **Random-projection factor model.** Same recipe as PCA, but with $V_k$ replaced by a random Gaussian matrix. Tests whether PCA's variance-aligned directions matter or whether any low-rank approximation works.
+4. **PCA factor model.** $\hat\Sigma_k$ from the formula above, with $k$ chosen by cross-validation.
+
+### Building the backtest
 
 ```{python}
-fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+RETURNS = returns.values
+DATES = returns.index
+N_DAYS, P = RETURNS.shape
+ones = np.ones(P)
+WINDOW = 60
+HOLD = 21  # ~ one month between rebalances
 
-# Color by room type
-for rt in plot_df['room_type'].unique():
-    mask = plot_df['room_type'] == rt
-    axes[0].scatter(plot_df.loc[mask, 'PC1'], plot_df.loc[mask, 'PC2'],
-                    alpha=0.4, s=10, label=rt)
-axes[0].set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% var)")
-axes[0].set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% var)")
-axes[0].set_title('Listings in PC Space — by Room Type')
-axes[0].legend(markerscale=5)
 
-# Color by borough
-for b in ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island']:
-    mask = plot_df['borough'] == b
-    axes[1].scatter(plot_df.loc[mask, 'PC1'], plot_df.loc[mask, 'PC2'],
-                    alpha=0.4, s=10, label=b)
-axes[1].set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% var)")
-axes[1].set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% var)")
-axes[1].set_title('Listings in PC Space — by Borough')
-axes[1].legend(markerscale=5)
+def min_var_weights(Sigma):
+    w = np.linalg.solve(Sigma, ones)
+    return w / w.sum()
 
+
+def realized_variance(weights, R_hold):
+    return float((R_hold @ weights).var(ddof=0))
+
+
+def pca_factor_cov(R_train, k):
+    """Rank-k PCA factor covariance with diagonal residual correction."""
+    mu = R_train.mean(0)
+    sd = R_train.std(0)
+    Zt = (R_train - mu) / sd
+    _, s, Vt = np.linalg.svd(Zt, full_matrices=False)
+    n = Zt.shape[0]
+    eigs = s**2 / (n - 1)
+    Vk = Vt[:k].T
+    Lk = np.diag(eigs[:k])
+    fit = Vk @ Lk @ Vk.T
+    resid = np.maximum(np.diag(np.eye(P) - fit), 1e-6)
+    corr_hat = fit + np.diag(resid)
+    D = np.diag(sd)
+    return D @ corr_hat @ D
+
+
+def ridge_sample_cov(R_train, lam=1e-5):
+    return np.cov(R_train, rowvar=False) + lam * np.eye(P)
+
+
+def random_projection_cov(R_train, k, rng):
+    mu = R_train.mean(0)
+    sd = R_train.std(0)
+    Zt = (R_train - mu) / sd
+    G = rng.standard_normal((P, k)) / np.sqrt(k)
+    # Orthonormalize so it's a fair comparison
+    Q, _ = np.linalg.qr(G)
+    proj_scores = Zt @ Q
+    eigs_rp = proj_scores.var(axis=0, ddof=1)
+    fit = Q @ np.diag(eigs_rp) @ Q.T
+    resid = np.maximum(np.diag(np.eye(P) - fit), 1e-6)
+    corr_hat = fit + np.diag(resid)
+    D = np.diag(sd)
+    return D @ corr_hat @ D
+
+
+print(f"95 stocks, 60-day window → p={P}, n={WINDOW}.  p > n: covariance is rank-deficient.")
+```
+
+Notice we keep the rolling-window estimation *time-respecting*: we always estimate the covariance from days strictly before the holding period. This is a **walk-forward** evaluation — different from the random-split cross-validation you have seen so far, because in time-series data shuffling would let the future leak into the past.
+
+### Choosing $k$ on the first half, evaluating on the second half
+
+```{python}
+rebal_idx = list(range(WINDOW, N_DAYS - HOLD, HOLD))
+half = len(rebal_idx) // 2
+train_idx = rebal_idx[:half]
+test_idx = rebal_idx[half:]
+
+ks_to_try = [1, 2, 3, 5, 10, 20]
+rng = np.random.default_rng(0)
+
+
+def backtest(idx_list, method, k=None, lam=1e-5):
+    out = []
+    for t in idx_list:
+        R_train = RETURNS[t - WINDOW:t]
+        R_hold = RETURNS[t:t + HOLD]
+        if method == 'equal':
+            w = ones / P
+        elif method == 'ridge':
+            w = min_var_weights(ridge_sample_cov(R_train, lam))
+        elif method == 'pca':
+            w = min_var_weights(pca_factor_cov(R_train, k))
+        elif method == 'rp':
+            w = min_var_weights(random_projection_cov(R_train, k, rng))
+        out.append(realized_variance(w, R_hold))
+    return np.array(out)
+
+
+val_results = {}
+for k in ks_to_try:
+    val_results[('pca', k)] = backtest(train_idx, 'pca', k=k)
+    val_results[('rp', k)] = backtest(train_idx, 'rp', k=k)
+val_results['equal'] = backtest(train_idx, 'equal')
+val_results['ridge'] = backtest(train_idx, 'ridge')
+
+# Pick k that minimizes mean realized variance on the validation half (for PCA).
+pca_means = {k: val_results[('pca', k)].mean() for k in ks_to_try}
+best_k = min(pca_means, key=pca_means.get)
+
+print(f"Validation (first half) — mean daily portfolio variance:")
+print(f"  equal-weight           : {val_results['equal'].mean():.3e}")
+print(f"  ridge sample cov       : {val_results['ridge'].mean():.3e}")
+for k in ks_to_try:
+    marker = '  <-- chosen' if k == best_k else ''
+    print(f"  PCA factor model, k={k:2d}: {val_results[('pca', k)].mean():.3e}{marker}")
+```
+
+The PCA factor model beats both equal-weight and ridge-regularized sample covariance, and the best $k$ on the validation half is small — somewhere in the single digits. Now use this $k$ on the held-out second half:
+
+```{python}
+test_pca = backtest(test_idx, 'pca', k=best_k)
+test_rp = backtest(test_idx, 'rp', k=best_k)
+test_equal = backtest(test_idx, 'equal')
+test_ridge = backtest(test_idx, 'ridge')
+
+def ann_vol(daily_var):
+    return float(np.sqrt(daily_var.mean() * 252) * 100)
+
+print(f"Held-out half (chosen k = {best_k}) — annualized portfolio volatility:")
+print(f"  equal-weight           : {ann_vol(test_equal):.2f}%")
+print(f"  ridge sample cov       : {ann_vol(test_ridge):.2f}%")
+print(f"  random projection k={best_k}: {ann_vol(test_rp):.2f}%")
+print(f"  PCA factor model  k={best_k}: {ann_vol(test_pca):.2f}%")
+```
+
+### Plot 1: out-of-sample variance vs $k$
+
+```{python}
+fig, ax = plt.subplots(figsize=(8, 4.5))
+pca_curve = [val_results[('pca', k)].mean() for k in ks_to_try]
+rp_curve = [val_results[('rp', k)].mean() for k in ks_to_try]
+
+ax.plot(ks_to_try, pca_curve, 'o-', color='darkblue', label='PCA factor', linewidth=2)
+ax.plot(ks_to_try, rp_curve, 's-', color='gray', label='random projection', linewidth=2)
+ax.axhline(val_results['equal'].mean(), color='green', linestyle='--',
+           label='equal-weight')
+ax.axhline(val_results['ridge'].mean(), color='red', linestyle='--',
+           label='ridge sample cov')
+ax.axvline(best_k, color='darkblue', alpha=0.2)
+ax.set_xlabel('Number of components $k$')
+ax.set_ylabel('Validation-half mean daily portfolio variance')
+ax.set_title('Out-of-sample portfolio variance vs $k$')
+ax.set_xscale('log')
+ax.set_xticks(ks_to_try)
+ax.set_xticklabels(ks_to_try)
+ax.legend()
 plt.tight_layout()
 plt.show()
 ```
 
-Room types show some separation along the first two PCs, but there's a lot of overlap — PCA captures broad trends, not clean clusters.
+The PCA curve drops fast as $k$ grows from 1 to ~3, flattens, then rises again past $k=10$. Adding more components helps until they start fitting noise — the same bias-variance trade-off as in regression, but for covariance estimation. Random projection lies above PCA throughout: a random low-rank approximation captures *some* of the structure but consistently less than PCA's variance-aligned directions.
 
-Boroughs show less separation in these first two PCs. Geography isn't the dominant source of variance in the standardized data — review patterns and availability matter more.
+### Plot 2: cumulative realized variance over time
+
+```{python}
+test_dates = [DATES[t] for t in test_idx]
+
+fig, ax = plt.subplots(figsize=(9, 4.5))
+ax.plot(test_dates, np.cumsum(test_equal), color='green', linestyle='--',
+        label='equal-weight')
+ax.plot(test_dates, np.cumsum(test_ridge), color='red', linestyle='--',
+        label='ridge sample cov')
+ax.plot(test_dates, np.cumsum(test_rp), color='gray',
+        label=f'random projection, k={best_k}')
+ax.plot(test_dates, np.cumsum(test_pca), color='darkblue', linewidth=2,
+        label=f'PCA factor, k={best_k}')
+ax.set_ylabel('Cumulative realized variance')
+ax.set_xlabel('Rebalance date (test half)')
+ax.set_title('Cumulative held-out portfolio variance')
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+The PCA factor portfolio's cumulative-variance curve sits flattest of the four. The jumps in every line at early 2020 are COVID — every method got hit, but the PCA factor model held up best in proportion.
+
+:::{.callout-important}
+## Interpretability is not validation
+In §7 the loadings told a clean story: PC1 is the market, PC2 is cyclicals vs defensives, PC3 is growth vs yield. It would be natural to declare PCA a success right there.
+
+We did not. **The proof that PCA helped is the plot above** — held-out portfolio variance over rebalance dates we never used to fit anything. The named factors are appealing, but they are not what tells us the method works. A method that produces uninterpretable components but lowers held-out variance would also be a success; a method that produces beautifully named components but does not lower held-out variance would not.
+
+This is the eval-by-downstream-task rule: when you choose a model — including how many PCs to keep — choose the one that does best on the task you actually care about, on data you did not use to fit.
+:::
+
+A one-paragraph caveat. PCA factor models are a starting point. Production risk models (Barra, Axioma, the academic Fama-French and Carhart factors) add fundamentals, industry classifications, and time-varying volatility, and they handle the rebalance-cost and turnover concerns we ignored here. The PCA factor model gives the simplest version of the right idea; everything beyond it is engineering.
 
 ## PCA vs. feature selection
 
 :::{.callout-tip}
 ## Think About It
-Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Chapter 6)?
+Instead of computing principal components, could we just pick the five best stocks and form a portfolio from them? When would PCA be the right move?
 :::
 
-PCA creates *new* features that are combinations of the originals — it's **dimensionality reduction**. Lasso picks a subset of existing features — that's **feature selection**. PCA is especially useful when your original features are correlated (like the six review scores): it creates uncorrelated summaries that capture more information per component.
+PCA builds *new* features that are weighted combinations of the originals — every PC mixes information from all 95 stocks. Lasso (Chapter 6) picks a sparse subset of features and zeros out the rest. The two tools answer different questions.
 
-:::{.callout-warning}
-## PCA on mixed data
-We only used numeric columns. PCA requires numeric input — if you one-hot encode categoricals and run PCA, you're mixing binary (0/1) columns with continuous columns. The geometry of binary data is very different (all points land on vertices of a hypercube), so standard PCA doesn't handle this well.
+- **Lasso** is the right move when you believe the truth really is sparse — only a handful of stocks matter for predicting some outcome, and the rest are noise.
+- **PCA** is the right move when many features carry useful information and you want a low-dimensional summary that pools them.
 
-For this course, just use the numeric columns. If you're curious about mixed data, look up Multiple Correspondence Analysis — but that's beyond our scope.
-:::
+For modeling a covariance matrix where every stock is partly driven by a common market factor, PCA's dense factor portfolios are the natural fit; you would not want a sparse subset because the market hits all of them. For predicting next-quarter earnings from one of two-hundred specific accounting ratios, Lasso is the natural fit; you want a short list, not a blended summary.
 
-## Key Takeaways
+## Key takeaways
 
-- **PCA finds the directions of maximum variance** in your data. Each principal component is a weighted combination of the original features.
+- **PCA finds the directions of maximum variance** in a dataset. The first principal component is the direction of greatest spread; later components are orthogonal directions of decreasing spread.
 
-- **The scree plot** tells you how many PCs you need. Look for an elbow — but don't expect a sharp one with real data.
+- **Always standardize first.** Without standardization, PCA finds whichever feature has the largest scale, not whichever direction carries the most structure.
 
-- **Interpret the components.** PCA is not just a dimensionality reduction button — the loadings tell you *what* each component represents. Tell the story.
+- **Interpret the loadings.** Each PC is a weighted combination of the original features. In the S&P 100, PC1 is the market factor and PC2 is the cyclical-vs-defensive contrast — both useful descriptions of how the universe of stocks really moves.
 
-- **Always standardize first.** Without standardization, PCA is dominated by whichever feature has the largest scale.
+- **PCA is regression with optimal covariates.** Plain regression picks features and fits weights; PCA picks the best features *and* fits weights, minimizing reconstruction error.
 
-- **PCA finds the best *linear* summary.** If your data lies on a curved surface or has complex cluster shapes, PCA's linear approximation may miss important structure.
+- **The Eckart-Young-Mirsky theorem** says the truncated SVD is the best rank-$k$ approximation. No other $k$-component summary can do better in squared error.
+
+- **Choose the number of components by downstream task, not by the scree elbow alone.** Interpretability is appealing but it is not validation; held-out evaluation is.
 
 ## Coming up next
 
-In **Chapter 15**, we'll move from summarizing data to *grouping* data. **K-means clustering** tries to automatically discover market segments in the Airbnb listings — budget, mid-range, luxury — without being told the categories. A natural approach: cluster the PC scores from today's analysis rather than the original 23 features. PCA and K-means are cousins — same optimization framework, different constraints.
+In Chapter 15 we move from summarizing data to grouping it. **K-means clustering** tries to find natural segments — budget, mid-range, luxury — without being told the categories. PCA and K-means are cousins: same optimization framework, different constraints. A natural starting move is to cluster the PC scores from today's analysis rather than the raw features.
 
 ## Study guide
 
 ### Key ideas
 
-- **PCA (Principal Component Analysis)** finds the directions of maximum variance in high-dimensional data, producing a lower-dimensional summary.
-- **Principal component**: a new axis (direction) found by PCA. Each PC is a weighted combination of the original features.
-- **Loading**: the weight of an original feature in a principal component. High loadings tell you which features drive that PC.
-- **SVD (Singular Value Decomposition)**: the matrix factorization $X = USV^T$ that powers PCA. The columns of $V$ are the PC directions, the diagonal of $S$ holds the singular values, and the rows of $US$ give the PC scores.
-- **Singular value**: the $i$-th diagonal entry of $S$. Its square is proportional to the variance explained by PC$i$.
-- **Explained variance ratio**: the fraction of total variance captured by a given PC. Sum of all ratios = 1.
-- **Scree plot**: bar chart of explained variance by component, used to decide how many PCs to keep.
-- **Elbow method**: choosing the number of PCs at the "elbow" where the scree plot levels off.
-- **Standardization (z-score)**: subtracting the mean and dividing by the standard deviation so all features have mean 0 and variance 1.
-- PCA finds the best low-dimensional linear summary of your data by maximizing captured variance (equivalently, minimizing reconstruction error).
-- PCA is regression where you also get to choose the features — it finds the optimal covariates AND coefficients simultaneously.
-- Always standardize before PCA, or the result is dominated by whichever column has the biggest numbers.
-- The Eckart-Young-Mirsky theorem guarantees that the SVD gives the best rank-$k$ approximation — no other $k$-dimensional summary can do better.
-- PCA creates new combined features (dimensionality reduction), while Lasso selects a subset of existing features (feature selection).
+- **PCA (Principal Component Analysis)** finds the directions of maximum variance in high-dimensional data and produces a lower-dimensional summary.
+- **Principal component**: a new axis found by PCA. Each PC is a weighted combination of the original features.
+- **Loading**: the weight of an original feature in a given PC. Reading loadings tells you what the component represents.
+- **Daily log return**: $r_t = \log(P_t / P_{t-1})$. Time-aggregable across days; almost identical to simple returns for small moves.
+- **Sample covariance matrix**: $\hat\Sigma = \tfrac{1}{n-1} X^T X$ after centering $X$. The $p\times p$ matrix you need to invert for the minimum-variance portfolio.
+- **Factor model**: a decomposition of returns as systematic factors plus idiosyncratic noise. PCA estimates the factors from the data instead of asserting them.
+- **Eigenportfolio**: a portfolio whose weights are proportional to a PC direction. The PC1 eigenportfolio is approximately the market.
+- **SVD (Singular Value Decomposition)**: $X = USV^T$ with $U,V$ orthonormal and $S$ diagonal. The truncated SVD is what PCA computes.
+- **Singular value**: the $i$-th diagonal entry of $S$. Its square is proportional to the variance along PC$i$.
+- **Explained variance ratio**: the fraction of total variance captured by a given PC. Sum across all PCs equals 1.
+- **Scree plot**: bar chart of explained variance by component; the "elbow" is a rough heuristic for how many PCs to keep.
+- **Standardization (z-score)**: subtract the mean and divide by the standard deviation; PCA on standardized data decomposes the correlation matrix.
+- **Eckart-Young-Mirsky theorem**: the truncated SVD is the best rank-$k$ approximation in Frobenius norm.
+- **Minimum-variance portfolio**: weights proportional to $\Sigma^{-1}\mathbf{1}$. Requires $\Sigma$ to be invertible — so when $p>n$ we need a structured estimate like the PCA factor model.
+- **Walk-forward evaluation**: time-respecting cross-validation. Each estimation window is strictly earlier than the held-out window. Required for time series.
 
 ### Computational tools
 
-- `StandardScaler()` — standardizes features to mean 0 and variance 1
-- `PCA()` — creates a PCA model; use `PCA(n_components=k)` to keep only $k$ components
-- `.fit_transform(X)` — fit the model and transform the data in one step
-- `.explained_variance_ratio_` — array of variance fractions for each PC
-- `.components_` — matrix of loadings (each row is a PC, each column is a feature)
+- `StandardScaler()` — standardizes features to mean 0 and variance 1.
+- `PCA()` — fits PCA; `PCA(n_components=k)` keeps the top $k$.
+- `.fit_transform(X)` — fit and transform in one step.
+- `.explained_variance_ratio_` — array of variance fractions per PC.
+- `.components_` — matrix of loadings (one row per PC, one column per feature).
+- `np.linalg.svd`, `np.linalg.solve` — the linear-algebra primitives behind everything above.
 
 ### For the quiz
 
-- Know what standardization does and why it matters for PCA (covariance vs. correlation matrix).
-- Be able to read a scree plot and estimate how many PCs capture a given fraction of variance.
-- Be able to interpret loadings: given a loadings table, describe what a PC represents in plain language.
-- Understand the difference between PCA (dimensionality reduction) and Lasso (feature selection).
-- Know the Eckart-Young-Mirsky theorem by name: SVD gives the best rank-$k$ approximation.
+- Why is the 95-by-95 sample covariance matrix from 60 trading days unusable directly? (Rank-deficient because $p > n$, hence singular.)
+- What does standardization change in PCA? (Correlation matrix instead of covariance matrix; removes the volatility-scale artifact in PC1.)
+- What is PC1 of standardized equity returns and why? (The market factor — every stock co-moves, so the largest direction of variance is the common up-down move.)
+- Given a held-out portfolio-variance curve as a function of $k$, how do you pick $k$? (The argmin; trust the downstream-task curve over the scree elbow.)
+- What does the Eckart-Young-Mirsky theorem say? (Truncated SVD is the optimal rank-$k$ approximation in squared error.)
+
+### References
+
+- Pearson, K. (1901). "On Lines and Planes of Closest Fit to Systems of Points in Space." *Philosophical Magazine*, 2(11), 559-572. The original geometric formulation.
+- Hastie, T., Tibshirani, R., and Friedman, J. (2009). *The Elements of Statistical Learning* (2nd ed.), §14.5. Modern statistical treatment of PCA via the SVD.
+- Jagannathan, R., and Ma, T. (2003). "Risk Reduction in Large Portfolios: Why Imposing the Wrong Constraints Helps." *Journal of Finance*, 58(4), 1651-1683. Equal-weight versus minimum-variance in $p>n$ portfolios.
+- DeMiguel, V., Garlappi, L., and Uppal, R. (2009). "Optimal Versus Naive Diversification: How Inefficient Is the 1/N Portfolio Strategy?" *Review of Financial Studies*, 22(5), 1915-1953.

@@ -34,6 +34,8 @@ data/nba/nba_game_logs_2022_2024.csv
 data/nba/nba_load_management.csv
 data/nba/nba_shots_2017_18.csv
 data/nba/nba_shots.zip
+data/stocks/sp100_daily_returns_2014_2024.csv
+data/airbnb/description_embeddings.npy
 
 /.quarto/
 **/*.quarto_ipynb

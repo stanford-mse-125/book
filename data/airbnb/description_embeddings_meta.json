@@ -1,0 +1,11 @@
+{
+  "model": "sentence-transformers/all-mpnet-base-v2",
+  "revision": "main",
+  "instruction_prefix": "",
+  "normalize": true,
+  "dtype": "float32",
+  "dimension": 768,
+  "n_rows": 29124,
+  "date": "2026-05-12",
+  "fallback_note": "Spec calls for intfloat/e5-mistral-7b-instruct (4096-d); used all-mpnet-base-v2 (768-d) because spec model exceeds available VRAM/unified memory on consumer Apple Silicon."
+}
