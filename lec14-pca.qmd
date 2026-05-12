@@ -53,13 +53,6 @@ plt.show()
 
 For most of January and February the lines drift independently. Then in mid-March they all crash together. By summer they diverge again — tech runs up, energy lags, the bank rebounds slowly. **One hundred stocks have one hundred stories, but on most days the market moves them in lockstep.** How many *real* dimensions of variation are there in this dataset? PCA gives a quantitative answer.
 
-:::{.callout-warning}
-## Not investment advice
-This chapter is about dimensionality reduction. The portfolios we construct are pedagogical, evaluated on historical data, with no transaction costs, no constraints on shorting, and no thought given to taxes. Real portfolio construction involves orders of magnitude more care. Treat the dollar numbers as an *evaluation rubric for our statistical method*, not as a recommendation about anything.
-:::
-
-A note on the spine: this is the one chapter where the textbook's Airbnb backbone is set aside. PCA's natural home is the high-dimensional, low-sample-count regime, and equities give us that without manufacturing it. We return to Airbnb in Chapter 15 (clustering).
-
 ## The picture behind PCA
 
 Long before computers, Karl Pearson described PCA geometrically. In 1901 he asked: given a cloud of points in the plane, what *line* minimizes the sum of perpendicular distances from points to the line? He answered the question in any number of dimensions, with no eigenvalues and no matrix factorizations — just elementary geometry (Pearson, "On Lines and Planes of Closest Fit to Systems of Points in Space," Philosophical Magazine, 1901).
@@ -112,13 +105,9 @@ plt.show()
 
 The cloud is genuinely elliptical. PC1 (orange) is the long axis: it captures the joint up-and-down movement of the two banks — call it the "banking sector" direction. PC2 (green) is the short axis: it captures the small idiosyncratic differences between the two stocks after their common movement is subtracted. The dotted red line shows one day's perpendicular drop onto PC1 — its length is what PCA minimizes, summed over all days.
 
-This is the picture behind every PCA: **find the line (or plane, or subspace) closest to the data in perpendicular distance.** In two dimensions you can see it. In one hundred dimensions you cannot, but the math is identical.
+This is the picture behind every PCA. Each data point is a vector in $\mathbb{R}^p$ — one number per feature. PC1 is the unit direction $v \in \mathbb{R}^p$ that maximizes the variance of projected points; equivalently, it is the direction that minimizes the total squared perpendicular distance from the data to the line through the mean with direction $v$. (Those two optimizations are the same problem in disguise: a point's squared distance to the mean splits cleanly into the squared length of its projection onto $v$ plus the squared length of its perpendicular residual, so maximizing one minimizes the other.) PC2 is the next-best direction orthogonal to PC1, PC3 the next-best orthogonal to both, and so on.
 
-:::{.callout-note collapse="true"}
-## Going deeper: the original Pearson paper
-
-Pearson's 1901 paper works the problem out in arbitrary dimensions using only Lagrange multipliers; the reformulation as an eigenvalue problem came later. The figure above is a modern reproduction of Pearson's geometric set-up, drawn with stock-return data instead of his original astronomical and biometric examples.
-:::
+In two dimensions you can see it. In ninety-five you cannot — but the optimization is the same one, solved by a single eigendecomposition.
 
 ## Loading the returns data
 
@@ -139,14 +128,7 @@ print(f"Date range: {returns.index.min().date()} to {returns.index.max().date()}
 print(f"Tickers (first 10): {list(returns.columns[:10])}")
 ```
 
-So we have eleven years of daily returns for 95 S&P 100 constituents — the rest of the original 100 names had to be dropped for data-quality reasons (delistings, IPOs, missing days).
-
-:::{.callout-warning}
-## Survivorship bias
-We use the *current* S&P 100 roster, frozen at the time the data were fetched. Companies that were in the index in 2014 but failed or were demoted before 2024 do not appear. This biases the dataset toward winners.
-
-For pedagogical purposes the bias is harmless — the structure of returns we find is qualitatively right. For real risk research, use a survivorship-bias-free source like CRSP, which records the point-in-time index membership.
-:::
+So we have eleven years of daily returns for 95 S&P 100 constituents.
 
 ## First attempt: PCA without standardization
 
@@ -161,17 +143,21 @@ Before reading on — which stocks do you expect to dominate PC1 when we skip st
 pca_raw = PCA()
 pca_raw.fit(returns.values)
 loadings_raw_pc1 = pd.Series(pca_raw.components_[0], index=returns.columns)
+# Sign of a PC is arbitrary; fix it so the average loading is positive
+# (PC1 always identifies a common-direction axis; we want positive = "up together").
+if loadings_raw_pc1.mean() < 0:
+    loadings_raw_pc1 = -loadings_raw_pc1
 
-print(f"PC1 explains {pca_raw.explained_variance_ratio_[0]*100:.1f}% of total variance")
+print(f"PC1 (no standardization) — explains {pca_raw.explained_variance_ratio_[0]*100:.1f}% of variance")
+print(f"  positive loadings: {(loadings_raw_pc1 > 0).sum()} / {len(loadings_raw_pc1)} stocks")
+top5_sqshare_raw = (loadings_raw_pc1**2).nlargest(5).sum()
+print(f"  squared-loading mass in top 5 stocks: {top5_sqshare_raw*100:.1f}% (uniform = {5/len(loadings_raw_pc1)*100:.1f}%)")
 print()
-print("Top 5 stocks by absolute PC1 loading (no standardization):")
-print(loadings_raw_pc1.abs().sort_values(ascending=False).head(5).round(3))
-print()
-print("Top 5 stocks by raw daily-return variance:")
-print(returns.var().sort_values(ascending=False).head(5).map(lambda v: f"{v:.5f}"))
+print("Top 5 stocks by |PC1 loading| (with signs):")
+print(loadings_raw_pc1.loc[loadings_raw_pc1.abs().nlargest(5).index].round(3))
 ```
 
-The top-PC1 stocks are largely the highest-volatility names — four of the top five overlap with the highest-raw-variance list. PC1 is not "the market" — PC1 is "TSLA and the other big movers." We have rediscovered which stocks have the largest raw variance. Useful, but it is not what we wanted.
+PC1 already loads positively on every stock — there is a common up/down direction in the data even without standardization. But the loading *magnitudes* are uneven: the five most volatile names hold about 2× their uniform-baseline share of PC1's squared mass. The high-volatility stocks define what PC1 points to. PC1 is shaped more by "TSLA and the other big movers" than by the average company.
 
 :::{.callout-warning}
 ## PCA is dominated by scale
@@ -190,20 +176,49 @@ Z = scaler.fit_transform(returns.values)
 pca = PCA()
 pca.fit(Z)
 
-print(f"After standardization:")
-print(f"  PC1 explains {pca.explained_variance_ratio_[0]*100:.1f}% of variance")
-print(f"  PC2 explains {pca.explained_variance_ratio_[1]*100:.1f}% of variance")
-print(f"  PC3 explains {pca.explained_variance_ratio_[2]*100:.1f}% of variance")
-
 loadings_pc1 = pd.Series(pca.components_[0], index=returns.columns)
+if loadings_pc1.mean() < 0:
+    loadings_pc1 = -loadings_pc1
+
+print(f"PC1 (standardized) — explains {pca.explained_variance_ratio_[0]*100:.1f}% of variance")
+print(f"  positive loadings: {(loadings_pc1 > 0).sum()} / {len(loadings_pc1)} stocks")
+top5_sqshare = (loadings_pc1**2).nlargest(5).sum()
+print(f"  squared-loading mass in top 5 stocks: {top5_sqshare*100:.1f}% (uniform = {5/len(loadings_pc1)*100:.1f}%)")
 print()
-print(f"PC1 loadings — sign breakdown:")
-print(f"  positive on {(loadings_pc1 > 0).sum()} / {len(loadings_pc1)} stocks")
-print(f"  negative on {(loadings_pc1 < 0).sum()} / {len(loadings_pc1)} stocks")
-print(f"  mean loading: {loadings_pc1.mean():+.3f}")
+print("Top 5 stocks by |PC1 loading| (with signs):")
+print(loadings_pc1.loc[loadings_pc1.abs().nlargest(5).index].round(3))
+print()
+print(f"PC2: {pca.explained_variance_ratio_[1]*100:.1f}% of variance")
+print(f"PC3: {pca.explained_variance_ratio_[2]*100:.1f}% of variance")
 ```
 
-After standardization the picture flips completely. PC1 loads positively on essentially every stock in the universe. It is a single direction in which the entire S&P 100 moves up together (or down together). **This is the market factor.** It was always there in the data; raw-scale PCA could not see it.
+The sign pattern hasn't changed — every loading is still positive — but the magnitudes have evened out. After standardization, the top-5 concentration drops noticeably, closer to the uniform baseline; every stock now contributes nearly equally to PC1. **This is the market factor**, no longer biased toward the high-volatility names. It was always there in the data; raw-scale PCA tilted it toward whichever stocks happened to have the largest raw variance.
+
+The contrast is sharpest in a picture: sorted PC1 loadings, raw on the left, standardized on the right.
+
+```{python}
+fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=False)
+
+axes[0].bar(range(len(loadings_raw_pc1)),
+            sorted(loadings_raw_pc1.values, reverse=True),
+            color='indianred', edgecolor='white', linewidth=0.3)
+axes[0].axhline(0, color='black', linewidth=0.5)
+axes[0].set_title('PC1 loadings — raw returns')
+axes[0].set_xlabel('Stock (sorted by loading)')
+axes[0].set_ylabel('Loading')
+
+axes[1].bar(range(len(loadings_pc1)),
+            sorted(loadings_pc1.values, reverse=True),
+            color='steelblue', edgecolor='white', linewidth=0.3)
+axes[1].axhline(0, color='black', linewidth=0.5)
+axes[1].set_title('PC1 loadings — standardized returns')
+axes[1].set_xlabel('Stock (sorted by loading)')
+
+plt.tight_layout()
+plt.show()
+```
+
+The left panel has a steep nose and a long flat tail — a few stocks dominate. The right panel is a broad, uniformly positive bar — every stock contributes. Same data, same algorithm, different scale.
 
 ## The scree plot
 
@@ -297,7 +312,7 @@ print("PC3 — top 5 negative loadings:")
 print(loadings_named.nsmallest(5, 'PC3')[['PC3', 'sector']].round(2))
 ```
 
-PC3 turns out to be the growth-versus-yield contrast: Nvidia, Amazon, Meta, Adobe, Alphabet on one side; utilities (Duke, Southern), staples (Coca-Cola, Altria), and high-dividend telecom (Verizon) on the other. By PC5 or PC6, the loadings start looking arbitrary — the components explain real variance, but the economic story runs out.
+PC3 turns out to be the growth-versus-yield contrast: Nvidia, Amazon, Meta, Adobe, Alphabet on one side; utilities (Duke, Southern), staples (Coca-Cola, Altria), and high-dividend telecom (Verizon) on the other. By PC5 or PC6 the economic story runs out.
 
 :::{.callout-tip}
 ## Think About It
@@ -335,6 +350,16 @@ is what we mean by "PCA with $k$ components." For deeper SVD and PCA theory see 
 ## Definition: Eckart-Young-Mirsky theorem
 Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest squared error (Frobenius norm). No other $k$-component summary can do better.
 :::
+
+## When does PCA work well?
+
+Eckart-Young-Mirsky tells us the truncated SVD is the *best* rank-$k$ approximation. It does *not* tell us the best rank-$k$ approximation is any good. PCA pays off when a small $k$ already explains most of the variance — when the data is approximately low-rank.
+
+When should we expect that? When the entries of the data matrix are generated by a smooth function of a few latent variables — a few unobserved drivers that govern many observed features. Stock returns are like this: each stock's daily return is approximately a linear combination of a market factor, a few sector factors, and idiosyncratic noise, so the returns matrix has a few large singular values and a long tail of small ones. Other examples follow the same pattern: word counts in documents are driven by a few latent topics; pixel intensities across face photographs are driven by a few latent geometric factors (lighting, pose, expression); gene-expression measurements across cells are driven by a small number of cell types and developmental states.
+
+Udell and Townsend (2019) show that this pattern is not coincidental. Whenever entries of a data matrix are generated by a smooth latent-variable model — and many real-world data-generation processes are — the resulting matrix has rapidly decaying singular values, so a low-rank PCA approximation captures most of the structure with a small $k$. This is why PCA, a one-objective optimization with a one-line answer, works so well on so many different kinds of data.
+
+If your data is *not* approximately low-rank — say, every feature is independently and identically generated noise — then no rank-$k$ approximation will help. PCA still runs; it just has nothing to find. The scree plot tells you which regime you are in: a sharp drop after a few PCs means PCA will help, a flat scree means it will not.
 
 ## PCA as regression onto optimal covariates
 
@@ -582,8 +607,6 @@ We did not. **The proof that PCA helped is the plot above** — held-out portfol
 This is the eval-by-downstream-task rule: when you choose a model — including how many PCs to keep — choose the one that does best on the task you actually care about, on data you did not use to fit.
 :::
 
-A one-paragraph caveat. PCA factor models are a starting point. Production risk models (Barra, Axioma, the academic Fama-French and Carhart factors) add fundamentals, industry classifications, and time-varying volatility, and they handle the rebalance-cost and turnover concerns we ignored here. The PCA factor model gives the simplest version of the right idea; everything beyond it is engineering.
-
 ## PCA vs. feature selection
 
 :::{.callout-tip}
@@ -635,6 +658,7 @@ In Chapter 15 we move from summarizing data to grouping it. **K-means clustering
 - **Eckart-Young-Mirsky theorem**: the truncated SVD is the best rank-$k$ approximation in Frobenius norm.
 - **Minimum-variance portfolio**: weights proportional to $\Sigma^{-1}\mathbf{1}$. Requires $\Sigma$ to be invertible — so when $p>n$ we need a structured estimate like the PCA factor model.
 - **Walk-forward evaluation**: time-respecting cross-validation. Each estimation window is strictly earlier than the held-out window. Required for time series.
+- **Approximate low rank**: a data matrix whose singular values decay rapidly, so a small-$k$ PCA approximation captures most of the variance. Matrices generated by smooth latent-variable processes are approximately low rank — which is why PCA works on so many real-world datasets (Udell & Townsend, 2019).
 
 ### Computational tools
 
@@ -657,5 +681,6 @@ In Chapter 15 we move from summarizing data to grouping it. **K-means clustering
 
 - Pearson, K. (1901). "On Lines and Planes of Closest Fit to Systems of Points in Space." *Philosophical Magazine*, 2(11), 559-572. The original geometric formulation.
 - Hastie, T., Tibshirani, R., and Friedman, J. (2009). *The Elements of Statistical Learning* (2nd ed.), §14.5. Modern statistical treatment of PCA via the SVD.
+- Udell, M., and Townsend, A. (2019). "Why Are Big Data Matrices Approximately Low Rank?" *SIAM Journal on Mathematics of Data Science*, 1(1), 144-160. Proves that smooth latent-variable models give rise to matrices with rapidly decaying singular values — the reason PCA works on so many real-world datasets.
 - Jagannathan, R., and Ma, T. (2003). "Risk Reduction in Large Portfolios: Why Imposing the Wrong Constraints Helps." *Journal of Finance*, 58(4), 1651-1683. Equal-weight versus minimum-variance in $p>n$ portfolios.
 - DeMiguel, V., Garlappi, L., and Uppal, R. (2009). "Optimal Versus Naive Diversification: How Inefficient Is the 1/N Portfolio Strategy?" *Review of Financial Studies*, 22(5), 1915-1953.
