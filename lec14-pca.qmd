@@ -250,7 +250,12 @@ for threshold in (50, 70, 80, 90):
     print(f"  {threshold}% variance: need {k} PCs (of {len(ratios)})")
 ```
 
-PC1 dominates. After PC1 the variance falls off quickly, but there is no sharp elbow — the tail is long and gradual. In finance this is the typical shape: one large factor (the market), a handful of mid-sized factors (sectors, styles), and a long tail of idiosyncratic structure. The elbow heuristic gives a rough guide; the right answer for any specific use case depends on what we plan to do with the components. We will come back to this question in the payoff section below and answer it by cross-validation.
+PC1 dominates. After PC1 the variance falls off quickly, but there is no sharp elbow — the tail is long and gradual. In finance this is the typical shape: one large factor (the market), a handful of mid-sized factors (sectors, styles), and a long tail of idiosyncratic structure.
+
+:::{.callout-important}
+## Definition: Elbow heuristic
+A rough rule for choosing the number of components $k$ from a scree plot: keep components up to the point where the bar heights stop dropping quickly — the bend, or "elbow," in the plot. Components before the elbow capture meaningful structure; components after it look like noise. The elbow is a guide, not a prescription, and on real data (like the plot above) it can be ambiguous. The principled alternative is to choose $k$ by cross-validation against a downstream task — which is what we do in the payoff section below.
+:::
 
 ## Interpreting the principal components
 
@@ -321,39 +326,50 @@ If PC1 looks like the market and PC2 splits cyclicals from defensives — haven'
 Hold that thought. We will revisit it in the payoff section below. *Interpretability is not validation.* The proof that PCA helps comes from a downstream task evaluated on data we never used to fit the components.
 :::
 
-## The math behind PCA: SVD
+## The math behind PCA
 
-PCA is powered by the **SVD** (**Singular Value Decomposition**). Two definitions first.
+In regression (Chapters 4 and 5) we projected $y$ onto a *given* subspace — the column space of the feature matrix $X$ — and measured how well we did by the squared length of the residual. PCA is the same kind of projection, except now we get to *choose* the subspace.
+
+Each row $x_i$ of the standardized data matrix is a vector in $\mathbb{R}^p$ — one number per feature (one daily return per stock, in our case). A **$k$-dimensional subspace** $S \subset \mathbb{R}^p$ is the span of $k$ linearly independent vectors, just like the column space we worked with in regression. Given any such $S$, the projection $P_S x_i$ is the closest point in $S$ to $x_i$, and the squared distance from the data point to the subspace is $\|x_i - P_S x_i\|^2$.
+
+PCA picks the subspace, not the projection.
 
 :::{.callout-important}
-## Definition: Basis and orthonormal basis
-A **basis** for a subspace is a minimal set of linearly independent vectors that spans it. The number of basis vectors equals the **dimension** of the subspace.
+## Definition: Principal Component Analysis (variational form)
+Among all $k$-dimensional subspaces of $\mathbb{R}^p$, PCA picks the one closest to the data: the subspace $S^\star$ that minimizes the total squared distance from data points to the subspace,
 
-An **orthonormal basis** is a basis whose vectors all have norm 1 and are pairwise orthogonal (inner product 0). With an orthonormal basis, finding coordinates is just a dot product — no matrix inversion needed.
+$$S^\star = \arg\min_{\dim S = k}\; \sum_{i=1}^n \|x_i - P_S x_i\|^2.$$
+
+Equivalently — using the Pythagorean identity $\|x_i\|^2 = \|P_S x_i\|^2 + \|x_i - P_S x_i\|^2$ — it is the subspace that maximizes the squared length of the projections, which (for mean-zero data) is the total variance captured.
 :::
 
-The exact SVD of the standardized data matrix $X$ (rows = days, columns = stocks) is
+The **principal components** are an orthonormal basis for $S^\star$, ordered so that PC1 is the direction of greatest projected variance, PC2 the direction of greatest projected variance orthogonal to PC1, and so on. PC1, PC2, PC3 together span the optimal 3-dimensional subspace; PC1 through PC$k$ span the optimal $k$-dimensional subspace.
 
+This is the variational characterization. It says *what* PCA is solving but not *how* to solve it. The answer is the **singular value decomposition** (SVD) of the data matrix.
+
+:::{.callout-note collapse="true"}
+## Going deeper: the SVD solves the variational problem
+
+Every $n \times p$ matrix $X$ admits a decomposition
 $$X = U S V^T,$$
+where $U \in \mathbb{R}^{n \times r}$ and $V \in \mathbb{R}^{p \times r}$ have orthonormal columns and $S \in \mathbb{R}^{r \times r}$ is diagonal with nonnegative entries $\sigma_1 \geq \sigma_2 \geq \cdots \geq \sigma_r \geq 0$ (the **singular values**), where $r = \min(n,p)$.
 
-with $U$ and $V$ orthonormal and $S$ diagonal with nonnegative entries (the **singular values**, in decreasing order). The rank-$k$ truncation,
+The first $k$ columns of $V$, written $V_k$, form an orthonormal basis for the optimal subspace $S^\star$ in the variational problem above. The rank-$k$ truncation
+$$X_k = U_k S_k V_k^T$$
+is the closest rank-$k$ matrix to $X$ in squared Frobenius error. This last claim is the **Eckart-Young-Mirsky theorem** (Eckart & Young 1936, Mirsky 1960): no other rank-$k$ summary can do better.
 
-$$X \approx U_k S_k V_k^T,$$
+The pieces of the SVD have direct interpretations:
 
-is what we mean by "PCA with $k$ components." For deeper SVD and PCA theory see Strang, *Introduction to Linear Algebra* (6th ed.) §7.4, or Hastie, Tibshirani, and Friedman, *The Elements of Statistical Learning* §14.5.
+- The columns of $V_k$ are the **principal component directions** — the orthonormal basis for the optimal subspace.
+- The squared singular value $\sigma_i^2$ is proportional to the variance captured by PC$i$. The fraction $\sigma_i^2 / \sum_j \sigma_j^2$ is PC$i$'s **explained variance ratio**.
+- The rows of $U_k S_k$ are the **PC scores**: each row is one data point's coordinates in the new basis.
 
-- The columns of $V$ are the **principal component directions** — the new axes in stock space.
-- The diagonal of $S$ holds the **singular values**. The variance captured by PC$i$ is $\sigma_i^2 / \sum_j \sigma_j^2$.
-- The rows of $US$ are the **PC scores** — each row is one day's coordinates in the new basis.
-
-:::{.callout-important}
-## Definition: Eckart-Young-Mirsky theorem
-Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest squared error (Frobenius norm). No other $k$-component summary can do better.
+For deeper SVD and PCA theory see Strang, *Introduction to Linear Algebra* (6th ed.) §7.4, or Hastie, Tibshirani, and Friedman, *The Elements of Statistical Learning* §14.5.
 :::
 
 ## When does PCA work well?
 
-Eckart-Young-Mirsky tells us the truncated SVD is the *best* rank-$k$ approximation. It does *not* tell us the best rank-$k$ approximation is any good. PCA pays off when a small $k$ already explains most of the variance — when the data is approximately low-rank.
+The variational characterization says PCA finds the *best* $k$-dimensional subspace. It does not say the best $k$-dimensional subspace is any good. PCA pays off when a small $k$ already explains most of the variance — when the data is approximately low-rank.
 
 When should we expect that? When the entries of the data matrix are generated by a smooth function of a few latent variables — a few unobserved drivers that govern many observed features. Stock returns are like this: each stock's daily return is approximately a linear combination of a market factor, a few sector factors, and idiosyncratic noise, so the returns matrix has a few large singular values and a long tail of small ones. Other examples follow the same pattern: word counts in documents are driven by a few latent topics; pixel intensities across face photographs are driven by a few latent geometric factors (lighting, pose, expression); gene-expression measurements across cells are driven by a small number of cell types and developmental states.
 
@@ -363,9 +379,11 @@ If your data is *not* approximately low-rank — say, every feature is independe
 
 ## PCA as regression onto optimal covariates
 
-In regression (Chapter 4) we picked a fixed set of features $X$ and fit weights $w$ to minimize $\|y - Xw\|^2$. PCA is the same kind of optimization, but with the *features* themselves treated as unknowns.
+The variational view picks the *subspace*. There is an equivalent picture that picks the *coordinates*, and it leads directly to factor models.
 
-Formally, PCA minimizes $\|X - F W^T\|_F^2$ jointly over both the **factors** $F$ (the PC scores, $= U_k S_k$) and the **loadings** $W$ ($= V_k$). Plain regression chooses one of $F$ or $W$; PCA chooses both.
+Once we have the principal directions $V_k$, each data point gets new coordinates in the basis they form — the PC scores. The reconstruction of the data matrix takes the form $X \approx F W^T$, with $F$ holding the scores (one row per data point) and $W = V_k$ holding the directions (one column per component). Equivalently, PCA jointly minimizes
+$$\|X - F W^T\|_F^2$$
+over both $F$ and $W$. Plain regression fixes $W$ and solves for $F$; PCA picks both — that is what "optimal covariates" means.
 
 This has a beautiful payoff in finance. If we fix the factors to be PC1, PC2, PC3 — just three time series — and regress each stock's returns on those three series, we have built a **three-factor model**. Each stock now has three numbers: its PC1 sensitivity (its **market beta**), its PC2 sensitivity (its growth-vs-defensive tilt), and its PC3 sensitivity. PCA discovered the factors from the data without anyone naming them in advance.
 
