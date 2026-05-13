@@ -54,3 +54,66 @@ nba[features].describe().round(2)
 ```
 
 The shot-mix percentages sum to one for each player, so they're already on the same scale. We'll still standardize before clustering — partly out of habit, partly because k-means is a distance-based method and standardization keeps it well-behaved.
+
+## How k-means works
+
+The algorithm is beautifully simple:
+
+1. **Pick k initial centroids** (randomly)
+2. **Assign** each point to the nearest centroid
+3. **Recompute** each centroid as the mean of its assigned points
+4. **Repeat** steps 2-3 until assignments stop changing
+
+:::{.callout-important}
+## Definition: Sum of squared errors (SSE)
+K-means minimizes the total within-cluster sum of squared distances from each point to its assigned cluster centroid — the **sum of squared errors (SSE)**:
+
+$$\text{SSE} = \sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$$
+
+This is the same kind of object as the SSE we minimized in regression (Chapter 4) — a sum of squared deviations — except the "prediction" for each point is its cluster centroid rather than a fitted line.
+:::
+
+Each step of the algorithm is guaranteed to decrease the SSE (or keep it the same). The objective is non-convex, so different starting points can converge to different **local minima** — more on that shortly.
+
+Let's watch it work. We'll use just two features — `pct_RA` (share at the rim) and `pct_ATB3` (share above the break from three) — so we can visualize the iterations.
+
+```{python}
+np.random.seed(42)
+X_viz = nba[['pct_RA', 'pct_ATB3']].values
+X_viz_scaled = StandardScaler().fit_transform(X_viz)
+
+# Initialize three centroids by picking three random players
+k = 3
+init_idx = np.random.choice(len(X_viz_scaled), size=k, replace=False)
+centroids = X_viz_scaled[init_idx].copy()
+```
+
+```{python}
+fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+for step in range(4):
+    ax = axes[step // 2, step % 2]
+    distances = np.array([np.sum((X_viz_scaled - c)**2, axis=1) for c in centroids])
+    labels = distances.argmin(axis=0)
+    for j in range(k):
+        mask = labels == j
+        ax.scatter(X_viz_scaled[mask, 0], X_viz_scaled[mask, 1],
+                   c=colors[j], alpha=0.4, s=15)
+        ax.scatter(centroids[j, 0], centroids[j, 1],
+                   c=colors[j], marker='X', s=200, edgecolors='black', linewidths=2)
+    ax.set_xlabel('% at rim (standardized)')
+    ax.set_ylabel('% above-break three (standardized)')
+    ax.set_title(f'Iteration {step + 1}')
+    for j in range(k):
+        if (labels == j).sum() > 0:
+            centroids[j] = X_viz_scaled[labels == j].mean(axis=0)
+
+plt.suptitle('K-means iterating on NBA shot mix (k=3, two features)', fontsize=14, y=1.02)
+plt.tight_layout()
+plt.show()
+```
+
+Panel 1 shows the random initial centroids. By panel 4 the centroids have stabilized — assignments barely change. That's k-means: dead simple, fast, and guaranteed to converge in finite steps (there are finitely many possible assignments, and SSE decreases at every step). The solution is only a local optimum, though, as we'll see shortly.
+
+But this two-feature view is just for visualization. The real archetypes come out when we cluster on all five zones at once.
