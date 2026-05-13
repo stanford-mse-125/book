@@ -443,3 +443,69 @@ Which clustering would you defend in a courtroom? Which would you defend in a pr
 :::
 
 The COMPAS example points forward to Chapter 16 (validation and feedback loops): the priors that feed COMPAS's score are themselves the output of past policing decisions, which were informed by past risk assessments, which were informed by past priors. Every measurement we cluster on has a history.
+
+## Key takeaways
+
+- **K-means** minimizes the sum of squared distances from each point to its cluster centroid: SSE = $\sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$. The algorithm always converges in finite steps, but only to a *local* optimum.
+
+- **Standardize first.** K-means uses Euclidean distance, so features on larger scales dominate. Even when your features are already on a similar scale (like shot-mix percentages summing to 1), standardization is a defensible default.
+
+- **Your features determine your clusters.** Shot mix gives archetypes; shot volume gives stars vs role players; shot efficiency gives skill tiers. COMPAS risk-score features give a one-dimensional risk axis; criminal-history features give life-cycle groups. No feature set is "neutral" — each encodes a theory of what makes two cases similar.
+
+- **Choosing k is a judgment call**, not a formula. The elbow plot and silhouette score rule out bad choices but don't pick the right one.
+
+- **K-means is not deterministic.** Different random seeds produce different clusters. Always check stability via ARI across seeds. Players or cases at cluster boundaries tell you something the rigid labels don't.
+
+- **Always interpret and validate.** Clustering algorithms will find structure in *any* data, including pure noise. Ask: are the clusters meaningful? Are they stable? Are they useful for the decision you need to make? And — especially when the stakes are high — *what value judgment is embedded in your feature choice?*
+
+## Looking ahead
+
+We've now covered three major types of learning:
+
+- **Supervised** (regression in Chapters 4-6, classification in Chapter 7, trees in Chapter 13)
+- **Unsupervised for structure** (PCA in Chapter 14 — finding directions that explain variation)
+- **Unsupervised for grouping** (clustering today — assigning points to discrete clusters)
+
+Mathematically, PCA and k-means are cousins. PCA approximates the data matrix with a rank-k linear combination; k-means approximates it by assigning each row to one of k prototypes. Both find low-dimensional summaries, but PCA gives a continuous representation while k-means forces each point into exactly one cluster.
+
+Chapter 16 will pick up the COMPAS thread directly: when an algorithm's predictions feed back into the world that generates its training data, the system enters a **feedback loop**. The "ground truth" you validate against is partly produced by the algorithm itself. We'll see why this makes standard validation methods break down — and what to do about it.
+
+In Chapters 18-19 we'll ask a fundamentally different question: not "what groups exist?" but "did this intervention cause that outcome?" The question shifts from prediction to **causal inference**.
+
+## Study guide
+
+### Key ideas
+
+- **Unsupervised learning:** finding structure in data without labeled outcomes.
+- **K-means:** clustering algorithm that alternates between assigning points to the nearest centroid and recomputing centroids. Minimizes SSE = $\sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$.
+- **Centroid:** the mean of all points in a cluster.
+- **SSE (sum of squared errors):** the k-means objective — total squared distance from each point to its cluster centroid. (sklearn calls this `inertia_`; we use the SSE label, consistent with regression in Chapter 4.)
+- **Silhouette score:** measures how well each point fits its own cluster versus the nearest alternative (range [-1, 1]).
+- **Elbow method:** plotting SSE vs k and looking for diminishing returns.
+- **Local optimum:** a solution that can't be improved by small changes but may not be the global best.
+- **Adjusted Rand Index (ARI):** measures agreement between two clusterings, adjusted for chance (1 = identical, 0 = random).
+- Standardization is the default for distance-based methods, including k-means and PCA.
+- Feature selection determines what structure clustering finds. *No feature set is "neutral."*
+- K-means is sensitive to initialization. The k-means++ initialization strategy picks initial centroids that are spread apart, reducing sensitivity to random starts.
+- The algorithm always finds clusters, even in pure noise. Validation is your responsibility.
+
+### Computational tools
+
+- `KMeans(n_clusters=k, random_state=42, n_init=10)` — fit k-means
+- `km.fit_predict(X)` — fit and return cluster labels
+- `km.inertia_` — sklearn's attribute name for the SSE
+- `StandardScaler().fit_transform(X)` — standardize to zero mean, unit variance
+- `silhouette_score(X, labels)` — average silhouette across all points
+- `adjusted_rand_score(labels1, labels2)` — compare two clusterings
+
+### For the quiz
+
+You should be able to:
+
+- Describe the k-means algorithm (assign, recompute, repeat) and state what it optimizes (SSE).
+- Explain why standardization matters for k-means (and connect to PCA).
+- Interpret an elbow plot and a silhouette plot.
+- Explain why different runs can produce different clusters (local optima, initialization).
+- Given cluster profiles, name the archetypes/groups and identify which clusters cross traditional categories.
+- Explain why feature selection changes the clusters you find.
+- Explain why "neutral" feature sets don't exist when feature choice encodes a value judgment.
