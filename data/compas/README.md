@@ -20,7 +20,7 @@ The data is derived from Broward County public records obtained via FOIA. ProPub
 
 | Column | Meaning |
 |---|---|
-| `id` | Anonymous defendant ID |
+| `id` | Record ID (numeric; the dataset is **not** de-identified — real names are in `name`, `first`, `last` columns) |
 | `name` | Defendant name (public record) |
 | `race` | Self-reported race (African-American, Caucasian, Hispanic, Asian, Other, Native American) |
 | `sex` | Male / Female |
@@ -33,12 +33,13 @@ The data is derived from Broward County public records obtained via FOIA. ProPub
 | `decile_score` | COMPAS general recidivism risk score (1-10, low to high) |
 | `v_decile_score` | COMPAS violent recidivism risk score (1-10) |
 | `score_text` | Risk category (Low / Medium / High) |
-| `is_recid` | Re-arrested within 2 years (1=yes, 0=no, -1=missing follow-up) |
+| `is_recid` | Re-arrested within 2 years (1=yes, 0=no); separate column `two_year_recid` gives the canonical two-year recidivism label used in ProPublica's analysis |
+| `two_year_recid` | Recidivism within two years — the canonical target variable in ProPublica's *Machine Bias* analysis |
 | `days_b_screening_arrest` | Days between screening and arrest event |
 
 ## Standard filter (ProPublica's recipe)
 
-ProPublica's *Machine Bias* analysis applies these filters before analysis to remove cases with unclear follow-up or non-standard charges. We use the same recipe:
+ProPublica's *Machine Bias* analysis applies four filter steps before analysis. On *this* file (`compas-scores-two-years.csv`), only the `days_b_screening_arrest` step removes rows — the other three steps are no-ops because the file ProPublica published here is already partially filtered. We keep all four steps in our standard recipe for parity with ProPublica's published code, even though three of them are no-ops on this file:
 
 ```python
 df = pd.read_csv('data/compas/compas-scores-two-years.csv')
@@ -51,5 +52,6 @@ df = df[df['score_text'] != 'N/A']
 
 ## Notes
 
+- **Duplicate column names.** The CSV header lists `decile_score` and `priors_count` twice each (positions 11/39 and 14/48). `pd.read_csv` silently renames the second occurrence to `decile_score.1` and `priors_count.1`. For the general recidivism score and prior count, use the unsuffixed column name; the suffixed columns appear to be ProPublica's join keys from the raw scores file.
 - ProPublica's analysis has been discussed and re-analyzed across many follow-up papers (Flores, Bechtel, Lowenkamp 2016; Chouldechova 2017; Corbett-Davies et al. 2017). Our Lec15 use of this dataset is illustrative of a clustering feature-choice lesson, not a definitive claim about whether COMPAS itself is biased.
 - Defendant names are kept in the file (they were already public records) but should not be quoted in chapter prose.
