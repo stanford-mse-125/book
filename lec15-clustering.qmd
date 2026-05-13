@@ -228,3 +228,74 @@ If you were a GM, would you want k=3 (broad strokes — guards, wings, bigs) or 
 :::
 
 The heuristics rule out bad choices but don't pick the right one. Choosing k requires judgment about what the clusters are *for*. Three broad groups give a stable, defensible taxonomy. Five gives finer resolution that matches how analysts actually talk about modern players — at the cost of softer boundaries.
+
+## Your features determine your clusters
+
+The five archetypes we found are not the *only* way to cluster these 317 players. Same algorithm, same players, different features → different stories. Watch what happens when we change the feature set.
+
+### Cluster on shot *volume* (raw counts)
+
+```{python}
+features_vol = ['RA_FGA', 'PAINT_FGA', 'MID_FGA', 'LC3_FGA', 'RC3_FGA', 'ATB3_FGA']
+X_vol = StandardScaler().fit_transform(nba[features_vol].values)
+nba['cluster_vol'] = KMeans(n_clusters=5, random_state=42, n_init=10).fit_predict(X_vol)
+
+# Show top players per volume-cluster
+for c in sorted(nba['cluster_vol'].unique()):
+    sample = nba[nba['cluster_vol']==c].nlargest(6, 'FGA')['PLAYER_NAME'].tolist()
+    print(f"Volume cluster {c}: {sample}")
+```
+
+Clustering on raw shot counts produces a different taxonomy: high-volume players (Luka, Embiid, SGA, the league's top scorers) cluster together regardless of position; low-volume role players cluster together regardless of style. The structure is "how many shots do you take?" not "what kind of shots?"
+
+### Cluster on shot *efficiency* (FG% by zone)
+
+```{python}
+# Compute FG% by zone; for zones with very few attempts use league average
+fg_features = []
+for zone, fgm_col, fga_col in [
+    ('rim', 'RA_FGM', 'RA_FGA'),
+    ('paint', 'PAINT_FGM', 'PAINT_FGA'),
+    ('mid', 'MID_FGM', 'MID_FGA'),
+    ('lc3', 'LC3_FGM', 'LC3_FGA'),
+    ('rc3', 'RC3_FGM', 'RC3_FGA'),
+    ('atb3', 'ATB3_FGM', 'ATB3_FGA'),
+]:
+    fg_col = f'fg_{zone}'
+    # Avoid divide-by-zero; use league average for zones with very few attempts
+    league_avg = nba[fgm_col].sum() / nba[fga_col].sum()
+    nba[fg_col] = np.where(nba[fga_col] >= 20, nba[fgm_col] / nba[fga_col], league_avg)
+    fg_features.append(fg_col)
+
+X_eff = StandardScaler().fit_transform(nba[fg_features].values)
+nba['cluster_eff'] = KMeans(n_clusters=5, random_state=42, n_init=10).fit_predict(X_eff)
+
+for c in sorted(nba['cluster_eff'].unique()):
+    sample = nba[nba['cluster_eff']==c].nlargest(6, 'FGA')['PLAYER_NAME'].tolist()
+    print(f"Efficiency cluster {c}: {sample}")
+```
+
+Now the clusters group players by their *skill profile*. Highly efficient scorers (whoever they are) cluster together; players who shoot below average everywhere cluster together. The story is "how *well* do you shoot?" rather than "what *kind* of shots?"
+
+### Same players, three stories
+
+```{python}
+# Show how a handful of well-known players move across the three clusterings
+spotlight = ['Stephen Curry', 'LeBron James', 'Giannis Antetokounmpo',
+             'Nikola Jokić', 'Buddy Hield', 'Jalen Brunson',
+             'Kevin Durant', 'Donovan Mitchell']
+
+mask = nba['PLAYER_NAME'].isin(spotlight)
+comparison = nba.loc[mask, ['PLAYER_NAME', 'archetype', 'cluster_vol', 'cluster_eff']].copy()
+comparison.columns = ['Player', 'By shot mix', 'By volume', 'By efficiency']
+print(comparison.to_string(index=False))
+```
+
+Curry, LeBron, Jokić, Durant — read across the columns. The same player sits in a different cluster depending on which question you asked.
+
+:::{.callout-warning}
+## Your features determine your clusters
+There is no "true" clustering of NBA players. Each feature recipe answers a different question. **Shot mix** asks "what kind of shots?" — gives archetypes. **Shot volume** asks "how many?" — gives stars-vs-role-players. **Shot efficiency** asks "how well?" — gives skill tiers. Pick the features that match the decision you need to make.
+:::
+
+If you were a GM looking for a Buddy Hield replacement, shot-mix archetypes are useful — they tell you who plays the same *role*. If you were ranking trade targets by raw production, shot volume is more useful. If you were valuing a contract, efficiency probably matters most.
