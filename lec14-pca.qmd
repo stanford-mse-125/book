@@ -380,7 +380,7 @@ print(loadings_named.nsmallest(5, 'PC3')[['PC3', 'sector']].round(2))
 A sector-colored bar chart shows the contrast across the universe:
 
 ```{python}
-fig, ax = plt.subplots(figsize=(8, 3.5))
+fig, ax = plt.subplots(figsize=(8, 5))
 pc3_colors = [sector_color.get(loadings_sector.loc[t, 'sector'], 'gray') for t in order]
 ax.bar(range(len(order)), loadings.loc[order, 'PC3'],
        color=pc3_colors, edgecolor='white', linewidth=0.3)
@@ -390,8 +390,8 @@ ax.set_xlabel('Stock (sorted by PC1 loading)')
 ax.set_title('PC3 loadings — colored by GICS sector')
 
 handles = [Patch(facecolor=sector_color[s], label=s) for s in sectors_unique]
-ax.legend(handles=handles, loc='lower center', bbox_to_anchor=(0.5, -0.75),
-          ncol=4, fontsize=7, frameon=False)
+ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.18),
+          ncol=4, fontsize=8, frameon=False)
 plt.tight_layout()
 plt.show()
 ```
