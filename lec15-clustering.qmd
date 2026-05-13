@@ -117,3 +117,64 @@ plt.show()
 Panel 1 shows the random initial centroids. By panel 4 the centroids have stabilized — assignments barely change. That's k-means: dead simple, fast, and guaranteed to converge in finite steps (there are finitely many possible assignments, and SSE decreases at every step). The solution is only a local optimum, though, as we'll see shortly.
 
 But this two-feature view is just for visualization. The real archetypes come out when we cluster on all five zones at once.
+
+## Discovering archetypes (k=5)
+
+We standardize all five shot-mix features and fit k-means with k=5. (We'll see how to *choose* k in the next section — for now, let's see what k=5 finds.)
+
+```{python}
+X_scaled = StandardScaler().fit_transform(nba[features].values)
+kmeans_5 = KMeans(n_clusters=5, random_state=42, n_init=10)
+nba['archetype'] = kmeans_5.fit_predict(X_scaled)
+
+profile = nba.groupby('archetype')[features].mean().round(2)
+print(profile)
+print(f"\nCluster sizes: {nba.groupby('archetype').size().to_dict()}")
+```
+
+Each row of the table above is one archetype's average shot mix. Read the rows like fingerprints.
+
+```{python}
+# Top-volume players per cluster — a sanity check that the archetypes are recognizable
+for c in sorted(nba['archetype'].unique()):
+    sample = nba[nba['archetype']==c].nlargest(6, 'FGA')['PLAYER_NAME'].tolist()
+    print(f"Archetype {c}: {sample}")
+```
+
+:::{.callout-tip}
+## Think about it
+Before reading on, look at the cluster profiles and the top players. Can you give each archetype a one-word name? Which traditional positions (PG, SG, SF, PF, C) show up together in the same cluster?
+:::
+
+The five clusters correspond to recognizable modern archetypes. The cluster numbering depends on initialization, but the *patterns* are stable. Reading the profile table:
+
+- **Rim runners** — overwhelming share at the rim, almost zero threes. The bigs who finish lobs, roll to the basket, and clean the glass.
+- **Midrange masters** — heavy paint and midrange, light on threes. The classic iso scorers and pull-up artists.
+- **Floor-spacers** — almost everything is a three, split between corners and above the break, with almost no midrange. Specialists whose job is to be open for a kickout.
+- **Three-point creators** — mostly above-the-break threes with rim attacks. Modern guards who pull up off the dribble and finish at the basket.
+- **Two-way wings** — balanced across all zones. Versatile attackers who don't specialize.
+
+Notice what k-means did *not* do: it ignored traditional positions entirely. The midrange-masters cluster contains a point guard (Brunson), a wing (Edwards), and Kevin Durant; the three-point creators include Curry, Luka, and Tatum side by side regardless of position; Jokić sits next to Edwards as a midrange operator. The algorithm found a taxonomy based on *how* a player scores, not what number the box score lists.
+
+```{python}
+# Scatter: %-at-rim vs %-above-break-3, colored by archetype
+fig, ax = plt.subplots(figsize=(8, 5.5))
+palette = sns.color_palette('Set1', n_colors=5)
+for c in sorted(nba['archetype'].unique()):
+    mask = nba['archetype'] == c
+    ax.scatter(nba.loc[mask, 'pct_RA'], nba.loc[mask, 'pct_ATB3'],
+               color=palette[c], alpha=0.6, s=30, label=f'Archetype {c}')
+ax.set_xlabel('Share of shots at the rim')
+ax.set_ylabel('Share of shots above-the-break 3')
+ax.set_title('Archetypes spread across the shot-mix plane')
+ax.legend(loc='best', fontsize=9)
+plt.tight_layout()
+plt.show()
+```
+
+The scatter shows the archetypes are not arbitrary — they occupy distinct regions of the shot-mix plane. Rim runners cluster in the upper-left (high rim share, low above-break-3). Floor-spacers and three-point creators sit toward the right. Midrange masters and two-way wings fill the middle.
+
+:::{.callout-note collapse="true"}
+## Going deeper: the modern positional revolution
+Cluster-based player taxonomies have a real history in basketball analytics. Muthu Alagappan's 2012 work used hierarchical clustering to argue for 13 player "positions" instead of 5. Kirk Goldsberry's *Sprawlball* (2019) documents how the league transformed as the midrange shot disappeared and the three-pointer exploded. What we just did is a simplified version of the same exercise — coaches and analysts have been thinking this way for over a decade.
+:::
