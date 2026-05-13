@@ -178,3 +178,53 @@ The scatter shows the archetypes are not arbitrary — they occupy distinct regi
 ## Going deeper: the modern positional revolution
 Cluster-based player taxonomies have a real history in basketball analytics. Muthu Alagappan's 2012 work used hierarchical clustering to argue for 13 player "positions" instead of 5. Kirk Goldsberry's *Sprawlball* (2019) documents how the league transformed as the midrange shot disappeared and the three-pointer exploded. What we just did is a simplified version of the same exercise — coaches and analysts have been thinking this way for over a decade.
 :::
+
+## Choosing k
+
+How did we know k=5 was right? We didn't. K is a **choice**, not a discovery. But there are heuristics that help.
+
+The **elbow method** plots the SSE as k increases. We look for an "elbow" where adding more clusters stops helping much.
+
+:::{.callout-important}
+## Definition: Silhouette score
+The **silhouette score** measures how similar each point is to its own cluster compared to the nearest other cluster. The range is [-1, 1]: a score near +1 means points sit comfortably inside their cluster; near 0 means they're on the boundary between clusters; near -1 means they're probably in the wrong cluster.
+:::
+
+```{python}
+k_range = range(2, 11)
+sses = []
+silhouettes = []
+
+for k in k_range:
+    km = KMeans(n_clusters=k, random_state=42, n_init=10).fit(X_scaled)
+    sses.append(km.inertia_)  # sklearn calls this `inertia_`; we label the quantity SSE
+    silhouettes.append(silhouette_score(X_scaled, km.labels_))
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+
+axes[0].plot(list(k_range), sses, 'o-', color='steelblue')
+axes[0].axvline(x=5, color='gray', linestyle='--', alpha=0.5, label='k=5 (our choice)')
+axes[0].set_xlabel('Number of clusters (k)')
+axes[0].set_ylabel('SSE (within-cluster sum of squared distances)')
+axes[0].set_title('Elbow plot')
+axes[0].legend()
+
+axes[1].plot(list(k_range), silhouettes, 'o-', color='coral')
+axes[1].axvline(x=5, color='gray', linestyle='--', alpha=0.5, label='k=5 (our choice)')
+axes[1].set_xlabel('Number of clusters (k)')
+axes[1].set_ylabel('Silhouette score')
+axes[1].set_title('Silhouette score')
+axes[1].legend()
+
+plt.tight_layout()
+plt.show()
+```
+
+Neither plot gives a definitive answer. The elbow is gradual — there's no sharp bend. The silhouette score is highest at small k (where there are few enough clusters that points sit comfortably inside one), and decays as we ask for finer distinctions.
+
+:::{.callout-tip}
+## Think about it
+If you were a GM, would you want k=3 (broad strokes — guards, wings, bigs) or k=5 (finer archetype detail — midrange masters, floor-spacers, etc.)? What would each give you, and what would each cost?
+:::
+
+The heuristics rule out bad choices but don't pick the right one. Choosing k requires judgment about what the clusters are *for*. Three broad groups give a stable, defensible taxonomy. Five gives finer resolution that matches how analysts actually talk about modern players — at the cost of softer boundaries.
