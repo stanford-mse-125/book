@@ -643,38 +643,38 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Objectives addressed:** 15 (k-means, evaluate cluster quality)
 
+**Dataset:** NBA shot zones 2023-24 (`data/nba/shot_zones_2023-24.csv`) — 317 players with ≥200 FGA, shot-mix percentages by court zone. Secondary: ProPublica COMPAS recidivism (`data/compas/compas-scores-two-years.csv`) — 6,172 Broward County defendants after ProPublica's standard filter.
+
 **Key concepts:**
 - Unsupervised learning: finding structure without labels
-- K-means algorithm: assign points to nearest centroid, recompute centroids, repeat
-- Choosing k: elbow method, silhouette score
-- Standardization matters for clustering (same lesson as PCA)
-- K-means is sensitive to initialization — different seeds → different clusters
-- Local vs. global optima: k-means finds a local minimum, not necessarily the best
-- Interpretation: what do the clusters mean?
+- K-means algorithm: assign points to nearest centroid, recompute centroids, repeat; objective is SSE (sum of squared errors)
+- Standardization is the default for distance-based methods like k-means — same reason as PCA
+- Elbow and silhouette plots rule out bad k choices; they don't uniquely pick the right one
+- Given cluster profiles (shot-mix archetypes), name interpretable types and identify players who cross traditional position lines
+- Feature selection changes which clusters emerge — no feature set is "neutral" when stakes involve people (COMPAS cautionary case)
+- Assessing cluster stability across random seeds using ARI; k-means++ initialization reduces sensitivity
 
 **Key vocabulary:**
 - Unsupervised learning
 - K-means
 - Centroid
-- Cluster
+- Sum of squared errors (SSE)
 - Silhouette score
 - Elbow method
-- Local optimum, initialization sensitivity
-- Distance metrics (Euclidean, Manhattan, cosine)
-- K-medoids
+- Local optimum
 - Adjusted Rand Index (ARI)
+- K-means++ initialization
 
 **Key formulas:**
-- K-means objective: minimize Σ_k Σ_{i∈C_k} ||x_i − μ_k||²
-- ORIE 4741: k-means as GLRM with unit-one-sparse constraint on X
+- K-means objective: minimize Σ_k Σ_{i∈C_k} ||x_i − μ_k||² (SSE)
 
-**Prerequisites:** Lec 14 (PCA, standardization)
+**Prerequisites:** Lec 2 (EDA), Lec 4 (regression — for SSE intuition), Lec 14 (PCA — for unsupervised framing and standardization)
 
 **Connections:**
-- Backward: Lec 14 (PCA, standardization)
-- ORIE 4741: unsupervised.tex — k-means as special case of GLRM framework
+- Backward: Lec 2 (EDA), Lec 4 (SSE), Lec 14 (PCA, standardization, unsupervised framing)
+- Forward: Lec 17 (working with AI — feature-choice stakes revisited), Lec 18-19 (causal inference — when correlational groupings mislead)
 
-**Surprise moment(s):** (1) Geography dominates clustering unless lat/lon are removed. (2) Different random seeds produce different clusters — k-means is not deterministic.
+**Surprise moment(s):** (1) Clustered shot profiles reveal players who defy traditional position labels — analytics archetypes cut across PG/SG/SF/PF/C. (2) Changing which features enter k-means shifts cluster membership substantially — the "same" algorithm produces different groupings depending on what you include. (3) On COMPAS data, clustering by criminal history vs. socioeconomic features produces systematically different racial compositions, illustrating that no feature set is neutral.
 
 ---
 
