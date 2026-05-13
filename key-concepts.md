@@ -591,6 +591,8 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Objectives addressed:** 14 (PCA, interpret principal components)
 
+**Dataset:** S&P 100 daily log returns, 2014–2024 (95 stocks × ~2,770 trading days), plus sector metadata.
+
 **Key concepts:**
 - Dimensionality reduction: many features → fewer meaningful dimensions
 - PCA finds directions of maximum variance
@@ -599,23 +601,31 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Loadings: which original features contribute to each PC
 - Standardization is essential before PCA (otherwise largest-magnitude column dominates)
 - PCA as regression onto optimal covariates (the ORIE 4741 framing)
+- Factor-model covariance for portfolio construction in the $p > n$ regime
+- Walk-forward (time-respecting) cross-validation for choosing $k$
 
 **Key vocabulary:**
 - PCA (Principal Component Analysis)
 - Principal component, loading
+- PC scores
 - SVD (Singular Value Decomposition)
 - Singular value
 - Explained variance ratio
 - Scree plot, elbow method
 - Standardization (z-score)
 - Basis, orthonormal basis
+- Dimensionality reduction
+- Eigenportfolio
+- Minimum-variance portfolio
+- Walk-forward evaluation
 
 **Key formulas:**
 - SVD: X = USV^T
 - Columns of V = PC directions
-- Diagonal of S = singular values (proportional to variance explained)
+- Diagonal of S = singular values; their **squares** divided by $(n-1)$ are the PC variances
 - US = PC scores (coordinates in reduced space)
 - Eckart-Young-Mirsky: SVD gives the best rank-r approximation
+- Minimum-variance portfolio: $w \propto \Sigma^{-1}\mathbf{1}$
 
 **Prerequisites:** Lec 4 (column space, projection); Lec 5 (projection idea)
 
@@ -625,7 +635,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - VMLS Ch 16 (PCA)
 - ORIE 4741: unsupervised.tex — PCA as low-rank approximation, GLRM framework (PCA as special case)
 
-**Surprise moment:** PCA on raw (unstandardized) Airbnb data just picks up maximum_nights — standardization completely changes the results
+**Surprise moment:** Raw (unstandardized) PCA on returns is tilted by the highest-volatility names — a few stocks hold disproportionate squared-loading mass; standardization recovers a roughly even market factor (95/95 positive PC1 loadings).
 
 ---
 
