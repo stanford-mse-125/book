@@ -339,7 +339,7 @@ print(f"ARI mean: {off_diag.mean():.3f}")
 print(f"ARI range: {off_diag.min():.3f} to {off_diag.max():.3f}")
 ```
 
-The mean ARI sits around 0.6, but the range is wide: some pairs of runs agree perfectly or nearly so (ARI above 0.9), while others agree only weakly (ARI below 0.4). The archetypes are partially stable, but the cluster boundaries are not — some players will flip groups depending on the seed.
+The numbers above tell the story. The mean ARI is moderate, but the spread is wide: some pairs of runs agree closely, others only weakly. The archetypes are partially stable, but the cluster boundaries are not — some players will flip groups depending on the seed.
 
 ```{python}
 # Which players sit at archetype boundaries?
