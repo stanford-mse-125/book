@@ -359,3 +359,87 @@ print(boundary_players.to_string(index=False))
 Players at archetype boundaries flip between clusters across seeds. This isn't a bug — it's information. A player who sits in the middle of two archetypes is, in fact, a hybrid. The clustering's instability tells you something the rigid k=5 labels don't.
 
 If you were a GM looking for a Buddy Hield replacement, shot-mix archetypes are useful — they tell you who plays the same *role*. If you were ranking trade targets by raw production, shot volume is more useful. If you were valuing a contract, efficiency probably matters most.
+
+## When the features carry a value judgment: COMPAS
+
+So far the stakes have been low — picking the wrong archetype gets a coach yelled at, not jailed. Let's run the same analysis on a dataset where it does get someone jailed.
+
+**COMPAS** is a risk-scoring algorithm used in pretrial bail decisions, parole hearings, and sentencing across many US states. Given a defendant's age, criminal history, and other factors, it returns a 1-10 score predicting the probability of re-arrest within two years. In 2016 ProPublica investigated COMPAS and found it disproportionately flagged Black defendants as high-risk who didn't go on to reoffend — and disproportionately flagged White defendants as low-risk who did.^[Angwin, J., Larson, J., Mattu, S., & Kirchner, L. (2016). Machine Bias. *ProPublica*. The COMPAS data we use is from ProPublica's published analysis of 7,214 Broward County defendants screened 2013-14.]
+
+We're not going to re-litigate ProPublica's argument. Instead, we'll ask a question that sits one level up: **what does clustering on COMPAS's data reveal, and how does that depend on which features you cluster on?**
+
+```{python}
+compas = pd.read_csv(f'{DATA_DIR}/compas/compas-scores-two-years.csv')
+
+# ProPublica's standard filter (see book/data/compas/README.md)
+compas = compas[(compas['days_b_screening_arrest'] <= 30) &
+                (compas['days_b_screening_arrest'] >= -30)]
+compas = compas[compas['is_recid'] != -1]
+compas = compas[compas['c_charge_degree'] != 'O']
+compas = compas[compas['score_text'] != 'N/A']
+print(f"Defendants after filter: {len(compas):,}")
+print(compas['race'].value_counts().to_string())
+```
+
+### Two feature sets, one population
+
+We'll cluster the same defendants two ways, both at k=3:
+
+- **Risk-score features**: COMPAS's algorithmic outputs and prior count — `decile_score`, `v_decile_score`, `priors_count`. This is "how the algorithm sees you."
+- **Criminal-history features**: age and juvenile record — `age`, `priors_count`, `juv_fel_count`, `juv_misd_count`, `juv_other_count`. This is "what your record looks like before any algorithm interprets it."
+
+```{python}
+feat_risk = ['decile_score', 'v_decile_score', 'priors_count']
+feat_hist = ['age', 'priors_count', 'juv_fel_count', 'juv_misd_count', 'juv_other_count']
+
+results = {}
+for label, feats in [('risk_score', feat_risk), ('history', feat_hist)]:
+    X = StandardScaler().fit_transform(compas[feats].values)
+    labels = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
+    results[label] = labels
+
+compas['cluster_risk'] = results['risk_score']
+compas['cluster_hist'] = results['history']
+```
+
+### What did each clustering find?
+
+```{python}
+print("=== Clustering on RISK-SCORE features ===")
+print("Cluster profiles (mean values):")
+print(compas.groupby('cluster_risk')[feat_risk].mean().round(2))
+print("\nCluster sizes:")
+print(compas.groupby('cluster_risk').size().to_string())
+print("\nRace composition (% per cluster):")
+print((pd.crosstab(compas['cluster_risk'], compas['race'], normalize='index') * 100).round(1))
+```
+
+```{python}
+print("=== Clustering on CRIMINAL-HISTORY features ===")
+print("Cluster profiles (mean values):")
+print(compas.groupby('cluster_hist')[feat_hist].mean().round(2))
+print("\nCluster sizes:")
+print(compas.groupby('cluster_hist').size().to_string())
+print("\nRace composition (% per cluster):")
+print((pd.crosstab(compas['cluster_hist'], compas['race'], normalize='index') * 100).round(1))
+```
+
+Look at the two cluster profile tables and the race-composition tables side by side.
+
+- The **risk-score clustering** finds three groups that are essentially "low risk" (low decile_score, few priors), "medium risk" (mid decile_score), and "high risk and many priors" (high decile_score, many priors). The three clusters form a one-dimensional ordering — low → medium → high. The Black share of each cluster *increases monotonically* along that axis.
+
+- The **history-only clustering** finds three groups too — but the structure is two-dimensional. Two clusters split on age (young vs older), and one cluster picks out defendants with heavy juvenile records. The Black share is uneven across clusters but does *not* climb monotonically with anything that looks like "risk."
+
+:::{.callout-warning}
+## Neither feature set is "neutral"
+Both clusterings find structure in the data. Both produce racially-skewed clusters. The difference is *what structure they find*: the risk-score features impose a one-dimensional risk axis; the history features find life-cycle groups. Neither tells the "truth" about these defendants. Each is a value judgment about what makes two people *similar enough* to treat alike.
+
+There is no feature set that escapes this. Age and prior count are not race-neutral — they reflect, among other things, decades of policing patterns that themselves were not race-neutral. Choosing features is choosing a theory of who counts as "the same."
+:::
+
+:::{.callout-tip}
+## Think about it
+Which clustering would you defend in a courtroom? Which would you defend in a press conference? Notice these may not be the same answer — and that the difference is about politics, not statistics.
+:::
+
+The COMPAS example points forward to Chapter 16 (validation and feedback loops): the priors that feed COMPAS's score are themselves the output of past policing decisions, which were informed by past risk assessments, which were informed by past priors. Every measurement we cluster on has a history.
