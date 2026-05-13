@@ -298,4 +298,64 @@ Curry, LeBron, Jokić, Durant — read across the columns. The same player sits 
 There is no "true" clustering of NBA players. Each feature recipe answers a different question. **Shot mix** asks "what kind of shots?" — gives archetypes. **Shot volume** asks "how many?" — gives stars-vs-role-players. **Shot efficiency** asks "how well?" — gives skill tiers. Pick the features that match the decision you need to make.
 :::
 
+## How stable are these clusters?
+
+K-means starts with random initial centroids. Different starting points can lead to different final clusters — the algorithm finds a **local optimum**, not the global best.
+
+:::{.callout-tip}
+## Think about it
+If you ran k-means again with different starting points, would you get the same five archetypes? Would the *boundaries* shift? Which players would you expect to be most stable, and which most likely to switch?
+:::
+
+We deliberately set `n_init=1` (one random start) to expose the instability. sklearn's default `n_init=10` helps by picking the best of 10 runs, but even that doesn't guarantee identical clusters across calls.
+
+To compare two clusterings, we use the **Adjusted Rand Index (ARI)**. The ARI asks: for any two players, do both runs agree on whether they're in the same cluster or different clusters? ARI = 1 means perfect agreement; ARI = 0 means agreement no better than random chance.
+
+```{python}
+# Run k-means 10 times with different random seeds
+all_labels = []
+for seed in range(10):
+    km = KMeans(n_clusters=5, random_state=seed, n_init=1)
+    all_labels.append(km.fit_predict(X_scaled))
+
+ari_matrix = np.zeros((10, 10))
+for i in range(10):
+    for j in range(10):
+        ari_matrix[i, j] = adjusted_rand_score(all_labels[i], all_labels[j])
+
+fig, ax = plt.subplots(figsize=(7, 5.5))
+display_matrix = ari_matrix.copy()
+np.fill_diagonal(display_matrix, np.nan)
+sns.heatmap(display_matrix, annot=True, fmt='.2f', cmap='YlOrRd',
+            ax=ax, vmin=0, vmax=1, cbar_kws={'label': 'ARI'})
+ax.set_xlabel('Run')
+ax.set_ylabel('Run')
+ax.set_title('Pairwise ARI between 10 k-means runs (k=5, n_init=1)')
+plt.tight_layout()
+plt.show()
+
+off_diag = ari_matrix[np.triu_indices(10, k=1)]
+print(f"ARI mean: {off_diag.mean():.3f}")
+print(f"ARI range: {off_diag.min():.3f} to {off_diag.max():.3f}")
+```
+
+The mean ARI sits around 0.6, but the range is wide: some pairs of runs agree perfectly or nearly so (ARI above 0.9), while others agree only weakly (ARI below 0.4). The archetypes are partially stable, but the cluster boundaries are not — some players will flip groups depending on the seed.
+
+```{python}
+# Which players sit at archetype boundaries?
+boundary_counts = pd.Series(0, index=nba.index)
+for labels in all_labels:
+    # Compare to the seed-42 baseline assignment in `nba['archetype']`
+    same = labels == nba['archetype'].values
+    boundary_counts += ~same
+
+nba_boundary = nba.copy()
+nba_boundary['flips'] = boundary_counts.values
+boundary_players = nba_boundary[nba_boundary['FGA'] >= 800].nlargest(8, 'flips')[['PLAYER_NAME', 'flips']]
+print("High-volume players whose archetype is least stable across seeds:")
+print(boundary_players.to_string(index=False))
+```
+
+Players at archetype boundaries flip between clusters across seeds. This isn't a bug — it's information. A player who sits in the middle of two archetypes is, in fact, a hybrid. The clustering's instability tells you something the rigid k=5 labels don't.
+
 If you were a GM looking for a Buddy Hield replacement, shot-mix archetypes are useful — they tell you who plays the same *role*. If you were ranking trade targets by raw production, shot volume is more useful. If you were valuing a contract, efficiency probably matters most.
