@@ -7,11 +7,28 @@ jupyter: python3
 
 ## Building next year's roster
 
-The Indiana Pacers' front office wants to find a free agent who fits their offense. They have a target: a wing who can space the floor *and* attack closeouts. The traditional 5-position scheme (PG, SG, SF, PF, C) is useless for this — Stephen Curry and Russell Westbrook are both "point guards" but couldn't play more differently. What's the *real* taxonomy of NBA players in 2024?
+The Indiana Pacers' front office wants to sign a wing who can space the floor *and* attack closeouts. The traditional 5-position scheme (PG, SG, SF, PF, C) is no help: Stephen Curry and Russell Westbrook are both "point guards" but play nothing alike. What is the real taxonomy of NBA players in 2024?
 
-This task is **unsupervised learning**: there's no "right answer" column. We're looking for patterns in the data itself. In Chapter 14, PCA found a few directions that explain most of the variation in our stock returns. Today, we ask a different question: instead of *directions*, can we find *groups*? PCA compresses; k-means clusters. Both are unsupervised — no labels, just structure.
+The task is **unsupervised learning** — there is no "right answer" column, only patterns in the data. In Chapter 14, PCA found a few *directions* that explained most of the variation in stock returns. Here we ask the parallel question: can we find *groups*? Both PCA and clustering are unsupervised; PCA compresses, k-means partitions.
 
-We'll use **k-means clustering** — one of the simplest and most widely used clustering algorithms — to discover modern NBA archetypes that cross traditional position lines. Then we'll see, on a higher-stakes dataset, how the same algorithm can lead an analyst badly astray when the features encode the wrong assumptions.
+We use **k-means clustering** to discover modern NBA archetypes that cross position lines. We then re-run the same procedure on COMPAS, a criminal-justice dataset where the same kind of analysis carries far higher stakes.
+
+:::{.callout-note collapse="false"}
+## Basketball glossary (for non-fans)
+- **PG / SG / SF / PF / C**: point guard, shooting guard, small forward, power forward, center — the five traditional positions, from smallest and quickest (PG) to tallest (C).
+- **Wing**: a player who plays facing the basket — usually a small forward or athletic shooting guard.
+- **Big**: a tall player, traditionally a power forward or center.
+- **Free agent**: an unsigned player available to sign with any team.
+- **GM (general manager)**: the team executive who builds the roster.
+- **Rim / restricted area**: shots taken right at the basket (the small arc under the rim).
+- **Paint**: the painted rectangle ("the lane") extending out from the basket.
+- **Midrange**: shots between the paint and the 3-point line — historically common, devalued in the modern game.
+- **Corner three / above-the-break three**: 3-pointers from the corners vs. everywhere else along the arc.
+- **Space the floor**: be enough of a 3-point threat that defenders can't sag off, opening driving lanes for teammates.
+- **Attack closeouts**: drive to the basket when your defender sprints out to contest a shot.
+- **Kickout**: pass to a perimeter shooter after a drive collapses the defense.
+- **Iso scorer**: a player who reliably creates a shot one-on-one.
+:::
 
 ```{python}
 import numpy as np
@@ -33,7 +50,7 @@ DATA_DIR = 'data'
 
 ## Preparing the data
 
-We use shot-attempt counts from the 2023-24 NBA regular season, broken down by court zone: restricted area (right under the basket), non-restricted paint, midrange, corner three, and above-the-break three. For each player we'll compute the *share* of shot attempts that came from each zone — a "shot mix" fingerprint.
+We use shot-attempt counts from the 2023-24 NBA regular season, broken down by five court zones: restricted area, non-restricted paint, midrange, corner three, and above-the-break three. For each player we compute the *share* of attempts in each zone — a "shot mix" fingerprint.
 
 ```{python}
 nba = pd.read_csv(f'{DATA_DIR}/nba/shot_zones_2023-24.csv')
@@ -53,16 +70,87 @@ features = ['pct_RA', 'pct_PAINT', 'pct_MID', 'pct_C3', 'pct_ATB3']
 nba[features].describe().round(2)
 ```
 
-The shot-mix percentages sum to one for each player, so they're already on the same scale. We'll still standardize before clustering — partly out of habit, partly because k-means is a distance-based method and standardization keeps it well-behaved.
+The five percentages sum to one for each player, so they are already on a common scale. We still standardize before clustering: k-means uses Euclidean distance, and standardization is a safe default for any distance-based method.
+
+## What does "similar" mean? A choice, not a fact
+
+Before clustering, we must commit to a notion of *distance* — a number that says how far apart two players are. For shot-mix data, the natural choice is **Euclidean distance** on the standardized features: square the differences zone by zone, add them up, take a square root. Two players are "close" when their five shot-share percentages line up.
+
+The choice of distance is itself a value judgment. Euclidean distance on shot mix says two players are similar when their *recipes* match, regardless of height, defense, rebounding, or even total shot volume. A star and a role player who take the same proportions from each zone look identical to this metric.
+
+The distances between famous pairs make the implications concrete:
+
+```{python}
+scaler = StandardScaler().fit(nba[features].values)
+
+def shot_mix_distance(name1, name2):
+    """Euclidean distance between two players in standardized shot-mix space."""
+    v1 = scaler.transform(nba.loc[nba['PLAYER_NAME']==name1, features].values)[0]
+    v2 = scaler.transform(nba.loc[nba['PLAYER_NAME']==name2, features].values)[0]
+    return float(np.linalg.norm(v1 - v2))
+
+pairs = [
+    ('Stephen Curry', 'Klay Thompson'),         # both Warriors shooters (Klay has a notable midrange share)
+    ('Stephen Curry', 'Buddy Hield'),           # both heavy three-point shooters
+    ('Stephen Curry', 'Russell Westbrook'),     # both PGs, very different styles
+    ('Stephen Curry', 'Giannis Antetokounmpo'), # guard vs interior force
+    ('Nikola Jokić', 'Joel Embiid'),            # both All-NBA centers
+    ('LeBron James', 'Kevin Durant'),           # both elite all-around scorers
+]
+for a, b in pairs:
+    print(f"  d({a}, {b}) = {shot_mix_distance(a, b):.2f}")
+```
+
+Curry and Klay are nearly identical (both Warriors shooters). Curry and Hield are nearly as close — same role on different teams. Curry and Westbrook share a position label but sit far apart in shot-mix space. Curry and Giannis are at opposite ends of the map. Even Jokić and Embiid — both elite centers — are separated by a non-trivial distance: Embiid takes far more midrange shots, while Jokić lives in the paint. The position label hides these differences; shot mix exposes them.
+
+```{python}
+spotlight_pairs = [
+    ('Stephen Curry', 'Klay Thompson', '#e74c3c'),
+    ('Stephen Curry', 'Russell Westbrook', '#3498db'),
+    ('Stephen Curry', 'Giannis Antetokounmpo', '#2ecc71'),
+]
+
+# Custom label offsets to avoid overlap. Curry and Klay sit on top of each
+# other (the point of the figure!), so we push their labels in opposite
+# directions; for other pairs the default upper-right offset is fine.
+label_offsets = {
+    # Curry and Klay sit on top of each other (that's the point); push Curry up-right
+    # and Thompson down-left so the two labels don't collide.
+    ('Stephen Curry', 'Klay Thompson'):      ((8, 8),  (-50, -16)),
+    ('Stephen Curry', 'Russell Westbrook'):  ((6, 6),  (6, 6)),
+    ('Stephen Curry', 'Giannis Antetokounmpo'): ((6, 6), (6, 6)),
+}
+
+fig, ax = plt.subplots(figsize=(8, 5.5))
+ax.scatter(nba['pct_RA'], nba['pct_ATB3'], color='lightgray', alpha=0.5, s=20)
+
+for a, b, col in spotlight_pairs:
+    xa, ya = nba.loc[nba['PLAYER_NAME']==a, ['pct_RA','pct_ATB3']].values[0]
+    xb, yb = nba.loc[nba['PLAYER_NAME']==b, ['pct_RA','pct_ATB3']].values[0]
+    ax.plot([xa, xb], [ya, yb], color=col, linewidth=2, alpha=0.8)
+    ax.scatter([xa, xb], [ya, yb], color=col, s=80, edgecolors='black', linewidths=1, zorder=3)
+    oa, ob = label_offsets[(a, b)]
+    ax.annotate(a.split()[-1], (xa, ya), xytext=oa, textcoords='offset points', fontsize=9)
+    ax.annotate(b.split()[-1], (xb, yb), xytext=ob, textcoords='offset points', fontsize=9)
+
+ax.set_xlabel('Share of shots at the rim')
+ax.set_ylabel('Share of shots above-the-break 3')
+ax.set_title('Shot-mix distance, visualized (gray dots = all 317 players)')
+plt.tight_layout()
+plt.show()
+```
+
+K-means uses exactly this distance. It groups players who sit close together in standardized shot-mix space, ignoring position, height, and volume. Every clustering algorithm inherits the similarity measure it is given. A clustering built on *salary* would group players differently; one built on *defensive stats* would too. The distance metric is the first place a value judgment enters the analysis.
 
 ## How k-means works
 
-The algorithm is beautifully simple:
+K-means is an iterative algorithm. We start by picking $k$ **centroids** — points in feature space that will represent the clusters — and then repeat two steps until assignments stop changing:
 
-1. **Pick k initial centroids** (randomly)
-2. **Assign** each point to the nearest centroid
-3. **Recompute** each centroid as the mean of its assigned points
-4. **Repeat** steps 2-3 until assignments stop changing
+1. **Initialize** $k$ centroids (randomly).
+2. **Assign** each point to the nearest centroid.
+3. **Recompute** each centroid as the mean of its assigned points.
+
+Loop on steps 2-3 until no point changes its assignment.
 
 :::{.callout-important}
 ## Definition: Sum of squared errors (SSE)
@@ -70,12 +158,20 @@ K-means minimizes the total within-cluster sum of squared distances from each po
 
 $$\text{SSE} = \sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$$
 
-This is the same kind of object as the SSE we minimized in regression (Chapter 4) — a sum of squared deviations — except the "prediction" for each point is its cluster centroid rather than a fitted line.
+- $K$ is the number of clusters (chosen by us).
+- $C_k$ is the set of data points assigned to cluster $k$.
+- $x_i$ is the feature vector for data point $i$ (here, one player's shot-mix percentages).
+- $\mu_k$ is the **centroid** of cluster $k$ — the mean of the points in $C_k$.
+- $\|x_i - \mu_k\|^2$ is the squared Euclidean distance from point $i$ to its cluster's centroid.
+
+The form mirrors the SSE we minimized in regression (Chapter 4): there, the "prediction" for each point was a single number (the mean) or a fitted line; here, the "prediction" is its cluster's centroid. K-means partitions the data into clusters and replaces each point with its centroid, just as regression replaces each $y_i$ with $\hat y_i$.
 :::
 
-Each step of the algorithm is guaranteed to decrease the SSE (or keep it the same). The objective is non-convex, so different starting points can converge to different **local minima** — more on that shortly.
+The two steps above are the two halves of an **alternating minimization** of SSE: step 2 fixes the centroids and re-assigns each point to its nearest one (the SSE-minimizing assignment); step 3 fixes the assignments and sets each centroid to the mean of its points (the SSE-minimizing centroid, and the source of the "mean" in k-means). This alternating-minimization pattern is the same engine that fits PCA in Chapter 14.
 
-Let's watch it work. We'll use just two features — `pct_RA` (share at the rim) and `pct_ATB3` (share above the break from three) — so we can visualize the iterations.
+Every iteration decreases the SSE or leaves it unchanged, and the number of possible assignments is finite — so the algorithm must eventually stop changing the assignment and terminate. The objective is non-convex, so different starting points can converge to different **local optima**.
+
+To visualize the iterations, we run the algorithm on just two features — `pct_RA` (share at the rim) and `pct_ATB3` (share above the break from three).
 
 ```{python}
 np.random.seed(42)
@@ -88,8 +184,10 @@ init_idx = np.random.choice(len(X_viz_scaled), size=k, replace=False)
 centroids = X_viz_scaled[init_idx].copy()
 ```
 
+Starting from these three random centroids, the cell below runs four iterations of assign-and-recompute, plotting the partition after each round so the centroids' drift toward stability is visible.
+
 ```{python}
-fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharex=True, sharey=True)
 colors = ['#e74c3c', '#3498db', '#2ecc71']
 
 for step in range(4):
@@ -101,7 +199,8 @@ for step in range(4):
         ax.scatter(X_viz_scaled[mask, 0], X_viz_scaled[mask, 1],
                    c=colors[j], alpha=0.4, s=15)
         ax.scatter(centroids[j, 0], centroids[j, 1],
-                   c=colors[j], marker='X', s=200, edgecolors='black', linewidths=2)
+                   c=colors[j], marker='X', s=200, edgecolors='black', linewidths=2,
+                   label=f'Cluster {j+1} (centroid)' if step == 0 else None)
     ax.set_xlabel('% at rim (standardized)')
     ax.set_ylabel('% above-break three (standardized)')
     ax.set_title(f'Iteration {step + 1}')
@@ -109,30 +208,48 @@ for step in range(4):
         if (labels == j).sum() > 0:
             centroids[j] = X_viz_scaled[labels == j].mean(axis=0)
 
-plt.suptitle('K-means iterating on NBA shot mix (k=3, two features)', fontsize=14, y=1.02)
-plt.tight_layout()
+# Shared legend across all four panels (handles come from iteration 1)
+handles, labels_legend = axes[0, 0].get_legend_handles_labels()
+fig.legend(handles, labels_legend, loc='lower center', ncol=3,
+           bbox_to_anchor=(0.5, -0.02), fontsize=10, frameon=True)
+plt.suptitle('K-means iterating on NBA shot mix (k=3, two features)', fontsize=14, y=0.98)
+plt.tight_layout(rect=[0, 0.04, 1, 0.96])
 plt.show()
 ```
 
-Panel 1 shows the random initial centroids. By panel 4 the centroids have stabilized — assignments barely change. That's k-means: dead simple, fast, and guaranteed to converge in finite steps (there are finitely many possible assignments, and SSE decreases at every step). The solution is only a local optimum, though, as we'll see shortly.
+Panel 1 shows the random initial centroids and their first assignment; by panel 4 the centroids have stabilized and assignments barely change. K-means is simple and converges in a finite number of steps: the number of possible assignments is finite, and as long as the assignment changes from one iteration to the next, SSE strictly decreases — so the assignment must eventually stop changing, at which point the algorithm has converged. The solution is only a *local* optimum, an issue we return to below.
 
-But this two-feature view is just for visualization. The real archetypes come out when we cluster on all five zones at once.
+The two-feature view is for visualization only. The real archetypes appear when we cluster on all five zones at once.
 
 ## Discovering archetypes (k=5)
 
-We standardize all five shot-mix features and fit k-means with k=5. (We'll see how to *choose* k in the next section — for now, let's see what k=5 finds.)
+We standardize all five shot-mix features and fit k-means with $k=5$. The next section addresses how to *choose* $k$; for now we examine what $k=5$ returns.
 
 ```{python}
 X_scaled = StandardScaler().fit_transform(nba[features].values)
 kmeans_5 = KMeans(n_clusters=5, random_state=42, n_init=10)
-nba['archetype'] = kmeans_5.fit_predict(X_scaled)
+raw_labels = kmeans_5.fit_predict(X_scaled)
+
+def relabel_by_key(raw, df, key, ascending=False):
+    """Remap cluster IDs so cluster 0 has the largest (or smallest) mean of `key`.
+
+    Sklearn returns cluster labels in arbitrary order: change the random seed
+    and the IDs shuffle. We sort by a meaningful statistic so that prose like
+    "Archetype 0 = rim-heaviest group" stays true across runs and across
+    sklearn versions."""
+    means = df.groupby(raw)[key].mean()
+    order = means.sort_values(ascending=ascending).index.tolist()
+    remap = {old: new for new, old in enumerate(order)}
+    return np.array([remap[r] for r in raw])
+
+nba['archetype'] = relabel_by_key(raw_labels, nba, 'pct_RA', ascending=False)
 
 profile = nba.groupby('archetype')[features].mean().round(2)
 print(profile)
 print(f"\nCluster sizes: {nba.groupby('archetype').size().to_dict()}")
 ```
 
-Each row of the table above is one archetype's average shot mix. Read the rows like fingerprints.
+Each row of the table is one archetype's average shot mix — a fingerprint. To check whether those averages capture a recognizable type, we list the six highest-volume players in each cluster.
 
 ```{python}
 # Top-volume players per cluster — a sanity check that the archetypes are recognizable
@@ -146,48 +263,91 @@ for c in sorted(nba['archetype'].unique()):
 Before reading on, look at the cluster profiles and the top players. Can you give each archetype a one-word name? Which traditional positions (PG, SG, SF, PF, C) show up together in the same cluster?
 :::
 
-The five clusters correspond to recognizable modern archetypes. The cluster numbering depends on initialization, but the *patterns* are stable. Reading the profile table:
+The five clusters correspond to recognizable modern archetypes. Reading the profile table from the most rim-heavy cluster to the least:
 
-- **Rim runners** — overwhelming share at the rim, almost zero threes. The bigs who finish lobs, roll to the basket, and clean the glass.
-- **Midrange masters** — heavy paint and midrange, light on threes. The classic iso scorers and pull-up artists.
-- **Floor-spacers** — almost everything is a three, split between corners and above the break, with almost no midrange. Specialists whose job is to be open for a kickout.
-- **Three-point creators** — mostly above-the-break threes with rim attacks. Modern guards who pull up off the dribble and finish at the basket.
-- **Two-way wings** — balanced across all zones. Versatile attackers who don't specialize.
+- **Archetype 0 — Interior finishers** (Giannis, Zion, Sabonis): overwhelming share at the rim, almost no threes. The bigs and downhill drivers who finish lobs, roll to the basket, and clean the glass.
+- **Archetype 1 — Two-way wings** (LeBron, Kuzma, Jaylen Brown): balanced across all zones. Versatile attackers without a single specialty.
+- **Archetype 2 — Midrange masters** (Brunson, Edwards, Durant): the highest midrange share of any cluster (~3× the league baseline), with comparable rates at the rim, in the paint, and from three. Midrange is the distinguishing feature. Classic iso scorers and pull-up artists.
+- **Archetype 3 — Floor-spacers** (Hield, DiVincenzo, Strus): threes dominate (61% of attempts), with very little midrange. Specialists who spot up for a kickout.
+- **Archetype 4 — Three-point creators** (Curry, Luka, Tatum): mostly above-the-break threes with some rim attempts. Guards who pull up off the dribble and finish at the basket.
 
-Notice what k-means did *not* do: it ignored traditional positions entirely. The midrange-masters cluster contains a point guard (Brunson), a wing (Edwards), and Kevin Durant; the three-point creators include Curry, Luka, and Tatum side by side regardless of position; Jokić sits next to Edwards as a midrange operator. The algorithm found a taxonomy based on *how* a player scores, not what number the box score lists.
+The cluster numbering is not what k-means returned. Sklearn's cluster IDs are arbitrary: change the random seed and they shuffle. The `relabel_by_key` helper above sorts clusters by mean rim share (descending) so that archetype 0 is the most rim-heavy and archetype 4 is the least. Sorting by a meaningful key is a useful trick any time you want to talk about clusters by name.
+
+K-means ignored traditional positions entirely. The midrange-masters cluster mixes a point guard (Brunson), a wing (Edwards), and Kevin Durant. The three-point creators include Curry, Luka, and Tatum regardless of listed position. Jokić, a center, joins the midrange operators. The taxonomy reflects *how* a player scores, not the number on the box score.
 
 ```{python}
-# Scatter: %-at-rim vs %-above-break-3, colored by archetype
-fig, ax = plt.subplots(figsize=(8, 5.5))
-palette = sns.color_palette('Set1', n_colors=5)
-for c in sorted(nba['archetype'].unique()):
-    mask = nba['archetype'] == c
-    ax.scatter(nba.loc[mask, 'pct_RA'], nba.loc[mask, 'pct_ATB3'],
-               color=palette[c], alpha=0.6, s=30, label=f'Archetype {c}')
-ax.set_xlabel('Share of shots at the rim')
-ax.set_ylabel('Share of shots above-the-break 3')
-ax.set_title('Archetypes spread across the shot-mix plane')
-ax.legend(loc='best', fontsize=9)
+# Canonical archetype palette — reused in every figure that colors by archetype.
+archetype_names = ['Interior finishers', 'Two-way wings', 'Midrange masters',
+                   'Floor-spacers', 'Three-point creators']
+archetype_colors = ['#c0392b', '#e67e22', '#f1c40f', '#3498db', '#2980b9']
+
+# Bar chart of cluster profiles — easier to read than the table above.
+# The zone palette is intentionally neutral so it doesn't collide with the
+# archetype colors used in subsequent figures.
+zone_labels = ['Rim', 'Paint', 'Midrange', 'Corner 3', 'Above-break 3']
+zone_colors = ['#5d6d7e'] * 5  # single neutral; archetype identity lives in the panel title
+
+fig, axes = plt.subplots(1, 5, figsize=(13, 3.5), sharey=True)
+for c, ax in zip(range(5), axes):
+    means = nba[nba['archetype']==c][features].mean().values
+    ax.bar(range(5), means, color=zone_colors, edgecolor='black', linewidth=0.5)
+    ax.set_xticks(range(5))
+    ax.set_xticklabels(zone_labels, rotation=45, ha='right', fontsize=9)
+    ax.set_title(f'{c}: {archetype_names[c]}', fontsize=10,
+                 color=archetype_colors[c], fontweight='bold')
+    ax.set_ylim(0, 0.75)
+    if c == 0:
+        ax.set_ylabel('Share of shots')
+plt.suptitle('Shot-mix fingerprint of each archetype', fontsize=13, y=1.02)
 plt.tight_layout()
 plt.show()
 ```
 
-The scatter shows the archetypes are not arbitrary — they occupy distinct regions of the shot-mix plane. Rim runners cluster in the upper-left (high rim share, low above-break-3). Floor-spacers and three-point creators sit toward the right. Midrange masters and two-way wings fill the middle.
+The five fingerprints look visibly different. Interior finishers are a single tall bar at the rim; floor-spacers and three-point creators show two tall bars on the right (the threes); midrange masters concentrate their shots on the left side of the floor.
+
+```{python}
+# Scatter: %-at-rim vs %-above-break-3, colored by archetype (same palette as above)
+fig, ax = plt.subplots(figsize=(8, 5.5))
+for c in sorted(nba['archetype'].unique()):
+    mask = nba['archetype'] == c
+    ax.scatter(nba.loc[mask, 'pct_RA'], nba.loc[mask, 'pct_ATB3'],
+               color=archetype_colors[c], alpha=0.7, s=30, label=archetype_names[c])
+ax.set_xlabel('Share of shots at the rim')
+ax.set_ylabel('Share of shots above-the-break 3')
+ax.set_title('Archetypes spread across the shot-mix plane')
+ax.legend(loc='best', fontsize=8)
+plt.tight_layout()
+plt.show()
+```
+
+The scatter shows the archetypes occupy distinct regions of the shot-mix plane. Interior finishers sit in the lower right (high rim share, low above-break-3). Floor-spacers and three-point creators sit in the upper left (low rim share, high above-break-3). Midrange masters and two-way wings fill the middle.
+
+Back to the Pacers' opening question: a wing who can "space the floor and attack closeouts" sits in the floor-spacer or three-point-creator clusters — Hield's own archetype and the one next to it. Once the front office accepts that this is the lens, the shortlist of candidates falls out of the partition.
 
 :::{.callout-note collapse="true"}
 ## Going deeper: the modern positional revolution
-Cluster-based player taxonomies have a real history in basketball analytics. Muthu Alagappan's 2012 work used hierarchical clustering to argue for 13 player "positions" instead of 5. Kirk Goldsberry's *Sprawlball* (2019) documents how the league transformed as the midrange shot disappeared and the three-pointer exploded. What we just did is a simplified version of the same exercise — coaches and analysts have been thinking this way for over a decade.
+Cluster-based player taxonomies have a history in basketball analytics. Muthu Alagappan's 2012 MIT Sloan paper used **topological data analysis** (a different unsupervised method that builds a network of overlapping clusters) to argue for 13 player categories instead of 5. Kirk Goldsberry's *Sprawlball* (2019) documents the disappearance of the midrange shot and the rise of the three-pointer. Our k=5 analysis is a simplified version of the same exercise.
 :::
 
 ## Choosing k
 
-How did we know k=5 was right? We didn't. K is a **choice**, not a discovery. But there are heuristics that help.
+How did we know $k=5$ was right? We didn't. $k$ is a **choice**, not a discovery. Two heuristics help narrow the range.
 
-The **elbow method** plots the SSE as k increases. We look for an "elbow" where adding more clusters stops helping much.
+The **elbow method** plots SSE against $k$. We look for an "elbow" — a value of $k$ beyond which adding clusters yields little further reduction in SSE.
+
+The **silhouette score** is a second heuristic, worth a look even when it won't be the deciding voice.
 
 :::{.callout-important}
 ## Definition: Silhouette score
-The **silhouette score** measures how similar each point is to its own cluster compared to the nearest other cluster. The range is [-1, 1]: a score near +1 means points sit comfortably inside their cluster; near 0 means they're on the boundary between clusters; near -1 means they're probably in the wrong cluster.
+The **silhouette score** measures how well each point fits its own cluster compared to the nearest other cluster.
+
+For a point $x_i$ in cluster $C_k$, define
+$$a(i) = \frac{1}{|C_k| - 1} \sum_{j \in C_k,\, j \ne i} \|x_i - x_j\|, \qquad b(i) = \min_{\ell \ne k} \frac{1}{|C_\ell|} \sum_{j \in C_\ell} \|x_i - x_j\|.$$
+
+$a(i)$ is the mean distance from $x_i$ to other points in its cluster; $b(i)$ is the mean distance from $x_i$ to points in the nearest other cluster. The **silhouette of point $i$** is
+$$s(i) = \frac{b(i) - a(i)}{\max(a(i), b(i))} \in [-1, 1].$$
+
+The **silhouette score** is the mean of $s(i)$ across all points. Higher is better: $s(i) \approx 1$ means $x_i$ sits well inside its cluster; $s(i) \approx 0$ means it sits on a boundary; $s(i) < 0$ means it is closer to a different cluster than to its own.^[By convention, $s(i) = 0$ when $x_i$'s cluster contains only $x_i$ (so $a(i)$ would be a sum over an empty set). This matches sklearn's `silhouette_samples`.]
 :::
 
 ```{python}
@@ -213,103 +373,206 @@ axes[1].plot(list(k_range), silhouettes, 'o-', color='coral')
 axes[1].axvline(x=5, color='gray', linestyle='--', alpha=0.5, label='k=5 (our choice)')
 axes[1].set_xlabel('Number of clusters (k)')
 axes[1].set_ylabel('Silhouette score')
-axes[1].set_title('Silhouette score')
-axes[1].legend()
+axes[1].set_title('Silhouette score (higher is better ↑)')
+# Anchor at 0 so the visible gap between k=3 and k=5 reflects its true magnitude
+# (~0.03 on a 0-to-1 scale) rather than being inflated by an auto-zoomed axis.
+axes[1].set_ylim(0, 0.5)
+axes[1].annotate('higher\nis better', xy=(0.97, 0.97), xycoords='axes fraction',
+                 ha='right', va='top', fontsize=10,
+                 bbox=dict(boxstyle='round,pad=0.3', fc='#fff7e6', ec='gray', lw=0.5))
+axes[1].legend(loc='lower left')
 
 plt.tight_layout()
 plt.show()
 ```
 
-Neither plot gives a definitive answer. The elbow is gradual — there's no sharp bend. The silhouette score is highest at small k (where there are few enough clusters that points sit comfortably inside one), and decays as we ask for finer distinctions.
+Neither plot gives a definitive answer. The elbow is gradual, with no sharp bend. The silhouette score *peaks at $k=3$, with $k=2$ close behind*, then drifts down from there. Taken at face value, the silhouette recommends a coarse partition that would lump Curry, LeBron, and Brunson into the same group.
 
 :::{.callout-tip}
 ## Think about it
-If you were a GM, would you want k=3 (broad strokes — guards, wings, bigs) or k=5 (finer archetype detail — midrange masters, floor-spacers, etc.)? What would each give you, and what would each cost?
+The silhouette score peaks at $k=3$ (with $k=2$ close behind). We picked $k=5$. What information did we use that the silhouette score does not see?
 :::
 
-The heuristics rule out bad choices but don't pick the right one. Choosing k requires judgment about what the clusters are *for*. Three broad groups give a stable, defensible taxonomy. Five gives finer resolution that matches how analysts actually talk about modern players — at the cost of softer boundaries.
+The heuristics rule out clearly bad choices ($k=20$ over-segments; $k=2$ under-segments) but cannot identify the granularity a particular task needs.
+
+**The level of detail required to find a Hield replacement is not in the data — it is in the question the Pacers are asking.** We pick $k=5$ because the front office needs archetype-level resolution, finer than the silhouette score alone would recommend.
+
+## Hierarchical clustering: don't commit to k up front
+
+When the right $k$ is unclear, an alternative is to avoid choosing $k$ at all. **Hierarchical clustering** builds a *tree* of merges instead of a flat partition; we read off a clustering at any granularity afterwards.
+
+The agglomerative algorithm:
+
+1. **Start** with every point as its own cluster ($n$ clusters total).
+2. **Merge** the two closest clusters into one.
+3. **Repeat** until a single cluster remains.
+
+The result is a **dendrogram**, a tree whose leaves are individual players and whose root is the full dataset. Cutting the tree at a chosen height yields a clustering at the corresponding granularity.
+
+The algorithm needs a definition of distance between two *clusters*, not just two points. The choice is called a **linkage rule**. Common options:
+
+- **Single linkage**: distance between two clusters is the minimum pairwise distance — produces long, stringy clusters.
+- **Complete linkage**: maximum pairwise distance — produces compact, ball-shaped clusters.
+- **Average linkage**: mean pairwise distance.
+- **Ward**: merges the pair whose union increases the total SSE by the least.
+
+We use **Ward** for the rest of this chapter because it is the rule most consistent with the k-means objective — both minimize SSE. The other three rules belong on the menu (they show up in advanced clustering courses and they produce visibly different dendrograms on the same data), but we won't return to them here. Trying several linkage rules on a new dataset is a useful sensitivity check.
+
+```{python}
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+
+Z = linkage(X_scaled, method='ward')
+
+fig, ax = plt.subplots(figsize=(10, 4.5))
+dendrogram(Z, truncate_mode='lastp', p=30, no_labels=True,
+           color_threshold=Z[-4, 2], above_threshold_color='gray', ax=ax)
+ax.axhline(y=Z[-3, 2], color='black', linestyle='--', alpha=0.5)
+ax.axhline(y=Z[-5, 2], color='black', linestyle='--', alpha=0.5)
+ax.text(0.02, Z[-3, 2], ' cut at k=3', va='bottom', ha='left', fontsize=10,
+        transform=ax.get_yaxis_transform())
+ax.text(0.02, Z[-5, 2], ' cut at k=5', va='bottom', ha='left', fontsize=10,
+        transform=ax.get_yaxis_transform())
+ax.set_xlabel('Players (last 30 merges shown)')
+ax.set_ylabel('Linkage distance (Ward)')
+ax.set_title('Hierarchical clustering of NBA players by shot mix')
+plt.tight_layout()
+plt.show()
+```
+
+The dendrogram shows the cluster structure at every granularity simultaneously. The upper dashed line cuts the tree into three groups; the lower one into five. A lower cut produces a finer partition.
+
+```{python}
+# Cut the tree to get k=5 clusters. fcluster labels are 1..k; we 0-index for consistency.
+hier_labels = fcluster(Z, t=5, criterion='maxclust') - 1
+
+# Relabel by rim share, same trick we used for k-means
+nba['archetype_hier'] = relabel_by_key(hier_labels, nba, 'pct_RA', ascending=False)
+
+print("Hierarchical k=5 cluster profiles:")
+print(nba.groupby('archetype_hier')[features].mean().round(2))
+print()
+ari_km_vs_hier = adjusted_rand_score(nba['archetype'], nba['archetype_hier'])
+print(f"ARI between k-means k=5 and hierarchical k=5: {ari_km_vs_hier:.2f}")
+```
+
+The two methods disagree on some boundary players but agree on the broad archetype structure. The interior-finisher / floor-spacer split appears under both algorithms. Agreement across algorithms is evidence that the structure lives in the data, not in any single method.
+
+Hierarchical clustering is slower than k-means: it stores all pairwise distances (memory grows with the *square* of the number of points $n$) and runs in time that grows much faster than linearly with $n$, compared to k-means' near-linear cost per iteration. Both costs become impractical for very large $n$. For hundreds or low thousands of points where $k$ is unknown, hierarchical clustering is a useful complement — inspect the tree first, then choose a cut.
 
 ## Your features determine your clusters
 
-The five archetypes we found are not the *only* way to cluster these 317 players. Same algorithm, same players, different features → different stories. Watch what happens when we change the feature set.
+The five archetypes are not the *only* way to cluster these 317 players. Same algorithm, same players, different feature set, different answer. Two alternative feature recipes illustrate the point.
 
-### Cluster on shot *volume* (raw counts)
+### Cluster on shot *volume* (total attempts)
+
+For volume, we cluster on a single feature: total field goal attempts. K-means on a one-dimensional feature reduces to grouping players by how many shots they take, with each cluster a contiguous range of FGA counts — a slightly fancier version of sorting players and splitting them into five tiers (the algorithm picks the four cut-points that minimize within-cluster squared error).
 
 ```{python}
-features_vol = ['RA_FGA', 'PAINT_FGA', 'MID_FGA', 'LC3_FGA', 'RC3_FGA', 'ATB3_FGA']
-X_vol = StandardScaler().fit_transform(nba[features_vol].values)
-nba['cluster_vol'] = KMeans(n_clusters=5, random_state=42, n_init=10).fit_predict(X_vol)
+X_vol = StandardScaler().fit_transform(nba[['FGA']].values)
+raw_vol = KMeans(n_clusters=5, random_state=42, n_init=10).fit_predict(X_vol)
+nba['cluster_vol'] = relabel_by_key(raw_vol, nba, 'FGA', ascending=False)
 
-# Show top players per volume-cluster
 for c in sorted(nba['cluster_vol'].unique()):
-    sample = nba[nba['cluster_vol']==c].nlargest(6, 'FGA')['PLAYER_NAME'].tolist()
-    print(f"Volume cluster {c}: {sample}")
+    sub = nba[nba['cluster_vol']==c]
+    sample = sub.nlargest(4, 'FGA')['PLAYER_NAME'].tolist()
+    print(f"Volume tier {c} (FGA range {sub['FGA'].min():.0f}–{sub['FGA'].max():.0f}): {sample}")
 ```
 
-Clustering on raw shot counts produces a different taxonomy: high-volume players (Luka, Embiid, SGA, the league's top scorers) cluster together regardless of position; low-volume role players cluster together regardless of style. The structure is "how many shots do you take?" not "what kind of shots?"
+The volume clusters form a clean ladder: tier 0 holds the league's highest-volume scorers, tier 4 the bench players who barely cleared the 200-FGA cutoff. The structure captures one signal, total shots taken. Players with very different shot mixes (Luka and Brunson, say) end up together if they take similar numbers of shots.
 
-### Cluster on shot *efficiency* (FG% by zone)
+### Cluster on shot *efficiency* (effective FG%)
+
+For efficiency we use **effective field-goal percentage** (eFG%): standard FG%, but each made three-pointer counts as 1.5 makes to reflect its higher point value. The metric is the NBA's standard "shooting efficiency" statistic and compares a three-point shooter to a rim finisher on a common scale.
 
 ```{python}
-# Compute FG% by zone; for zones with very few attempts use league average
-fg_features = []
-for zone, fgm_col, fga_col in [
-    ('rim', 'RA_FGM', 'RA_FGA'),
-    ('paint', 'PAINT_FGM', 'PAINT_FGA'),
-    ('mid', 'MID_FGM', 'MID_FGA'),
-    ('lc3', 'LC3_FGM', 'LC3_FGA'),
-    ('rc3', 'RC3_FGM', 'RC3_FGA'),
-    ('atb3', 'ATB3_FGM', 'ATB3_FGA'),
-]:
-    fg_col = f'fg_{zone}'
-    # Avoid divide-by-zero; use league average for zones with very few attempts
-    league_avg = nba[fgm_col].sum() / nba[fga_col].sum()
-    nba[fg_col] = np.where(nba[fga_col] >= 20, nba[fgm_col] / nba[fga_col], league_avg)
-    fg_features.append(fg_col)
+nba['fgm_total'] = nba[['RA_FGM','PAINT_FGM','MID_FGM','LC3_FGM','RC3_FGM','ATB3_FGM']].sum(axis=1)
+nba['3pm']       = nba[['LC3_FGM','RC3_FGM','ATB3_FGM']].sum(axis=1)
+nba['efg_pct']   = (nba['fgm_total'] + 0.5 * nba['3pm']) / nba['FGA']
 
-X_eff = StandardScaler().fit_transform(nba[fg_features].values)
-nba['cluster_eff'] = KMeans(n_clusters=5, random_state=42, n_init=10).fit_predict(X_eff)
+X_eff = StandardScaler().fit_transform(nba[['efg_pct']].values)
+raw_eff = KMeans(n_clusters=5, random_state=42, n_init=10).fit_predict(X_eff)
+nba['cluster_eff'] = relabel_by_key(raw_eff, nba, 'efg_pct', ascending=False)
 
 for c in sorted(nba['cluster_eff'].unique()):
-    sample = nba[nba['cluster_eff']==c].nlargest(6, 'FGA')['PLAYER_NAME'].tolist()
-    print(f"Efficiency cluster {c}: {sample}")
+    sub = nba[nba['cluster_eff']==c]
+    sample = sub.nlargest(4, 'FGA')['PLAYER_NAME'].tolist()
+    print(f"Efficiency tier {c} (eFG% range {sub['efg_pct'].min():.3f}–{sub['efg_pct'].max():.3f}): {sample}")
 ```
 
-Now the clusters group players by their *skill profile*. Highly efficient scorers (whoever they are) cluster together; players who shoot below average everywhere cluster together. The story is "how *well* do you shoot?" rather than "what *kind* of shots?"
+Another clean ladder, this time ordered by *skill*. Tier 0 holds the most efficient shooters in the league — rim finishers and rebounders who rarely miss. Tier 4 holds the players shooting below league average. A high-volume but inefficient player (volume tier 0, efficiency tier 4) and a low-volume but accurate one (volume tier 4, efficiency tier 0) sit far apart in these clusterings even when they share a shot-mix archetype.
 
 ### Same players, three stories
 
+Raw cluster IDs are arbitrary even after relabeling. We display each spotlight player's *named* label under all three clusterings, with color encoding the tier:
+
 ```{python}
-# Show how a handful of well-known players move across the three clusterings
+# Singular form of archetype names for use in cells (matches archetype_colors above)
+arch_names_singular = ['Interior finisher', 'Two-way wing', 'Midrange master',
+                       'Floor-spacer', 'Three-point creator']
+# Shared sequential palette for volume/efficiency tiers: dark=high, light=low
+tier_palette = plt.get_cmap('Greens')
+tier_colors = [tier_palette(0.85 - 0.18*i) for i in range(5)]
+
+def text_color_for(rgba):
+    """Choose black or white text based on background luminance (Rec. 601)."""
+    r, g, b = rgba[:3]
+    luma = 0.299*r + 0.587*g + 0.114*b
+    return 'white' if luma < 0.5 else 'black'
+
+import matplotlib.colors as mcolors  # for hex -> RGBA conversion
+arch_rgba = [mcolors.to_rgba(c) for c in archetype_colors]
+
 spotlight = ['Stephen Curry', 'LeBron James', 'Giannis Antetokounmpo',
              'Nikola Jokić', 'Buddy Hield', 'Jalen Brunson',
              'Kevin Durant', 'Donovan Mitchell']
 
-mask = nba['PLAYER_NAME'].isin(spotlight)
-comparison = nba.loc[mask, ['PLAYER_NAME', 'archetype', 'cluster_vol', 'cluster_eff']].copy()
-comparison.columns = ['Player', 'By shot mix', 'By volume', 'By efficiency']
-print(comparison.to_string(index=False))
+fig, ax = plt.subplots(figsize=(9, 4.5))
+ax.set_xlim(-0.5, 3.5)
+ax.set_ylim(-0.5, len(spotlight)-0.5)
+ax.invert_yaxis()
+
+for row_i, name in enumerate(spotlight):
+    row = nba[nba['PLAYER_NAME'] == name].iloc[0]
+    a, v, e = row['archetype'], row['cluster_vol'], row['cluster_eff']
+    ax.text(-0.45, row_i, name, va='center', ha='left', fontsize=10, fontweight='bold')
+    for col_i, (label, rgba) in enumerate([
+        (arch_names_singular[a], arch_rgba[a]),
+        (f'Tier {v}',            tier_colors[v]),
+        (f'Tier {e}',            tier_colors[e]),
+    ]):
+        ax.add_patch(plt.Rectangle((col_i + 0.55, row_i - 0.4), 0.9, 0.8,
+                                   facecolor=rgba, edgecolor='white', linewidth=1))
+        ax.text(col_i + 1.0, row_i, label, va='center', ha='center',
+                fontsize=9, color=text_color_for(rgba))
+
+for col_i, header in enumerate(['Shot mix', 'Volume', 'Efficiency']):
+    ax.text(col_i + 1.0, -0.55, header, va='bottom', ha='center',
+            fontsize=11, fontweight='bold')
+
+ax.set_axis_off()
+plt.tight_layout()
+plt.show()
 ```
 
-Curry, LeBron, Jokić, Durant — read across the columns. The same player sits in a different cluster depending on which question you asked.
+Curry and Brunson share the top volume tier but split on shot mix and on efficiency. Jokić and Giannis sit one archetype apart but agree on volume and efficiency. Each row describes the same player three ways; none of the three descriptions is privileged.
+
+A GM looking for a Buddy Hield replacement wants shot-mix archetypes — they identify players who fill the same *role*. A GM ranking trade targets by raw production should cluster on volume. A GM valuing a contract should cluster on efficiency. The feature choice follows the decision the GM needs to make.
 
 :::{.callout-warning}
-## Your features determine your clusters
-There is no "true" clustering of NBA players. Each feature recipe answers a different question. **Shot mix** asks "what kind of shots?" — gives archetypes. **Shot volume** asks "how many?" — gives stars-vs-role-players. **Shot efficiency** asks "how well?" — gives skill tiers. Pick the features that match the decision you need to make.
+## Pick the features that match your decision
+There is no "true" clustering of NBA players. Each feature recipe answers a different question. **Shot mix** asks "what kind of shots?" — gives archetypes. **Shot volume** asks "how many?" — gives stars-vs-role-players. **Shot efficiency** asks "how well?" — gives skill tiers. The feature choice is your responsibility — and it is also your liability when the decision has stakes.
 :::
 
 ## How stable are these clusters?
 
-K-means starts with random initial centroids. Different starting points can lead to different final clusters — the algorithm finds a **local optimum**, not the global best.
+K-means starts from random initial centroids. Different starts can yield different final partitions: the algorithm finds a **local optimum**, not the global one.
 
 :::{.callout-tip}
 ## Think about it
-If you ran k-means again with different starting points, would you get the same five archetypes? Would the *boundaries* shift? Which players would you expect to be most stable, and which most likely to switch?
+If we re-ran k-means with different starting points, would the five archetypes survive? Would the *boundaries* shift? Which players would change cluster most often?
 :::
 
-We deliberately set `n_init=1` (one random start) to expose the instability. sklearn's default `n_init=10` helps by picking the best of 10 runs, but even that doesn't guarantee identical clusters across calls.
-
-To compare two clusterings, we use the **Adjusted Rand Index (ARI)**. The ARI asks: for any two players, do both runs agree on whether they're in the same cluster or different clusters? ARI = 1 means perfect agreement; ARI = 0 means agreement no better than random chance.
+To expose the instability we run k-means 10 times with different seeds, each using just *one* random start per run (`n_init=1`). To compare two clusterings we use the **Adjusted Rand Index (ARI)**. The ARI asks: across all pairs of players, do the two clusterings agree on whether each pair lands in the same cluster? An ARI of 1 means perfect agreement; an ARI of 0 means agreement no better than chance; the ARI can be negative when two clusterings disagree more than chance would predict (rare but possible).
 
 ```{python}
 # Run k-means 10 times with different random seeds
@@ -339,34 +602,37 @@ print(f"ARI mean: {off_diag.mean():.3f}")
 print(f"ARI range: {off_diag.min():.3f} to {off_diag.max():.3f}")
 ```
 
-The numbers above tell the story. The mean ARI is moderate, but the spread is wide: some pairs of runs agree closely, others only weakly. The archetypes are partially stable, but the cluster boundaries are not — some players will flip groups depending on the seed.
+The mean ARI is moderate and the spread is wide. Some seed-pairs produced exactly the same partition (ARI = 1.0) — those starts converged to identical local optima — while others agreed only weakly. The archetypes are partially stable; the boundaries are not. Some players flip groups depending on the seed.
 
 ```{python}
 # Which players sit at archetype boundaries?
-boundary_counts = pd.Series(0, index=nba.index)
-for labels in all_labels:
-    # Compare to the seed-42 baseline assignment in `nba['archetype']`
-    same = labels == nba['archetype'].values
-    boundary_counts += ~same
+# Sklearn returns labels in arbitrary order per run, so we re-apply the
+# rim-share-sort relabeling to each run before comparing to the baseline.
+# That way `flips` counts true partition disagreement, not label-ID shuffles.
+baseline = nba['archetype'].values
+boundary_counts = np.zeros(len(nba), dtype=int)
+for raw in all_labels:
+    aligned = relabel_by_key(raw, nba, 'pct_RA', ascending=False)
+    boundary_counts += (aligned != baseline).astype(int)
 
 nba_boundary = nba.copy()
-nba_boundary['flips'] = boundary_counts.values
+nba_boundary['flips'] = boundary_counts
 boundary_players = nba_boundary[nba_boundary['FGA'] >= 800].nlargest(8, 'flips')[['PLAYER_NAME', 'flips']]
 print("High-volume players whose archetype is least stable across seeds:")
 print(boundary_players.to_string(index=False))
 ```
 
-Players at archetype boundaries flip between clusters across seeds. This isn't a bug — it's information. A player who sits in the middle of two archetypes is, in fact, a hybrid. The clustering's instability tells you something the rigid k=5 labels don't.
+The boundary-flippers are not noise; they are information. A player who sits between two archetypes is a hybrid, and the instability of the clustering reveals what the rigid k=5 labels cannot.
 
-If you were a GM looking for a Buddy Hield replacement, shot-mix archetypes are useful — they tell you who plays the same *role*. If you were ranking trade targets by raw production, shot volume is more useful. If you were valuing a contract, efficiency probably matters most.
+So what do practitioners do about this? Throughout the rest of the chapter we pass `n_init=10` explicitly so k-means picks the best of 10 starts — recent sklearn versions default `n_init` to `'auto'`, which resolves to 1 under the default `k-means++` initializer, so a bare `KMeans(...)` call gives you a single random start. Sklearn also defaults to **k-means++ initialization**: instead of picking starting centroids uniformly at random, k-means++ picks the first centroid at random and then each subsequent centroid with probability proportional to its squared distance from the centroids already chosen — biasing the starts to be spread apart. The combination — k-means++ plus `n_init=10` — is what makes k-means usable in practice; it mitigates the local-optimum problem but does not guarantee identical clusters across calls.
 
-## When the features carry a value judgment: COMPAS
+## When the stakes are higher: COMPAS
 
-So far the stakes have been low — picking the wrong archetype gets a coach yelled at, not jailed. Let's run the same analysis on a dataset where it does get someone jailed.
+The stakes have been low so far — a misjudged archetype costs a coach a free agent, not a defendant their liberty. The same algorithm applied to a different dataset can carry far higher stakes.
 
-**COMPAS** is a risk-scoring algorithm used in pretrial bail decisions, parole hearings, and sentencing across many US states. Given a defendant's age, criminal history, and other factors, it returns a 1-10 score predicting the probability of re-arrest within two years. In 2016 ProPublica investigated COMPAS and found it disproportionately flagged Black defendants as high-risk who didn't go on to reoffend — and disproportionately flagged White defendants as low-risk who did.^[Angwin, J., Larson, J., Mattu, S., & Kirchner, L. (2016). Machine Bias. *ProPublica*. The COMPAS data we use is from ProPublica's published analysis of 7,214 Broward County defendants screened 2013-14.]
+**COMPAS** is a risk-scoring algorithm used in pretrial bail decisions, parole hearings, and sentencing across many US states. Given a defendant's age, criminal history, and other factors, COMPAS returns a 1–10 ordinal decile risk rank for re-arrest (1 = lowest decile of risk in the developer's reference population, 10 = highest). In 2016 ProPublica investigated the system, evaluating the score against a two-year recidivism window, and found it disproportionately labeled Black defendants who did not reoffend as high-risk, and disproportionately labeled White defendants who did reoffend as low-risk.^[Angwin, J., Larson, J., Mattu, S., & Kirchner, L. (2016). Machine Bias. *ProPublica*. The data we use is ProPublica's published analysis of 7,214 Broward County defendants screened 2013-14. ProPublica's headline numbers: the false-positive rate (mislabeled high-risk among those who did not re-offend) was 44.9% for Black defendants vs 23.5% for White defendants; the false-negative rate was correspondingly higher for White defendants (47.7% vs 28.0%).]
 
-We're not going to re-litigate ProPublica's argument. Instead, we'll ask a question that sits one level up: **what does clustering on COMPAS's data reveal, and how does that depend on which features you cluster on?**
+We do not re-litigate ProPublica's argument here. Instead we ask a question one level up: **what structure does clustering reveal in COMPAS's data, and how does that structure depend on the feature choice?**
 
 ```{python}
 compas = pd.read_csv(f'{DATA_DIR}/compas/compas-scores-two-years.csv')
@@ -383,111 +649,181 @@ print(compas['race'].value_counts().to_string())
 
 ### Two feature sets, one population
 
-We'll cluster the same defendants two ways, both at k=3:
+We cluster the same defendants two ways, both at $k=3$:
 
-- **Risk-score features**: COMPAS's algorithmic outputs and prior count — `decile_score`, `v_decile_score`, `priors_count`. This is "how the algorithm sees you."
-- **Criminal-history features**: age and juvenile record — `age`, `priors_count`, `juv_fel_count`, `juv_misd_count`, `juv_other_count`. This is "what your record looks like before any algorithm interprets it."
+- **Risk-score features** (`decile_score`, `v_decile_score`, `priors_count`): COMPAS's outputs and prior count — the algorithm's view of the defendant.
+- **Criminal-history features** (`age`, `priors_count`, `juv_fel_count`, `juv_misd_count`, `juv_other_count`): a defendant's record, with no algorithmic risk score involved.
 
 ```{python}
 feat_risk = ['decile_score', 'v_decile_score', 'priors_count']
 feat_hist = ['age', 'priors_count', 'juv_fel_count', 'juv_misd_count', 'juv_other_count']
 
-results = {}
-for label, feats in [('risk_score', feat_risk), ('history', feat_hist)]:
-    X = StandardScaler().fit_transform(compas[feats].values)
-    labels = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
-    results[label] = labels
+# Risk-score clustering, relabeled so cluster 0 = lowest mean decile_score
+X = StandardScaler().fit_transform(compas[feat_risk].values)
+raw_r = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
+compas['cluster_risk'] = relabel_by_key(raw_r, compas, 'decile_score', ascending=True)
 
-compas['cluster_risk'] = results['risk_score']
-compas['cluster_hist'] = results['history']
+# History clustering, relabeled so cluster 0 = lowest mean priors_count
+X = StandardScaler().fit_transform(compas[feat_hist].values)
+raw_h = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
+compas['cluster_hist'] = relabel_by_key(raw_h, compas, 'priors_count', ascending=True)
 ```
 
 ### What did each clustering find?
 
-```{python}
-print("=== Clustering on RISK-SCORE features ===")
-print("Cluster profiles (mean values):")
-print(compas.groupby('cluster_risk')[feat_risk].mean().round(2))
-print("\nCluster sizes:")
-print(compas.groupby('cluster_risk').size().to_string())
-print("\nRace composition (% per cluster):")
-print((pd.crosstab(compas['cluster_risk'], compas['race'], normalize='index') * 100).round(1))
-```
+Tables of nine or fifteen numbers are hard to read. We'll plot the cluster profiles instead — one panel per feature, with one bar per cluster showing the cluster's mean.
 
 ```{python}
-print("=== Clustering on CRIMINAL-HISTORY features ===")
-print("Cluster profiles (mean values):")
-print(compas.groupby('cluster_hist')[feat_hist].mean().round(2))
-print("\nCluster sizes:")
-print(compas.groupby('cluster_hist').size().to_string())
-print("\nRace composition (% per cluster):")
-print((pd.crosstab(compas['cluster_hist'], compas['race'], normalize='index') * 100).round(1))
+fig, axes = plt.subplots(1, 3, figsize=(11, 3.5))
+risk_colors = ['#2ecc71', '#f1c40f', '#c0392b']  # green / yellow / red along the risk axis
+for f, ax in zip(feat_risk, axes):
+    means = compas.groupby('cluster_risk')[f].mean()
+    ax.bar(range(3), means.values, color=risk_colors, edgecolor='black', linewidth=0.5)
+    # Annotate the multiplier vs cluster 0 above each bar so cross-panel
+    # comparison reflects ratios, not raw axis heights.
+    base = means.values[0]
+    for i, v in enumerate(means.values):
+        ax.text(i, v, f' {v/base:.1f}×' if i > 0 else ' 1×',
+                ha='center', va='bottom', fontsize=9)
+    ax.set_xticks(range(3))
+    ax.set_xticklabels([f'Cluster {c}' for c in range(3)])
+    ax.set_title(f)
+    ax.set_ylim(0, max(means.values) * 1.25)
+plt.suptitle('Risk-score clustering: profiles (axes differ per panel; multipliers vs cluster 0 shown above bars)',
+             fontsize=11, y=1.02)
+plt.tight_layout()
+plt.show()
 ```
 
-Look at the two cluster profile tables and the race-composition tables side by side.
+The three risk-score clusters form a *ladder* along the COMPAS risk axis: decile score and prior count both climb sharply from cluster 0 to cluster 2 (cluster 2 is distinguished above all by an order-of-magnitude jump in priors — the multipliers above the bars make this comparable across panels). The violence sub-score isn't quite monotonic — it peaks in the middle cluster — but the dominant signal is one-dimensional: "how high does COMPAS rate this person?", sliced into low / mid / high.
 
-- The **risk-score clustering** finds three groups that are essentially "low risk" (low decile_score, few priors), "medium risk" (mid decile_score), and "high risk and many priors" (high decile_score, many priors). The three clusters form a one-dimensional ordering — low → medium → high. The Black share of each cluster *increases monotonically* along that axis.
+```{python}
+fig, axes = plt.subplots(2, 3, figsize=(9, 6))
+hist_colors = ['#3498db', '#9b59b6', '#34495e']  # neutral palette; cluster ordering carries no risk meaning
+for f, ax in zip(feat_hist, axes.flat):
+    means = compas.groupby('cluster_hist')[f].mean()
+    ax.bar(range(3), means.values, color=hist_colors, edgecolor='black', linewidth=0.5)
+    ax.set_xticks(range(3))
+    ax.set_xticklabels(['C0', 'C1', 'C2'])
+    ax.set_title(f, fontsize=10)
+axes.flat[-1].set_axis_off()  # hide the 6th empty panel
+plt.suptitle('Criminal-history clustering: profiles', fontsize=12, y=0.99)
+plt.tight_layout()
+plt.show()
+```
 
-- The **history-only clustering** finds three groups too — but the structure is two-dimensional. Two clusters split on age (young vs older), and one cluster picks out defendants with heavy juvenile records. The Black share is uneven across clusters but does *not* climb monotonically with anything that looks like "risk."
+Cluster numbers in this figure are arbitrary and *do not* line up with the risk-clustering numbers above — cluster 2 here is not the same group as cluster 2 there. We kept the color palette neutral (blue / purple / navy) precisely so it doesn't imply a risk ladder.
+
+The history clusters do **not** form a ladder. Reading across the five panels: cluster 0 is young with few priors and almost no juvenile record; cluster 1 is much older (age ~49) with moderate priors and almost no juvenile record; cluster 2 is young with many priors and heavy juvenile counts. The structure is two-dimensional — age on one axis, juvenile record on another — and no single ordering of the three clusters captures both.
+
+A clustering used in pretrial bail decisions effectively assigns people into similarity groups for the courts to treat alike. If those groups track race more sharply than they track the recidivism outcome we ultimately care about, the algorithm risks recommending different treatment for defendants who differ chiefly in their demographics. The next plot shows the racial composition of each cluster under both feature recipes.
+
+:::{.callout-tip}
+## Think about it
+Both clusterings group the same defendants. Before looking at the next plot, predict: will the racial composition of the clusters be similar across the two feature sets, or different? Why? What would each answer imply about whether the choice of features is "neutral"?
+:::
+
+```{python}
+def race_composition(cluster_col):
+    """% Black, White, Hispanic per cluster — collapse small groups into 'Other'."""
+    df = compas.copy()
+    df['race_grp'] = df['race'].where(df['race'].isin(
+        ['African-American', 'Caucasian', 'Hispanic']), 'Other')
+    return (pd.crosstab(df[cluster_col], df['race_grp'], normalize='index') * 100).round(1)
+
+comp_risk = race_composition('cluster_risk')[['African-American', 'Caucasian', 'Hispanic', 'Other']]
+comp_hist = race_composition('cluster_hist')[['African-American', 'Caucasian', 'Hispanic', 'Other']]
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
+race_palette = {'African-American': '#c0392b', 'Caucasian': '#3498db',
+                'Hispanic': '#f39c12', 'Other': '#95a5a6'}
+
+for ax, comp, title in [(axes[0], comp_risk, 'Risk-score clustering'),
+                        (axes[1], comp_hist, 'Criminal-history clustering')]:
+    bottoms = np.zeros(len(comp))
+    for race in ['African-American', 'Caucasian', 'Hispanic', 'Other']:
+        ax.bar(range(len(comp)), comp[race].values, bottom=bottoms,
+               color=race_palette[race], edgecolor='white', linewidth=0.5, label=race)
+        bottoms += comp[race].values
+    ax.set_xticks(range(len(comp)))
+    ax.set_xticklabels([f'Cluster {c}' for c in comp.index])
+    ax.set_title(title)
+    ax.set_ylim(0, 100)
+    ax.set_ylabel('% of cluster')
+
+axes[1].legend(loc='upper right', bbox_to_anchor=(1.35, 1), fontsize=9)
+plt.suptitle('Racial composition of each cluster', fontsize=13, y=1.02)
+plt.tight_layout()
+plt.show()
+```
+
+The risk-score features turn the racial skew into a clean ladder: the Black share *roughly doubles* across the three clusters (39% → 63% → 78%), climbing exactly with the risk axis. The history features produce a comparable Black share in their most-priors cluster (68%), but no longer along a single line — the share is highest in the heavy-juvenile cluster, and the older-defendants cluster is more racially mixed than the youngest one.
+
+- The **risk-score clustering** finds three groups that line up along a one-dimensional axis: low risk (low decile, few priors), mid risk, and high risk with many priors. The Black share of each cluster increases monotonically along the same axis.
+
+- The **history-only clustering** also finds three groups, but the structure is two-dimensional. Two clusters separate younger from older defendants; a third picks out defendants with heavy juvenile records. The Black share varies across clusters without tracking any single "risk" dimension.
 
 :::{.callout-warning}
 ## Neither feature set is "neutral"
-Both clusterings find structure in the data. Both produce racially-skewed clusters. The difference is *what structure they find*: the risk-score features impose a one-dimensional risk axis; the history features find life-cycle groups. Neither tells the "truth" about these defendants. Each is a value judgment about what makes two people *similar enough* to treat alike.
+Both clusterings find structure in the data and both produce racially-skewed clusters. The difference is *which* structure they find: the risk-score features impose a one-dimensional risk axis; the history features describe two-dimensional life-cycle groups. Neither version is the truth about these defendants. Each encodes a value judgment about which defendants count as similar.
 
-There is no feature set that escapes this. Age and prior count are not race-neutral — they reflect, among other things, decades of policing patterns that themselves were not race-neutral. Choosing features is choosing a theory of who counts as "the same."
+No feature set escapes this problem. Age and prior count are not race-neutral inputs — they reflect, among other things, decades of policing decisions that were themselves not race-neutral. Choosing features is choosing a theory of who counts as "the same."
 :::
 
 :::{.callout-tip}
 ## Think about it
-Which clustering would you defend in a courtroom? Which would you defend in a press conference? Notice these may not be the same answer — and that the difference is about politics, not statistics.
+Which clustering would you defend in a courtroom? Which in a press conference? The two answers may differ — and the difference is about values, not statistics.
 :::
 
-The COMPAS example points forward to Chapter 16 (validation and feedback loops): the priors that feed COMPAS's score are themselves the output of past policing decisions, which were informed by past risk assessments, which were informed by past priors. Every measurement we cluster on has a history.
+The COMPAS example sets up Chapter 16 (validation and feedback loops). The priors that feed COMPAS's score are themselves products of past policing decisions, which were informed by past risk assessments, which were informed by past priors. Every measurement we cluster on has a history.
 
 ## Key takeaways
 
-- **K-means** minimizes the sum of squared distances from each point to its cluster centroid: SSE = $\sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$. The algorithm always converges in finite steps, but only to a *local* optimum.
+- **K-means** finds local-optimum partitions by minimizing within-cluster squared distance from each point to its centroid. The study guide below carries the formula.
 
-- **Standardize first.** K-means uses Euclidean distance, so features on larger scales dominate. Even when your features are already on a similar scale (like shot-mix percentages summing to 1), standardization is a defensible default.
+- **Standardize first.** K-means uses Euclidean distance, so features on larger scales dominate. Standardization is a safe default even when the features share a scale already.
 
-- **Your features determine your clusters.** Shot mix gives archetypes; shot volume gives stars vs role players; shot efficiency gives skill tiers. COMPAS risk-score features give a one-dimensional risk axis; criminal-history features give life-cycle groups. No feature set is "neutral" — each encodes a theory of what makes two cases similar.
+- **Your features determine your clusters.** Shot mix gives archetypes; shot volume gives volume tiers; eFG% gives skill tiers. COMPAS risk-score features give a one-dimensional risk axis; criminal-history features give two-dimensional life-cycle groups. No feature set is neutral; each encodes a theory of similarity.
 
-- **Choosing k is a judgment call**, not a formula. The elbow plot and silhouette score rule out bad choices but don't pick the right one.
+- **Choosing $k$ is a judgment call.** The elbow plot and silhouette score rule out clearly bad choices but cannot pick the granularity your task needs.
 
-- **K-means is not deterministic.** Different random seeds produce different clusters. Always check stability via ARI across seeds. Players or cases at cluster boundaries tell you something the rigid labels don't.
+- **K-means is not deterministic.** Different random seeds produce different clusters; check stability via ARI across seeds. Cases at cluster boundaries reveal structure the rigid labels hide.
 
-- **Always interpret and validate.** Clustering algorithms will find structure in *any* data, including pure noise. Ask: are the clusters meaningful? Are they stable? Are they useful for the decision you need to make? And — especially when the stakes are high — *what value judgment is embedded in your feature choice?*
+- **Always interpret and validate.** Clustering algorithms find structure in *any* data, including pure noise. Ask: are the clusters meaningful? Are they stable? Are they useful for the decision at hand? And — when the stakes are high — what value judgment does the feature choice embed?
 
 ## Looking ahead
 
-We've now covered three major types of learning:
+We have now seen three types of learning:
 
-- **Supervised** (regression in Chapters 4-6, classification in Chapter 7, trees in Chapter 13)
-- **Unsupervised for structure** (PCA in Chapter 14 — finding directions that explain variation)
-- **Unsupervised for grouping** (clustering today — assigning points to discrete clusters)
+- **Supervised** — regression (Chapters 4-6), classification (Chapter 7), trees (Chapter 13).
+- **Unsupervised for structure** — PCA (Chapter 14) finds directions that explain variation.
+- **Unsupervised for grouping** — clustering assigns points to discrete groups.
 
-Mathematically, PCA and k-means are cousins. PCA approximates the data matrix with a rank-k linear combination; k-means approximates it by assigning each row to one of k prototypes. Both find low-dimensional summaries, but PCA gives a continuous representation while k-means forces each point into exactly one cluster.
+PCA and k-means solve the same matrix-approximation problem with different constraints. Stack the players as rows of $Y$ (the data) and the centroids (or PCA directions) as rows of $W$. Each player is then summarized by one row of a third matrix $X$, where $XW$ should reproduce $Y$ as closely as possible. PCA lets each row of $X$ be any real vector — a continuous coordinate, so each player is a *combination* of the rows of $W$. K-means restricts each row of $X$ to be a one-hot indicator — each player is replaced by *one* of the rows of $W$, its cluster centroid. Same objective, two different rules for what counts as a valid summary.
 
-Chapter 16 will pick up the COMPAS thread directly: when an algorithm's predictions feed back into the world that generates its training data, the system enters a **feedback loop**. The "ground truth" you validate against is partly produced by the algorithm itself. We'll see why this makes standard validation methods break down — and what to do about it.
+Chapter 16 returns to predictive-policing and recidivism-risk examples to ask a different question: when an algorithm's predictions feed back into the world that generates its training data, the system enters a **feedback loop**, and the "ground truth" used for validation becomes partly the algorithm's own output. The chapter shows why standard validation breaks down under feedback and what to do about it.
 
-In Chapters 18-19 we'll ask a fundamentally different question: not "what groups exist?" but "did this intervention cause that outcome?" The question shifts from prediction to **causal inference**.
+Chapter 17 returns to feature-choice stakes from the AI angle — when an LLM picks features for you, who is making the value judgment?
+
+Chapters 18-19 ask a different question: not "what groups exist?" but "did this intervention cause that outcome?" The shift is from prediction to **causal inference**.
 
 ## Study guide
 
 ### Key ideas
 
 - **Unsupervised learning:** finding structure in data without labeled outcomes.
-- **K-means:** clustering algorithm that alternates between assigning points to the nearest centroid and recomputing centroids. Minimizes SSE = $\sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$.
-- **Centroid:** the mean of all points in a cluster.
-- **SSE (sum of squared errors):** the k-means objective — total squared distance from each point to its cluster centroid. (sklearn calls this `inertia_`; we use the SSE label, consistent with regression in Chapter 4.)
-- **Silhouette score:** measures how well each point fits its own cluster versus the nearest alternative (range [-1, 1]).
-- **Elbow method:** plotting SSE vs k and looking for diminishing returns.
-- **Local optimum:** a solution that can't be improved by small changes but may not be the global best.
-- **Adjusted Rand Index (ARI):** measures agreement between two clusterings, adjusted for chance (1 = identical, 0 = random).
+- **K-means:** clustering algorithm that alternates between assigning points to the nearest centroid and recomputing centroids. Minimizes SSE $= \sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$.
+- **Centroid:** the mean of the points in a cluster.
+- **SSE (sum of squared errors):** the k-means objective — total squared distance from each point to its cluster centroid. (Sklearn calls this `inertia_`; the SSE label is consistent with regression in Chapter 4.)
+- **Silhouette score:** mean over points of $s(i) = (b(i) - a(i)) / \max(a(i), b(i))$, where $a(i)$ is the mean within-cluster distance and $b(i)$ is the mean distance to the nearest other cluster. Range $[-1, 1]$; higher is better.
+- **Elbow method:** plot SSE against $k$ and look for diminishing returns.
+- **Local optimum:** a solution that no small change improves but that may not be the global best.
+- **Hierarchical clustering:** builds a tree (dendrogram) of merges; cut the tree at any height to obtain a clustering at that granularity.
+- **Adjusted Rand Index (ARI):** measures agreement between two clusterings, adjusted for chance. $\mathrm{ARI} = 1$ for identical clusterings; $\mathrm{ARI} = 0$ for chance agreement; $\mathrm{ARI} < 0$ when two clusterings disagree more than chance would predict (rare but possible).
 - Standardization is the default for distance-based methods, including k-means and PCA.
-- Feature selection determines what structure clustering finds. *No feature set is "neutral."*
-- K-means is sensitive to initialization. The k-means++ initialization strategy picks initial centroids that are spread apart, reducing sensitivity to random starts.
-- The algorithm always finds clusters, even in pure noise. Validation is your responsibility.
+- Feature selection determines what structure clustering finds. *No feature set is neutral.*
+- K-means is sensitive to initialization. The k-means++ strategy picks initial centroids that are spread apart, reducing sensitivity to random starts.
+- Clustering algorithms find structure in *any* data, including pure noise. Validation is the analyst's responsibility.
 
 ### Computational tools
 

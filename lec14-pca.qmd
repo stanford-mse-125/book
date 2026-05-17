@@ -424,7 +424,7 @@ For this course, just use the numeric columns. If you're curious about mixed dat
 
 ## Coming up next
 
-In **Chapter 15**, we'll move from summarizing data to *grouping* data. **K-means clustering** tries to automatically discover market segments in the Airbnb listings — budget, mid-range, luxury — without being told the categories. A natural approach: cluster the PC scores from today's analysis rather than the original 23 features. PCA and K-means are cousins — same optimization framework, different constraints.
+In **Chapter 15**, we'll move from summarizing data to *grouping* data. **K-means clustering** will discover modern NBA archetypes that cut across traditional positions — and then we'll apply the same algorithm to a criminal-risk dataset where the feature choice matters far more than the basketball one. PCA and K-means are cousins: same optimization framework, different constraints.
 
 ## Study guide
 
