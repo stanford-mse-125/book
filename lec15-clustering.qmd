@@ -7,7 +7,7 @@ jupyter: python3
 
 ## Building next year's roster
 
-The Indiana Pacers' front office wants to sign a wing who can space the floor *and* attack closeouts. The traditional 5-position scheme (PG, SG, SF, PF, C) is no help: Stephen Curry and Russell Westbrook are both "point guards" but play nothing alike. What is the real taxonomy of NBA players in 2024?
+The Indiana Pacers' front office wants to sign a wing who can space the floor *and* attack closeouts. Even the modern guard / wing / big taxonomy doesn't get them there: Stephen Curry and Russell Westbrook are both "guards" and play nothing alike. What is the real taxonomy of NBA players in 2024?
 
 The task is **unsupervised learning** — there is no "right answer" column, only patterns in the data. In Chapter 14, PCA found a few *directions* that explained most of the variation in stock returns. Here we ask the parallel question: can we find *groups*? Both PCA and clustering are unsupervised; PCA compresses, k-means partitions.
 
@@ -72,11 +72,24 @@ nba[features].describe().round(2)
 
 The five percentages sum to one for each player, so they are already on a common scale. We still standardize before clustering: k-means uses Euclidean distance, and standardization is a safe default for any distance-based method.
 
+Standardization for k-means follows the same logic as for PCA in Chapter 14: features on bigger scales would dominate the Euclidean distance and crowd out the rest. For the shot-mix data, where all five features already sum to 1, standardization equalizes the variances — slightly up-weighting the low-variance zones (midrange, corner threes) relative to the high-variance ones (rim share). The 1-D volume and efficiency clusterings below don't need standardization (a single feature can't be drowned out by other features) but the multi-feature shot-mix clustering does.
+
 ## What does "similar" mean? A choice, not a fact
 
-Before clustering, we must commit to a notion of *distance* — a number that says how far apart two players are. For shot-mix data, the natural choice is **Euclidean distance** on the standardized features: square the differences zone by zone, add them up, take a square root. Two players are "close" when their five shot-share percentages line up.
+The choice of distance is the first value judgment we'll make in this chapter. By the end, you'll see that feature choice — which directly shapes the distance — is what makes "the same" algorithm produce different answers.
 
-The choice of distance is itself a value judgment. Euclidean distance on shot mix says two players are similar when their *recipes* match, regardless of height, defense, rebounding, or even total shot volume. A star and a role player who take the same proportions from each zone look identical to this metric.
+Before clustering, we must commit to a notion of *distance* — a number that says how far apart two players are. For shot-mix data, the natural choice is Euclidean distance on the standardized features.
+
+:::{.callout-important}
+## Definition: Euclidean distance
+The **Euclidean distance** between two feature vectors $x, y \in \mathbb{R}^d$ is
+
+$$d(x, y) = \sqrt{\sum_{j=1}^{d} (x_j - y_j)^2} = \|x - y\|_2.$$
+
+Square the differences coordinate by coordinate, add them up, take a square root. This is the straight-line distance from $x$ to $y$ in $d$-dimensional space.
+:::
+
+For shot mix, two players are "close" when their five shot-share percentages line up. The choice of distance is itself a value judgment. Euclidean distance on shot mix says two players are similar when their *recipes* match, regardless of height, defense, rebounding, or even total shot volume. A star and a role player who take the same proportions from each zone look identical to this metric.
 
 The distances between famous pairs make the implications concrete:
 
@@ -144,7 +157,16 @@ K-means uses exactly this distance. It groups players who sit close together in 
 
 ## How k-means works
 
-K-means is an iterative algorithm. We start by picking $k$ **centroids** — points in feature space that will represent the clusters — and then repeat two steps until assignments stop changing:
+:::{.callout-important}
+## Definition: Centroid
+The **centroid** of a cluster is the mean of the feature vectors of the points assigned to it. For cluster $C_k$,
+
+$$\mu_k = \frac{1}{|C_k|} \sum_{i \in C_k} x_i.$$
+
+K-means represents each cluster by its centroid — a single point in feature space that summarizes the whole group.
+:::
+
+K-means is an iterative algorithm. We start by picking $k$ centroids and then repeat two steps until assignments stop changing:
 
 1. **Initialize** $k$ centroids (randomly).
 2. **Assign** each point to the nearest centroid.
@@ -163,11 +185,7 @@ $$\text{SSE} = \sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$$
 - $x_i$ is the feature vector for data point $i$ (here, one player's shot-mix percentages).
 - $\mu_k$ is the **centroid** of cluster $k$ — the mean of the points in $C_k$.
 - $\|x_i - \mu_k\|^2$ is the squared Euclidean distance from point $i$ to its cluster's centroid.
-
-The form mirrors the SSE we minimized in regression (Chapter 4): there, the "prediction" for each point was a single number (the mean) or a fitted line; here, the "prediction" is its cluster's centroid. K-means partitions the data into clusters and replaces each point with its centroid, just as regression replaces each $y_i$ with $\hat y_i$.
 :::
-
-The two steps above are the two halves of an **alternating minimization** of SSE: step 2 fixes the centroids and re-assigns each point to its nearest one (the SSE-minimizing assignment); step 3 fixes the assignments and sets each centroid to the mean of its points (the SSE-minimizing centroid, and the source of the "mean" in k-means). This alternating-minimization pattern is the same engine that fits PCA in Chapter 14.
 
 Every iteration decreases the SSE or leaves it unchanged, and the number of possible assignments is finite — so the algorithm must eventually stop changing the assignment and terminate. The objective is non-convex, so different starting points can converge to different **local optima**.
 
@@ -218,6 +236,13 @@ plt.show()
 ```
 
 Panel 1 shows the random initial centroids and their first assignment; by panel 4 the centroids have stabilized and assignments barely change. K-means is simple and converges in a finite number of steps: the number of possible assignments is finite, and as long as the assignment changes from one iteration to the next, SSE strictly decreases — so the assignment must eventually stop changing, at which point the algorithm has converged. The solution is only a *local* optimum, an issue we return to below.
+
+The two steps in the algorithm above are the two halves of an **alternating minimization** of SSE: step 2 fixes the centroids and re-assigns each point to its nearest one (the SSE-minimizing assignment); step 3 fixes the assignments and sets each centroid to the mean of its points (the SSE-minimizing centroid, and the source of the "mean" in k-means). The alternating-minimization pattern is the same engine that fits PCA in Chapter 14.
+
+:::{.callout-note collapse="true"}
+## Going deeper: k-means assumes round clusters
+K-means assumes round clusters. The Euclidean-distance objective rewards solutions where each cluster is roughly spherical and similar in size. On data with elongated, curved, or non-convex clusters (think two interlocking crescents), k-means produces straight-line boundaries and misses the real structure. Spectral clustering and DBSCAN are common alternatives for shape-aware clustering — beyond our scope, but worth knowing they exist. Your features determine your clusters; your *algorithm* determines your cluster shapes.
+:::
 
 The two-feature view is for visualization only. The real archetypes appear when we cluster on all five zones at once.
 
@@ -324,6 +349,8 @@ The scatter shows the archetypes occupy distinct regions of the shot-mix plane. 
 
 Back to the Pacers' opening question: a wing who can "space the floor and attack closeouts" sits in the floor-spacer or three-point-creator clusters — Hield's own archetype and the one next to it. Once the front office accepts that this is the lens, the shortlist of candidates falls out of the partition.
 
+And the Curry-vs-Westbrook question that opened the chapter? Both listed as point guards; the cluster places them at opposite ends of the map. Curry sits in three-point creators (over half his attempts are above-the-break threes), while Westbrook lands among the two-way wings — at the most rim-heavy edge of that cluster, taking a larger share at the rim (0.49) than any other point guard in the league and closer to Giannis territory than to any other "point guard." Same position label, opposite archetypes — the labels weren't tracking how the players actually score.
+
 :::{.callout-note collapse="true"}
 ## Going deeper: the modern positional revolution
 Cluster-based player taxonomies have a history in basketball analytics. Muthu Alagappan's 2012 MIT Sloan paper used **topological data analysis** (a different unsupervised method that builds a network of overlapping clusters) to argue for 13 player categories instead of 5. Kirk Goldsberry's *Sprawlball* (2019) documents the disappearance of the midrange shot and the rise of the three-pointer. Our k=5 analysis is a simplified version of the same exercise.
@@ -333,7 +360,10 @@ Cluster-based player taxonomies have a history in basketball analytics. Muthu Al
 
 How did we know $k=5$ was right? We didn't. $k$ is a **choice**, not a discovery. Two heuristics help narrow the range.
 
-The **elbow method** plots SSE against $k$. We look for an "elbow" — a value of $k$ beyond which adding clusters yields little further reduction in SSE.
+:::{.callout-important}
+## Definition: Elbow method
+The **elbow method** plots the k-means SSE against the number of clusters $k$. SSE always decreases with $k$ — adding clusters can only reduce within-cluster distances — so the curve is monotone. The "elbow" is the value of $k$ beyond which adding clusters yields only small further reductions. Pick $k$ at the bend.
+:::
 
 The **silhouette score** is a second heuristic, worth a look even when it won't be the deciding voice.
 
@@ -397,6 +427,35 @@ The heuristics rule out clearly bad choices ($k=20$ over-segments; $k=2$ under-s
 
 **The level of detail required to find a Hield replacement is not in the data — it is in the question the Pacers are asking.** We pick $k=5$ because the front office needs archetype-level resolution, finer than the silhouette score alone would recommend.
 
+Each player gets their own silhouette value. The bars below show the full distribution at k=5: tall bars sit comfortably inside their cluster; thin or negative bars are boundary cases. The boundary-heavy archetypes are the ones we'll see flip across seeds in §How stable below.
+
+```{python}
+from sklearn.metrics import silhouette_samples
+
+# Re-use the same relabeling as §Discovering archetypes so the colors and
+# numbers below match the chapter's canonical archetype palette.
+sil = silhouette_samples(X_scaled, nba['archetype'].values)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+y_lower = 0
+for c in range(5):
+    vals = np.sort(sil[nba['archetype'].values == c])
+    y_upper = y_lower + len(vals)
+    ax.barh(np.arange(y_lower, y_upper), vals,
+            color=archetype_colors[c], edgecolor='none', height=1.0,
+            label=f'{c}: {archetype_names[c]}')
+    y_lower = y_upper + 5  # small gap between archetypes
+ax.axvline(sil.mean(), color='black', linestyle='--', linewidth=1,
+           label=f'mean = {sil.mean():.2f}')
+ax.set_xlabel('Silhouette value $s(i)$')
+ax.set_ylabel('Players (grouped by archetype, sorted within group)')
+ax.set_title('Per-point silhouette at k=5')
+ax.set_yticks([])
+ax.legend(loc='lower right', fontsize=8)
+plt.tight_layout()
+plt.show()
+```
+
 ## Hierarchical clustering: don't commit to k up front
 
 When the right $k$ is unclear, an alternative is to avoid choosing $k$ at all. **Hierarchical clustering** builds a *tree* of merges instead of a flat partition; we read off a clustering at any granularity afterwards.
@@ -459,9 +518,89 @@ The two methods disagree on some boundary players but agree on the broad archety
 
 Hierarchical clustering is slower than k-means: it stores all pairwise distances (memory grows with the *square* of the number of points $n$) and runs in time that grows much faster than linearly with $n$, compared to k-means' near-linear cost per iteration. Both costs become impractical for very large $n$. For hundreds or low thousands of points where $k$ is unknown, hierarchical clustering is a useful complement — inspect the tree first, then choose a cut.
 
+## How stable are these clusters?
+
+Before we ask what *other* features could change the answer, let's ask how stable the answer is to a smaller perturbation: the random seed. K-means starts from random initial centroids. Different starts can yield different final partitions: the algorithm finds a **local optimum**, not the global one.
+
+:::{.callout-tip}
+## Think about it
+If we re-ran k-means with different starting points, would the five archetypes survive? Would the *boundaries* shift? Which players would change cluster most often?
+:::
+
+To expose the instability we run k-means 10 times with different seeds, each using just *one* random start per run (`n_init=1`). To compare two clusterings we use the **Adjusted Rand Index (ARI)**.
+
+:::{.callout-important}
+## Definition: Adjusted Rand Index (ARI)
+The **Adjusted Rand Index** measures agreement between two clusterings of the same points, corrected for the agreement expected by chance. Across all pairs of points, the ARI asks whether the two clusterings agree on whether each pair lands in the same cluster.
+
+- $\mathrm{ARI} = 1$: perfect agreement.
+- $\mathrm{ARI} = 0$: agreement no better than chance.
+- $\mathrm{ARI} < 0$: the two clusterings disagree *more* than chance would predict (rare but possible).
+:::
+
+```{python}
+# Run k-means 10 times with different random seeds
+all_labels = []
+for seed in range(10):
+    km = KMeans(n_clusters=5, random_state=seed, n_init=1)
+    all_labels.append(km.fit_predict(X_scaled))
+
+ari_matrix = np.zeros((10, 10))
+for i in range(10):
+    for j in range(10):
+        ari_matrix[i, j] = adjusted_rand_score(all_labels[i], all_labels[j])
+
+fig, ax = plt.subplots(figsize=(8, 6.5))
+display_matrix = ari_matrix.copy()
+np.fill_diagonal(display_matrix, np.nan)
+sns.heatmap(display_matrix, annot=True, fmt='.2f', cmap='YlOrRd',
+            ax=ax, vmin=0, vmax=1, cbar_kws={'label': 'ARI'},
+            linewidths=0.5, linecolor='white')
+ax.set_xlabel('Run')
+ax.set_ylabel('Run')
+ax.set_title('Pairwise ARI between 10 k-means runs (k=5, n_init=1)')
+plt.tight_layout()
+plt.show()
+
+off_diag = ari_matrix[np.triu_indices(10, k=1)]
+print(f"ARI mean: {off_diag.mean():.3f}")
+print(f"ARI range: {off_diag.min():.3f} to {off_diag.max():.3f}")
+```
+
+The mean ARI is moderate and the spread is wide. Some seed-pairs produced exactly the same partition (ARI = 1.0) — those starts converged to identical local optima — while others agreed only weakly. The archetypes are partially stable; the boundaries are not. Some players flip groups depending on the seed.
+
+```{python}
+# Which players sit at archetype boundaries?
+# Sklearn returns labels in arbitrary order per run, so we re-apply the
+# rim-share-sort relabeling to each run before comparing to the baseline.
+# That way `flips` counts true partition disagreement, not label-ID shuffles.
+baseline = nba['archetype'].values
+boundary_counts = np.zeros(len(nba), dtype=int)
+for raw in all_labels:
+    aligned = relabel_by_key(raw, nba, 'pct_RA', ascending=False)
+    boundary_counts += (aligned != baseline).astype(int)
+
+nba_boundary = nba.copy()
+nba_boundary['flips'] = boundary_counts
+boundary_players = nba_boundary[nba_boundary['FGA'] >= 800].nlargest(8, 'flips')[['PLAYER_NAME', 'flips']]
+print("High-volume players whose archetype is least stable across seeds:")
+print(boundary_players.to_string(index=False))
+```
+
+The boundary-flippers are not noise; they are information. A player who sits between two archetypes is a hybrid, and the instability of the clustering reveals what the rigid k=5 labels cannot.
+
+So what do practitioners do about this? Throughout the rest of the chapter we pass `n_init=10` explicitly so k-means picks the best of 10 starts — recent sklearn versions default `n_init` to `'auto'`, which resolves to 1 under the default `k-means++` initializer, so a bare `KMeans(...)` call gives you a single random start. Sklearn also defaults to **k-means++ initialization**: instead of picking starting centroids uniformly at random, k-means++ picks the first centroid at random and then each subsequent centroid with probability proportional to its squared distance from the centroids already chosen — biasing the starts to be spread apart. The combination — k-means++ plus `n_init=10` — is what makes k-means usable in practice; it mitigates the local-optimum problem but does not guarantee identical clusters across calls.
+
+**In practice: always pass `n_init=10` to k-means, and use the default `k-means++` initializer.** This is what sklearn's docs recommend and what made the rest of this chapter's figures reproducible. The diagnostic above shows what happens when you *don't*.
+
+:::{.callout-note collapse="true"}
+## Going deeper: validating clustering with held-out data
+We measured stability across random seeds. A complementary check borrows from Chapter 6: split the players into training and test sets, fit k-means on training, then assign each test player to the nearest training centroid. If the test reconstruction error is comparable to the training reconstruction error, the clusters generalize beyond the training sample. This is the same logic that validated PCA via held-out reconstruction in Chapter 14.
+:::
+
 ## Your features determine your clusters
 
-The five archetypes are not the *only* way to cluster these 317 players. Same algorithm, same players, different feature set, different answer. Two alternative feature recipes illustrate the point.
+Seed instability tells us where the boundaries of our k=5 partition sit. A bigger question is whether the same 317 players, *clustered on different features entirely*, even land in the same neighborhoods at all. The five archetypes are not the *only* way to cluster these players. Same algorithm, same players, different feature set, different answer. Two alternative feature recipes illustrate the point.
 
 ### Cluster on shot *volume* (total attempts)
 
@@ -499,13 +638,15 @@ for c in sorted(nba['cluster_eff'].unique()):
     print(f"Efficiency tier {c} (eFG% range {sub['efg_pct'].min():.3f}–{sub['efg_pct'].max():.3f}): {sample}")
 ```
 
-Another clean ladder, this time ordered by *skill*. Tier 0 holds the most efficient shooters in the league — rim finishers and rebounders who rarely miss. Tier 4 holds the players shooting below league average. A high-volume but inefficient player (volume tier 0, efficiency tier 4) and a low-volume but accurate one (volume tier 4, efficiency tier 0) sit far apart in these clusterings even when they share a shot-mix archetype.
+Another clean ladder, this time ordered by *skill*. Tier 0 holds the most efficient shooters in the league — rim finishers and rebounders who rarely miss. Tier 4 holds the players shooting well below league average (max 0.503; the 2023-24 NBA league-average eFG% was around 0.546). A high-volume but inefficient player (volume tier 0, efficiency tier 4) and a low-volume but accurate one (volume tier 4, efficiency tier 0) sit far apart in these clusterings even when they share a shot-mix archetype.
 
 ### Same players, three stories
 
 Raw cluster IDs are arbitrary even after relabeling. We display each spotlight player's *named* label under all three clusterings, with color encoding the tier:
 
 ```{python}
+#| code-fold: true
+# Presentation figure — the takeaway is in the output, not the code.
 # Singular form of archetype names for use in cells (matches archetype_colors above)
 arch_names_singular = ['Interior finisher', 'Two-way wing', 'Midrange master',
                        'Floor-spacer', 'Three-point creator']
@@ -526,7 +667,11 @@ spotlight = ['Stephen Curry', 'LeBron James', 'Giannis Antetokounmpo',
              'Nikola Jokić', 'Buddy Hield', 'Jalen Brunson',
              'Kevin Durant', 'Donovan Mitchell']
 
-fig, ax = plt.subplots(figsize=(9, 4.5))
+fig = plt.figure(figsize=(9, 6))
+gs = fig.add_gridspec(2, 1, height_ratios=[5, 1.4], hspace=0.05)
+ax = fig.add_subplot(gs[0])
+ax_leg = fig.add_subplot(gs[1])
+
 ax.set_xlim(-0.5, 3.5)
 ax.set_ylim(-0.5, len(spotlight)-0.5)
 ax.invert_yaxis()
@@ -550,11 +695,52 @@ for col_i, header in enumerate(['Shot mix', 'Volume', 'Efficiency']):
             fontsize=11, fontweight='bold')
 
 ax.set_axis_off()
+
+# Legend pane: archetype color swatches + tier color ramp
+ax_leg.set_xlim(0, 10)
+ax_leg.set_ylim(0, 4)
+ax_leg.set_axis_off()
+
+# Archetype swatches (one row): label "Shot mix" then five name+swatch pairs
+ax_leg.text(0.05, 3.0, 'Shot mix:', va='center', ha='left',
+            fontsize=10, fontweight='bold')
+for i, (name, rgba) in enumerate(zip(arch_names_singular, arch_rgba)):
+    x0 = 1.45 + 1.7 * i
+    ax_leg.add_patch(plt.Rectangle((x0, 2.65), 0.32, 0.7,
+                                   facecolor=rgba, edgecolor='black', linewidth=0.5))
+    ax_leg.text(x0 + 0.42, 3.0, name, va='center', ha='left', fontsize=8)
+
+# Tier color ramp: label "Volume / Efficiency tiers:" then 5-block gradient
+ax_leg.text(0.05, 1.0, 'Volume / Efficiency tiers:', va='center', ha='left',
+            fontsize=10, fontweight='bold')
+for i, rgba in enumerate(tier_colors):
+    x0 = 3.3 + 0.45 * i
+    ax_leg.add_patch(plt.Rectangle((x0, 0.65), 0.42, 0.7,
+                                   facecolor=rgba, edgecolor='black', linewidth=0.5))
+ax_leg.annotate('', xy=(5.55, 1.0), xytext=(3.3, 1.0),
+                arrowprops=dict(arrowstyle='<->', color='gray', lw=0.8))
+ax_leg.text(3.3, 0.25, 'high', va='center', ha='left', fontsize=8, color='gray')
+ax_leg.text(5.55, 0.25, 'low', va='center', ha='right', fontsize=8, color='gray')
+
 plt.tight_layout()
 plt.show()
 ```
 
 Curry and Brunson share the top volume tier but split on shot mix and on efficiency. Jokić and Giannis sit one archetype apart but agree on volume and efficiency. Each row describes the same player three ways; none of the three descriptions is privileged.
+
+How big is the disagreement? ARI puts a number on it.
+
+```{python}
+mix_labels = nba['archetype'].values
+vol_labels = nba['cluster_vol'].values
+eff_labels = nba['cluster_eff'].values
+
+print(f"ARI(shot-mix, volume)      = {adjusted_rand_score(mix_labels, vol_labels):.3f}")
+print(f"ARI(shot-mix, efficiency)  = {adjusted_rand_score(mix_labels, eff_labels):.3f}")
+print(f"ARI(volume, efficiency)    = {adjusted_rand_score(vol_labels, eff_labels):.3f}")
+```
+
+All three pairwise ARIs land near zero — the volume-vs-efficiency pair is even slightly *negative*, meaning two analysts running the same algorithm on the same 317 players with different feature recipes would disagree on cluster membership *more* than two analysts running different random seeds. Recall §How stable: the cross-seed ARI mean was about 0.6. Feature choice scrambles the partition by roughly an order of magnitude more than the seed does.
 
 A GM looking for a Buddy Hield replacement wants shot-mix archetypes — they identify players who fill the same *role*. A GM ranking trade targets by raw production should cluster on volume. A GM valuing a contract should cluster on efficiency. The feature choice follows the decision the GM needs to make.
 
@@ -563,70 +749,22 @@ A GM looking for a Buddy Hield replacement wants shot-mix archetypes — they id
 There is no "true" clustering of NBA players. Each feature recipe answers a different question. **Shot mix** asks "what kind of shots?" — gives archetypes. **Shot volume** asks "how many?" — gives stars-vs-role-players. **Shot efficiency** asks "how well?" — gives skill tiers. The feature choice is your responsibility — and it is also your liability when the decision has stakes.
 :::
 
-## How stable are these clusters?
+So far we've used clustering as a discovery tool. The shot-mix archetypes were one possible answer to one possible question; volume tiers and skill tiers answered different questions; none was the "true" partition of the league. When the consequence of a bad partition is signing the wrong free agent, the value judgment baked into the feature choice is easy to absorb. We now apply the same algorithm to a dataset where the value judgment determines how people are treated by the courts. Three lessons from the basketball half carry over: features encode a theory of similarity, structure appears whether or not it is real, and the analyst — not the algorithm — owns the result.
 
-K-means starts from random initial centroids. Different starts can yield different final partitions: the algorithm finds a **local optimum**, not the global one.
-
-:::{.callout-tip}
-## Think about it
-If we re-ran k-means with different starting points, would the five archetypes survive? Would the *boundaries* shift? Which players would change cluster most often?
-:::
-
-To expose the instability we run k-means 10 times with different seeds, each using just *one* random start per run (`n_init=1`). To compare two clusterings we use the **Adjusted Rand Index (ARI)**. The ARI asks: across all pairs of players, do the two clusterings agree on whether each pair lands in the same cluster? An ARI of 1 means perfect agreement; an ARI of 0 means agreement no better than chance; the ARI can be negative when two clusterings disagree more than chance would predict (rare but possible).
-
-```{python}
-# Run k-means 10 times with different random seeds
-all_labels = []
-for seed in range(10):
-    km = KMeans(n_clusters=5, random_state=seed, n_init=1)
-    all_labels.append(km.fit_predict(X_scaled))
-
-ari_matrix = np.zeros((10, 10))
-for i in range(10):
-    for j in range(10):
-        ari_matrix[i, j] = adjusted_rand_score(all_labels[i], all_labels[j])
-
-fig, ax = plt.subplots(figsize=(7, 5.5))
-display_matrix = ari_matrix.copy()
-np.fill_diagonal(display_matrix, np.nan)
-sns.heatmap(display_matrix, annot=True, fmt='.2f', cmap='YlOrRd',
-            ax=ax, vmin=0, vmax=1, cbar_kws={'label': 'ARI'})
-ax.set_xlabel('Run')
-ax.set_ylabel('Run')
-ax.set_title('Pairwise ARI between 10 k-means runs (k=5, n_init=1)')
-plt.tight_layout()
-plt.show()
-
-off_diag = ari_matrix[np.triu_indices(10, k=1)]
-print(f"ARI mean: {off_diag.mean():.3f}")
-print(f"ARI range: {off_diag.min():.3f} to {off_diag.max():.3f}")
-```
-
-The mean ARI is moderate and the spread is wide. Some seed-pairs produced exactly the same partition (ARI = 1.0) — those starts converged to identical local optima — while others agreed only weakly. The archetypes are partially stable; the boundaries are not. Some players flip groups depending on the seed.
-
-```{python}
-# Which players sit at archetype boundaries?
-# Sklearn returns labels in arbitrary order per run, so we re-apply the
-# rim-share-sort relabeling to each run before comparing to the baseline.
-# That way `flips` counts true partition disagreement, not label-ID shuffles.
-baseline = nba['archetype'].values
-boundary_counts = np.zeros(len(nba), dtype=int)
-for raw in all_labels:
-    aligned = relabel_by_key(raw, nba, 'pct_RA', ascending=False)
-    boundary_counts += (aligned != baseline).astype(int)
-
-nba_boundary = nba.copy()
-nba_boundary['flips'] = boundary_counts
-boundary_players = nba_boundary[nba_boundary['FGA'] >= 800].nlargest(8, 'flips')[['PLAYER_NAME', 'flips']]
-print("High-volume players whose archetype is least stable across seeds:")
-print(boundary_players.to_string(index=False))
-```
-
-The boundary-flippers are not noise; they are information. A player who sits between two archetypes is a hybrid, and the instability of the clustering reveals what the rigid k=5 labels cannot.
-
-So what do practitioners do about this? Throughout the rest of the chapter we pass `n_init=10` explicitly so k-means picks the best of 10 starts — recent sklearn versions default `n_init` to `'auto'`, which resolves to 1 under the default `k-means++` initializer, so a bare `KMeans(...)` call gives you a single random start. Sklearn also defaults to **k-means++ initialization**: instead of picking starting centroids uniformly at random, k-means++ picks the first centroid at random and then each subsequent centroid with probability proportional to its squared distance from the centroids already chosen — biasing the starts to be spread apart. The combination — k-means++ plus `n_init=10` — is what makes k-means usable in practice; it mitigates the local-optimum problem but does not guarantee identical clusters across calls.
+---
 
 ## When the stakes are higher: COMPAS
+
+:::{.callout-note collapse="false"}
+## COMPAS glossary
+- **Defendant**: a person charged with a crime who is awaiting trial or sentencing.
+- **Pretrial**: the period after a defendant is charged but before they are tried; courts decide whether to release the defendant or hold them in jail.
+- **Recidivism**: re-arrest (here, within a two-year follow-up window after release).
+- **decile_score**: COMPAS's overall risk-of-re-arrest score on a 1–10 scale (10 = highest risk in the developer's reference population).
+- **v_decile_score**: COMPAS's violent-re-arrest sub-score, also on a 1–10 scale.
+- **priors_count**: number of prior adult criminal convictions on the defendant's record at screening.
+- **juv_fel_count / juv_misd_count / juv_other_count**: counts of juvenile felonies, misdemeanors, and other juvenile offenses on the record.
+:::
 
 The stakes have been low so far — a misjudged archetype costs a coach a free agent, not a defendant their liberty. The same algorithm applied to a different dataset can carry far higher stakes.
 
@@ -654,6 +792,8 @@ We cluster the same defendants two ways, both at $k=3$:
 - **Risk-score features** (`decile_score`, `v_decile_score`, `priors_count`): COMPAS's outputs and prior count — the algorithm's view of the defendant.
 - **Criminal-history features** (`age`, `priors_count`, `juv_fel_count`, `juv_misd_count`, `juv_other_count`): a defendant's record, with no algorithmic risk score involved.
 
+We treat decile rank as a numeric feature for clustering. K-means assumes Euclidean distances are meaningful, which is a stronger claim for ordinal scales than for true measurements — another value judgment baked into the analysis.
+
 ```{python}
 feat_risk = ['decile_score', 'v_decile_score', 'priors_count']
 feat_hist = ['age', 'priors_count', 'juv_fel_count', 'juv_misd_count', 'juv_other_count']
@@ -665,8 +805,8 @@ compas['cluster_risk'] = relabel_by_key(raw_r, compas, 'decile_score', ascending
 
 # History clustering, relabeled so cluster 0 = lowest mean priors_count
 X = StandardScaler().fit_transform(compas[feat_hist].values)
-raw_h = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
-compas['cluster_hist'] = relabel_by_key(raw_h, compas, 'priors_count', ascending=True)
+raw_compas_h = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
+compas['cluster_hist'] = relabel_by_key(raw_compas_h, compas, 'priors_count', ascending=True)
 ```
 
 ### What did each clustering find?
@@ -777,9 +917,14 @@ Which clustering would you defend in a courtroom? Which in a press conference? T
 
 The COMPAS example sets up Chapter 16 (validation and feedback loops). The priors that feed COMPAS's score are themselves products of past policing decisions, which were informed by past risk assessments, which were informed by past priors. Every measurement we cluster on has a history.
 
+:::{.callout-note collapse="true"}
+## Going deeper: the impossibility result
+Subsequent work — Chouldechova 2017 ("Fair prediction with disparate impact") and Corbett-Davies et al. 2017 ("Algorithmic decision making and the cost of fairness") — showed that no risk score can simultaneously be calibrated across groups and have equal false-positive rates across groups when base rates differ. The COMPAS controversy turned out to be an instance of a general impossibility result. There is no algorithmic fix; the trade-off between competing fairness criteria is a value judgment, not a math problem.
+:::
+
 ## Key takeaways
 
-- **K-means** finds local-optimum partitions by minimizing within-cluster squared distance from each point to its centroid. The study guide below carries the formula.
+- **K-means** minimizes the total within-cluster sum of squared distances (SSE) and converges in finitely many steps to a *local* optimum.
 
 - **Standardize first.** K-means uses Euclidean distance, so features on larger scales dominate. Standardization is a safe default even when the features share a scale already.
 
@@ -799,27 +944,31 @@ We have now seen three types of learning:
 - **Unsupervised for structure** — PCA (Chapter 14) finds directions that explain variation.
 - **Unsupervised for grouping** — clustering assigns points to discrete groups.
 
+PCA finds the best low-rank summary of the whole data matrix; k-means finds the best one-centroid-per-cluster summary. Different constraints, same engine — formal version in the Going-deeper box below.
+
+:::{.callout-note collapse="true"}
+## Going deeper: PCA and k-means as matrix approximation
 PCA and k-means solve the same matrix-approximation problem with different constraints. Stack the players as rows of $Y$ (the data) and the centroids (or PCA directions) as rows of $W$. Each player is then summarized by one row of a third matrix $X$, where $XW$ should reproduce $Y$ as closely as possible. PCA lets each row of $X$ be any real vector — a continuous coordinate, so each player is a *combination* of the rows of $W$. K-means restricts each row of $X$ to be a one-hot indicator — each player is replaced by *one* of the rows of $W$, its cluster centroid. Same objective, two different rules for what counts as a valid summary.
+:::
 
 Chapter 16 returns to predictive-policing and recidivism-risk examples to ask a different question: when an algorithm's predictions feed back into the world that generates its training data, the system enters a **feedback loop**, and the "ground truth" used for validation becomes partly the algorithm's own output. The chapter shows why standard validation breaks down under feedback and what to do about it.
 
-Chapter 17 returns to feature-choice stakes from the AI angle — when an LLM picks features for you, who is making the value judgment?
-
-Chapters 18-19 ask a different question: not "what groups exist?" but "did this intervention cause that outcome?" The shift is from prediction to **causal inference**.
+Chapter 17 returns to feature-choice stakes from the AI angle: what happens when a language model picks features for you, revisiting the value judgment we made by hand in §Your features determine your clusters? Chapters 18-19 ask a different question: when can we move from "are these features associated with the outcome?" to "do these features *cause* the outcome?" Clustering revealed structure; causal inference asks whether the structure is the kind we can intervene on.
 
 ## Study guide
 
 ### Key ideas
 
 - **Unsupervised learning:** finding structure in data without labeled outcomes.
-- **K-means:** clustering algorithm that alternates between assigning points to the nearest centroid and recomputing centroids. Minimizes SSE $= \sum_{k=1}^{K} \sum_{i \in C_k} \|x_i - \mu_k\|^2$.
-- **Centroid:** the mean of the points in a cluster.
-- **SSE (sum of squared errors):** the k-means objective — total squared distance from each point to its cluster centroid. (Sklearn calls this `inertia_`; the SSE label is consistent with regression in Chapter 4.)
-- **Silhouette score:** mean over points of $s(i) = (b(i) - a(i)) / \max(a(i), b(i))$, where $a(i)$ is the mean within-cluster distance and $b(i)$ is the mean distance to the nearest other cluster. Range $[-1, 1]$; higher is better.
-- **Elbow method:** plot SSE against $k$ and look for diminishing returns.
+- **K-means:** clustering algorithm that alternates between assigning points to the nearest centroid and recomputing centroids (see §How k-means works). Sklearn calls the objective `inertia_`; we use SSE to match the regression notation from Chapter 4.
+- **Centroid:** the mean of the points in a cluster (see §How k-means works).
+- **SSE (sum of squared errors):** the k-means objective — total squared distance from each point to its cluster centroid (see §How k-means works).
+- **Silhouette score:** mean over points of $s(i)$, a per-point fit-to-own-cluster vs. nearest-other-cluster measure (see §Choosing k). Range $[-1, 1]$; higher is better.
+- **Elbow method:** plot SSE against $k$ and look for diminishing returns (see §Choosing k).
 - **Local optimum:** a solution that no small change improves but that may not be the global best.
 - **Hierarchical clustering:** builds a tree (dendrogram) of merges; cut the tree at any height to obtain a clustering at that granularity.
-- **Adjusted Rand Index (ARI):** measures agreement between two clusterings, adjusted for chance. $\mathrm{ARI} = 1$ for identical clusterings; $\mathrm{ARI} = 0$ for chance agreement; $\mathrm{ARI} < 0$ when two clusterings disagree more than chance would predict (rare but possible).
+- **Adjusted Rand Index (ARI):** chance-corrected agreement between two clusterings (see §How stable). $\mathrm{ARI} = 1$ for identical clusterings; $\mathrm{ARI} = 0$ for chance.
+- **Vector quantization:** K-means is sometimes called **vector quantization**: each data point is replaced ("quantized") by one of $K$ codebook entries (the centroids). This is the principle behind image and audio compression — and it's what's happening every time you apply k-means.
 - Standardization is the default for distance-based methods, including k-means and PCA.
 - Feature selection determines what structure clustering finds. *No feature set is neutral.*
 - K-means is sensitive to initialization. The k-means++ strategy picks initial centroids that are spread apart, reducing sensitivity to random starts.
@@ -832,7 +981,9 @@ Chapters 18-19 ask a different question: not "what groups exist?" but "did this 
 - `km.inertia_` — sklearn's attribute name for the SSE
 - `StandardScaler().fit_transform(X)` — standardize to zero mean, unit variance
 - `silhouette_score(X, labels)` — average silhouette across all points
+- `silhouette_samples(X, labels)` — per-point silhouette values for the per-point plot
 - `adjusted_rand_score(labels1, labels2)` — compare two clusterings
+- `scipy.cluster.hierarchy.linkage` and `dendrogram` — build and plot a hierarchical clustering
 
 ### For the quiz
 
@@ -845,3 +996,29 @@ You should be able to:
 - Given cluster profiles, name the archetypes/groups and identify which clusters cross traditional categories.
 - Explain why feature selection changes the clusters you find.
 - Explain why "neutral" feature sets don't exist when feature choice encodes a value judgment.
+- Read a dendrogram and identify how the choice of cut-height controls $k$.
+- Use ARI to compare two clusterings (across seeds, across feature sets, across algorithms).
+- Explain how cluster racial-composition skew arises from the choice of features, not the algorithm.
+
+#### Practice questions
+
+**1. Archetype naming.** A new cluster's profile has the following mean shot mix: rim 0.50, paint 0.30, midrange 0.05, corner 3 0.05, above-the-break 3 0.10. Which archetype is this, and which two named players from the chapter most likely belong?
+
+:::{.callout-tip collapse="true"}
+## Answer
+**Interior finishers.** Rim and paint together account for 80% of attempts; threes are barely 15%. Giannis, Zion, and Sabonis fit this profile.
+:::
+
+**2. Feature choice and skew.** A teammate clusters HMDA loan applicants on income, loan amount, and credit score and finds the high-rejection cluster is 70% Black. Should they conclude the algorithm is discriminating? Why or why not?
+
+:::{.callout-tip collapse="true"}
+## Answer
+**No.** The *cluster* didn't decide anything; the lender's rejection rule did. Clustering revealed that race correlates with the chosen feature set, but the chapter's lesson is that this correlation reflects what was put in — the features encode the lender's view of similarity. The question to investigate is what *decisions* are being made on top of the clusters and whether equally-creditworthy applicants are being routed to different clusters. Compare COMPAS's risk-score-vs-history split: same defendants, different feature recipes, different cluster compositions; none of the clusterings was the "true" partition.
+:::
+
+**3. Stability interpretation.** You run k-means with `n_init=1` and 10 different seeds. The pairwise ARI matrix has mean 0.45 with min 0.18 and max 0.88. What should you do?
+
+:::{.callout-tip collapse="true"}
+## Answer
+**Switch to `n_init=10` (sklearn's default `KMeans` plus k-means++).** The high spread tells you initialization matters; some pairs of runs found very different partitions. Reporting profiles (mean feature values, top members) rather than integer labels — and naming archetypes by their content rather than their ID — is the durable habit.
+:::

@@ -647,6 +647,8 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Given cluster profiles (shot-mix archetypes), name interpretable types and identify players who cross traditional position lines
 - Feature selection changes which clusters emerge — no feature set is "neutral" when stakes involve people (COMPAS cautionary case)
 - Assessing cluster stability across random seeds using ARI; k-means++ initialization reduces sensitivity
+- Hierarchical clustering as a complement to k-means when the right k is unclear; Ward linkage is the SSE-consistent choice
+- ARI as a comparison metric: across seeds, across feature sets, across algorithms
 
 **Key vocabulary:**
 - Unsupervised learning
@@ -658,9 +660,16 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Local optimum
 - Adjusted Rand Index (ARI)
 - K-means++ initialization
+- Hierarchical clustering
+- Dendrogram
+- Ward linkage
 
 **Key formulas:**
 - K-means objective: minimize Σ_k Σ_{i∈C_k} ||x_i − μ_k||² (SSE)
+
+**Computational tools:**
+- `sklearn.cluster.KMeans`, `sklearn.metrics.silhouette_score`, `sklearn.metrics.silhouette_samples`, `sklearn.metrics.adjusted_rand_score`
+- `scipy.cluster.hierarchy.linkage`, `scipy.cluster.hierarchy.dendrogram`, `scipy.cluster.hierarchy.fcluster`
 
 **Prerequisites:** Lec 2 (EDA), Lec 4 (regression — for SSE intuition), Lec 14 (PCA — for unsupervised framing and standardization)
 
@@ -668,7 +677,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Backward: Lec 2 (EDA), Lec 4 (SSE), Lec 14 (PCA, standardization, unsupervised framing)
 - Forward: Lec 17 (working with AI — feature-choice stakes revisited), Lec 18-19 (causal inference — when correlational groupings mislead)
 
-**Surprise moment(s):** (1) Clustered shot profiles reveal players who defy traditional position labels — analytics archetypes cut across PG/SG/SF/PF/C. (2) Changing which features enter k-means shifts cluster membership substantially — the "same" algorithm produces different groupings depending on what you include. (3) On COMPAS data, clustering by criminal history vs. socioeconomic features produces systematically different racial compositions, illustrating that no feature set is neutral.
+**Surprise moment(s):** (1) Clustered shot profiles reveal players who defy traditional position labels — analytics archetypes cut across PG/SG/SF/PF/C. (2) Changing which features enter k-means shifts cluster membership substantially — pairwise ARI between shot-mix / volume / efficiency clusterings drops near zero (≈0.05), an order of magnitude below the cross-seed mean (≈0.62), so feature choice scrambles membership *more* than random initialization does. (3) On COMPAS data, clustering by COMPAS risk-score features vs. criminal-history features produces systematically different racial compositions, illustrating that no feature set is neutral.
 
 ---
 
