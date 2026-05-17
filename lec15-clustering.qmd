@@ -591,7 +591,7 @@ The boundary-flippers are not noise; they are information. A player who sits bet
 
 So what do practitioners do about this? Throughout the rest of the chapter we pass `n_init=10` explicitly so k-means picks the best of 10 starts — recent sklearn versions default `n_init` to `'auto'`, which resolves to 1 under the default `k-means++` initializer, so a bare `KMeans(...)` call gives you a single random start. Sklearn also defaults to **k-means++ initialization**: instead of picking starting centroids uniformly at random, k-means++ picks the first centroid at random and then each subsequent centroid with probability proportional to its squared distance from the centroids already chosen — biasing the starts to be spread apart. The combination — k-means++ plus `n_init=10` — is what makes k-means usable in practice; it mitigates the local-optimum problem but does not guarantee identical clusters across calls.
 
-**In practice: always pass `n_init=10` to k-means, and use the default `k-means++` initializer.** This is what sklearn's docs recommend and what made the rest of this chapter's figures reproducible. The diagnostic above shows what happens when you *don't*.
+**In practice: always pass `n_init=10` to k-means, and use the default `k-means++` initializer.** These reduce sensitivity to the random start; the diagnostic above shows what happens when you don't use them. For figures and prose that need to match across runs, also fix a `random_state` — that's what guarantees reproducibility, not the tricks.
 
 :::{.callout-note collapse="true"}
 ## Going deeper: validating clustering with held-out data
@@ -919,7 +919,12 @@ The COMPAS example sets up Chapter 16 (validation and feedback loops). The prior
 
 :::{.callout-note collapse="true"}
 ## Going deeper: the impossibility result
-Subsequent work — Chouldechova 2017 ("Fair prediction with disparate impact") and Corbett-Davies et al. 2017 ("Algorithmic decision making and the cost of fairness") — showed that no risk score can simultaneously be calibrated across groups and have equal false-positive rates across groups when base rates differ. The COMPAS controversy turned out to be an instance of a general impossibility result. There is no algorithmic fix; the trade-off between competing fairness criteria is a value judgment, not a math problem.
+Two terms from Chapter 7, in a new context:
+
+- A score is **calibrated** across groups when, for a given score value, the actual rate of the outcome is the same across groups. In COMPAS terms: among defendants who score 7, the same fraction re-offend regardless of race.
+- The **false-positive rate** for a group is the fraction of *non-reoffenders* in that group who were nonetheless labeled high-risk. ProPublica's headline (44.9% vs. 23.5%) is the gap in this rate between Black and White defendants.
+
+Subsequent work — Chouldechova 2017 ("Fair prediction with disparate impact") and Corbett-Davies et al. 2017 ("Algorithmic decision making and the cost of fairness") — proved that when groups have different base rates of the outcome, no risk score can be simultaneously calibrated across groups *and* have equal false-positive rates across groups. You can have one or the other; you cannot have both. The COMPAS controversy turned out to be an instance of a general impossibility result, not a quirk of one vendor's algorithm. The trade-off between competing fairness criteria is a value judgment, not a math problem.
 :::
 
 ## Key takeaways
