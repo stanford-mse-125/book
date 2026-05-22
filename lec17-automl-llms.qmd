@@ -73,7 +73,7 @@ plt.show()
 ```
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Why does averaging many overfitting trees produce a good model? Hint: each tree overfits to *different* noise, given that it sees different bootstrap samples and different feature subsets.
 :::
 
@@ -222,7 +222,7 @@ for patch, color in zip(bp['boxes'], colors):
     patch.set_facecolor(color)
     patch.set_alpha(0.7)
 ax.set_ylabel('R-squared (5-fold CV)')
-ax.set_title('Mini AutoML Shootout: Predicting Graduate Earnings')
+ax.set_title('Mini AutoML shootout: predicting graduate earnings')
 ax.grid(axis='y', alpha=0.3)
 plt.tight_layout()
 plt.show()
@@ -231,7 +231,7 @@ plt.show()
 Not bad! Random Forest edges out gradient boosting here. AutoML *works* — for the modeling step.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before we continue — what did AutoML NOT do here? What decisions did *we* make before any model was fit?
 :::
 
@@ -355,14 +355,14 @@ This result reflects a **confounding** problem — the kind you saw in [Chapter 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
 axes[0].scatter(sc_clean['PCTPELL'], sc_clean['SAT_AVG'], alpha=0.4, s=15)
-axes[0].set_xlabel('Pell Grant Recipients (%)')
-axes[0].set_ylabel('Average SAT Score')
-axes[0].set_title('Pell % vs. SAT Average')
+axes[0].set_xlabel('Pell Grant recipients (%)')
+axes[0].set_ylabel('Average SAT score')
+axes[0].set_title('Pell % vs. SAT average')
 
 axes[1].scatter(sc_clean['PCTPELL'], sc_clean['MD_EARN_WNE_P10'], alpha=0.4, s=15)
-axes[1].set_xlabel('Pell Grant Recipients (%)')
-axes[1].set_ylabel('Median Earnings (10yr post)')
-axes[1].set_title('Pell % vs. Median Earnings')
+axes[1].set_xlabel('Pell Grant recipients (%)')
+axes[1].set_ylabel('Median earnings (10yr post)')
+axes[1].set_title('Pell % vs. median earnings')
 
 plt.tight_layout()
 plt.show()
@@ -389,9 +389,9 @@ fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
 axes[0].scatter(model_llm.predict(X_llm), residuals, alpha=0.3, s=10)
 axes[0].axhline(y=0, color='red', linestyle='--')
-axes[0].set_xlabel('Predicted Earnings')
+axes[0].set_xlabel('Predicted earnings')
 axes[0].set_ylabel('Residual')
-axes[0].set_title('Residuals vs Fitted (LLM skipped this)')
+axes[0].set_title('Residuals vs fitted (LLM skipped this)')
 # Annotate the fan shape
 axes[0].annotate('Variance increases\nwith predicted earnings',
                  xy=(0.95, 0.95), xycoords='axes fraction',
@@ -401,7 +401,7 @@ axes[1].hist(residuals, bins=50, edgecolor='black', alpha=0.7)
 axes[1].axvline(x=np.median(residuals), color='red', linestyle='--', label='Median')
 axes[1].set_xlabel('Residual')
 axes[1].set_ylabel('Count')
-axes[1].set_title('Residual Distribution (right-skewed)')
+axes[1].set_title('Residual distribution (right-skewed)')
 axes[1].legend()
 
 plt.tight_layout()
@@ -424,7 +424,7 @@ LLMs don't reliably calibrate their confidence. They may hedge on a simple calcu
 :::
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Would you trust a colleague who never says "I don't know"? What would you do differently if you knew your analysis tool couldn't distinguish what it knows from what it's guessing?
 :::
 
@@ -462,7 +462,7 @@ if rested.mean() < not_rested.mean():
 Wait — rested players score *fewer* points? That's backwards from what you'd expect.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Why might this be backwards? Think about *which* players tend to have many rest days, and *which* players play on back-to-backs. Take 30 seconds before reading on.
 :::
 
@@ -567,7 +567,7 @@ The LLM gave a precise answer to the wrong question. Tukey's warning, written lo
 **Communicating uncertainty honestly.** LLMs project confidence. Good statisticians communicate uncertainty. "The model suggests X, but the confidence interval is wide and the data is missing for the most vulnerable populations" is more honest — and more useful — than "X."
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Which of these skills could an AI eventually learn? Which require human judgment that no amount of training data can replace?
 :::
 
@@ -599,7 +599,7 @@ Don't ask an LLM to "analyze this dataset." Break the task into smaller steps wh
 Each step gives you a checkpoint. If the LLM silently drops 84% of the data in step 1, you catch it before it propagates through the entire analysis.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 You've probably used AI tools for homework this quarter. Think of a time the AI gave you something that looked right but wasn't — or a time you caught a mistake the AI missed. What course concept helped you catch it?
 :::
 
@@ -651,7 +651,7 @@ You won't always have the data or the time to check all 15. But the questions th
 You'll practice this in Homework 5: you'll receive an analysis produced with AI assistance, walk through this checklist, and propose corrections.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Pick any analysis you've seen in the news this week. Run through the checklist. Which items can you check from the article? Which would require access to the data or code?
 :::
 

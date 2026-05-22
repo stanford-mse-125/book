@@ -32,7 +32,7 @@ Every causal claim hides a counterfactual comparison. The hospital's "3 point dr
 ## Difference-in-differences: the economist's workhorse
 
 :::{.callout-important}
-## Definition: Difference-in-Differences (DiD)
+## Definition: Difference-in-differences (DiD)
 A method that estimates causal effects by comparing how a treatment group changed over time relative to a control group. If both groups were on the same trajectory before the treatment, any *divergence* afterward must be caused by the treatment.
 :::
 
@@ -80,8 +80,8 @@ ax.text(mid_post + 0.3, (treated[idx] + counterfactual[idx - (intervention_q-1)]
         'Treatment\neffect', fontsize=10, color='#d62728', va='center')
 
 ax.set_xlabel('Quarter')
-ax.set_ylabel('Readmission Rate (%)')
-ax.set_title('Difference-in-Differences: New Discharge Protocol', fontsize=14)
+ax.set_ylabel('Readmission rate (%)')
+ax.set_title('Difference-in-differences: new discharge protocol', fontsize=14)
 ax.legend(loc='upper right', fontsize=10)
 plt.tight_layout()
 plt.show()
@@ -92,7 +92,7 @@ The dashed line shows the **counterfactual** — what *would have happened* to H
 With simulated data, we know the true effect is -3.0 percentage points and can verify that DiD recovers it. In real data, you never have this luxury --- you must rely on the parallel trends assumption.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Looking at the plot, how would you quantify the effect of the new protocol? What two comparisons would you make?
 :::
 
@@ -120,7 +120,7 @@ did_table = pd.DataFrame({
     'Change': [treated_after - treated_before, control_after - control_before]
 }, index=['Hospital A (treated)', 'Hospital B (control)'])
 
-print("Difference-in-Differences Table")
+print("Difference-in-differences table")
 print("=" * 55)
 print(did_table.round(2))
 print("-" * 55)
@@ -131,7 +131,7 @@ print(f"True effect:  -3.00 percentage points")
 ### The key assumption: parallel trends
 
 :::{.callout-important}
-## Definition: Parallel Trends Assumption
+## Definition: Parallel trends assumption
 The assumption that treatment and control groups would have followed the same trajectory absent the treatment. DiD only works if this assumption holds.
 :::
 
@@ -164,8 +164,8 @@ ax.axvline(x=intervention_q - 0.5, color='gray', ls='--', alpha=0.7,
 ax.axhline(y=2.0, color='gray', ls=':', alpha=0.5,
            label='Baseline gap (no effect)')
 ax.set_xlabel('Quarter')
-ax.set_ylabel('Treated - Control Difference')
-ax.set_title('Event Study: Pre-Trend Check for Parallel Trends', fontsize=14)
+ax.set_ylabel('Treated - control difference')
+ax.set_title('Event study: pre-trend check for parallel trends', fontsize=14)
 ax.legend()
 plt.tight_layout()
 plt.show()
@@ -175,7 +175,7 @@ print("Post-treatment: differences jump down — that's the treatment effect.")
 ```
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 What would this event study plot look like if the parallel trends assumption were *violated*? What if Hospital A was already improving faster than Hospital B before the intervention?
 :::
 
@@ -223,7 +223,7 @@ Real-world DiD usually requires **cluster-robust standard errors** at the treatm
 ### John Snow's natural experiment
 
 :::{.callout-note}
-## Historical Context: Snow's Grand Experiment
+## Historical context: Snow's grand experiment
 Last lecture we learned that John Snow's most powerful evidence for waterborne cholera was *not* his famous map — it was his comparison of water companies. In the 1850s, two water companies served intermingled houses on the same streets of South London. Lambeth Company moved its water intake upstream (away from sewage) in 1852. Southwark & Vauxhall kept drawing from the polluted Thames. Houses were served essentially at random based on which company had laid pipes, making this arrangement a **natural experiment** --- nature created near-random assignment.
 :::
 
@@ -232,7 +232,7 @@ Let's compute the actual numbers.
 ```{python}
 # Load Snow's water company data
 snow = pd.read_csv(f'{DATA_DIR}/john-snow/snow_water_companies.csv')
-print("John Snow's Water Company Comparison (1854 cholera epidemic)")
+print("John Snow's water company comparison (1854 cholera epidemic)")
 print("=" * 60)
 print(snow.to_string(index=False))
 print(f"\nRelative risk: {snow.loc[snow['company'] == 'Southwark & Vauxhall', 'death_rate_per_10000'].values[0] / snow.loc[snow['company'] == 'Lambeth', 'death_rate_per_10000'].values[0]:.1f}x")
@@ -265,14 +265,14 @@ print("This result is the power of a natural experiment.")
 Why is this comparison a natural experiment rather than just an observational study? The two companies served *intermingled* houses on the same streets. A household's water company was determined by which company happened to have laid pipes to that address — essentially arbitrary. This arrangement eliminates confounding by neighborhood poverty, crowding, or sanitation.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Why can't we frame Snow's water company comparison as a standard DiD with before/after data? (Hint: we only have data from the 1854 epidemic, not from before Lambeth moved its intake.) What assumption are we making instead?
 :::
 
 ## RCTs: the gold standard revisited
 
 :::{.callout-important}
-## Definition: Randomized Controlled Trial (RCT)
+## Definition: Randomized controlled trial (RCT)
 An experiment where treatment is randomly assigned, eliminating confounding by ensuring that treatment and control groups are comparable on all characteristics, measured and unmeasured.
 :::
 
@@ -308,7 +308,7 @@ print("No confounder can explain away any difference in outcomes.")
 ```
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 The balance table shows the groups are *nearly* identical, but not *perfectly* identical. Why doesn't randomization guarantee perfect balance? (Hint: think about sample size and the law of large numbers.)
 :::
 
@@ -327,8 +327,8 @@ bars = ax.bar(range(4), means, yerr=1.96 * sems, capsize=5,
               color=colors, edgecolor='black', alpha=0.8)
 ax.set_xticks(range(4))
 ax.set_xticklabels(arm_order, fontsize=11)
-ax.set_ylabel('Mean CD4 Change at 20 Weeks', fontsize=12)
-ax.set_title('ACTG 175: Treatment Effect on CD4 Count', fontsize=14)
+ax.set_ylabel('Mean CD4 change at 20 weeks', fontsize=12)
+ax.set_title('ACTG 175: treatment effect on CD4 count', fontsize=14)
 ax.axhline(y=0, color='black', linewidth=0.5, linestyle='--')
 plt.tight_layout()
 plt.show()
@@ -342,7 +342,7 @@ print(f"\nBecause of randomization, this IS the causal effect. No adjustment nee
 ## A/B testing: an RCT by another name
 
 :::{.callout-important}
-## Definition: A/B Test
+## Definition: A/B test
 A randomized controlled trial run in a tech or business setting, where users are randomly assigned to different variants (e.g., website designs) and outcomes (e.g., conversion rates) are compared.
 :::
 
@@ -359,7 +359,7 @@ true_control_rate, true_treatment_rate = 0.12, 0.14  # 2pp lift
 control_conv = np.random.binomial(1, true_control_rate, n_control)
 treatment_conv = np.random.binomial(1, true_treatment_rate, n_treatment)
 
-print("A/B Test Results:")
+print("A/B test results:")
 print(f"  Control (A):   {control_conv.sum():,}/{n_control:,} = {control_conv.mean():.3f}")
 print(f"  Treatment (B): {treatment_conv.sum():,}/{n_treatment:,} = {treatment_conv.mean():.3f}")
 print(f"  Lift:          {treatment_conv.mean() - control_conv.mean():.3f} "
@@ -390,8 +390,8 @@ print(f"\n  {'Reject H0: the new design increases conversions!' if p_value < 0.0
 ### The peeking problem
 
 :::{.callout-warning}
-## Don't Peek at A/B Test Results
-**Peeking** — checking results repeatedly and stopping at the first significant result — inflates your false positive rate far beyond 5%. Your PM checks the dashboard every morning. On day 5, p = 0.03. "Ship it!" they say. But you know better...
+## Don't peek at A/B test results
+**Peeking** — checking results repeatedly and stopping at the first significant result — inflates your false positive rate far beyond 5%. Your PM checks the dashboard every morning. On day 5, p = 0.03. "Ship it!" they say. But you know better than to ship on the first significant peek.
 :::
 
 The peeking problem is related to the multiple testing problem from [Chapter 11](lec11-multiple-testing.qmd): each peek is another chance for a false positive. The situation is actually worse than independent multiple tests --- test statistics at successive peeks are correlated, making standard corrections like Bonferroni overly conservative. Tech companies use sequential testing methods designed for exactly this situation: mSPRT (mixed sequential probability ratio test, popularized by Optimizely) and always-valid p-values (Howard et al. 2021) let you peek as often as you like without inflating false positives.
@@ -431,9 +431,9 @@ if sig_peeks:
                 xytext=(sig_peeks[0][0] + 1500, sig_peeks[0][1] + 0.15),
                 arrowprops=dict(arrowstyle='->', color='#d62728'),
                 fontsize=10, color='#d62728')
-ax.set_xlabel('Sample Size (per group)')
+ax.set_xlabel('Sample size (per group)')
 ax.set_ylabel('p-value')
-ax.set_title('Peeking at an A/A Test (No Real Effect)', fontsize=14)
+ax.set_title('Peeking at an A/A test (no real effect)', fontsize=14)
 ax.legend()
 plt.tight_layout()
 plt.show()
@@ -446,7 +446,7 @@ print("If you stop at the first significant peek, you'll ship a change that does
 ### Other A/B testing pitfalls
 
 :::{.callout-important}
-## Definition: SUTVA (Stable Unit Treatment Value Assumption)
+## Definition: SUTVA (stable unit treatment value assumption)
 The assumption that one unit's treatment assignment does not affect another unit's outcome. Violated when users interact, as in social networks or marketplaces.
 :::
 
@@ -455,7 +455,7 @@ The assumption that one unit's treatment assignment does not affect another unit
 - **Small effects need large samples**: A 0.5% lift in conversion requires millions of users to detect reliably.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 You're running an A/B test on a social media feed. Treatment users see more local news. But they share those stories with control users. What happens to your estimate?
 :::
 
@@ -565,9 +565,9 @@ ax.hist(bail_df[bail_df['bail_assigned']==1]['propensity_score'],
         bins=30, alpha=0.6, label='Bail assigned', color='#1f77b4', density=True)
 ax.hist(bail_df[bail_df['bail_assigned']==0]['propensity_score'],
         bins=30, alpha=0.6, label='No bail', color='#ff7f0e', density=True)
-ax.set_xlabel('Estimated Propensity Score')
+ax.set_xlabel('Estimated propensity score')
 ax.set_ylabel('Density')
-ax.set_title('Propensity Score Distributions by Treatment Group', fontsize=14)
+ax.set_title('Propensity score distributions by treatment group', fontsize=14)
 ax.legend()
 plt.tight_layout()
 plt.show()
@@ -640,7 +640,7 @@ Jung et al. did not use propensity score matching; they used a related counterfa
 ### Limitations
 
 :::{.callout-warning}
-## Hidden Bias
+## Hidden bias
 Propensity score matching only controls for *observed* confounders. If judges use information not captured in the data --- demeanor, the defendant's answers to questions, gut instinct --- the matched comparison is still biased. No matching method can substitute for randomization.
 :::
 
@@ -649,7 +649,7 @@ Propensity score matching does not solve the fundamental problem of causal infer
 The method is most credible when the dataset is rich enough that the observable covariates plausibly capture the key drivers of treatment assignment --- and when the analyst is transparent about what might be missing.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 A hospital compares survival rates for patients who received an experimental surgery vs. standard care, using propensity score matching on age, diagnosis, and lab values. A skeptic argues the comparison is invalid because surgeons selected patients based partly on "clinical judgment" not captured in the data. Is the skeptic right? What would you need to address this concern?
 :::
 
@@ -734,7 +734,7 @@ print(f"\ntreated_x_post = {model_mlb.params['treated_x_post']:+.2f}  "
 The interaction coefficient is the causal estimate: AL pitchers hit batters about 1 extra time per 1000 plate appearances after 1973, a roughly 30% relative increase, while NL rates barely moved.^[The published Bradbury-Drinen estimate is larger, because they use team-season data and control for factors like retaliation patterns within games; the stylized two-league aggregate here recovers the direction and rough magnitude.] The story is hard to beat: remove the pitcher's own at-bat, and pitchers become more willing to throw at opposing hitters. Incentives, not virtue, were keeping the numbers down.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 The DiD estimate is credible only if no *other* change hit the AL differently at 1973. What plausible threats are there? (Think about strike zones, ballpark dimensions, pitching philosophy, rule enforcement.) How would you check whether any of them is driving the result rather than the DH rule?
 :::
 

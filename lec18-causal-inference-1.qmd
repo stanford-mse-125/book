@@ -27,7 +27,7 @@ You're a high school senior choosing between Stanford and your state school. Sta
 The central question of **causal inference** is: when can we interpret a statistical association as a cause-and-effect relationship?
 
 :::{.callout-important}
-## Definition: Causal Effect
+## Definition: Causal effect
 X **causes** Y if intervening to change X — while holding everything else fixed — would change Y. The causal effect of X on Y is the difference in Y that results from this intervention.
 :::
 
@@ -73,9 +73,9 @@ slope, intercept, r, p, se = stats.linregress(colleges['SAT_AVG'], colleges['MD_
 x_line = np.linspace(colleges['SAT_AVG'].min(), colleges['SAT_AVG'].max(), 100)
 ax.plot(x_line, intercept + slope * x_line, 'r-', lw=2, alpha=0.7)
 
-ax.set_xlabel('Average SAT Score')
-ax.set_ylabel('Median Earnings (10 years after enrollment)')
-ax.set_title(f'SAT Score vs. Earnings (r = {r:.2f})')
+ax.set_xlabel('Average SAT score')
+ax.set_ylabel('Median earnings (10 years after enrollment)')
+ax.set_title(f'SAT score vs. earnings (r = {r:.2f})')
 ax.legend()
 plt.show()
 
@@ -92,7 +92,7 @@ Each row in this dataset is a *school*, not a student. `SAT_AVG` is the average 
 But wait. What if something else drives *both* who attends a selective school and who earns more?
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 What factors might affect both a student's ability to attend a selective school and their future earnings?
 :::
 
@@ -113,7 +113,7 @@ If family wealth drives both, then the selective-school-to-earnings correlation 
 ## Causal diagrams (DAGs)
 
 :::{.callout-important}
-## Definition: DAG (Directed Acyclic Graph)
+## Definition: DAG (directed acyclic graph)
 A **Directed Acyclic Graph (DAG)** is a visual tool for representing causal relationships. "Directed" means the arrows have direction (A causes B, not the reverse). "Acyclic" means there are no loops — you can never follow the arrows in a circle back to where you started. Each arrow means "causes" or "directly influences." Another formal framework, the **potential outcomes model** (also called the Rubin causal model), defines causal effects algebraically rather than graphically.
 :::
 
@@ -183,7 +183,7 @@ In practice, this is nearly impossible with **observational data** (data collect
 The gap between correlation and causation motivates the distinction between **observational data** (collected without intervention) and **experimental data** (from a randomized experiment). In a randomized experiment, the treatment is assigned randomly, so there are no backdoor paths to worry about.
 
 :::{.callout-warning}
-## The Fundamental Problem
+## The fundamental problem
 With observational data, you can never be sure you've blocked every backdoor path.
 :::
 
@@ -229,8 +229,8 @@ overall = hospitals.groupby('is_high_volume')['overall_readmission_rate'].mean()
 colors_bar = ['#4878CF', '#E24A33']
 axes[0].bar(['Low-volume', 'High-volume'],
             overall.values, color=colors_bar, edgecolor='white', width=0.5)
-axes[0].set_ylabel('Mean Readmission Rate (%)')
-axes[0].set_title('Overall: High-Volume Looks BETTER')
+axes[0].set_ylabel('Mean readmission rate (%)')
+axes[0].set_title('Overall: high-volume looks BETTER')
 
 # Right: within severity categories
 severity_cats = ['Low severity', 'Medium severity', 'High severity']
@@ -248,11 +248,11 @@ axes[1].bar(x - width/2, rates_low, width, label='Low-volume', color='#4878CF', 
 axes[1].bar(x + width/2, rates_high, width, label='High-volume', color='#E24A33', edgecolor='white')
 axes[1].set_xticks(x)
 axes[1].set_xticklabels(severity_cats)
-axes[1].set_ylabel('Mean Readmission Rate (%)')
-axes[1].set_title('Within Severity: High-Volume is WORSE')
+axes[1].set_ylabel('Mean readmission rate (%)')
+axes[1].set_title('Within severity: high-volume is WORSE')
 axes[1].legend()
 
-plt.suptitle("Simpson's Paradox in Hospital Readmissions", fontsize=14, fontweight='bold', y=1.02)
+plt.suptitle("Simpson's paradox in hospital readmissions", fontsize=14, fontweight='bold', y=1.02)
 plt.tight_layout()
 plt.show()
 ```
@@ -286,7 +286,7 @@ From 2008 to 2012, the NYPD conducted roughly 760,000 stops under its Concealed 
 
 ```{python}
 # NYPD stop-and-frisk hit rates (Goel, Rao, Shroff 2016; Grossman 2023 MSE 125 Lecture 1)
-print("NYPD Stop-and-Frisk Hit Rates (2008-2012)")
+print("NYPD stop-and-frisk hit rates (2008-2012)")
 print("=" * 55)
 print(f"  City-wide hit rate, Black individuals:  2.5%")
 print(f"  City-wide hit rate, White individuals:  13%")
@@ -339,7 +339,7 @@ After the Stanford Open Policing Project published similar within-group analyses
 ## John Snow and the birth of epidemiology
 
 :::{.callout-note}
-## Historical Context: John Snow's Cholera Investigation
+## Historical context: John Snow's cholera investigation
 London, 1854. Cholera is killing thousands. The prevailing theory: "bad air" (miasma) causes disease. A physician named John Snow had a different idea: contaminated *water*.
 :::
 
@@ -374,7 +374,7 @@ for _, pump in pumps.iterrows():
 
 ax.set_xlabel('x coordinate')
 ax.set_ylabel('y coordinate')
-ax.set_title("Snow's Cholera Map: Deaths Cluster Near Broad Street Pump")
+ax.set_title("Snow's cholera map: deaths cluster near Broad Street pump")
 ax.legend()
 plt.tight_layout()
 plt.show()
@@ -395,7 +395,7 @@ Snow's true breakthrough was something different. Two water companies served ove
 Crucially, houses served by different companies were **intermingled on the same streets**. Same neighborhoods, same air, same poverty — but different water.
 
 ```{python}
-print("Deaths by Water Company (1854 cholera outbreak):")
+print("Deaths by water company (1854 cholera outbreak):")
 print("=" * 55)
 print(water.to_string(index=False))
 
@@ -416,7 +416,7 @@ colors_wc = ['#d62728', '#2ca02c', '#7f7f7f']
 
 bars = ax.bar(companies, rates, color=colors_wc, edgecolor='white', width=0.6)
 ax.set_ylabel('Deaths per 10,000 houses')
-ax.set_title('Cholera Death Rates by Water Company (1854)')
+ax.set_title('Cholera death rates by water company (1854)')
 
 # Annotate bars
 for bar, rate in zip(bars, rates):
@@ -436,7 +436,7 @@ plt.show()
 ## Why this is a natural experiment
 
 :::{.callout-important}
-## Definition: Natural Experiment
+## Definition: Natural experiment
 A **natural experiment** occurs when some external circumstance assigns treatment in a way that is **as-if random** — creating comparable groups without deliberate randomization.
 :::
 
@@ -580,14 +580,14 @@ Adding control variables to a regression can help — but only if:
 The difficulty of controlling for all confounders is the core challenge of observational studies. You're always one unmeasured confounder away from a wrong answer.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 What would you need to measure to estimate the *causal* effect of attending a selective college on earnings?
 :::
 
 ## A trap: collider bias
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 We said you should control for confounders. Should you *always* add more control variables to a regression? What could go wrong?
 :::
 
@@ -625,15 +625,15 @@ fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 axes[0].scatter(talent, connections, alpha=0.1, s=5, color='gray')
 r_all = np.corrcoef(talent, connections)[0, 1]
 axes[0].set_xlabel('Talent'); axes[0].set_ylabel('Connections')
-axes[0].set_title(f'Full Population: r = {r_all:.3f} (no relationship)')
+axes[0].set_title(f'Full population: r = {r_all:.3f} (no relationship)')
 
 # Right: among hired only — negative correlation!
 axes[1].scatter(talent[hired], connections[hired], alpha=0.3, s=10, color='steelblue')
 r_hired = np.corrcoef(talent[hired], connections[hired])[0, 1]
 axes[1].set_xlabel('Talent'); axes[1].set_ylabel('Connections')
-axes[1].set_title(f'Among Hired Only: r = {r_hired:.3f} (collider bias!)')
+axes[1].set_title(f'Among hired only: r = {r_hired:.3f} (collider bias!)')
 
-plt.suptitle('Collider Bias: Controlling for "Hired" Creates a Spurious Correlation',
+plt.suptitle('Collider bias: controlling for "Hired" creates a spurious correlation',
              fontsize=13, fontweight='bold', y=1.02)
 plt.tight_layout()
 plt.show()
@@ -645,12 +645,12 @@ print("(The negative correlation holds regardless of the hiring threshold — tr
 ```
 
 :::{.callout-warning}
-## Collider Bias
+## Collider bias
 Conditioning on a common *effect* of two variables creates a fake relationship between them. That's collider bias. Always check your DAG before adding control variables to a regression.
 :::
 
 :::{.callout-important}
-## Confounder vs. Collider
+## Confounder vs. collider
 A **confounder** is a common *cause* of treatment and outcome — controlling for it **removes** bias. A **collider** is a common *effect* of treatment and outcome — controlling for it **creates** bias. The two require opposite strategies: always control for confounders, never control for colliders.
 :::
 
@@ -688,14 +688,14 @@ Here are the key rules for reading causal diagrams:
 | X $\rightarrow$ Z $\leftarrow$ Y | **Collider** | Talent $\to$ Hired $\leftarrow$ Connections | **No!** Opens a spurious path |
 
 :::{.callout-important}
-## Definition: Back-Door Criterion
+## Definition: Back-door criterion
 The **back-door criterion** says: to estimate the causal effect of X on Y, you must block all backdoor paths (paths into X through common causes) without blocking any causal paths (paths from X to Y) or opening any collider paths. An additional requirement: you cannot control for any **descendant of the treatment** (a variable caused by X), since doing so partly blocks the causal effect or introduces bias through collider structures downstream of X.
 :::
 
 These rules follow from whether "controlling for" a variable opens or closes the path between treatment and outcome. Getting this wrong — controlling for the wrong variable — is one of the most common mistakes in applied statistics.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 In the DAG below, identify the confounder, mediator, and collider. Which should you control for?
 
 X $\to$ M $\to$ Y, &emsp; X $\leftarrow$ C $\to$ Y, &emsp; X $\to$ Z $\leftarrow$ Y

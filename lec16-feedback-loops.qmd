@@ -65,7 +65,7 @@ A time series is **non-stationary** when its mean or variance changes over time.
 Two pieces have to be in place before we fit anything: a number to score forecasts, and a baseline to beat.
 
 :::{.callout-important}
-## Definition: Mean Absolute Error (MAE)
+## Definition: Mean absolute error (MAE)
 **MAE** is the average size of the forecast error, in the units of the target:
 $$\text{MAE} = \frac{1}{n} \sum_{i=1}^{n} \left| y_i - \hat{y}_i \right|.$$
 For retail sales it's measured in dollars. Lower is better; 0 is perfect.
@@ -253,7 +253,7 @@ Three smoothing parameters in $[0, 1]$ control how fast each component adapts:
 Small values give smooth, slow-moving components; large values chase recent data. The three are fit by minimizing one-step-ahead squared error on the training set.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Retail sales grows year after year, but the *growth rate* — the slope of the trend — barely changes from one year to the next. Which of $\alpha, \beta, \gamma$ would you expect the fit to drive near zero? Check your guess against the fitted values below.
 :::
 
@@ -516,7 +516,7 @@ Residual resampling works for any model, not just linear regression. A forecast 
 The summer spike was the mild version of a deeper problem: what happens when the test data leaves the training range entirely. Mono County is the extreme — dust and wildfire events push AQI into the thousands, sometimes above 8,000, roughly 16× the "Hazardous" threshold of 500.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 If we train a model on "normal" days (AQI below 300), what would it predict for an AQI of 8,000? How far off would it be?
 :::
 
@@ -667,7 +667,7 @@ For example:
 * Parole-risk: keeping someone in prison longer can itself raise the odds of reoffense (lost job, deeper criminal networks), confirming the prediction.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 You build a model that predicts which students will fail a course, and the university uses it to assign tutoring resources. Is this a Weapon of Math Destruction? Check the three properties: is the outcome measurable? Could the prediction harm students (e.g., through stigma or self-fulfilling expectations)? Does it create a feedback loop? What design choices would make this a virtuous intervention rather than a vicious cycle?
 :::
 
