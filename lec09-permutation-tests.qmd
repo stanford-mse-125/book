@@ -120,7 +120,7 @@ print(f"\nObserved effect:                          {observed_effect:+.1f} CD4 c
 The fake effects bounce around zero — small positive, small negative. Our observed effect of ~50 looks very different.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 You're on the FDA advisory panel. The observed treatment effect is ~50 CD4 cells; the fake effects we just saw ranged roughly from −7 to +7. Before seeing the full null distribution, what fraction of fake effects *greater than or equal to 50* would you need to see to vote against the drug? 1 in 100? 1 in 1,000? 1 in a million? There is no right answer here — the exercise is to commit to a standard *before* the data comes in. Sanity check your answer by asking: would you be comfortable defending your threshold to a colleague who preferred one 10× stricter, and to one who preferred one 10× looser?
 :::
 
@@ -129,7 +129,7 @@ You're on the FDA advisory panel. The observed treatment effect is ~50 CD4 cells
 Five permutations gave us a rough sense. To build the full null distribution, we need thousands.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before we compute anything: the five fake effects we saw a moment ago ranged roughly $\pm 7$ CD4 cells. Where do you expect the observed effect (~50 CD4 cells) to land relative to a null distribution built from thousands of such shuffles? Sketch it, then read on.
 :::
 
@@ -230,7 +230,7 @@ The p-value is **a measure of surprise under the null**: a probability statement
 The p-value is one of the most misinterpreted quantities in statistics. The cleanest way to learn the traps is to walk into one.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 A skeptic says: "A p-value of 0.0001 means there's only a 0.01% chance the drug doesn't work." Is the skeptic right? Think through your answer before reading on.
 
@@ -264,7 +264,7 @@ To see that difference in action, we switch to a folk hypothesis NBA fans argue 
 **What's different is the interpretation of rejecting it.** No referees were randomly assigned to be home- or away-biased, and no games were randomly assigned home-or-away. Rejecting the null would tell us the two foul-count distributions differ — but it would *not* tell us *why*. Referee bias is one possible story, but other mechanisms ride along with the home/away label; the next Think About It asks you to generate some before we run the test.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 Suppose the permutation test finds that home teams are called for fewer fouls than away teams. Referee bias is the folk-theory explanation — but it is only one possibility. What are at least three **alternative** mechanisms, confounded with the home/away label, that could produce the same gap? Write them down before reading on.
 
@@ -426,7 +426,7 @@ A Patriots ball that dropped *less* than the Colts' would have exonerated them, 
 :::
 
 :::{.callout-tip}
-## Think About It: pick the test
+## Think about it: pick the test
 
 For each scenario, **state the null hypothesis precisely** in plain language and pick one-sided or two-sided. The phrasing matters: "the new curriculum doesn't *increase* scores" is a different null from "the new curriculum doesn't *change* scores," and they pick out different tests. For each answer, ask: *what decision rides on the result, and would a result in the other direction change it?*
 
@@ -479,7 +479,7 @@ These two simulation-based tools answer different questions:
 **Bootstrap = precision. Permutation = significance. Use both.**
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 Your bootstrap 95% CI for a treatment effect is [15, 85] — it excludes zero. Without computing anything, do you expect the permutation p-value to be above or below 0.05? Why?
 

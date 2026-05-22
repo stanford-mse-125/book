@@ -85,7 +85,7 @@ We went from 96 columns to 23 numeric ones. But 23 dimensions is still a lot. Ca
 Imagine plotting listings in 23-dimensional space (one axis per feature). The points form a cloud. Some directions in this cloud have lots of spread (variance) — those directions carry the most information. Other directions have very little spread — those are mostly noise.
 
 :::{.callout-important}
-## Definition: Principal Component Analysis (PCA)
+## Definition: Principal component analysis (PCA)
 **PCA finds the directions of maximum variance.** The first **principal component** (PC1) is the direction of maximum spread. PC2 is the direction of maximum spread *orthogonal* (perpendicular) to PC1. And so on.
 
 PCA finds the best $k$-dimensional subspace to project your data onto. "Best" means it minimizes the total squared distance between the original points and their projections — the same idea as regression minimizing squared residuals, but now the residuals are *perpendicular* to the fitted subspace, not vertical.
@@ -98,7 +98,7 @@ In Chapter 5, regression projected $y$ onto a fixed set of features $X$. PCA ask
 Let's see what happens if we run PCA on the raw (unstandardized) data — the fastest path, and an easy default to fall into.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before looking at the output — which feature do you think PC1 will pick up, and why?
 :::
 
@@ -172,9 +172,9 @@ fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 axes[0].bar(range(1, len(pca.explained_variance_ratio_)+1),
             pca.explained_variance_ratio_ * 100,
             color='steelblue', edgecolor='white')
-axes[0].set_xlabel('Principal Component')
-axes[0].set_ylabel('Variance Explained (%)')
-axes[0].set_title('Scree Plot')
+axes[0].set_xlabel('Principal component')
+axes[0].set_ylabel('Variance explained (%)')
+axes[0].set_title('Scree plot')
 axes[0].set_xlim(0.5, 15.5)
 
 cumvar = np.cumsum(pca.explained_variance_ratio_) * 100
@@ -182,8 +182,8 @@ axes[1].plot(range(1, len(cumvar)+1), cumvar, 'o-', color='steelblue')
 axes[1].axhline(y=80, color='red', linestyle='--', alpha=0.5, label='80% threshold')
 axes[1].axhline(y=90, color='orange', linestyle='--', alpha=0.5, label='90% threshold')
 axes[1].set_xlabel('Number of Components')
-axes[1].set_ylabel('Cumulative Variance Explained (%)')
-axes[1].set_title('Cumulative Variance Explained')
+axes[1].set_ylabel('Cumulative variance explained (%)')
+axes[1].set_title('Cumulative variance explained')
 axes[1].legend()
 axes[1].set_xlim(0.5, 15.5)
 
@@ -209,7 +209,7 @@ Still, the first few PCs do capture meaningful structure. Let's interpret them.
 Each PC is a weighted combination of the original features. The **loadings** — the weights — tell us what each PC represents.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Now that we've standardized, what groupings of features do you expect PCA to find? Think about which Airbnb features tend to be correlated with each other.
 :::
 
@@ -224,7 +224,7 @@ loadings = pd.DataFrame(
 fig, ax = plt.subplots(figsize=(10, 10))
 sns.heatmap(loadings, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
             ax=ax, linewidths=0.5)
-ax.set_title('PCA Loadings — What Does Each Component Represent?')
+ax.set_title('PCA loadings — what does each component represent?')
 plt.tight_layout()
 plt.show()
 ```
@@ -307,7 +307,7 @@ else:
 To understand what the SVD produces, two definitions from linear algebra are needed. These definitions build on the vector and span concepts from Chapter 4.
 
 :::{.callout-important}
-## Definition: Basis and Orthonormal Basis
+## Definition: Basis and orthonormal basis
 A **basis** for a subspace is a minimal set of linearly independent vectors that spans it. The number of vectors in any basis equals the **dimension** of the subspace.
 
 An **orthonormal basis** is a basis where every vector has norm 1 and every pair of vectors is orthogonal (inner product = 0). Orthonormal bases are especially convenient: to find the coordinates of a point, you just take dot products — no matrix inversion needed. PCA finds an orthonormal basis aligned with the directions of maximum variance.
@@ -328,7 +328,7 @@ $$X \approx U_k S_k V_k^T$$
 - The rows of $US$ are the **PC scores** — row $i$ gives listing $i$'s coordinates in the new basis
 
 :::{.callout-important}
-## Definition: Eckart-Young-Mirsky Theorem
+## Definition: Eckart-Young-Mirsky theorem
 Among all rank-$k$ approximations to $X$, the truncated SVD has the smallest total squared error (Frobenius norm). No other $k$-dimensional summary can do better.
 :::
 
@@ -373,7 +373,7 @@ for rt in plot_df['room_type'].unique():
                     alpha=0.4, s=10, label=rt)
 axes[0].set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% var)")
 axes[0].set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% var)")
-axes[0].set_title('Listings in PC Space — by Room Type')
+axes[0].set_title('Listings in PC space — by room type')
 axes[0].legend(markerscale=5)
 
 # Color by borough
@@ -397,7 +397,7 @@ Boroughs show less separation in these first two PCs. Geography isn't the domina
 ## PCA vs. feature selection
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Couldn't we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Chapter 6)?
 :::
 
@@ -410,7 +410,7 @@ We only used numeric columns. PCA requires numeric input — if you one-hot enco
 For this course, just use the numeric columns. If you're curious about mixed data, look up Multiple Correspondence Analysis — but that's beyond our scope.
 :::
 
-## Key Takeaways
+## Key takeaways
 
 - **PCA finds the directions of maximum variance** in your data. Each principal component is a weighted combination of the original features.
 

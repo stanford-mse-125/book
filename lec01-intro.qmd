@@ -70,7 +70,7 @@ It turns out that when two groups have different base rates of reoffending, it i
 **Scale.** The World Food Programme's reallocation model affects 2 million people simultaneously. Netflix's recommendation algorithm shapes what 200 million users watch. When a decision affects many people at once, even small errors can be consequential.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Look back at the ten questions in the table above. Pick three from different domains. Which of these four dimensions (financial, human, irreversible, scale) applies to each? Most consequential decisions hit more than one.
 :::
 
@@ -112,7 +112,7 @@ These four modes — **summary, prediction, inference, and causation** — form 
 **Causation** asks: *what would happen if we intervened?* Does fining hospitals actually reduce readmissions — or do penalized hospitals just learn to game the metrics? Causal questions are the hardest because correlation doesn't imply causation. Observing that fined hospitals improve doesn't prove the fine caused the improvement — maybe those hospitals were already investing in quality. The comparison may be **confounded** by other changes happening at the same time. We'll define and study confounding starting in Chapter 2. In Act 3, we'll develop frameworks for causal reasoning.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Pick one of the ten questions from the opening table. Which of the four modes — summary, prediction, inference, or causation — does it primarily involve? Most involve more than one.
 :::
 
@@ -186,7 +186,7 @@ readmissions['Measure Name'].value_counts()
 ### Summarizing a numeric column
 
 :::{.callout-important}
-## Definition: Excess Readmission Ratio (ERR)
+## Definition: Excess readmission ratio (ERR)
 The **Excess Readmission Ratio (ERR)** compares a hospital's predicted readmissions to its expected number, after adjusting for patient risk. A value above 1.0 means more readmissions than expected.
 :::
 
@@ -212,9 +212,9 @@ fig, ax = plt.subplots()
 sns.histplot(readmissions['Excess Readmission Ratio'].dropna(), bins=50, ax=ax,
              edgecolor='white')
 ax.axvline(x=1.0, color='red', linestyle='--', linewidth=2, label='Expected = 1.0')
-ax.set_xlabel('Excess Readmission Ratio')
+ax.set_xlabel('Excess readmission ratio')
 ax.set_ylabel('Count')
-ax.set_title('Hospital Readmission Performance Across the U.S.')
+ax.set_title('Hospital readmission performance across the U.S.')
 ax.legend()
 plt.tight_layout()
 plt.show()
@@ -236,11 +236,11 @@ heart_failure[['Facility Name', 'State', 'Excess Readmission Ratio']].head()
 The expression inside the brackets — `readmissions['Measure Name'] == 'READM-30-HF-HRRP'` — produces a True/False value for each row. Only the True rows are kept. Boolean filtering — selecting rows that satisfy a condition — is a fundamental pandas operation.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 If you ran a hospital and your heart failure ERR was 1.05, would you worry? How would you decide if that number reflects a real quality problem or just random variation? That's a statistics question — and one we'll answer in Act 2.
 :::
 
-## Key Takeaways
+## Key takeaways
 
 - **Applied statistics is about decisions under uncertainty**, not formulas in a vacuum.
 - The same dataset supports four different modes of reasoning: **summary** (what happened?), **prediction** (what will happen?), **inference** (what can we conclude?), and **causation** (what would happen if we intervened?).

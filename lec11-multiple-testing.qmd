@@ -102,7 +102,7 @@ About 141 of the 317 players come back significant. That can't be right — we h
 ## Wait — how many should we expect by chance?
 
 ::: {.callout-tip}
-## Think About It
+## Think about it
 If every player's true FG% equaled the league baseline, how many of our 317 tests would you expect to come back significant at $\alpha = 0.05$?
 :::
 
@@ -392,7 +392,7 @@ So when we tested Aaron Gordon's 55.7% against league baseline 47.7% and rejecte
 The variable that drives this — shot location — is a **confounder**. It influences both the input (which player is taking the shot) and the output (whether it goes in), creating an aggregate association that doesn't reflect what we actually want to measure: shooting skill. We will formalize confounders using causal diagrams (DAGs) in [Chapter 18](lec18-causal-inference-1.qmd).
 
 ::: {.callout-tip}
-## Think About It
+## Think about it
 Bonferroni rejected $H_0$ for both Aaron Gordon (high) and Klay Thompson (low). Both rejections are statistically real — neither player shoots league average. But what *kind* of question would each rejection answer correctly, and what kind would it answer wrongly?
 :::
 

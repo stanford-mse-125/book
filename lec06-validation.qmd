@@ -18,7 +18,7 @@ Every one of these failures shares the same root cause: the evaluation didn't si
 In [Chapter 5](lec05-feature-engineering.qmd), we engineered features — dummies, polynomials, interactions — and saw that a linear model can capture surprisingly complex patterns. But we've been measuring performance on the *same data we trained on*. Evaluating a model on its training data is like grading a student on the questions they've already seen — of course they'll do well. The question the hospital *should* have asked is the question this chapter answers: **does this model generalize?** We'll develop the tools to answer it: train/test splits, cross-validation, and the bias-variance tradeoff that explains why more complex models don't always win.
 
 :::{.callout-note}
-## All Models Are Wrong
+## All models are wrong
 "All models are wrong, but some are useful." — George Box (1976)
 
 Every model simplifies reality. The question is never *whether* a model is exactly right — no model is. The question is whether the model's approximation is close enough to be useful for the decision at hand. The entire machinery of validation exists to answer that question.
@@ -129,7 +129,7 @@ Each example in the opening vignette lands in one of these panels: Epic sepsis (
 With abundant data (tens of thousands of observations), the split ratio matters less — even 10% held out gives a large test set. With small data (a few hundred observations), every observation counts for training, and cross-validation (introduced below) is a better strategy than a single split.
 
 :::{.callout-important}
-## Definition: Train and Test Metrics
+## Definition: Train and test metrics
 Any performance metric can be computed on either the training set or the test set:
 
 - **Train $R^2$**: $R^2$ computed on the data used to fit the model. Measures how well the model explains what it has already seen. Always increases (or stays the same) as model complexity increases.
@@ -352,7 +352,7 @@ print(f"Train: {len(y_train):,}  |  Test: {len(y_test):,}")
 ```
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before we run the experiment: which level do you think will have the highest *test* $R^2$? Sketch what you expect the train and test $R^2$ curves to look like across the seven levels.
 :::
 
@@ -470,7 +470,7 @@ print(f"         {n_features_list[-1]:,} features, {len(y_train):,} training obs
 **The warning sign:** a large gap between train and test $R^2$, with test $R^2$ moving in the wrong direction as we add features. Push complexity far enough and test $R^2$ can even drop *below zero* — meaning the model's predictions on held-out listings are worse than simply predicting the test-set mean every time. Adding features has a limit; past it, more features make the model worse, not better.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Why does training $R^2$ always go up as we add nested feature sets? And why can test $R^2$ go *negative* in principle? Take a minute before reading on — the answer is hiding in the definition of $R^2$.
 :::
 
@@ -698,7 +698,7 @@ plt.show()
 ```
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Go back to the Airbnb 7-level plot. Which levels show high bias? Which show high variance? Where is the sweet spot? (Hint: look at both the absolute test $R^2$ *and* the gap between train and test.)
 :::
 
@@ -785,7 +785,7 @@ We read the 7-level plot and spotted the best test $R^2$ somewhere in the middle
 The solution: a **three-way split**.
 
 :::{.callout-important}
-## Definition: The Three-Way Split
+## Definition: The three-way split
 - **Training set** — the data the model learns from.
 - **Validation set** — held-out data used to *choose* model complexity (number of features, regularization strength, tree depth). The modeler sees validation scores and adjusts accordingly.
 - **Test set** — held-out data touched *only once*, at the very end, to report final performance. No modeling decisions depend on the test set.
@@ -942,7 +942,7 @@ plt.show()
 Every observation is in the test set exactly once. Averaging over 5 folds typically reduces the noise of any single split. (The 5 scores are not independent — the training sets overlap in 3/4 of their observations — so the reduction is weaker than averaging 5 truly independent estimates would give.) Five or ten folds is the usual default.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 With 5-fold CV, each observation sits in the held-out fold exactly once. How does this differ from running five independent 80/20 random splits? Which approach gives a more reliable performance estimate?
 :::
 
@@ -1079,7 +1079,7 @@ There's also a concrete reason the rankings can differ even when the procedures 
 Cross-validation averages out the most noise and is usually the most trustworthy, so the practical takeaway is that a small cluster of "middle" levels is indistinguishable on this data and CV's ranking is the one to trust.
 
 :::{.callout-warning}
-## CV Assumes the Data Can Be Shuffled
+## CV assumes the data can be shuffled
 CV relies on the assumption that we can shuffle the data randomly — each fold is representative of the whole. The assumption breaks if the data have temporal structure. You can't train on 2024 data and "test" on 2023 data — the model would be peeking into the future. We'll see time-series validation in [Chapter 16](lec16-feedback-loops.qmd).
 :::
 
@@ -1274,7 +1274,7 @@ print(f"Lasso — Train R²: {lasso_model.score(X_deg3_train_std, y_train):.3f} 
 On this split, both Ridge and Lasso beat OLS on the same features. The coefficient plots below reveal the mechanism. We stack the three panels so their shapes line up, and give each its own y-scale — because the OLS coefficients span several hundred while Lasso's sit well under twenty, forcing them onto the same axis would make Ridge and Lasso look flat.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before you look at the three panels: what should Ridge's coefficients look like compared to OLS's — shrunk toward zero, or a few set exactly to zero? What about Lasso's? If Lasso and Ridge end up with similar test $R^2$, do their coefficient vectors have to look the same?
 :::
 
@@ -1307,7 +1307,7 @@ Reading the three panels top to bottom, the shrinkage story is immediate: OLS co
 The Lasso penalty strength $\alpha$ controls the bias-variance tradeoff directly. Large $\alpha$ means more regularization — more features zeroed out, a simpler model with higher bias and lower variance. Small $\alpha$ means less regularization — closer to OLS, with lower bias and higher variance. So how do we pick $\alpha$? Cross-validation, as we do next.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before we let cross-validation choose $\alpha$: where do you expect the CV-error curve to bottom out — closer to the OLS end (small $\alpha$) or closer to the all-zero end (large $\alpha$)? Sketch what you think the curve looks like.
 :::
 

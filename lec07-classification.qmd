@@ -69,7 +69,7 @@ print(f"  Ratio:   {chd_counts[0]/chd_counts[1]:.1f}:1")
 In the data, **CHD is coded as 1 and no CHD as 0** — the column `TenYearCHD` takes those two values. Only 15.2% of patients developed CHD.
 
 :::{.callout-important}
-## Definition: Positive and Negative Class
+## Definition: Positive and negative class
 The **positive class** is the outcome you are trying to detect, coded 1 in the data. The **negative class** is its absence, coded 0. The terminology comes from signal detection and medical testing: a *positive test result* is one that *detects* the condition — a positive CHD test (or a positive cancer test) is bad news for the patient. "Positive" tracks the 1 in the encoding, not the desirability of the outcome.
 :::
 
@@ -172,7 +172,7 @@ $$p = \frac{1}{1 + e^{-(\beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p)}}$$
 The function $\sigma(z) = 1/(1 + e^{-z})$ — where $z = \beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p$ is called the **linear predictor** — is the **sigmoid function**. It maps any real number to $[0, 1]$ — exactly the constraint we needed.
 
 :::{.callout-warning}
-## Logistic Regression Conditions
+## Logistic regression conditions
 Two conditions for logistic regression to be valid: (1) each outcome is independent of the others, and (2) each predictor is linearly related to the log-odds when other predictors are held constant. Because the log-odds are linear in the features, the decision boundary (where $p = 0.5$) is a hyperplane — logistic regression can only produce linear decision boundaries. If the true boundary is curved, add polynomial or interaction features (Chapter 5) to capture it.
 :::
 
@@ -187,7 +187,7 @@ ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
 ax.axvline(x=0, color='gray', linestyle='--', alpha=0.5)
 ax.set_xlabel('Linear predictor (z)')
 ax.set_ylabel('Predicted probability')
-ax.set_title('The Sigmoid Function: maps any number to [0, 1]')
+ax.set_title('The sigmoid function: maps any number to [0, 1]')
 ax.annotate('z > 0 → predict positive', xy=(3, 0.95), fontsize=11)
 ax.annotate('z < 0 → predict negative', xy=(-5.5, 0.05), fontsize=11)
 plt.tight_layout()
@@ -328,7 +328,7 @@ ax.scatter(X_test['age'], y_proba_all, alpha=0.4, s=10,
            color='steelblue', label='Predicted probability')
 ax.set_xlabel('Age')
 ax.set_ylabel('Probability of CHD')
-ax.set_title('Logistic Regression: predicted probabilities vs. age')
+ax.set_title('Logistic regression: predicted probabilities vs. age')
 ax.legend()
 plt.tight_layout()
 plt.show()
@@ -363,7 +363,7 @@ print(f"Improvement over baseline:                {test_acc - baseline_accuracy:
 Our fancy logistic regression barely beats "predict everyone is fine." That ~85% accuracy is **almost entirely driven by the class imbalance**, not by the model learning anything useful.
 
 :::{.callout-warning}
-## The Accuracy Trap
+## The accuracy trap
 This phenomenon is the **accuracy trap** (also called the **accuracy paradox**). Accuracy measures how often you're right *overall*, but when one class dominates, being right about that class is easy and uninformative.
 :::
 
@@ -372,7 +372,7 @@ This phenomenon is the **accuracy trap** (also called the **accuracy paradox**).
 Before we fix the evaluation problem, let's understand what the model learned. Recall that logistic regression models the log-odds as a linear function of features. Each coefficient $\beta_j$ tells us how much a one-unit increase in $x_j$ shifts the log-odds.
 
 :::{.callout-important}
-## Definition: Odds Ratio
+## Definition: Odds ratio
 Exponentiating a coefficient gives the **odds ratio**: $e^{\beta_j}$ is the multiplicative change in odds per one-unit increase in $x_j$, holding other features constant.
 :::
 
@@ -392,7 +392,7 @@ Each odds ratio tells us how the odds of CHD change per one-standard-deviation i
 
 ```{python}
 # Interpret the coefficients
-print("Logistic Regression Coefficients (standardized features):")
+print("Logistic regression coefficients (standardized features):")
 print("=" * 55)
 for _, row in coef_df.iterrows():
     print(f"  {row['Feature']:>12s}: odds x {row['Odds Ratio']:.2f} per 1-SD increase")
@@ -403,7 +403,7 @@ A concrete example: if a patient's predicted CHD probability is 0.20 (odds = 0.2
 The model says: age, systolic blood pressure, glucose, and male sex are the strongest risk factors. This ranking matches medical knowledge — but notice that the model treats each feature independently. It doesn't know that high blood pressure and high BMI often go together, or that young smokers face different risks than old smokers (for that, we'd need interaction terms — recall Chapter 5). We'll come back to this.
 
 :::{.callout-tip}
-## The Divide-by-4 Rule
+## The divide-by-4 rule
 Odds ratios are hard to feel. A quicker way to interpret logistic regression coefficients on the probability scale: **divide the coefficient by 4**. The result is the *maximum* possible change in $\Pr(Y=1)$ per one-unit increase in $x$.
 
 Why does this work? The logistic curve is steepest at $p = 0.5$, where $dp/dx = p(1-p)\cdot\beta = 0.25\cdot\beta = \beta/4$. When $p$ is far from 0.5 the curve is flatter, so $\beta/4$ is an upper bound on the actual change.
@@ -443,7 +443,7 @@ At the default threshold of 0.5, anyone with predicted probability above 0.5 is 
 ## The confusion matrix: seeing where the model fails
 
 :::{.callout-important}
-## Definition: Confusion Matrix
+## Definition: Confusion matrix
 The **confusion matrix** is a 2x2 table that cross-tabulates the model's predicted classes against the true classes, showing True Positives, False Positives, True Negatives, and False Negatives.
 :::
 
@@ -458,7 +458,7 @@ cm = confusion_matrix(y_test, y_pred)
 fig, ax = plt.subplots(figsize=(6, 5))
 disp = ConfusionMatrixDisplay(cm, display_labels=['No CHD', 'CHD'])
 disp.plot(ax=ax, cmap='Blues', values_format='d')
-ax.set_title('Confusion Matrix (threshold = 0.5)')
+ax.set_title('Confusion matrix (threshold = 0.5)')
 plt.tight_layout()
 plt.show()
 
@@ -475,7 +475,7 @@ Look at the bottom row — actual CHD cases. The model catches very few of them!
 This outcome is a **False Negative** — and in medicine, false negatives can be deadly.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 A follow-up test (the consequence of a false positive) costs roughly \$500. Missing a CHD case and treating it in an emergency (the consequence of a false negative) costs tens of thousands. With those numbers in mind, would you rather the screening tool flag too many patients or too few — and how would that change if the costs were flipped, as they are in spam filtering?
 :::
 
@@ -536,8 +536,8 @@ roc_auc = auc(fpr, tpr)
 fig, ax = plt.subplots(figsize=(8, 6))
 ax.plot(fpr, tpr, linewidth=2, label=f'Logistic Regression (AUC = {roc_auc:.3f})')
 ax.plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random guessing (AUC = 0.5)')
-ax.set_xlabel('False Positive Rate')
-ax.set_ylabel('True Positive Rate (Recall)')
+ax.set_xlabel('False positive rate')
+ax.set_ylabel('True positive rate (recall)')
 ax.set_title('ROC Curve — Framingham CHD Prediction')
 ax.legend(fontsize=12)
 ax.set_xlim([0, 1])
@@ -604,7 +604,7 @@ The rule above uses the *average* precision at an operating point as a stand-in 
 :::
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 If you're the hospital administrator and you have budget for follow-up appointments with 200 patients per month, which threshold would you choose? The break-even rule says "push to $p^* \approx 1\%$" — but capacity is finite. How do you reconcile a clinical break-even with a hard staffing constraint?
 :::
 
@@ -616,7 +616,7 @@ fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(recall_curve, precision_curve, linewidth=2)
 ax.set_xlabel('Recall (fraction of CHD cases caught)')
 ax.set_ylabel('Precision (fraction of flags that are real)')
-ax.set_title('Precision-Recall Tradeoff')
+ax.set_title('Precision-recall tradeoff')
 
 # Annotate a few thresholds
 for t in [0.1, 0.2, 0.3, 0.5]:
@@ -636,7 +636,7 @@ plt.show()
 Precision depends on the base rate. A test with high **sensitivity** (catches most true cases) and high **specificity** (correctly clears most non-cases) can still have low precision when the condition is rare. This is one of the most common ways people are misled by machine learning claims.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 A vendor pitches a cancer screening test with "99% accuracy" — it catches 99% of cancer cases *and* correctly clears 99% of healthy patients (sensitivity = specificity = 99%). Cancer prevalence in the screened population is 0.5%. A patient tests positive. What is the probability they actually have cancer?
 :::
 
@@ -677,7 +677,7 @@ This is why mass screening programs are controversial — and why a vendor claim
 The overall AUC is ~0.75. Not amazing, but not terrible. But *overall* performance can hide dramatic failures in subgroups.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before we look at the numbers — for which age group do you think the model performs worst? Why?
 :::
 
@@ -724,7 +724,7 @@ sns.boxplot(data=test_df.dropna(subset=['age_group']),
             palette={'No CHD': 'steelblue', 'CHD': 'firebrick'}, ax=ax)
 ax.set_xlabel('Age group')
 ax.set_ylabel('Predicted CHD probability')
-ax.set_title('Predicted Probabilities by Age Group and Outcome')
+ax.set_title('Predicted probabilities by age group and outcome')
 plt.tight_layout()
 plt.show()
 ```
@@ -747,7 +747,7 @@ A model is **well-calibrated** if its predicted probabilities match observed fre
 A **calibration plot** checks this visually: bin predictions by predicted probability, compute the observed fraction of positives in each bin, and plot observed vs. predicted. A perfectly calibrated model lies on the diagonal.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before you look at the plot — if you sorted patients into ten groups by predicted risk (lowest 10%, next 10%, ..., highest 10%), would you expect the observed CHD rate in each group to match the average predicted risk for that group? Why or why not, given everything you've already seen about this model?
 :::
 
@@ -777,7 +777,7 @@ Calibration directly affects decision-making. Suppose a doctor uses a 30% predic
 Calibration and AUC measure different things. A model can have high AUC yet be poorly calibrated: it ranks patients correctly (high risk above low risk) while getting the absolute risk levels wrong. Whether that gap is a problem depends on how you use the probabilities.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 A model with good AUC but poor calibration ranks observations correctly but gets the absolute probabilities wrong. When is ranking enough? When do you need well-calibrated probabilities?
 :::
 
@@ -785,7 +785,7 @@ A model with good AUC but poor calibration ranks observations correctly but gets
 
 We opened with a hospital predicting 30-day readmissions, where 15% of patients are readmitted and "predict no one" scores 85% accuracy. The setup is the same as Framingham. Every tool from this chapter now applies to that problem: the confusion matrix exposes which patients the model misses; precision and recall frame the clinical tradeoff; the ROC curve shows performance across thresholds; the threshold itself is a cost-benefit call about intervention dollars and patient outcomes; subgroup analysis checks whether the model works across demographics; calibration asks whether the model's "25% readmission risk" label really means one in four. **Where on the precision-recall curve should the hospital operate?** There's no purely statistical answer — it depends on intervention costs, staff availability, and patient outcomes. That pattern — statistics narrows the choices, context picks one — is what every classification deployment looks like.
 
-## Key Takeaways
+## Key takeaways
 
 - **Logistic regression** predicts probabilities using the sigmoid function. The **logit** (log-odds) is a linear function of the features, and coefficients tell you the multiplicative change in odds.
 

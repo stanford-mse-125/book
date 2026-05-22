@@ -165,7 +165,7 @@ A statistical estimate is **biased** when it systematically deviates from the tr
 :::
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 If you drop all the PrivacySuppressed rows, what kind of schools remain in your dataset? What conclusions about "average college earnings" might change?
 :::
 
@@ -178,7 +178,7 @@ Survivorship bias is MNAR in disguise: the observations you *don't* see are syst
 :::
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 What other datasets might suffer from survivorship bias? Consider: (1) a study of building longevity that only examines structures still standing, (2) a dataset of songs on a "greatest hits of the 1960s" playlist, or (3) career advice from Fortune 500 CEOs. In each case, what is missing, and how does the missing data distort your conclusions?
 :::
 
@@ -285,7 +285,7 @@ print(f"Programs unique institutions:  {programs['UNITID'].nunique():,}")
 The join key is `UNITID` — a unique identifier assigned by the Department of Education to each campus. But the two datasets have different numbers of unique institutions, so not every ID appears in both.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before we run the join — predict: will the inner join have more rows, fewer rows, or the same number as the scorecard table? What about compared to the programs table?
 :::
 
@@ -347,7 +347,7 @@ The inner join *exploded* rows from roughly 7,700 to over 216,000. Each institut
 **The join type is a decision, not a default.** Each choice gives a different answer. An inner join used without checking may lose data; a one-to-many join may multiply it — and neither will warn you.
 
 :::{.callout-important}
-## Key Principle
+## Key principle
 After every join, check your row counts. Did you gain rows (one-to-many matches or duplicates in the join key)? Lose rows (unmatched keys)? Either one is a signal worth investigating.
 :::
 
@@ -469,7 +469,7 @@ if len(multi_id) > 0:
 The `subset` parameter controls which columns define a "duplicate." Changing it changes what counts as the same record — another judgment call.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Suppose two university campuses merge into one. Going forward, the merged school reports under a single UNITID — but what happens to the old UNITID? It may be purged from future data releases, creating a gap in the time series. Worse, the historical records under the old UNITID aren't retroactively relabeled, so pre-merger and post-merger data live under different identifiers with no automatic link.
 
 This problem is especially common in financial data: companies merge, are acquired, spin off divisions, go through IPOs, or go bankrupt. If you want to analyze the long-run performance of an investment strategy, you can't ignore these events — a company that was acquired in 2015 has no stock price after 2015, and its pre-acquisition data lives under a ticker symbol that no longer exists. Handling these transitions correctly is one of the hardest parts of working with longitudinal data.
@@ -526,7 +526,7 @@ Approach 2 (**mean imputation**) gives the same overall mean — by construction
 You might be thinking: if they all give the same overall mean, who cares? Here's where the damage shows — when we compare groups.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 If we drop all rows with missing earnings data, which types of schools do you think we lose the most of? Why?
 :::
 
@@ -653,7 +653,7 @@ print(f"Mean WITHOUT sentinels: {sensor_data[sensor_data != -999].mean():.1f}°F
 The sentinel-contaminated mean is wildly wrong. Unlike `NaN`, sentinel values don't trigger any warnings — they participate in every computation as if they were real data.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 The College Scorecard reports some schools with \$0 median debt. Are those real values — perhaps schools where all students receive full scholarships — or sentinel values for "no data"? How would you decide?
 :::
 
@@ -720,7 +720,7 @@ The first three paths give different answers, each reflecting a different decisi
 When you ask an AI to summarize the data directly, it picks one of these paths — and doesn't tell you which.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Which of the first three paths above would you choose, and why? Under what circumstances would the enrollment-weighted average (Path 3) give a meaningfully different answer from the unweighted average (Path 1)?
 :::
 
@@ -767,7 +767,7 @@ ChatGPT's data analysis tool introduces a further problem: it samples or truncat
 ### AI gotcha: wrong metric, no domain knowledge
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 If you were ranking schools by earnings performance, would you use a single institution-level number or program-level data? Why might the aggregate be misleading?
 :::
 
@@ -809,14 +809,14 @@ The "best" schools by raw earnings might just be the ones admitting the stronges
 ### AI gotcha: data leakage
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Look at these Scorecard columns: `SAT_AVG` (average SAT score), `UGDS` (undergraduate enrollment), `PCTPELL` (fraction of students receiving Pell grants, a measure of low-income enrollment), `MD_EARN_WNE_P10` (median earnings 10 years after entry), and `GT_25K_P6` (fraction of students earning above \$25K six years after entry). If you wanted to predict earnings, which columns would be dangerous to include as inputs?
 :::
 
 Suppose the AI builds a model to predict earnings. It naturally includes all numeric columns as features — including `GT_25K_P6`, the fraction of graduates earning above \$25K at six years. But `GT_25K_P6` is *derived from earnings data*. Including it as a feature to predict earnings is circular.
 
 :::{.callout-important}
-## Definition: Data Leakage
+## Definition: Data leakage
 **Data leakage** occurs when your model's input features contain information that wouldn't be available at prediction time, or that is mathematically derived from the target. Here, using `GT_25K_P6` (share earning above \$25K) to predict `MD_EARN_WNE_P10` (median earnings) is leakage — the feature encodes the answer by construction, like using tomorrow's stock price to "predict" today's return.
 :::
 
@@ -846,7 +846,7 @@ Good code, by contrast, is deterministic. Run the same script on the same data a
 Every data analysis starts with data munging. Here's the checklist:
 
 :::{.callout-note}
-## Data Munging Checklist
+## Data munging checklist
 
 1. **Check provenance.** Where did the data come from? Is there a data dictionary? A methodology document? If not, proceed with caution.
 2. **Check types.** Run `df.dtypes`. Any `object` columns that should be numeric? Any numeric columns that are really categories?
@@ -859,7 +859,7 @@ Every data analysis starts with data munging. Here's the checklist:
 9. **Compare groups.** Is the missingness evenly distributed across the groups you care about? If not, group comparisons are biased.
 :::
 
-## Key Takeaways
+## Key takeaways
 
 - **Know where your data came from.** Data provenance — who collected it, how, and why — determines how much you should trust any result.
 - **Missing data hides in many forms.** `NaN` is just one encoding. Strings like "PrivacySuppressed," sentinel values like `-999`, and absent rows are all missing data that pandas won't detect automatically.

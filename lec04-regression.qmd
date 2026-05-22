@@ -388,7 +388,7 @@ plt.show()
 Minimizing absolute error gives the **median**. Minimizing squared error gives the **mean**. The shared x-axis makes the alignment visual: the V-shape bottoms out at the median, the parabola bottoms out at the mean, and both picks sit inside the bulk of the distribution above.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 Why does the choice of loss function pick out a different summary? Squared error favors the mean, absolute error favors the median. Before reading the proof below, ask yourself: what happens to the derivative of $(y_i - c)^2$ as $c$ moves through the data, and why does that force a balance at $\bar{y}$?
 :::
@@ -402,7 +402,7 @@ $$\frac{d}{dc} \sum_{i=1}^n (y_i - c)^2 = -2\sum_{i=1}^n (y_i - c) = 0 \quad \Lo
 The optimal constant prediction under squared error is the sample mean $\bar{y}$. The absolute-error result takes more work: $|y_i - c|$ is not differentiable at $c = y_i$, so no calculus proof applies. The median emerges from a discrete balancing argument — when half the data points are above and half below, there's no benefit to changing $c$.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 The squared-error curve is a smooth parabola; the absolute-error curve has a sharp V. What does the shape of each curve tell you about sensitivity to small changes in your guess? If you shift $c$ by one dollar near the optimum, which loss punishes you more — absolute or squared?
 :::
@@ -498,7 +498,7 @@ print(f"Least-squares fit: ŷ = {b0:.0f} + {b1:.0f} × bedrooms")
 Each $(\beta_0, \beta_1)$ traces a different line on the bedrooms-vs-price scatter plot. The plot below overlays four candidates.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 Look at the four candidate lines below. Which one do you think minimizes the total squared error — and what criterion is your eye implicitly using to decide? "Passes through the middle of the cloud" is a starting point; try to make the criterion precise enough that you could compute it.
 :::
@@ -796,7 +796,7 @@ plt.show()
 ```
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 The residual cloud above is flat on average, as orthogonality guarantees. But suppose the cloud curved — sagging below zero in the middle and rising at the extremes. What would a curved pattern like that tell you about the relationship between price and bedrooms? Pause and form an answer before reading on.
 :::
@@ -1008,7 +1008,7 @@ The regression line is flatter than the 45-degree line. Parents 2 standard devia
 Galton's method for quantifying the trend — fitting a line through the data — became known as "regression," and the name stuck even though we now use it for problems that have nothing to do with reverting to averages. (For the full story, see Salsburg, *The Lady Tasting Tea*, Ch. 4.)
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 Where else do you see regression to the mean? Consider: a sports team wins 90% of games one season. Would you expect the same record next year? A student scores in the 99th percentile on one exam — will they do the same on the next?
 :::

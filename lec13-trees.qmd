@@ -94,7 +94,7 @@ print(f"  Train R² = {tree_train_r2:.3f}  |  Test R² = {tree_test_r2:.3f}")
 ```
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before running the next cell, predict: which feature lands at the root — `bedrooms`, `room_type`, or `borough`? Which appears second on the more expensive side?
 :::
 
@@ -280,7 +280,7 @@ plt.show()
 Both predictions are **rectangular blocks** of constant color — the tree's signature. (A linear model would render the same plot as a smooth gradient.) The shallow tree carves a few orderly blocks: bigger listings cost more, every step of the way. The deep tree is a quilt of small rectangles where the gradient breaks — adjacent cells where adding a bedroom *lowers* the prediction (highlighted). The tree has memorized a few quirky training listings.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 A coworker proposes shipping a tree at `max_depth=20` because "deeper is more flexible." Using only the depth-vs-R² plot above, write a one-sentence rebuttal. Which depth would you ship instead, and what would you measure to defend the choice?
 :::
 
@@ -318,7 +318,7 @@ plt.tight_layout(); plt.show()
 The U-shaped CV curve mirrors the polynomial experiment from [Chapter 6](lec06-validation.qmd). The same workflow picks any hyperparameter: lasso $\alpha$, polynomial degree, tree depth, number of neighbors — sweep, score by CV, take the best.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 The next section runs CV for *classification* instead of regression. **Before reading on**, predict the two substitutions you'd need to make in the loop above.
 :::
 
@@ -660,7 +660,7 @@ The random forest wins with no manual feature engineering — no hand-crafted po
 :::
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 The forest beats the linear model with interactions. Does that mean linear models are useless? What advantages might a linear model still have?
 :::
 
@@ -800,7 +800,7 @@ Each approach has distinct strengths:
 Prefer logistic regression for interpretability or small datasets; prefer trees/forests for many features with potential interactions when per-feature coefficients aren't needed.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 You've now seen all four cells of the linear-vs-trees × regression-vs-classification grid. Pick one of these scenarios and decide which model family you'd reach for first, and why:
 
 1. A health-insurance underwriter wants to price policies and produce, for each applicant, a one-line explanation of which factors moved their premium up or down.
@@ -901,7 +901,7 @@ Rule of thumb: reach for XGBoost first; switch to LightGBM when training time hu
 :::
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 If 30% of `bedrooms` is missing and you impute with the median before fitting a tree, what information have you destroyed? Would the tree have been better off seeing the missingness?
 :::
 

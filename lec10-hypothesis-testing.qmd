@@ -113,7 +113,7 @@ A non-significant result means the data are compatible with $H_0$ — but they m
 The two error rates trade off as we move the rejection threshold. Picture the test statistic's distribution under $H_0$ (centered at zero) and under a specific $H_1$ (shifted). Anything past the threshold counts as "reject."
 
 ::: {.callout-tip}
-## Think About It
+## Think about it
 
 Before scrolling: if we move the rejection threshold *to the right* (stricter $\alpha$ — harder to reject), what happens to the false-positive region under $H_0$? To the false-negative region under $H_1$? Predict before you read on.
 :::
@@ -331,7 +331,7 @@ With $\sigma \approx 105$ CD4 cells of patient-to-patient variation, even a $\De
 We can compute power by simulation — same engine as the Chapter 9 permutation, just with a true effect baked in. We simulate from a normal distribution here for tractability; the actual CD4-change distribution is somewhat skewed, but the approximation is fine at this $n$.
 
 ::: {.callout-tip}
-## Think About It
+## Think about it
 
 Suppose the true treatment effect really is 30 CD4 cells (a meaningful but not huge effect for HIV). With **100 patients per arm**, what fraction of trials would correctly reject $H_0$? 90%? 75%? 50%? Guess before you read on.
 :::
@@ -406,7 +406,7 @@ We now have the mechanics: $\alpha$ controls Type I error, power controls Type I
 You're the FDA. Approving a useless \$1.3B drug exposes patients to side effects with no upside and burns billions in healthcare costs (Type I). Rejecting a drug that works denies treatment to people who would have benefited — and possibly survived (Type II). The cost ratio of those two errors is what should set $\alpha$, not convention.
 
 ::: {.callout-tip}
-## Think About It
+## Think about it
 
 A drug might save 1,000 lives per year but costs \$2B to manufacture. What false positive rate would you accept? How does your answer change if the side-effect profile is severe?
 :::
@@ -592,7 +592,7 @@ plt.show()
 For a fixed real effect, the p-value collapses as we add data. Eventually *any* nonzero effect becomes significant.
 
 ::: {.callout-tip}
-## Think About It: the blood pressure drug
+## Think about it: the blood pressure drug
 
 A clinical trial with 10,000 participants tests a new blood pressure drug and finds a statistically significant reduction (p = 0.013). The effect: a 2 mmHg decrease in systolic blood pressure. For context, drinking a cup of coffee temporarily raises blood pressure by about 5 mmHg (Mesas et al., *Journal of Hypertension*, 2011). The drug's effect is real — it's not zero — but it's smaller than your morning coffee. Would you recommend this drug to patients, given costs and side effects?
 :::

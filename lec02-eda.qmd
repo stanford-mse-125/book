@@ -12,7 +12,7 @@ You've just rented an apartment in New York City, and you want to list a spare r
 Before you model, predict, or optimize, you need to *see* your data. **Exploratory Data Analysis (EDA)** is the practice of examining a dataset's structure, distributions, and quirks before fitting any model. EDA is the most important step in any analysis.
 
 :::{.callout-important}
-## Definition: Exploratory Data Analysis (EDA)
+## Definition: Exploratory data analysis (EDA)
 
 **Exploratory Data Analysis (EDA)** is the practice of examining a dataset's structure, distributions, and quirks before fitting any model. The goal is to build understanding: what variables do you have, what do they look like, and what relationships exist between them?
 :::
@@ -74,7 +74,7 @@ Scan the `Dtype` column. Most columns are what you'd expect: `int64` for counts,
 The `Dtype` column reports how pandas *stores* each column — but storage type and semantic type are different things. Before going further, let's name the six data types you'll encounter throughout this course.
 
 :::{.callout-important}
-## Definition: Data Types
+## Definition: Data types
 
 - **Continuous**: values on a number line (price, rating score, temperature). Pandas dtype: `float64`.
 - **Discrete**: countable values (number of bedrooms, number of reviews). Pandas dtype: `int64`.
@@ -124,7 +124,7 @@ The left plot wastes space — the distribution is so skewed that most data pile
 The zoomed-in version on the right is more informative. Most listings fall between \$50 and \$200/night, with a peak around \$100.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before looking at the numbers below: how large do you think the gap between mean and median price is? $5? $20? $100? What does the size of that gap tell you about the distribution?
 :::
 
@@ -185,13 +185,13 @@ plt.show()
 The mean (red dashed line) is pulled to the right of the median (orange solid line) by the long tail of expensive listings. The shaded green band shows the IQR — the middle 50% of prices. Most listings fall in a fairly narrow range, but the tail extends far to the right.
 
 :::{.callout-important}
-## Definition: Robust Statistics
+## Definition: Robust statistics
 
 A statistic is **robust** if extreme values barely affect it. The **median** and **interquartile range (IQR)** are robust: moving one observation to \$100,000 hardly changes either one. The **mean** and **standard deviation** are not robust: a single extreme value can shift them dramatically. When a distribution has heavy tails or outliers, robust summaries give a more reliable picture of the typical value and spread.
 :::
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 You're reporting Airbnb price spread to a city council considering rent regulation. The standard deviation is \$85, but the IQR is \$45. Which number do you present, and how does your choice affect the policy conversation?
 :::
 
@@ -266,7 +266,7 @@ plt.show()
 On the linear scale, expensive listings in the \$500–\$999 range make it hard to see any pattern among the majority. On the log scale, a clear upward trend emerges: each additional guest corresponds to roughly a **multiplicative** increase in price. Notice the y-axis still shows dollar amounts — the log axis just spreads them out.
 
 :::{.callout-tip}
-## Think About It: Reading a log-scale plot
+## Think about it: reading a log-scale plot
 A straight line on a semilog plot (log y-axis, linear x-axis) means each unit increase in x **multiplies** y by a fixed factor. That's exactly what we see here: each additional guest corresponds to roughly a multiplicative increase in price. On a linear plot, by contrast, a straight line means each unit increase in x **adds** a fixed amount to y.
 
 We'll formalize this interpretation — and cover the other log-transform cases — when we fit regression models in Chapter 5.
@@ -322,7 +322,7 @@ fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 # Room type
 room_counts = airbnb['room_type'].value_counts()
 room_counts.plot.bar(ax=axes[0], color=sns.color_palette()[:len(room_counts)], edgecolor='white')
-axes[0].set_title('Listings by Room Type')
+axes[0].set_title('Listings by room type')
 axes[0].set_ylabel('Count')
 axes[0].tick_params(axis='x', rotation=0)
 
@@ -420,12 +420,12 @@ fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
 # Top row: by room type
 sns.boxplot(data=filtered, x='room_type', y='price', ax=axes[0, 0])
-axes[0, 0].set_title('Price by Room Type (box)')
+axes[0, 0].set_title('Price by room type (box)')
 axes[0, 0].set_ylabel('Price ($)')
 axes[0, 0].set_xlabel('')
 
 sns.violinplot(data=filtered, x='room_type', y='price', ax=axes[0, 1], inner='quartile')
-axes[0, 1].set_title('Price by Room Type (violin)')
+axes[0, 1].set_title('Price by room type (violin)')
 axes[0, 1].set_ylabel('Price ($)')
 axes[0, 1].set_xlabel('')
 
@@ -561,7 +561,7 @@ print(f"Gaps by room type: ${gap_by_type.min():.0f}–${gap_by_type.max():.0f}")
 ```
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 The overall Manhattan-Brooklyn gap is *larger* than the gap within any individual room type. How is that possible? (Hint: what fraction of Manhattan listings are entire homes vs. Brooklyn?)
 :::
 
@@ -582,7 +582,7 @@ We'll develop formal tools for reasoning about confounders — including directe
 
 In Chapter 3, we'll see a higher-stakes version of confounding in the hospital data, where naive rankings penalize hospitals that treat the sickest patients. And we'll return to hospitals one final time in Chapter 18 to ask a causal question: does the penalty actually reduce readmissions, or does it just punish hospitals that serve vulnerable populations?
 
-## Key Takeaways
+## Key takeaways
 
 - **EDA comes first** — understand your data before modeling it.
 - **Distributions reveal what summaries hide.** The mean can be misleading when distributions are skewed. Always plot a histogram. Use a log axis for heavy-tailed data.

@@ -86,13 +86,13 @@ fig, axes = plt.subplots(1, 2, figsize=(8, 3.5))
 sns.boxplot(x='bathrooms', y='price_clean', data=airbnb_clean, ax=axes[0], color='steelblue')
 axes[0].set_xlabel('Number of Bathrooms')
 axes[0].set_ylabel('Price per Night ($)')
-axes[0].set_title('Airbnb Price by Bathrooms')
+axes[0].set_title('Airbnb price by bathrooms')
 
 sns.boxplot(x='borough', y='price_clean',
             data=airbnb_clean, ax=axes[1], color='steelblue')
 axes[1].set_xlabel('Borough')
 axes[1].set_ylabel('Price per Night ($)')
-axes[1].set_title('Airbnb Price by Borough')
+axes[1].set_title('Airbnb price by borough')
 axes[1].tick_params(axis='x', rotation=30)
 
 plt.tight_layout()
@@ -104,7 +104,7 @@ print("More bathrooms = higher price. Does this hold after controlling for bedro
 In Chapter 5 we already saw what "controlling for" does to a regression coefficient: the bathrooms coefficient shrank when bedrooms entered the model, because the two are correlated -- bigger places tend to have more of both. The lesson there: fit the multivariate model directly. So:
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 Before reading the regression output below, sketch your prediction for two numbers:
 (a) the bathrooms coefficient (sign and rough magnitude in dollars per night), and
 (b) the Manhattan-vs-Bronx borough gap (sign and rough magnitude). Check your guesses against the printed table.
@@ -164,7 +164,7 @@ We will read every regression table in this textbook off this same template.
 ## Interpreting the Airbnb coefficients
 
 :::{.callout-important}
-## Definition: Coefficient Interpretation
+## Definition: Coefficient interpretation
 Each coefficient has a specific interpretation: **"holding everything else constant,** a one-unit increase in $x_j$ is associated with a $\hat{\beta}_j$ change in $y$." The "holding everything else constant" language is what we mean by **controlling for** the other predictors.
 :::
 
@@ -177,7 +177,7 @@ Read the signs:
 - **`C(borough)[T.<X>]` rows:** each is the price gap for that borough relative to the dropped reference (the Bronx). Manhattan should be the largest gap; Brooklyn close behind; Queens and Staten Island lower. The intercept gives the absolute baseline (Bronx, zero bathrooms, zero bedrooms), and each borough indicator tells you how to shift from there.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 The coefficient on `bedrooms` is about \$34 per night. Does that mean adding a bedroom to your listing would increase your nightly rate by that amount? What other factors might change when you add a bedroom — and how would that affect the interpretation?
 :::
 
@@ -487,11 +487,11 @@ std_coefs = coef_vals * predictor_sds
 std_ci_lower = ci[0] * predictor_sds
 std_ci_upper = ci[1] * predictor_sds
 
-labels = ['Rest Days', 'Player Quality\n(Season Avg)', 'Home Court', 'Opponent\nGS Allowed']
+labels = ['Rest days', 'Player quality\n(season avg)', 'Home court', 'Opponent\nGS allowed']
 y_pos = list(range(len(labels)))
 
 # Color the bar that drives the decision differently so it pops in both panels.
-colors = ['#e74c3c' if l == 'Rest Days' else 'steelblue' for l in labels]
+colors = ['#e74c3c' if l == 'Rest days' else 'steelblue' for l in labels]
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4.5),
                           gridspec_kw={'width_ratios': [1.4, 1]})
@@ -514,7 +514,7 @@ for ax, title, xlim in zip(
     if xlim is not None:
         ax.set_xlim(*xlim)
 
-fig.suptitle('Standardized Regression Coefficients with 95% CIs', fontsize=12, y=1.02)
+fig.suptitle('Standardized regression coefficients with 95% CIs', fontsize=12, y=1.02)
 plt.tight_layout()
 plt.show()
 
@@ -558,7 +558,7 @@ print(f"completely negligible in practice.")
 > *"Statistical significance is no substitute for practical importance."* -- the unwritten lesson behind every $n$ in the tens of thousands.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 A sports analytics team comes to you and says "we ran a regression and found a negative coefficient for rest days -- extra rest actually *hurts* performance, with $p < 0.001$!" Before you act on that, what questions should you ask? Sketch your answers before reading on.
 :::
 
@@ -597,8 +597,8 @@ for bucket, color in zip(['Bench (Q1)', 'Role (Q2)', 'Starter (Q3)', 'Star (Q4)'
             color=color, label=str(bucket), linewidth=1.5, markersize=5)
 ax.plot(agg['REST_DAYS'], agg['GAME_SCORE'], 'k--',
         label='Aggregate (all players)', linewidth=2.5)
-ax.set_xlabel('Rest Days')
-ax.set_ylabel('Mean Game Score')
+ax.set_xlabel('Rest days')
+ax.set_ylabel('Mean game score')
 ax.set_title("Simpson's paradox: rest vs game score, aggregate vs within-quality bucket")
 ax.legend(title='Player season-avg quartile', fontsize=9, loc='best')
 plt.tight_layout()
@@ -631,7 +631,7 @@ Each LINE condition has a characteristic diagnostic signature. The residual plot
 ### Residual plot: do residuals have constant spread?
 
 :::{.callout-important}
-## Definition: Residual Plot
+## Definition: Residual plot
 A **residual plot** shows residuals (observed $-$ predicted) vs. **fitted values** (the model's predicted values, $\hat{y}_i$). We want to see a random scatter with no pattern. If the spread of residuals changes with the fitted value, that is **heteroscedasticity** -- the model's uncertainty is not uniform.
 :::
 
@@ -646,18 +646,18 @@ fig, axes = plt.subplots(1, 2, figsize=(8, 3.5))
 
 axes[0].scatter(fitted_air, resid_air, alpha=0.04, s=5, color='steelblue')
 axes[0].axhline(y=0, color='red', linestyle='--', linewidth=1)
-axes[0].set_xlabel('Fitted Values (ŷ)')
+axes[0].set_xlabel('Fitted values (ŷ)')
 axes[0].set_ylabel('Residuals')
-axes[0].set_title('Airbnb: Residuals vs Fitted Values')
+axes[0].set_title('Airbnb: residuals vs fitted values')
 smooth_air = lowess(resid_air, fitted_air, frac=0.1)
 axes[0].plot(smooth_air[:, 0], smooth_air[:, 1], color='orange', linewidth=2, label='LOWESS smooth')
 axes[0].legend()
 
 std_resid_air = airbnb_model.get_influence().resid_studentized_internal
 axes[1].scatter(fitted_air, np.sqrt(np.abs(std_resid_air)), alpha=0.04, s=5, color='steelblue')
-axes[1].set_xlabel('Fitted Values')
+axes[1].set_xlabel('Fitted values')
 axes[1].set_ylabel(r'$\sqrt{|\mathrm{Standardized\ Residuals}|}$')
-axes[1].set_title('Airbnb: Scale-Location Plot')
+axes[1].set_title('Airbnb: scale-location plot')
 smooth_air2 = lowess(np.sqrt(np.abs(std_resid_air)), fitted_air, frac=0.1)
 axes[1].plot(smooth_air2[:, 0], smooth_air2[:, 1], color='orange', linewidth=2)
 
@@ -695,8 +695,8 @@ fig, ax = plt.subplots(figsize=(6, 6))
 ax.scatter(tq_air, ord_air, alpha=0.04, s=5, color='steelblue')
 ref_x = np.array([tq_air.min(), tq_air.max()])
 ax.plot(ref_x, intercept_air + slope_air * ref_x, 'r-', linewidth=1.5, label='Normal reference line')
-ax.set_xlabel('Theoretical Quantiles (Normal)')
-ax.set_ylabel('Sample Quantiles (Residuals)')
+ax.set_xlabel('Theoretical quantiles (normal)')
+ax.set_ylabel('Sample quantiles (residuals)')
 ax.set_title('Q-Q Plot of Residuals\n(Airbnb regression model)')
 ax.legend()
 plt.tight_layout()
@@ -782,9 +782,9 @@ for block_idx, labels in enumerate(row_layouts):
         ref_x = np.array([tq.min(), tq.max()])
         ax_q.plot(ref_x, intercept + slope * ref_x, 'r-', linewidth=1.5)
         if block_idx == len(row_layouts) - 1:
-            ax_q.set_xlabel('Theoretical Quantiles (Normal)', fontsize=10)
+            ax_q.set_xlabel('Theoretical quantiles (normal)', fontsize=10)
         if col == 0:
-            ax_q.set_ylabel('Sample Quantiles', fontsize=10)
+            ax_q.set_ylabel('Sample quantiles', fontsize=10)
 
         # Annotation arrow linking the Q-Q shape to the failure mode
         ann = annotations.get(label)
@@ -932,8 +932,8 @@ ax.errorbar(ors, y_pos, xerr=[ors - or_ci_lower, or_ci_upper - ors],
 ax.axvline(x=1, color='red', linestyle='--', linewidth=1, label='OR = 1 (no effect)')
 ax.set_yticks(list(y_pos))
 ax.set_yticklabels(predictors)
-ax.set_xlabel('Odds Ratio per 1 SD (95% CI)')
-ax.set_title('Odds Ratios for 10-Year CHD Risk (Framingham)')
+ax.set_xlabel('Odds ratio per 1 SD (95% CI)')
+ax.set_title('Odds ratios for 10-year CHD risk (Framingham)')
 ax.legend()
 plt.tight_layout()
 plt.show()

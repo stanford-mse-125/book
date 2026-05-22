@@ -173,7 +173,7 @@ print(f"                     bathrooms coefficient = ${model_two.coef_[1]:.0f}")
 Bedrooms and bathrooms travel together: apartments with more bedrooms tend to have more bathrooms too. Simple regression on bedrooms alone has no way to split the gain — it hands all the price difference to bedrooms, since that is the only variable it can see, and the coefficient absorbs everything **correlated** with bedrooms, bathrooms included. Multiple regression asks a sharper question: *among listings with the same number of bathrooms, how does price change with bedrooms?* That comparison is what "holding bathrooms constant" means.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 When you compare two listings with the same number of bathrooms, the one with an extra bedroom costs about \$58 more (according to the two-feature model). When you compare two listings with the same number of bedrooms, the one with an extra bathroom costs about \$34 more. Notice that the simple regression said each bedroom was worth \$66 — the coefficient dropped when we controlled for bathrooms. These coefficients measure **association**, not causation — we'll revisit that distinction in [Chapter 18](lec18-causal-inference-1.qmd).
 :::
@@ -194,7 +194,7 @@ print(df.groupby('room_type')['price'].mean().round(0).sort_values(ascending=Fal
 You cannot multiply "Entire home/apt" by a coefficient. Regression requires numbers.
 
 :::{.callout-tip}
-## Think About It
+## Think about it
 
 How would you convert room type to numbers so a regression model can use it? A first instinct is to assign each category a single integer — say, entire home = 2, private room = 1, shared room = 0. Think before reading on: what would a linear model actually do with those numbers, and why is that a problem?
 :::
