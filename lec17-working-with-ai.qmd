@@ -37,9 +37,82 @@ Where a forest averages many trees grown in parallel, **gradient boosting** grow
 
 Each new tree fits the *residuals* of the ensemble so far, so the ensemble's prediction error shrinks with every tree added. For squared-error loss the residual is just $y - \hat y$; for classification or other losses the same procedure applies but "residual" means the gradient of that loss.
 
+```{python}
+#| echo: false
+#| fig-cap: "Random forest fits trees in parallel and averages their predictions; gradient boosting fits trees in sequence, with each tree trained on the residuals of the previous ensemble."
+import matplotlib.patches as mpatches
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
+
+def _box(ax, x, y, text, w=0.9, h=0.7, fc='#e6e6e6', ec='#555', fs=10):
+    ax.add_patch(mpatches.FancyBboxPatch(
+        (x - w/2, y - h/2), w, h, boxstyle='round,pad=0.04',
+        fc=fc, ec=ec, lw=1.2))
+    ax.text(x, y, text, ha='center', va='center', fontsize=fs)
+
+def _arrow(ax, x1, y1, x2, y2, color='#555', lw=1.0, text='', toffset=(0, 0.32)):
+    ax.annotate('', xy=(x2, y2), xytext=(x1, y1),
+                arrowprops=dict(arrowstyle='->', color=color, lw=lw))
+    if text:
+        ax.text((x1 + x2) / 2 + toffset[0], (y1 + y2) / 2 + toffset[1],
+                text, ha='center', va='bottom', fontsize=9, color=color)
+
+# Random forest
+ax = axes[0]
+ax.set_xlim(-0.2, 7.5); ax.set_ylim(0.2, 5)
+ax.set_aspect('equal'); ax.axis('off')
+ax.set_title('Random forest: trees fit in parallel, then averaged',
+             fontsize=11, fontweight='bold')
+
+_box(ax, 0.6, 2.5, 'data\n$(X, y)$', w=1.1, h=0.9)
+for ty, lbl in zip([3.8, 2.5, 1.2], ['$T_1$', '$T_2$', '$T_B$']):
+    _box(ax, 3.2, ty, lbl, fc='#cfe2f3', ec='#2c7fb8')
+    _arrow(ax, 1.2, 2.5, 2.75, ty)
+    _arrow(ax, 3.65, ty, 5.25, 2.5)
+ax.text(3.2, 1.9, r'$\vdots$', ha='center', va='center', fontsize=14)
+_box(ax, 6.1, 2.5, r'$\hat y = \frac{1}{B}\sum_b T_b(x)$', w=1.6, h=0.9,
+     fc='#fff2cc', ec='#bf9000', fs=9)
+
+# Gradient boosting
+ax = axes[1]
+ax.set_xlim(-0.2, 10.2); ax.set_ylim(0.2, 5)
+ax.set_aspect('equal'); ax.axis('off')
+ax.set_title('Gradient boosting: trees fit in sequence, on residuals',
+             fontsize=11, fontweight='bold')
+
+_box(ax, 0.6, 2.5, 'data\n$(X, y)$', w=1.1, h=0.9)
+for tx, lbl in zip([2.5, 4.7, 7.2], ['$T_1$', '$T_2$', '$T_M$']):
+    _box(ax, tx, 2.5, lbl, fc='#fbe5d6', ec='#d95f02')
+_arrow(ax, 1.2, 2.5, 2.05, 2.5)
+_arrow(ax, 2.95, 2.5, 4.25, 2.5, color='#d95f02', lw=1.3,
+       text=r'residual $r_1$', toffset=(0, 0.32))
+ax.text(5.95, 2.5, r'$\dots$', ha='center', va='center', fontsize=14)
+_arrow(ax, 5.15, 2.5, 6.75, 2.5, color='#d95f02', lw=1.3,
+       text=r'residual $r_{M-1}$', toffset=(0, 0.32))
+_box(ax, 8.85, 2.5, r'$\hat y = \sum_m T_m(x)$', w=1.6, h=0.9,
+     fc='#fff2cc', ec='#bf9000', fs=9)
+_arrow(ax, 7.65, 2.5, 8.05, 2.5)
+
+plt.tight_layout()
+plt.show()
+```
+
 :::{.callout-note collapse="true"}
 ## Going deeper: gradient boosting as gradient descent in function space
-More precisely, each new tree fits the negative gradient of the loss with respect to the ensemble's prediction $F(x_i)$ at each training point — the *pseudo-residuals*. Gradient descent ([Chapter 7](lec07-classification.qmd)) takes steps in *parameter* space; gradient boosting takes steps in *function* space by adding a tree that approximates the negative-gradient direction. For squared-error loss $L = \tfrac{1}{2}(y - \hat y)^2$, the negative gradient *is* the residual $y - \hat y$, recovering the simple form above; for log-loss it is the difference between observed and predicted probabilities; and so on.
+
+"Fitting the negative gradient" means: at each training point $x_i$, compute the partial derivative of the loss with respect to the current ensemble prediction $F(x_i)$, take the *negative* of those derivatives (the **pseudo-residuals**), and fit a regression tree to predict them from $x$. Add a scaled copy of that tree to the ensemble and repeat. Gradient descent ([Chapter 7](lec07-classification.qmd)) takes steps in *parameter* space; gradient boosting takes steps in *function* space — adding a function (the new tree) that points in the negative-gradient direction.
+
+Two specific cases make this concrete.
+
+**Squared-error loss.** With $L_i = \tfrac{1}{2}(y_i - F(x_i))^2$, the partial derivative is
+$$\frac{\partial L_i}{\partial F(x_i)} = -\bigl(y_i - F(x_i)\bigr),$$
+so the negative gradient is the prediction error $y_i - F(x_i)$. The pseudo-residual *is* the ordinary residual — each tree literally fits the previous ensemble's mistakes.
+
+**Logistic loss** (binary classification with $y_i \in \{0, 1\}$ and $F(x_i)$ the predicted *logit*, so the predicted probability is $p_i = \sigma(F(x_i)) = 1/(1+e^{-F(x_i)})$). With $L_i = -y_i \log p_i - (1-y_i) \log(1-p_i)$, the chain rule through $\sigma$ collapses neatly:
+$$\frac{\partial L_i}{\partial F(x_i)} = p_i - y_i,$$
+so the negative gradient is $y_i - p_i$ — the gap between observed label and predicted probability. Each tree fits *how wrong was the previous probability estimate?*
+
+In both cases the next tree is a correction to the current ensemble; the loss determines the exact form of that correction.
 :::
 
 ```{python}
