@@ -11,7 +11,7 @@ The Indiana Pacers' front office wants to sign a wing who can space the floor *a
 
 The task is **unsupervised learning** — there is no "right answer" column, only patterns in the data. In Chapter 14, PCA found a few *directions* that explained most of the variation in stock returns. Here we ask the parallel question: can we find *groups*? Both PCA and clustering are unsupervised; PCA compresses, k-means partitions.
 
-We use **k-means clustering** to discover modern NBA archetypes that cross position lines. We then re-run the same procedure on COMPAS, a criminal-justice dataset where the same kind of analysis carries far higher stakes.
+We use **k-means clustering** to discover modern NBA archetypes that cross position lines. We then look at four published case studies that show how the same algorithm fares in cell biology, asthma research, depression psychiatry, and stellar astronomy — and what determines whether its clusters can be trusted.
 
 :::{.callout-note collapse="false"}
 ## Basketball glossary (for non-fans)
@@ -749,183 +749,86 @@ A GM looking for a Buddy Hield replacement wants shot-mix archetypes — they id
 There is no "true" clustering of NBA players. Each feature recipe answers a different question. **Shot mix** asks "what kind of shots?" — gives archetypes. **Shot volume** asks "how many?" — gives stars-vs-role-players. **Shot efficiency** asks "how well?" — gives skill tiers. The feature choice is your responsibility — and it is also your liability when the decision has stakes.
 :::
 
-So far we've used clustering as a discovery tool. The shot-mix archetypes were one possible answer to one possible question; volume tiers and skill tiers answered different questions; none was the "true" partition of the league. When the consequence of a bad partition is signing the wrong free agent, the value judgment baked into the feature choice is easy to absorb. We now apply the same algorithm to a dataset where the value judgment determines how people are treated by the courts. Three lessons from the basketball half carry over: features encode a theory of similarity, structure appears whether or not it is real, and the analyst — not the algorithm — owns the result.
+So far we've used clustering as a discovery tool on one dataset. The shot-mix archetypes were one possible answer to one possible question; volume tiers and skill tiers answered different questions; none was the "true" partition of the league. The same algorithm runs on cells, patients, and stars. Whether the clusters it returns deserve trust depends on what you can check *outside* the clustering itself.
 
 ---
 
-## When the stakes are higher: COMPAS
+## Clustering in the wild
 
-:::{.callout-note collapse="false"}
-## COMPAS glossary
-- **Defendant**: a person charged with a crime who is awaiting trial or sentencing.
-- **Pretrial**: the period after a defendant is charged but before they are tried; courts decide whether to release the defendant or hold them in jail.
-- **Recidivism**: re-arrest (here, within a two-year follow-up window after release).
-- **decile_score**: COMPAS's overall risk-of-re-arrest score on a 1–10 scale (10 = highest risk in the developer's reference population).
-- **v_decile_score**: COMPAS's violent-re-arrest sub-score, also on a 1–10 scale.
-- **priors_count**: number of prior adult criminal convictions on the defendant's record at screening.
-- **juv_fel_count / juv_misd_count / juv_other_count**: counts of juvenile felonies, misdemeanors, and other juvenile offenses on the record.
-:::
+The basketball half showed how feature choice shapes clusters when stakes are low. We now look at four published case studies — single-cell biology, asthma, depression, and stellar astronomy — that turn on the same point at higher stakes. Two are successes, one is a cautionary failure, one is mixed. All four are real studies in their fields' top journals.
 
-The stakes have been low so far — a misjudged archetype costs a coach a free agent, not a defendant their liberty. The same algorithm applied to a different dataset can carry far higher stakes.
+### PCA, then k-means: a common recipe in the wild
 
-**COMPAS** is a risk-scoring algorithm used in pretrial bail decisions, parole hearings, and sentencing across many US states. Given a defendant's age, criminal history, and other factors, COMPAS returns a 1–10 ordinal decile risk rank for re-arrest (1 = lowest decile of risk in the developer's reference population, 10 = highest). In 2016 ProPublica investigated the system, evaluating the score against a two-year recidivism window, and found it disproportionately labeled Black defendants who did not reoffend as high-risk, and disproportionately labeled White defendants who did reoffend as low-risk.^[Angwin, J., Larson, J., Mattu, S., & Kirchner, L. (2016). Machine Bias. *ProPublica*. The data we use is ProPublica's published analysis of 7,214 Broward County defendants screened 2013-14. ProPublica's headline numbers: the false-positive rate (mislabeled high-risk among those who did not re-offend) was 44.9% for Black defendants vs 23.5% for White defendants; the false-negative rate was correspondingly higher for White defendants (47.7% vs 28.0%).]
+The cases below use a few flavors of clustering, but one recipe dominates the wild: run PCA first, then cluster on the PC scores. Why? K-means uses Euclidean distance, which behaves badly in high dimensions when features are many, correlated, or on mixed scales — distances become noisy and uninformative. PCA projects the data onto a small orthogonal basis that captures most of the variance, so distances in the reduced space track meaningful differences. Then k-means (or a graph-based variant) finds groups in the reduced representation.
 
-We do not re-litigate ProPublica's argument here. Instead we ask a question one level up: **what structure does clustering reveal in COMPAS's data, and how does that structure depend on the feature choice?**
+The standard recipe:
 
-```{python}
-compas = pd.read_csv(f'{DATA_DIR}/compas/compas-scores-two-years.csv')
+1. **Standardize** the features so no single column dominates the distance calculation.
+2. **PCA** down to $k$ components, picked from a scree plot or the elbow ([Chapter 14](lec14-pca.qmd)).
+3. **Cluster** (k-means or a related algorithm) on the $k$-dimensional PC scores.
 
-# ProPublica's standard filter (see book/data/compas/README.md)
-compas = compas[(compas['days_b_screening_arrest'] <= 30) &
-                (compas['days_b_screening_arrest'] >= -30)]
-compas = compas[compas['is_recid'] != -1]
-compas = compas[compas['c_charge_degree'] != 'O']
-compas = compas[compas['score_text'] != 'N/A']
-print(f"Defendants after filter: {len(compas):,}")
-print(compas['race'].value_counts().to_string())
-```
+The marquee published example below — Tabula Muris — uses exactly this pipeline on tens of thousands of genes.
 
-### Two feature sets, one population
+### Tabula Muris: clustering as the scaffolding of a cell atlas
 
-We cluster the same defendants two ways, both at $k=3$:
+The Tabula Muris Consortium profiled the gene expression of 100,605 individual cells across 20 mouse organs.[^tabula-muris] No cell came pre-labeled with its type. The pipeline: PCA on the most variable genes to reduce each cell's expression vector from tens of thousands of genes to a few dozen components, then graph-based (Seurat / Louvain) clustering on the PC scores. The result was around 50 clusters per organ.
 
-- **Risk-score features** (`decile_score`, `v_decile_score`, `priors_count`): COMPAS's outputs and prior count — the algorithm's view of the defendant.
-- **Criminal-history features** (`age`, `priors_count`, `juv_fel_count`, `juv_misd_count`, `juv_other_count`): a defendant's record, with no algorithmic risk score involved.
+Why this counts as a *good* use of clustering: each cluster was then annotated against known **marker genes** — genes that decades of cell-biology research had already pinned to specific cell types. When a cluster's top-expressed genes lined up with the marker set for, say, hepatocytes, the cluster got that name. Almost every named cell type in mouse anatomy came back out. The clustering itself didn't reveal cell types; it organized the data well enough that biologists could verify each group against an existing standard.
 
-We treat decile rank as a numeric feature for clustering. K-means assumes Euclidean distances are meaningful, which is a stronger claim for ordinal scales than for true measurements — another value judgment baked into the analysis.
+![Cell-type clusters across 20 mouse organs from the Tabula Muris atlas. Each cluster's identity was confirmed against a curated marker-gene panel — validation came from outside the algorithm.](images/lec15/case-tabula-muris-real.png){fig-align="center" width="80%"}
 
-```{python}
-feat_risk = ['decile_score', 'v_decile_score', 'priors_count']
-feat_hist = ['age', 'priors_count', 'juv_fel_count', 'juv_misd_count', 'juv_other_count']
+[^tabula-muris]: Tabula Muris Consortium (2018). Single-cell transcriptomics of 20 mouse organs creates a *Tabula Muris*. *Nature* 562, 367–372. <https://www.nature.com/articles/s41586-018-0590-4>.
 
-# Risk-score clustering, relabeled so cluster 0 = lowest mean decile_score
-X = StandardScaler().fit_transform(compas[feat_risk].values)
-raw_r = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
-compas['cluster_risk'] = relabel_by_key(raw_r, compas, 'decile_score', ascending=True)
+### Haldar: clusters that change which drug you should take
 
-# History clustering, relabeled so cluster 0 = lowest mean priors_count
-X = StandardScaler().fit_transform(compas[feat_hist].values)
-raw_compas_h = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
-compas['cluster_hist'] = relabel_by_key(raw_compas_h, compas, 'priors_count', ascending=True)
-```
+Haldar and colleagues clustered three asthma cohorts on 8 clinical and physiologic features: age of asthma onset, sex, atopic status, body-mass index, peak-flow variability, FEV1 bronchodilator response, sputum eosinophil count, and exhaled nitric oxide.[^haldar] The cohorts: a primary-care sample (n = 184), a refractory secondary-care sample (n = 187), and a longitudinal randomized trial (n = 68). The method: Ward's hierarchical clustering to pick $k$, then k-means with that $k$.
 
-### What did each clustering find?
+Two clusters showed up in both the primary-care and the refractory cohorts: **early-onset atopic** asthma and **obese non-eosinophilic** asthma. Two additional clusters appeared only in the refractory cohort and were *discordant* — symptoms and inflammation moved in opposite directions: a **symptom-predominant** group (lots of symptoms, little eosinophilic inflammation) and an **inflammation-predominant** group (eosinophilic, few symptoms).
 
-Tables of nine or fifteen numbers are hard to read. We'll plot the cluster profiles instead — one panel per feature, with one bar per cluster showing the cluster's mean.
+The validation was a randomized trial. Patients in the inflammation-predominant cluster were assigned to be managed either by symptoms (the standard of care) or by inflammation markers. The inflammation-managed arm cut exacerbations from roughly 3.5 to 0.4 per patient per year. Symptom-predominant patients managed by symptoms received substantially less inhaled steroid than they would have under inflammation-marker management. Cluster membership predicted *which treatment helped which patient*. That's a harder test than "the clusters look biologically interpretable": different treatments worked in different clusters, so the clusters mapped onto a real joint in the disease.
 
-```{python}
-fig, axes = plt.subplots(1, 3, figsize=(11, 3.5))
-risk_colors = ['#2ecc71', '#f1c40f', '#c0392b']  # green / yellow / red along the risk axis
-for f, ax in zip(feat_risk, axes):
-    means = compas.groupby('cluster_risk')[f].mean()
-    ax.bar(range(3), means.values, color=risk_colors, edgecolor='black', linewidth=0.5)
-    # Annotate the multiplier vs cluster 0 above each bar so cross-panel
-    # comparison reflects ratios, not raw axis heights.
-    base = means.values[0]
-    for i, v in enumerate(means.values):
-        ax.text(i, v, f' {v/base:.1f}×' if i > 0 else ' 1×',
-                ha='center', va='bottom', fontsize=9)
-    ax.set_xticks(range(3))
-    ax.set_xticklabels([f'Cluster {c}' for c in range(3)])
-    ax.set_title(f)
-    ax.set_ylim(0, max(means.values) * 1.25)
-plt.suptitle('Risk-score clustering: profiles (axes differ per panel; multipliers vs cluster 0 shown above bars)',
-             fontsize=11, y=1.02)
-plt.tight_layout()
-plt.show()
-```
+![Haldar et al. 2008: hierarchical clustering of asthma patients on 8 clinical features. The discordant inflammation-predominant cluster drove a treatment-by-cluster interaction in the follow-on randomized trial.](images/lec15/case-haldar-real.png){fig-align="center" width="80%"}
 
-The three risk-score clusters form a *ladder* along the COMPAS risk axis: decile score and prior count both climb sharply from cluster 0 to cluster 2 (cluster 2 is distinguished above all by an order-of-magnitude jump in priors — the multipliers above the bars make this comparable across panels). The violence sub-score isn't quite monotonic — it peaks in the middle cluster — but the dominant signal is one-dimensional: "how high does COMPAS rate this person?", sliced into low / mid / high.
+[^haldar]: Haldar, P., Pavord, I. D., Shaw, D. E., et al. (2008). Cluster analysis and clinical asthma phenotypes. *American Journal of Respiratory and Critical Care Medicine* 178, 218–224. <https://www.atsjournals.org/doi/10.1164/rccm.200711-1754OC>.
 
-```{python}
-fig, axes = plt.subplots(2, 3, figsize=(9, 6))
-hist_colors = ['#3498db', '#9b59b6', '#34495e']  # neutral palette; cluster ordering carries no risk meaning
-for f, ax in zip(feat_hist, axes.flat):
-    means = compas.groupby('cluster_hist')[f].mean()
-    ax.bar(range(3), means.values, color=hist_colors, edgecolor='black', linewidth=0.5)
-    ax.set_xticks(range(3))
-    ax.set_xticklabels(['C0', 'C1', 'C2'])
-    ax.set_title(f, fontsize=10)
-axes.flat[-1].set_axis_off()  # hide the 6th empty panel
-plt.suptitle('Criminal-history clustering: profiles', fontsize=12, y=0.99)
-plt.tight_layout()
-plt.show()
-```
+### Drysdale: beautiful clusters, no replication
 
-Cluster numbers in this figure are arbitrary and *do not* line up with the risk-clustering numbers above — cluster 2 here is not the same group as cluster 2 there. We kept the color palette neutral (blue / purple / navy) precisely so it doesn't imply a risk ladder.
+The Tabula Muris and Haldar studies show what success looks like. The next study shows what failure looks like — and it published first.
 
-The history clusters do **not** form a ladder. Reading across the five panels: cluster 0 is young with few priors and almost no juvenile record; cluster 1 is much older (age ~49) with moderate priors and almost no juvenile record; cluster 2 is young with many priors and heavy juvenile counts. The structure is two-dimensional — age on one axis, juvenile record on another — and no single ordering of the three clusters captures both.
+Drysdale and colleagues claimed to discover **four biotypes of depression** in 2017.[^drysdale] The pipeline: canonical correlation analysis (CCA) linking resting-state fMRI connectivity features to clinical symptom scores in 1,188 patients, then hierarchical clustering on the CCA-projected fMRI scores. The four resulting biotypes were claimed to be diagnosable from fMRI alone with 82–93% sensitivity and specificity, and to predict response to transcranial magnetic stimulation (TMS) therapy.
 
-A clustering used in pretrial bail decisions effectively assigns people into similarity groups for the courts to treat alike. If those groups track race more sharply than they track the recidivism outcome we ultimately care about, the algorithm risks recommending different treatment for defendants who differ chiefly in their demographics. The next plot shows the racial composition of each cluster under both feature recipes.
+Two years later, Dinga and colleagues attempted to replicate the pipeline on an independent sample of 187 patients.[^dinga] Permutation tests on the canonical correlations — the same correlations that Drysdale's pipeline pivoted on — returned p-values of 0.64 and 0.99. Cross-validated correlations on held-out data dropped to about zero. The four-cluster solution itself was no better than chance on standard cluster-validity tests (Calinski-Harabasz p = 0.45, silhouette p = 0.19 under the null). Cluster assignments were unstable: leaving one subject out at a time changed which cluster many subjects got assigned to.
 
-:::{.callout-tip}
-## Think about it
-Both clusterings group the same defendants. Before looking at the next plot, predict: will the racial composition of the clusters be similar across the two feature sets, or different? Why? What would each answer imply about whether the choice of features is "neutral"?
-:::
+The mechanism: CCA can always find linear combinations of two high-dimensional feature sets that look correlated in the data they were fit on, even when no structure exists in the population. With enough features and not enough samples, the optimization step *manufactures* apparent structure. Without a permutation test or out-of-sample replication, you cannot tell that structure from a real signal. Drysdale's original analysis didn't do either step. Dinga's did, and the structure dissolved.
 
-```{python}
-def race_composition(cluster_col):
-    """% Black, White, Hispanic per cluster — collapse small groups into 'Other'."""
-    df = compas.copy()
-    df['race_grp'] = df['race'].where(df['race'].isin(
-        ['African-American', 'Caucasian', 'Hispanic']), 'Other')
-    return (pd.crosstab(df[cluster_col], df['race_grp'], normalize='index') * 100).round(1)
+![Drysdale et al. 2017: four claimed depression "biotypes" from CCA on fMRI connectivity. Dinga et al. 2019 ran the same pipeline on an independent cohort and the structure failed every replication test.](images/lec15/case-drysdale-real.png){fig-align="center" width="80%"}
 
-comp_risk = race_composition('cluster_risk')[['African-American', 'Caucasian', 'Hispanic', 'Other']]
-comp_hist = race_composition('cluster_hist')[['African-American', 'Caucasian', 'Hispanic', 'Other']]
+[^drysdale]: Drysdale, A. T., Grosenick, L., Downar, J., et al. (2017). Resting-state connectivity biomarkers define neurophysiological subtypes of depression. *Nature Medicine* 23, 28–38. <https://www.nature.com/articles/nm.4246>.
 
-fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
-race_palette = {'African-American': '#c0392b', 'Caucasian': '#3498db',
-                'Hispanic': '#f39c12', 'Other': '#95a5a6'}
+[^dinga]: Dinga, R., Schmaal, L., Penninx, B. W. J. H., et al. (2019). Evaluating the evidence for biotypes of depression: methodological replication and extension of Drysdale et al. (2017). *NeuroImage: Clinical* 22, 101796. <https://www.sciencedirect.com/science/article/pii/S2213158219302827>.
 
-for ax, comp, title in [(axes[0], comp_risk, 'Risk-score clustering'),
-                        (axes[1], comp_hist, 'Criminal-history clustering')]:
-    bottoms = np.zeros(len(comp))
-    for race in ['African-American', 'Caucasian', 'Hispanic', 'Other']:
-        ax.bar(range(len(comp)), comp[race].values, bottom=bottoms,
-               color=race_palette[race], edgecolor='white', linewidth=0.5, label=race)
-        bottoms += comp[race].values
-    ax.set_xticks(range(len(comp)))
-    ax.set_xticklabels([f'Cluster {c}' for c in comp.index])
-    ax.set_title(title)
-    ax.set_ylim(0, 100)
-    ax.set_ylabel('% of cluster')
+### APOGEE: the same lesson, in physics
 
-axes[1].legend(loc='upper right', bbox_to_anchor=(1.35, 1), fontsize=9)
-plt.suptitle('Racial composition of each cluster', fontsize=13, y=1.02)
-plt.tight_layout()
-plt.show()
-```
+Garcia-Dias and colleagues ran k-means on 153,847 stellar spectra from the APOGEE survey (resolution $R \approx 22{,}500$), using the normalized flux at each wavelength as the input features — the raw spectra, not derived astrophysical parameters like temperature, surface gravity, or metallicity.[^garcia-dias]
 
-The risk-score features turn the racial skew into a clean ladder: the Black share *roughly doubles* across the three clusters (39% → 63% → 78%), climbing exactly with the risk axis. The history features produce a comparable Black share in their most-priors cluster (68%), but no longer along a single line — the share is highest in the heavy-juvenile cluster, and the older-defendants cluster is more racially mixed than the youngest one.
+The result was mixed. Some known stellar populations came back: dwarfs vs. giants, red-clump and red-giant-branch stars, bulge vs. halo. But the recovery was partial, the algorithm was sensitive to initialization, and the authors flagged the core limitation themselves: *"a discrete classification in flux space does not result in a neat organisation in the parameters' space."*
 
-- The **risk-score clustering** finds three groups that line up along a one-dimensional axis: low risk (low decile, few priors), mid risk, and high risk with many priors. The Black share of each cluster increases monotonically along the same axis.
+The lesson: the underlying objects — distinct stellar populations differing in mass, age, and chemical composition — are physically real. Yet k-means in raw-flux space only partially recovered them, because Euclidean distance between two spectra is not the same notion of similarity as distance between two stars in the parameter space astronomers actually care about. The clustering algorithm did its job correctly; the *similarity metric* — encoded by the feature choice — was the wrong one for the question.
 
-- The **history-only clustering** also finds three groups, but the structure is two-dimensional. Two clusters separate younger from older defendants; a third picks out defendants with heavy juvenile records. The Black share varies across clusters without tracking any single "risk" dimension.
+![Garcia-Dias et al. 2018: k-means on 153,847 APOGEE stellar spectra. Some real populations appeared, but the partition in flux space did not align with the physical-parameter space that defines what astronomers call a "type" of star.](images/lec15/case-apogee-real.png){fig-align="center" width="80%"}
 
-:::{.callout-warning}
-## Neither feature set is "neutral"
-Both clusterings find structure in the data and both produce racially-skewed clusters. The difference is *which* structure they find: the risk-score features impose a one-dimensional risk axis; the history features describe two-dimensional life-cycle groups. Neither version is the truth about these defendants. Each encodes a value judgment about which defendants count as similar.
+[^garcia-dias]: Garcia-Dias, R., Allende Prieto, C., Sánchez Almeida, J., & Ordovás-Pascual, I. (2018). Machine learning in APOGEE: unsupervised spectral classification with $K$-means. *Astronomy & Astrophysics* 612, A98. <https://www.aanda.org/articles/aa/full_html/2018/04/aa32134-17/aa32134-17.html>.
 
-No feature set escapes this problem. Age and prior count are not race-neutral inputs — they reflect, among other things, decades of policing decisions that were themselves not race-neutral. Choosing features is choosing a theory of who counts as "the same."
-:::
+### Same lesson, four fields
 
-:::{.callout-tip}
-## Think about it
-Which clustering would you defend in a courtroom? Which in a press conference? The two answers may differ — and the difference is about values, not statistics.
-:::
+Four cases, four fields, four verdicts.
 
-The COMPAS example sets up Chapter 16 (validation and feedback loops). The priors that feed COMPAS's score are themselves products of past policing decisions, which were informed by past risk assessments, which were informed by past priors. Every measurement we cluster on has a history.
+- **Tabula Muris (good).** The clustering organized the data; a curated external standard (marker genes) confirmed each group's identity.
+- **Haldar (good).** A follow-on randomized trial showed that cluster membership predicted which treatment worked. Validation came from a *new experiment*, not from the data the clusters were fit on.
+- **Drysdale → Dinga (bad).** Pretty clusters in a high-dimensional, small-sample CCA pipeline failed every check an independent group could think to apply.
+- **APOGEE (mixed).** The objects were real; the features encoded the wrong notion of similarity. The clustering algorithm wasn't broken; the choice of distance was.
 
-:::{.callout-note collapse="true"}
-## Going deeper: the impossibility result
-Two terms from Chapter 7, in a new context:
-
-- A score is **calibrated** across groups when, for a given score value, the actual rate of the outcome is the same across groups. In COMPAS terms: among defendants who score 7, the same fraction re-offend regardless of race.
-- The **false-positive rate** for a group is the fraction of *non-reoffenders* in that group who were nonetheless labeled high-risk. ProPublica's headline (44.9% vs. 23.5%) is the gap in this rate between Black and White defendants.
-
-Subsequent work — Chouldechova 2017 ("Fair prediction with disparate impact") and Corbett-Davies et al. 2017 ("Algorithmic decision making and the cost of fairness") — proved that when groups have different base rates of the outcome, no risk score can be simultaneously calibrated across groups *and* have equal false-positive rates across groups. You can have one or the other; you cannot have both. The COMPAS controversy turned out to be an instance of a general impossibility result, not a quirk of one vendor's algorithm. The trade-off between competing fairness criteria is a value judgment, not a math problem.
-:::
+All four turn on the same axis. The algorithm always returns groups. Whether to trust those groups depends on what you can check *outside* the clustering: a curated reference, a follow-on experiment, a replication on independent data, or a known set of objects whose structure you can compare to. Cluster-validity statistics measured on the same data the clusters were fit on don't qualify.
 
 ## Key takeaways
 
@@ -933,13 +836,15 @@ Subsequent work — Chouldechova 2017 ("Fair prediction with disparate impact") 
 
 - **Standardize first.** K-means uses Euclidean distance, so features on larger scales dominate. Standardization is a safe default even when the features share a scale already.
 
-- **Your features determine your clusters.** Shot mix gives archetypes; shot volume gives volume tiers; eFG% gives skill tiers. COMPAS risk-score features give a one-dimensional risk axis; criminal-history features give two-dimensional life-cycle groups. No feature set is neutral; each encodes a theory of similarity.
+- **Your features determine your clusters.** Shot mix gives archetypes; shot volume gives volume tiers; eFG% gives skill tiers. No feature set is neutral; each encodes a theory of similarity. Tabula Muris recovered cell types by clustering on gene expression; APOGEE only partially recovered stellar populations because Euclidean distance between raw spectra wasn't the right similarity metric.
 
 - **Choosing $k$ is a judgment call.** The elbow plot and silhouette score rule out clearly bad choices but cannot pick the granularity your task needs.
 
 - **K-means is not deterministic.** Different random seeds produce different clusters; check stability via ARI across seeds. Cases at cluster boundaries reveal structure the rigid labels hide.
 
-- **Always interpret and validate.** Clustering algorithms find structure in *any* data, including pure noise. Ask: are the clusters meaningful? Are they stable? Are they useful for the decision at hand? And — when the stakes are high — what value judgment does the feature choice embed?
+- **Validate from outside.** Clustering algorithms find structure in *any* data, including pure noise. The four published case studies turn on what was checked *outside* the clustering — a curated marker-gene panel, a randomized trial, an independent replication, or a known set of objects.
+
+- **PCA then cluster.** A common recipe in the wild: standardize, project to a few principal components, then run k-means or a graph-based clusterer on the PC scores. Euclidean distance is more trustworthy in the reduced space than in raw high-dimensional features.
 
 ## Looking ahead
 
@@ -956,9 +861,9 @@ PCA finds the best low-rank summary of the whole data matrix; k-means finds the 
 PCA and k-means solve the same matrix-approximation problem with different constraints. Stack the players as rows of $Y$ (the data) and the centroids (or PCA directions) as rows of $W$. Each player is then summarized by one row of a third matrix $X$, where $XW$ should reproduce $Y$ as closely as possible. PCA lets each row of $X$ be any real vector — a continuous coordinate, so each player is a *combination* of the rows of $W$. K-means restricts each row of $X$ to be a one-hot indicator — each player is replaced by *one* of the rows of $W$, its cluster centroid. Same objective, two different rules for what counts as a valid summary.
 :::
 
-Chapter 16 returns to predictive-policing and recidivism-risk examples to ask a different question: when an algorithm's predictions feed back into the world that generates its training data, the system enters a **feedback loop**, and the "ground truth" used for validation becomes partly the algorithm's own output. The chapter shows why standard validation breaks down under feedback and what to do about it.
+Chapter 16 takes the next step: when a model's predictions feed back into the world it measures, even careful validation can mislead.
 
-Chapter 17 returns to feature-choice stakes from the AI angle: what happens when a language model picks features for you, revisiting the value judgment we made by hand in §Your features determine your clusters? Chapters 18-19 ask a different question: when can we move from "are these features associated with the outcome?" to "do these features *cause* the outcome?" Clustering revealed structure; causal inference asks whether the structure is the kind we can intervene on.
+Chapter 17 returns to feature choice from the AI angle: what happens when a language model picks features for you? Chapters 18-19 ask a different question: when can we move from "are these features associated with the outcome?" to "do these features *cause* the outcome?" Clustering revealed structure; causal inference asks whether the structure is the kind we can intervene on.
 
 ## Study guide
 
@@ -1003,7 +908,8 @@ You should be able to:
 - Explain why "neutral" feature sets don't exist when feature choice encodes a value judgment.
 - Read a dendrogram and identify how the choice of cut-height controls $k$.
 - Use ARI to compare two clusterings (across seeds, across feature sets, across algorithms).
-- Explain how cluster racial-composition skew arises from the choice of features, not the algorithm.
+- Describe the standard PCA → k-means pipeline and explain why PCA helps.
+- Given a published case study, identify the external validation step that justified (or failed to justify) the clusters.
 
 #### Practice questions
 
@@ -1014,11 +920,11 @@ You should be able to:
 **Interior finishers.** Rim and paint together account for 80% of attempts; threes are barely 15%. Giannis, Zion, and Sabonis fit this profile.
 :::
 
-**2. Feature choice and skew.** A teammate clusters HMDA loan applicants on income, loan amount, and credit score and finds the high-rejection cluster is 70% Black. Should they conclude the algorithm is discriminating? Why or why not?
+**2. Validation from outside.** You read a paper that clusters retail customers on monthly spend, web-visit count, and product-category mix, finds five clusters, and reports a silhouette score of 0.42. The authors argue the clusters are real. What external check would make you trust the clusters, and what check measured on the same data would not?
 
 :::{.callout-tip collapse="true"}
 ## Answer
-**No.** The *cluster* didn't decide anything; the lender's rejection rule did. Clustering revealed that race correlates with the chosen feature set, but the chapter's lesson is that this correlation reflects what was put in — the features encode the lender's view of similarity. The question to investigate is what *decisions* are being made on top of the clusters and whether equally-creditworthy applicants are being routed to different clusters. Compare COMPAS's risk-score-vs-history split: same defendants, different feature recipes, different cluster compositions; none of the clusterings was the "true" partition.
+**An external check** is a piece of evidence the clustering itself couldn't have produced: a follow-on randomized email campaign showing that different message variants work better in different clusters (Haldar-style), or replication on an independent customer panel (Dinga-style), or alignment with a curated taxonomy of customer types built outside the data (Tabula Muris-style). A silhouette score — or any cluster-validity statistic computed on the same data the clusters were fit on — is internal to the optimization step and proves only that the algorithm found some structure, not that the structure replicates or predicts anything new.
 :::
 
 **3. Stability interpretation.** You run k-means with `n_init=1` and 10 different seeds. The pairwise ARI matrix has mean 0.45 with min 0.18 and max 0.88. What should you do?

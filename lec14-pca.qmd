@@ -403,6 +403,8 @@ Couldn't we just pick the 5 most important features instead of doing PCA? When w
 
 PCA creates *new* features that are combinations of the originals — it's **dimensionality reduction**. Lasso picks a subset of existing features — that's **feature selection**. PCA is especially useful when your original features are correlated (like the six review scores): it creates uncorrelated summaries that capture more information per component.
 
+A common downstream use of PCA is to feed the top-$k$ PC scores into a clustering algorithm — Euclidean distances are more trustworthy in the reduced space than in the raw features. See [Chapter 15](lec15-clustering.qmd) for the Tabula Muris single-cell atlas, the marquee published example of this PCA-then-cluster recipe.
+
 :::{.callout-warning}
 ## PCA on mixed data
 We only used numeric columns. PCA requires numeric input — if you one-hot encode categoricals and run PCA, you're mixing binary (0/1) columns with continuous columns. The geometry of binary data is very different (all points land on vertices of a hypercube), so standard PCA doesn't handle this well.
@@ -424,7 +426,7 @@ For this course, just use the numeric columns. If you're curious about mixed dat
 
 ## Coming up next
 
-In **Chapter 15**, we'll move from summarizing data to *grouping* data. **K-means clustering** will discover modern NBA archetypes that cut across traditional positions — and then we'll apply the same algorithm to a criminal-risk dataset where the feature choice matters far more than the basketball one. PCA and K-means are cousins: same optimization framework, different constraints.
+In **Chapter 15**, we'll move from summarizing data to *grouping* data. **K-means clustering** will discover modern NBA archetypes that cut across traditional positions — and then we'll look at four published case studies (cells, asthma, depression, stars) that turn on the same point: feature choice determines what the algorithm finds, and validation has to come from outside the clustering itself. PCA and k-means are cousins: same optimization framework, different constraints.
 
 ## Study guide
 
