@@ -5,9 +5,9 @@ execute:
 jupyter: python3
 ---
 
-You can hand a dataset to an AI tool today — a chat interface with a code interpreter, a notebook agent, a turnkey AutoML pipeline — and get a fitted model and a written analysis back in seconds. When should you trust the result? What is the human still responsible for?
+You can give a dataset to an AI tool today — a chat interface with a code interpreter, a notebook agent, an AutoML pipeline — and get a fitted model and a written analysis back in seconds. When should you trust the result? What is the human still responsible for?
 
-This chapter walks the 2026 automation landscape: AutoML for model selection, tabular foundation models that skip per-dataset training, LLM agents that write analysis pipelines. For each we look at what published benchmarks say it does well, where it still fails, and what the human contributes that the tool cannot. The chapter closes with a checklist for evaluating any analysis — a colleague's, a vendor's, or an AI's — which delivers the promise from [Chapter 1](lec01-intro.qmd).
+This chapter covers three classes of 2026 automation: AutoML for model selection, tabular foundation models that skip per-dataset training, and LLM agents that write analysis pipelines. For each, we examine what published benchmarks say it does well, where it still fails, and what the human contributes that the tool cannot. The chapter closes with a checklist for evaluating any analysis — a colleague's, a vendor's, or an AI's — delivering the promise from [Chapter 1](lec01-intro.qmd).
 
 ```{python}
 import numpy as np
@@ -29,13 +29,13 @@ plt.rcParams['font.size'] = 12
 DATA_DIR = 'data'
 ```
 
-## Gradient boosting: the workhorse AutoML searches over
+## Gradient boosting: the model AutoML searches over
 
-Random forests and gradient boosting from [Chapter 13](lec13-trees.qmd) are the first models any AutoML system will reach for on tabular data. The forest mechanism — bootstrap sampling, feature subsets, average independently-grown trees — you already know. Gradient boosting we cover here because it is what underpins XGBoost, LightGBM, and CatBoost, the libraries that win most tabular competitions.
+Random forests and gradient boosting from [Chapter 13](lec13-trees.qmd) are the first models any AutoML system will try on tabular data. The forest mechanism — bootstrap sampling, feature subsets, average independently-grown trees — you already know. We cover gradient boosting here because it is the algorithm behind XGBoost, LightGBM, and CatBoost, the libraries that win most tabular competitions.
 
 Where a forest averages many trees grown in parallel, **gradient boosting** grows them *sequentially*: each new tree is trained on the *errors* of the previous trees.
 
-Each new tree trains on the *residuals* — the mistakes — of the ensemble so far, so the ensemble nudges its prediction a little closer to the truth with every tree added. For squared-error loss this residual is literally $y - \hat y$; for classification or other losses the same machinery applies but "residual" means the gradient of that loss.
+Each new tree fits the *residuals* of the ensemble so far, so the ensemble's prediction error shrinks with every tree added. For squared-error loss the residual is just $y - \hat y$; for classification or other losses the same procedure applies but "residual" means the gradient of that loss.
 
 :::{.callout-note collapse="true"}
 ## Going deeper: gradient boosting as gradient descent in function space
@@ -67,7 +67,7 @@ print(f"Random Forest:     CV R-sq = {forest_cv.mean():.3f}")
 print(f"Gradient Boosting: CV R-sq = {gboost_cv.mean():.3f}")
 ```
 
-On this College Scorecard target the forest edges scikit-learn's gradient booster by about three percentage points of CV R-sq — small in absolute terms, and on many tabular problems it flips the other way. The production gradient-boosting libraries (XGBoost, LightGBM, CatBoost) add learning-rate shrinkage, second-order gradients, regularization, and clever splits that scikit-learn's reference implementation does not. A 2022 benchmark across 45 datasets gave the field a definitive answer to a long-running debate: tree-based models still beat deep neural networks on typical tabular data, because tabular features are heterogeneous and tabular targets are non-smooth in ways that the rotational invariance of neural networks gets wrong.^[Grinsztajn, Oyallon, & Varoquaux. *Why do tree-based models still outperform deep learning on typical tabular data?* NeurIPS 2022 Datasets and Benchmarks Track. arXiv:2207.08815.] Trees and forests, then, are the model family AutoML will keep proposing on tabular data.
+On this College Scorecard target the forest outperforms scikit-learn's gradient booster by about three percentage points of CV R-sq — small in absolute terms, and the ordering often reverses on other tabular problems. Production gradient-boosting libraries (XGBoost, LightGBM, CatBoost) add learning-rate shrinkage, second-order gradients, regularization, and refined splitting rules that scikit-learn's reference implementation lacks. A 2022 benchmark across 45 datasets settled a long-running debate: tree-based models still outperform deep neural networks on typical tabular data, because tabular features are heterogeneous and tabular targets are non-smooth in ways that the rotational invariance of neural networks does not handle well.^[Grinsztajn, Oyallon, & Varoquaux. *Why do tree-based models still outperform deep learning on typical tabular data?* NeurIPS 2022 Datasets and Benchmarks Track. arXiv:2207.08815.] Trees and forests are the default tabular model family for AutoML.
 
 ## The AutoML loop
 
@@ -78,9 +78,9 @@ On this College Scorecard target the forest edges scikit-learn's gradient booste
 
 ### CASH: combined algorithm selection and hyperparameter optimization
 
-You have probably already done AutoML by hand. Try logistic regression. Try a random forest. Try gradient boosting. Tweak `max_depth` or `learning_rate`. Pick the configuration with the best cross-validated score. The task the field calls **CASH** — Combined Algorithm Selection and Hyperparameter optimization — is exactly this loop, but automated and searched intelligently. Auto-WEKA introduced the name in 2013 by folding "which algorithm" into a single top-level categorical hyperparameter, turning algorithm choice and hyperparameter tuning into one optimization problem.^[Thornton, Hutter, Hoos, & Leyton-Brown. *Auto-WEKA: Combined Selection and Hyperparameter Optimization of Classification Algorithms.* KDD 2013. arXiv:1208.3719.]
+You have probably already done AutoML by hand: try logistic regression, then a random forest, then gradient boosting; tune `max_depth` or `learning_rate`; pick the configuration with the best cross-validated score. The task the field calls **CASH** — Combined Algorithm Selection and Hyperparameter optimization — is exactly this loop, automated and searched systematically. Auto-WEKA introduced the name in 2013 by folding "which algorithm" into a single top-level categorical hyperparameter, turning algorithm choice and hyperparameter tuning into one optimization problem.^[Thornton, Hutter, Hoos, & Leyton-Brown. *Auto-WEKA: Combined Selection and Hyperparameter Optimization of Classification Algorithms.* KDD 2013. arXiv:1208.3719.]
 
-A "poor man's AutoML" in a few sklearn lines: try three model families — linear regression, a random forest, and gradient boosting — with cross-validation, and pick the winner. The `Pipeline` wrap on the linear model — `Pipeline([('scaler', StandardScaler()), ('model', LinearRegression())])` — fits `StandardScaler` only inside each training fold, so the scaler never sees the held-out fold's mean and standard deviation. This is the AutoML loop in miniature.
+A minimal AutoML in a few sklearn lines: try three model families — linear regression, a random forest, and gradient boosting — with cross-validation, and select the best. The `Pipeline` wrap on the linear model — `Pipeline([('scaler', StandardScaler()), ('model', LinearRegression())])` — fits `StandardScaler` only on each training fold, so the scaler never sees the held-out fold's mean and standard deviation. This is the same loop AutoML automates at larger scale.
 
 ```{python}
 # Poor man's AutoML: try 3 models, pick the best by 5-fold CV.
@@ -131,41 +131,41 @@ plt.tight_layout()
 plt.show()
 ```
 
-Notice how much the per-fold scores overlap. The difference in *mean* CV R-sq between the best and second model is small compared with the spread across folds, so on a different sample of folds the rank could easily flip. Real AutoML systems address this both by searching a much larger configuration space and by combining several configurations rather than picking a single winner.
+Notice how much the per-fold scores overlap. The difference in *mean* CV R-sq between the best and second model is small compared with the spread across folds, so on a different sample of folds the ordering could easily reverse. Real AutoML systems address this both by searching a much larger configuration space and by combining several configurations rather than selecting a single one.
 
-Beyond the grid-search loop you ran by hand, the modern toolkit is random search,^[Bergstra & Bengio. *Random Search for Hyper-Parameter Optimization.* JMLR 13:281–305 (2012).] Bayesian optimization with model-based surrogates, and bandit-style early stopping that "kills the losers" on cheap evaluations before the expensive ones — Hyperband is the standard reference.^[Li, Jamieson, DeSalvo, Rostamizadeh, & Talwalkar. *Hyperband: A Novel Bandit-Based Approach to Hyperparameter Optimization.* JMLR 18(185):1–52 (2018). arXiv:1603.06560.]
+Beyond grid search, the modern toolkit is random search,^[Bergstra & Bengio. *Random Search for Hyper-Parameter Optimization.* JMLR 13:281–305 (2012).] Bayesian optimization with model-based surrogates, and bandit-style early stopping that drops the lowest-performing configurations on cheap evaluations before the expensive ones — Hyperband is the standard reference.^[Li, Jamieson, DeSalvo, Rostamizadeh, & Talwalkar. *Hyperband: A Novel Bandit-Based Approach to Hyperparameter Optimization.* JMLR 18(185):1–52 (2018). arXiv:1603.06560.]
 
 :::{.callout-tip}
 ## Think about it
 Before we continue — what did AutoML *not* do here? Which decisions did *we* make before any model was fit?
 :::
 
-### AutoGluon wins by ensembling, not by clever search
+### AutoGluon wins by ensembling, not by better search
 
-The 2024 benchmark of record on tabular AutoML — nine frameworks, 71 classification tasks and 33 regression tasks — found a clear winner.^[Gijsbers, Bueno, Coors, LeDell, Poirier, Thomas, Bischl, & Vanschoren. *AMLB: an AutoML Benchmark.* JMLR 25 (2024). arXiv:2207.12560.] **AutoGluon** is the strongest open-source AutoML system on tabular data — and the reason is not a cleverer search algorithm. The wins come from **ensembling and multi-layer stacking** of many models AutoGluon has already fit. *Stacking* trains a small meta-learner whose input features are the predictions of the base models; the meta-learner learns which base model to trust under which conditions and decorrelates their errors. Both moves vindicate a 2004 result on ensemble selection from libraries of models that predates the entire AutoML era.^[Caruana, Niculescu-Mizil, Crew, & Ksikes. *Ensemble Selection from Libraries of Models.* ICML 2004.]
+The 2024 benchmark of record on tabular AutoML — nine frameworks, 71 classification tasks and 33 regression tasks — found a clear leader.^[Gijsbers, Bueno, Coors, LeDell, Poirier, Thomas, Bischl, & Vanschoren. *AMLB: an AutoML Benchmark.* JMLR 25 (2024). arXiv:2207.12560.] **AutoGluon** is the strongest open-source AutoML system on tabular data — and the reason is not a more sophisticated search algorithm. The gains come from **ensembling and multi-layer stacking** of many models AutoGluon has already fit. *Stacking* trains a small meta-learner whose input features are the predictions of the base models; the meta-learner learns which base model to trust under which conditions, and combines their predictions so individual errors cancel. Both moves confirm a 2004 result on ensemble selection from libraries of models that predates the entire AutoML era.^[Caruana, Niculescu-Mizil, Crew, & Ksikes. *Ensemble Selection from Libraries of Models.* ICML 2004.]
 
-The 2026 picture is that the search engine has stopped being the story. The wins come from (a) ensembling everything you have already fit and (b) reusing structure across datasets — which leads us to the next section.
+The 2026 frontier is no longer about better search algorithms. The improvements come from (a) ensembling models you have already fit and (b) reusing structure across datasets — the subject of the next section.
 
 ## Tabular foundation models
 
-Foundation models — single large pretrained networks adapted to many downstream tasks — became the norm in language (GPT, Claude, Gemini) and vision (CLIP, SAM) over the last several years. The tabular world is catching up. The marquee result is **TabPFN**.
+Foundation models — single large pretrained networks adapted to many downstream tasks — became the norm in language (GPT, Claude, Gemini) and vision (CLIP, SAM) over the last several years. Tabular data is catching up. The leading example is **TabPFN**.
 
 :::{.callout-important}
 ## Definition: TabPFN
 **TabPFN** (Tabular Prior-data Fitted Network) is a transformer pretrained once, offline, on millions of *synthetic* tabular datasets. At deployment it does no training and no hyperparameter tuning: paste the entire training table into the model's context window, append the test rows, read predictions off in one forward pass. Current v2 caps out around 10,000 rows and 500 features.
 :::
 
-This is **in-context learning** — the same mechanism that lets large language models give you a sensible answer from a few examples in a prompt, transposed to tables. The result was first published at ICLR 2023^[Hollmann, Müller, Eggensperger, & Hutter. *TabPFN: A Transformer That Solves Small Tabular Classification Problems in a Second.* ICLR 2023. arXiv:2207.01848 (preprint 2022).] and substantially expanded in *Nature* in January 2025:^[Hollmann, Müller, Purucker, Krishnakumar, Körfer, Hoo, Schirrmeister, & Hutter. *Accurate predictions on small data with a tabular foundation model.* Nature 637, 319–326 (2025). DOI 10.1038/s41586-024-08328-6.] a single pretrained model with no per-dataset fitting beats tuned XGBoost and CatBoost on small tabular problems. The version-2 release adds regression alongside classification, and **TabICL** (ICML 2025) extends the same idea to datasets with hundreds of thousands of rows.^[Qu, Holzmüller, Varoquaux, & Le Morvan. *TabICL: A Tabular Foundation Model for In-Context Learning on Large Data.* ICML 2025. arXiv:2502.05564.]
+This is **in-context learning** — the same mechanism that lets large language models produce a sensible answer from a few examples in a prompt, applied to tables. The result was first published at ICLR 2023^[Hollmann, Müller, Eggensperger, & Hutter. *TabPFN: A Transformer That Solves Small Tabular Classification Problems in a Second.* ICLR 2023. arXiv:2207.01848 (preprint 2022).] and substantially expanded in *Nature* in January 2025:^[Hollmann, Müller, Purucker, Krishnakumar, Körfer, Hoo, Schirrmeister, & Hutter. *Accurate predictions on small data with a tabular foundation model.* Nature 637, 319–326 (2025). DOI 10.1038/s41586-024-08328-6.] a single pretrained model with no per-dataset fitting outperforms tuned XGBoost and CatBoost on small tabular problems. The version-2 release adds regression alongside classification, and **TabICL** (ICML 2025) extends the same approach to datasets with hundreds of thousands of rows.^[Qu, Holzmüller, Varoquaux, & Le Morvan. *TabICL: A Tabular Foundation Model for In-Context Learning on Large Data.* ICML 2025. arXiv:2502.05564.]
 
-What this changes: for twelve years the unstated assumption in AutoML was *search for the right model on each new dataset.* A pretrained tabular foundation model breaks that assumption. The "model" is the same one across every dataset; what changes is the example table you put in the context window. TabPFN v2 needs a GPU for inference, so for now it does not displace AutoML on every problem — just dominates the small-data corner where pretraining across datasets has the strongest leverage.
+For twelve years the unstated assumption in AutoML was *search for the right model on each new dataset.* A pretrained tabular foundation model breaks that assumption: the same model serves every dataset, and what changes is the example table placed in the context window. TabPFN v2 needs a GPU for inference, so it does not replace AutoML on every problem. It currently leads on small datasets, where pretraining across datasets helps most.
 
 ## LLM agents writing data-analysis pipelines
 
-A second automation arc runs in parallel: large language models that write, execute, and revise analysis code.
+Alongside AutoML and foundation models, a third class of tools is large language models that write, execute, and revise analysis code.
 
 :::{.callout-important}
 ## Definition: AI agent (for data analysis)
-A **data-analysis agent** is a control loop wrapped around a language model: the model proposes code; an interpreter runs it; the model reads the output (numbers or tracebacks); the model revises and iterates. The *agent* is the loop, not the language model alone. Modern tools differ in how the loop is structured (single planner, multi-agent debate, tree-search-over-code), but they all execute and read back.
+A **data-analysis agent** is a control loop around a language model: the model proposes code; an interpreter runs it; the model reads the output (numbers or tracebacks); the model revises and iterates. The *agent* is the loop, not the language model alone. Modern tools differ in how the loop is structured (single planner, multi-agent debate, tree search over code), but they all execute and read back.
 :::
 
 Two examples carry useful through-lines for this chapter:
@@ -177,41 +177,41 @@ Other 2024–2025 systems take similar shapes — graph-of-tool-calls planners (
 
 How well do they actually do? OpenAI's **MLE-bench** measures this directly: 75 real Kaggle competitions, scored against the published human leaderboards.^[Chan, Chowdhury, Jaffe, Aung, Sherburn, Mays, et al. (OpenAI). *MLE-bench: Evaluating Machine Learning Agents on Machine Learning Engineering.* ICLR 2025. arXiv:2410.07095.] In the original paper the best setup — `o1-preview` with the AIDE scaffold — reached at least a *bronze* medal in 16.9% of competitions. The public leaderboard has since climbed: as of early 2026 the top entry, R&D-Agent (o3 + GPT-4.1), reports a roughly 30% medal rate, with new submissions paused 2026-04-24 pending a fairness review. Even the better number means today's best agents fail to clear the lowest human medal tier in about two of every three competitions.
 
-The trend across all three arcs — AutoML, foundation models, agents — is convergence. AIDE's tree search over code is CASH over programs. CAAFE is an LLM feeding features into a downstream tabular model. Agents increasingly *call* AutoGluon / XGBoost / TabPFN as tools rather than reinventing them.
+The trend across all three classes — AutoML, foundation models, agents — is convergence. AIDE's tree search over code is CASH over programs. CAAFE is an LLM feeding features into a downstream tabular model. Agents increasingly *call* AutoGluon, XGBoost, or TabPFN as tools rather than reimplementing them.
 
-## A through-line: OBOE → TabPFN
+## A common idea: OBOE → TabPFN
 
-The "exploit structure across datasets" bet has an older form. **OBOE** in 2019 built a matrix whose rows are models and columns are datasets, with entries equal to the cross-validated error of that model on that dataset.^[Yang, Akimoto, Kim, & Udell. *OBOE: Collaborative Filtering for AutoML Model Selection.* KDD 2019. arXiv:1808.03233.] The matrix turns out to be approximately *low rank* — most of the variation across (model, dataset) pairs can be explained by a few latent factors. Run a handful of cheap *probe* models on a new dataset and *complete the matrix* to predict which untried models are likely to do well: Netflix recommends movies, OBOE recommends models. TabPFN pushes the same bet harder, swapping a low-rank surface for a transformer pretrained across millions of synthetic datasets and queried in-context. Same intellectual idea, two generations of method.
+The "exploit structure across datasets" idea has an older form. **OBOE** in 2019 built a matrix whose rows are models and columns are datasets, with entries equal to the cross-validated error of that model on that dataset.^[Yang, Akimoto, Kim, & Udell. *OBOE: Collaborative Filtering for AutoML Model Selection.* KDD 2019. arXiv:1808.03233.] The matrix is approximately *low rank* — most of the variation across (model, dataset) pairs can be explained by a few latent factors. Run a few cheap *probe* models on a new dataset and *complete the matrix* to predict which untried models are likely to do well: collaborative filtering, applied to model selection. TabPFN extends the same idea, replacing the low-rank fit with a transformer pretrained across millions of synthetic datasets and queried in-context. The same idea, two generations of method.
 
 ## Honest capability boundaries
 
-Given all that automation, where do these tools still fail? The 2026 benchmark picture is consistent and worth being specific about.
+Where do these tools still fail? The 2026 benchmark picture is fairly consistent.
 
-**Reliable on the mechanical step, unreliable on the judgment-laden workflow.** **DABStep** is currently the closest benchmark to "an analyst doing real work" — 450+ multi-step data-analysis tasks drawn from a financial-analytics platform, partitioned into Easy and Hard tiers by the benchmark authors.^[Egg, Iglesias Goyanes, Kingma, Mora, von Werra, & Wolf (Adyen & Hugging Face). *DABstep: Data Agent Benchmark for Multi-step Reasoning.* arXiv:2506.23719 (2025).] On the Easy tier, a frontier model scores about **76%**. On the Hard tier — same model, same dataset, but the task requires reasoning across multiple documents and code steps — it scores about **15%**. The 76/15 gap is the failure profile. The arithmetic step is mostly solved; the judgment that strings it together is not.
+**Reliable on the mechanical step, unreliable on the judgment-laden workflow.** **DABStep** is currently the closest benchmark to "an analyst doing real work" — 450+ multi-step data-analysis tasks drawn from a financial-analytics platform, partitioned into Easy and Hard tiers by the benchmark authors.^[Egg, Iglesias Goyanes, Kingma, Mora, von Werra, & Wolf (Adyen & Hugging Face). *DABstep: Data Agent Benchmark for Multi-step Reasoning.* arXiv:2506.23719 (2025).] On the Easy tier, a frontier model scores about **76%**. On the Hard tier — same model, same dataset, but the task requires reasoning across multiple documents and code steps — it scores about **15%**. That 76/15 gap is the failure profile. The arithmetic step is mostly solved; the judgment that connects one step to the next is not.
 
-Other benchmarks tell the same story: about 25% on open-ended hypothesis discovery (DiscoveryBench), about 30% on real-world data-wrangling code generation (DA-Code), and on BLADE — which scores analytical decisions against the range of choices expert data scientists would defend — about 27% agreement on data transformations and 13% on conceptual-variable choices.^[DiscoveryBench: Majumder, Surana, Agarwal, et al. (AI2). arXiv:2407.01725 (2024). DA-Code: Huang, Luo, Yu, et al. EMNLP 2024. arXiv:2410.07331. BLADE: Gu, Shang, Jiang, et al. EMNLP 2024 Findings. arXiv:2408.09667.] The tools converge on a narrow set of analytic choices, not the breadth a careful analyst would weigh.
+Other benchmarks show the same pattern: about 25% on open-ended hypothesis discovery (DiscoveryBench), about 30% on real-world data-wrangling code generation (DA-Code), and on BLADE — which scores analytical decisions against the range of choices expert data scientists would defend — about 27% agreement on data transformations and 13% on conceptual-variable choices.^[DiscoveryBench: Majumder, Surana, Agarwal, et al. (AI2). arXiv:2407.01725 (2024). DA-Code: Huang, Luo, Yu, et al. EMNLP 2024. arXiv:2410.07331. BLADE: Gu, Shang, Jiang, et al. EMNLP 2024 Findings. arXiv:2408.09667.] The tools converge on a narrow set of analytic choices, not the breadth a careful analyst would weigh.
 
 ### One-shot versus tool-using agent
 
-It matters whether the AI is *just writing* code or also *executing* it. A model that emits code without running it can hand you a plausible-looking wrong number — for example, prose claiming `p = 0.03` for a test the code never actually ran. An agent that *executes* the code and reads the output cannot fabricate the printed number; the traceback or the printed value forces a correction.
+It matters whether the AI is *just writing* code or also *executing* it. A model that emits code without running it can return a plausible-looking wrong number — for example, prose claiming `p = 0.03` for a test the code never actually ran. An agent that *executes* the code and reads the output cannot fabricate the printed number; the traceback or the printed value forces a correction.
 
-So **execution kills the crash class of errors** — syntax bugs, wrong column names, shape mismatches, fabricated numbers in prose. **Execution does *not* kill the judgment class** — wrong test for the data, train–test leakage, mis-framed question, unchecked assumption. Those run cleanly and return a wrong-but-plausible answer. The clean teaching distinction:
+So **execution removes the crash class of errors** — syntax bugs, wrong column names, shape mismatches, fabricated numbers in prose. **Execution does *not* remove the judgment class** — wrong test for the data, train–test leakage, mis-framed question, unchecked assumption. Those run cleanly and return a wrong-but-plausible answer. The distinction:
 
 > Execution lets you trust the *arithmetic.* It does not let you trust the *analysis design*, the *assumption checking*, or the *causal interpretation.*
 
 ### How well-calibrated is an AI tool's confidence?
 
-The literature here is more nuanced than the meme "LLMs are confidently wrong" suggests. **Base** language models — before reinforcement-learning-from-human-feedback (RLHF) post-training — are well-calibrated; GPT-4's pretraining checkpoint scored close to perfect calibration on multiple-choice benchmarks.^[OpenAI. *GPT-4 Technical Report,* §Calibration, Fig. 8. arXiv:2303.08774 (2023).] The post-training that turns a base model into a chat assistant reduces that calibration.
+The literature here is more nuanced than the popular claim "LLMs are confidently wrong" suggests. **Base** language models — before reinforcement-learning-from-human-feedback (RLHF) post-training — are well-calibrated; GPT-4's pretraining checkpoint scored close to perfect calibration on multiple-choice benchmarks.^[OpenAI. *GPT-4 Technical Report,* §Calibration, Fig. 8. arXiv:2303.08774 (2023).] The post-training that turns a base model into a chat assistant reduces that calibration.
 
 The loss is largely *recoverable* with simple prompting. On QA benchmarks like TriviaQA, SciQ, and TruthfulQA, asking the model for several candidate answers before its confidence score cuts its *miscalibration* — the gap between stated confidence and empirical accuracy — by about 50% relative.^[Tian, Mitchell, Zhou, Sharma, Rafailov, Yao, Finn, & Manning. *Just Ask for Calibration: Strategies for Eliciting Calibrated Confidence Scores from Language Models Fine-Tuned with Human Feedback.* EMNLP 2023. arXiv:2305.14975.] Anthropic's own work shows large language models can usefully estimate the probability that their own answers are correct.^[Kadavath, Conerly, Askell, et al. (Anthropic). *Language Models (Mostly) Know What They Know.* arXiv:2207.05221 (2022).]
 
-The accurate statement: an unprompted "I am confident" from a chat model is closer to rhetoric than to a probability, but the underlying calibration is recoverable. When it matters, get assurance from re-running, cross-checking, and your own assumption checks — not from the tool's verbalized certainty.
+The accurate statement: an unprompted "I am confident" from a chat model carries little statistical meaning, but the underlying calibration is recoverable. When it matters, get assurance from re-running, cross-checking, and your own assumption checks — not from the tool's stated confidence.
 
 ### What is documented, what is not
 
 Two failure modes are documented well enough to teach as defaults:
 
-- **Skipping assumption checks unless explicitly asked.** A 2023 validation study found ChatGPT routinely omitted the assumptions of the tests it recommended (normality, equal variance, independence) and gave divergent answers about which test to use.^[Ordak. *ChatGPT's Skills in Statistical Analysis Using the Example of Allergology: Do We Have Reason for Concern?* Healthcare 11(18):2554 (2023). DOI 10.3390/healthcare11182554.] A 2025 healthcare-research validation reports overall inferential accuracy of **32.5%** on bare prompts, **81.3%** on prompts that named the test, and **92.5%** on prompts that also listed which assumptions to check^[Ruta, Gaidici, Irwin, & Lifshitz. *ChatGPT for Univariate Statistics: Validation of AI-Assisted Data Analysis in Healthcare Research.* JMIR 27:e63550 (2025). DOI 10.2196/63550.] — the same tool, made reliable by the analyst's specification. Frame this as *omission unless asked*, not malice.
+- **Skipping assumption checks unless explicitly asked.** A 2023 validation study found ChatGPT routinely omitted the assumptions of the tests it recommended (normality, equal variance, independence) and gave divergent answers about which test to use.^[Ordak. *ChatGPT's Skills in Statistical Analysis Using the Example of Allergology: Do We Have Reason for Concern?* Healthcare 11(18):2554 (2023). DOI 10.3390/healthcare11182554.] A 2025 healthcare-research validation reports overall inferential accuracy of **32.5%** on bare prompts, **81.3%** on prompts that named the test, and **92.5%** on prompts that also listed which assumptions to check^[Ruta, Gaidici, Irwin, & Lifshitz. *ChatGPT for Univariate Statistics: Validation of AI-Assisted Data Analysis in Healthcare Research.* JMIR 27:e63550 (2025). DOI 10.2196/63550.] — the same tool, made reliable by the analyst's specification. The pattern is omission unless asked.
 - **Output quality is highly sensitive to prompt specificity.** On identical analytical tasks, accuracy in the Ruta study nearly tripled as the prompt became more specific. The tool does the work you specify and skips the work you do not.
 
 Two more failure modes are weakly documented enough that we should *not* assert them in stronger language than the evidence supports:
@@ -219,9 +219,9 @@ Two more failure modes are weakly documented enough that we should *not* assert 
 - *"Confuses correlation with causation."* Language models are documented to struggle on formal causal-reasoning *text benchmarks* (CLadder; Causal Parrots),^[Jin, Chen, Leeb, et al. *CLadder: Assessing Causal Reasoning in Language Models.* NeurIPS 2023. arXiv:2312.04350. Zečević, Willig, Dhami, & Kersting. *Causal Parrots: Large Language Models May Talk Causality But Are Not Causal.* TMLR 2023. arXiv:2308.13067.] but no published study measures how often a data-analysis agent specifically reports a regression coefficient *as a causal effect.* Treat correlation-vs-causation as a known limitation of statistical reasoning generally — humans do this too — not as a measured AI failure rate.
 - *"Agents p-hack on their own."* The documented phenomenon is *researchers* exploiting LLM configuration choices to fish for the result they want — "prompt-hacking" or "LLM-hacking."^[See e.g. *Prompt-Hacking: The New p-Hacking?* arXiv:2504.14571 (2025); *Large Language Model Hacking.* arXiv:2509.08825 (2025).] That is a human-misuse risk amplified by the tool, not autonomous agent behavior.
 
-The honest teaching is short: *the tool will do the work you specify and skip the work you do not. Your job moves from running the analysis to specifying it, supplying the checklist, and auditing the result.* The failures that survive code execution are precisely the failures of judgment — which means everything you have learned this term about what to check is exactly the part the automation does not.
+The short version: *the tool does the work you specify and skips the work you do not. Your job moves from running the analysis to specifying it, supplying the checklist, and auditing the result.* The failures that survive code execution are precisely the failures of judgment — exactly the part of statistics this course has trained you to check.
 
-### The failure-profile axes, at a glance
+### The failure-profile axes
 
 Four axes of variation organize the picture:
 
@@ -232,15 +232,15 @@ Four axes of variation organize the picture:
 | Execution | the agent runs the code and reads the output | one-shot text only | Execution removes fabricated-in-prose numbers; judgment-class errors persist |
 | Model variant (RLHF stage) | base model, or chat model with a calibration prompt | unprompted RLHF-tuned chat | GPT-4 base calibrated; verbalized chat overconfident unless asked |
 
-Three of these axes — task complexity, prompt specificity, execution — are levers you can move by how you use the tool. (Model variant is set by which system you call.) That is what *prompt decomposition*, later in this chapter, does mechanically: it breaks a hard, open task into a sequence of small specified ones, shifting the second axis and pushing the first toward the easy end. Arithmetic-class errors get designed out as you move along these axes; judgment-class errors — wrong test, leakage, mis-framed question, unchecked assumption — are what survives.
+Three of these axes — task complexity, prompt specificity, execution — you can control by how you use the tool. (Model variant is fixed by which system you call.) *Prompt decomposition*, later in this chapter, works on exactly these axes: it breaks a hard, open task into a sequence of small specified ones, shifting prompt specificity toward the right and task complexity toward the easy end. Arithmetic-class errors get removed as you move along these axes; judgment-class errors — wrong test, leakage, mis-framed question, unchecked assumption — remain.
 
 ## Worked examples: where judgment makes the difference
 
-Two analyses to make that concrete. The first is about who the data *omits*; the second is about confounding inside the data we have. Both are mistakes a hurried analyst — human or AI — will make unless the analyst makes a deliberate check.
+Two analyses make this concrete. The first is about who the data *omits*; the second is about confounding inside the data we have. Both are mistakes a hurried analyst — human or AI — will make without a deliberate check.
 
 ### Example 1: silent data loss on the College Scorecard
 
-Every fit in this chapter has been run on `model_data` — the College Scorecard rows with complete entries on every feature. Filtering to complete cases looks innocent. It is not.
+Every fit in this chapter has been run on `model_data` — the College Scorecard rows with complete entries on every feature. Filtering to complete cases looks routine. It is not.
 
 ```{python}
 # What did the complete-case filter throw away?
@@ -285,11 +285,11 @@ plt.tight_layout()
 plt.show()
 ```
 
-The exclusion pattern is **selection bias** from [Chapter 3](lec03-munging.qmd) — the **MNAR** (missing not at random) case. Requiring SAT scores excludes community colleges, trade schools, and most for-profit institutions — precisely the schools where the relationship between institutional characteristics and earnings is likely to be *different* from the schools we kept. AutoML, foundation models, and LLM agents alike will all happily fit a model on the rows that remain and report a respectable cross-validated R². None of them will tell you *which schools the analysis can no longer speak about.* That is a judgment call upstream of any fit.
+The exclusion pattern is **selection bias** from [Chapter 3](lec03-munging.qmd) — the **MNAR** (missing not at random) case. Requiring SAT scores excludes community colleges, trade schools, and most for-profit institutions — precisely the schools where the relationship between institutional characteristics and earnings is likely to be *different* from the schools we kept. AutoML, foundation models, and LLM agents will all fit a model on the rows that remain and report a respectable cross-validated R². None of them will tell you *which schools the analysis no longer applies to.* That is a judgment call upstream of any fit.
 
 ### Example 2: Simpson's paradox in NBA rest days
 
-A practiced analyst — or a chat assistant given a vague prompt like "do NBA players score more when rested?" — would naturally start with the simplest comparison. Pull the player-game rows where rest was at least 3 days, pull the rows where rest was at most 1, t-test the means.
+A practiced analyst — or a chat assistant given a vague prompt like "do NBA players score more when rested?" — would start with the simplest comparison: select the player-game rows where rest was at least 3 days, select the rows where rest was at most 1, t-test the means.
 
 ```{python}
 # Load NBA data
@@ -380,13 +380,13 @@ plt.tight_layout()
 plt.show()
 ```
 
-Most players sit near zero, with the mean shifted by under one game-score point against rest — small next to typical game-to-game variability. Once player identity is controlled for, the dramatic aggregate difference evaporates: it came mostly from confounding between rest and player quality, not from a real effect of rest on performance. The per-player test still flags a single-digit-percent subset as "significant" at the 5% level, modestly more than chance alone would predict, but consistent with most of those being false positives from **multiple testing** across hundreds of players ([Chapter 11](lec11-multiple-testing.qmd)).
+Most players sit near zero. The mean is shifted by under one game-score point against rest — small relative to typical game-to-game variability. Once player identity is controlled for, the large aggregate difference disappears: it came mostly from confounding between rest and player quality, not from a real effect of rest on performance. The per-player test still flags a single-digit-percent subset as "significant" at the 5% level — modestly more than chance alone would predict, but consistent with most of those being false positives from **multiple testing** across hundreds of players ([Chapter 11](lec11-multiple-testing.qmd)).
 
-The arithmetic in the first pass was correct. The judgment was wrong. Knowing this took the chapters that came before: Simpson's paradox and within-subject comparisons ([Chapter 11](lec11-multiple-testing.qmd)), multiple-testing inflation ([Chapter 11](lec11-multiple-testing.qmd)), practical-significance reasoning ([Chapter 12](lec12-regression-inference.qmd)). An AI tool will give you the first pass in seconds. The audit is where your training pays off.
+The arithmetic in the first pass was correct. The judgment was wrong. Knowing this required the chapters that came before: Simpson's paradox and within-subject comparisons ([Chapter 11](lec11-multiple-testing.qmd)), multiple-testing inflation ([Chapter 11](lec11-multiple-testing.qmd)), practical-significance reasoning ([Chapter 12](lec12-regression-inference.qmd)). An AI tool will produce the first pass in seconds. The audit is where statistical training matters.
 
 ## What remains irreducibly human
 
-AI tools are getting better fast. Some things remain fundamentally human.
+AI tools are improving rapidly. Some parts of the work remain human.
 
 **Asking the right question.** "What predicts earnings?" is a different question from "What *causes* higher earnings?" or "Which schools provide the most *value-added*?" The data alone cannot tell you which question to ask.
 
@@ -402,10 +402,10 @@ AI tools are getting better fast. Some things remain fundamentally human.
 ## Tukey on asking the right question
 "Far better an approximate answer to the right question, which is often vague, than an exact answer to the wrong question, which can always be made precise." — John Tukey
 
-Tukey wrote this long before LLMs existed. It lands sharper today than ever.
+Tukey wrote this long before LLMs existed. It applies even more directly today.
 :::
 
-The starkest case of *judgment automation cannot do* is fairness. When several reasonable mathematical definitions of "fair" turn out to be mutually incompatible, picking which one to optimize is a values choice no algorithm makes for you. [Chapter 20](lec20-fairness.qmd) makes that concrete.
+The clearest case of *judgment automation cannot do* is fairness. Several reasonable mathematical definitions of "fair" turn out to be mutually incompatible, so picking which one to optimize is a values choice no algorithm makes for you. [Chapter 20](lec20-fairness.qmd) develops the point.
 
 :::{.callout-tip}
 ## Think about it
@@ -444,7 +444,7 @@ You have probably used AI tools for homework this quarter. Think of a time the A
 
 ## The critical evaluation checklist
 
-You have now spent 17 chapters building statistical intuition. Here is how to use it. When someone hands you an analysis — a colleague, a vendor, a consultant, or an AI — run through these five questions before you trust the conclusions.
+You have now spent 17 chapters building statistical intuition. Here is how to apply it. When someone gives you an analysis — a colleague, a vendor, a consultant, or an AI — run through these five questions before trusting the conclusions.
 
 :::{.callout-note}
 ## Five questions to ask before you trust an analysis
@@ -480,9 +480,9 @@ You have now spent 17 chapters building statistical intuition. Here is how to us
 - *Check who paid for it.* Does the analyst or vendor have an incentive to show a particular result? (common sense)
 :::
 
-[Chapter 1](lec01-intro.qmd) promised that by the end of this course, you would know when *not* to trust a model's output. The checklist above is that promise delivered. Each item maps to a specific concept you have learned — missingness, confounding, multiple testing, distribution shift — but together they form something more than the sum of their parts: a habit of disciplined skepticism.
+[Chapter 1](lec01-intro.qmd) promised that by the end of this course, you would know when *not* to trust a model's output. The checklist above is that promise delivered. Each item maps to a specific concept you have learned — missingness, confounding, multiple testing, distribution shift — and together they form a habit of disciplined skepticism.
 
-You will not always have the data or the time to check all of them. But the questions themselves are portable. They work on a vendor's sales pitch, a teammate's Jupyter notebook, an AI's confident summary, or a published paper. The point of the checklist is to make you the person in the room who knows which questions to ask.
+You will not always have the data or the time to check all of them. But the questions themselves are portable. They apply to a vendor's sales pitch, a teammate's Jupyter notebook, an AI's confident summary, or a published paper. The aim is to make you the analyst who knows which questions to ask.
 
 You will practice this in Homework 5: you will receive an analysis produced with AI assistance, walk through this checklist, and propose corrections.
 
@@ -497,7 +497,7 @@ Pick any analysis you have seen in the news this week. Run through the checklist
 
 - **The 2026 frontier is not cleverer search.** It is ensembling everything you have already fit (AutoGluon wins by stacking, vindicating a 2004 result), pretraining a single tabular model across many synthetic datasets so it can predict in-context with no per-dataset tuning (TabPFN), and LLM agents that *write* the analysis pipeline (CAAFE, AIDE, AutoKaggle, evaluated by MLE-bench).
 
-- **Benchmarks show a consistent profile.** On simple, well-specified tasks frontier tools are very good (~76% on DABStep Easy). On realistic multi-step analyses they are weak (~15% on DABStep Hard; ~25% on DiscoveryBench; ~30% medal rate on MLE-bench). Execution kills the *crash class* of errors; the *judgment class* survives untouched.
+- **Benchmarks show a consistent profile.** On simple, well-specified tasks frontier tools are very good (~76% on DABStep Easy). On realistic multi-step analyses they are weak (~15% on DABStep Hard; ~25% on DiscoveryBench; ~30% medal rate on MLE-bench). Execution removes the *crash class* of errors; the *judgment class* persists.
 
 - **The best-documented failure is omission, not malice.** AI tools skip assumption checks unless explicitly asked (Ordak 2023; Ruta et al. 2025), and output quality scales with prompt specificity — a fully specified prompt took the same tool from 32.5% to 92.5% accuracy on the same task.
 
@@ -518,11 +518,11 @@ The goal of this course was never to make you compute faster than a machine. It 
 - **Ensembling and stacking:** the practical winner on tabular benchmarks (AutoGluon). Combine many already-fit models; reduces variance and corrects individual model biases.
 - **Tabular foundation model** (e.g. TabPFN): a transformer pretrained once on many synthetic datasets, used at deployment with no per-dataset fitting via **in-context learning** (the training table is the prompt).
 - **LLM agent:** an iterative loop in which a language model proposes code, an interpreter runs it, the model reads stdout or tracebacks, and revises.
-- **One-shot vs tool-using distinction:** an AI tool that *only writes* code can hand you a fabricated number in prose; an AI tool that *executes* the code cannot fabricate the printed result. Execution removes crash-class errors; it does not remove judgment-class errors.
+- **One-shot vs tool-using distinction:** an AI tool that *only writes* code can return a fabricated number in prose; an AI tool that *executes* the code cannot fabricate the printed result. Execution removes crash-class errors; it does not remove judgment-class errors.
 - **MLE-bench / DABStep:** the two benchmarks of record for AI data-analysis tools. MLE-bench scores AI agents against Kaggle leaderboards; DABStep splits multi-step tasks into easy and hard tiers and exposes the Easy/Hard gap.
 - **Selection bias:** systematic exclusion of certain groups from an analysis. AutoML, foundation models, and LLM agents all fit on the rows that remain after filters; none of them flags the rows you lost.
 - **Prompt decomposition:** breaking an analysis into small, verifiable steps so you can catch AI errors before they propagate. The Ruta 2025 32.5% → 81.3% → 92.5% gradient is the empirical case for this.
-- **Shared-structure bet:** AutoML, foundation models, and matrix-completion meta-learning (OBOE → TabPFN) all bet that the structure of "what works on a tabular dataset" is shared across datasets. AutoGluon ensembles many models already fit; TabPFN pretrains once across millions of synthetic datasets; OBOE used low-rank matrix completion to recommend models the way Netflix recommends movies.
+- **Shared-structure principle:** AutoML, foundation models, and matrix-completion meta-learning (OBOE → TabPFN) all assume that the structure of "what works on a tabular dataset" is shared across datasets. AutoGluon ensembles many models already fit; TabPFN pretrains once across millions of synthetic datasets; OBOE used low-rank matrix completion to recommend models — collaborative filtering applied to model selection.
 
 ### Computational tools
 
