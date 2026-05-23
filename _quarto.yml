@@ -31,7 +31,7 @@ book:
         - lec14-pca.qmd
         - lec15-clustering.qmd
         - lec16-feedback-loops.qmd
-        - lec17-automl-llms.qmd
+        - lec17-working-with-ai.qmd
         - lec18-causal-inference-1.qmd
         - lec19-causal-inference-2.qmd
     - part: "Appendices"
