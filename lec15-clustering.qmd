@@ -755,25 +755,25 @@ So far we've used clustering as a discovery tool on one dataset. The shot-mix ar
 
 ## Clustering in the wild
 
-The basketball half showed how feature choice shapes clusters when stakes are low. We now look at four published case studies — single-cell biology, asthma, depression, and stellar astronomy — that turn on the same point at higher stakes. Two are successes, one is a cautionary failure, one is mixed. All four are real studies in their fields' top journals.
+The basketball half showed how feature choice shapes clusters when stakes are merely competitive. Four published studies turn on the same point at higher stakes — single-cell biology, asthma, depression, and stellar astronomy. Two succeeded, one failed cautionarily, one came out mixed.
 
 ### PCA, then k-means: a common recipe in the wild
 
-The cases below use a few flavors of clustering, but one recipe dominates the wild: run PCA first, then cluster on the PC scores. Why? K-means uses Euclidean distance, which behaves badly in high dimensions when features are many, correlated, or on mixed scales — distances become noisy and uninformative. PCA projects the data onto a small orthogonal basis that captures most of the variance, so distances in the reduced space track meaningful differences. Then k-means (or a graph-based variant) finds groups in the reduced representation.
+K-means uses Euclidean distance, which behaves badly in high dimensions. With many features, correlated columns, or columns on different scales, distances become noisy and uninformative. The fix that dominates the wild is to run PCA first and then k-means on the PC scores — Euclidean distance is much more trustworthy in the reduced space.
 
 The standard recipe:
 
 1. **Standardize** the features so no single column dominates the distance calculation.
 2. **PCA** down to $k$ components, picked from a scree plot or the elbow ([Chapter 14](lec14-pca.qmd)).
-3. **Cluster** (k-means or a related algorithm) on the $k$-dimensional PC scores.
+3. **K-means** on the $k$-dimensional PC scores.
 
-The marquee published example below — Tabula Muris — uses exactly this pipeline on tens of thousands of genes.
+The recipe has variants. At larger scales — millions of cells, for example — the k-means step is often swapped for a graph-based clusterer (community detection on a $k$-nearest-neighbor graph), but the dimension-reduction logic is identical; Tabula Muris below is that variant. Some pipelines skip PCA when the feature count is small enough that distances stay meaningful in the raw space (Haldar). Some replace PCA with a dimension-reduction step that uses *both* the features and an auxiliary signal (Drysdale's CCA), which carries its own dangers — see that case study. The four studies below illustrate where the recipe works, where it breaks, and what swaps preserve its validity.
 
 ### Tabula Muris: clustering as the scaffolding of a cell atlas
 
-The Tabula Muris Consortium profiled the gene expression of 100,605 individual cells across 20 mouse organs.[^tabula-muris] No cell came pre-labeled with its type. The pipeline: PCA on the most variable genes to reduce each cell's expression vector from tens of thousands of genes to a few dozen components, then graph-based (Seurat / Louvain) clustering on the PC scores. The result was around 50 clusters per organ.
+The Tabula Muris Consortium profiled the gene expression of 100,605 individual cells across 20 mouse organs.[^tabula-muris] No cell came pre-labeled with its type. Their pipeline ran in two stages. First, select a few thousand highly variable genes and run PCA on those to reduce each cell's expression vector to a few dozen components. Then cluster the cells with a graph-based community-detection algorithm — Louvain, packaged in the standard single-cell toolkit Seurat — by building a $k$-nearest-neighbor graph on the PC scores and finding densely connected groups. The result was up to around 50 clusters per organ.
 
-Why this counts as a *good* use of clustering: each cluster was then annotated against known **marker genes** — genes that decades of cell-biology research had already pinned to specific cell types. When a cluster's top-expressed genes lined up with the marker set for, say, hepatocytes, the cluster got that name. Almost every named cell type in mouse anatomy came back out. The clustering itself didn't reveal cell types; it organized the data well enough that biologists could verify each group against an existing standard.
+The use was a *good* one. Each cluster was annotated against known **marker genes** — genes that decades of cell-biology research had already pinned to specific cell types. When a cluster's top-expressed genes lined up with the marker set for, say, hepatocytes, the cluster got that name. Almost every named cell type in mouse anatomy came back out. The clustering itself didn't reveal cell types; it organized the data well enough that biologists could verify each group against an existing standard.
 
 ![Cell-type clusters across 20 mouse organs from the Tabula Muris atlas. Each cluster's identity was confirmed against a curated marker-gene panel — validation came from outside the algorithm.](images/lec15/case-tabula-muris-real.png){fig-align="center" width="80%"}
 
@@ -781,11 +781,13 @@ Why this counts as a *good* use of clustering: each cluster was then annotated a
 
 ### Haldar: clusters that change which drug you should take
 
-Haldar and colleagues clustered three asthma cohorts on 8 clinical and physiologic features: age of asthma onset, sex, atopic status, body-mass index, peak-flow variability, FEV1 bronchodilator response, sputum eosinophil count, and exhaled nitric oxide.[^haldar] The cohorts: a primary-care sample (n = 184), a refractory secondary-care sample (n = 187), and a longitudinal randomized trial (n = 68). The method: Ward's hierarchical clustering to pick $k$, then k-means with that $k$.
+Haldar and colleagues clustered three asthma cohorts on 8 clinical and physiologic features:[^haldar] age of asthma onset; sex; **atopic** status (whether the patient is prone to allergic reactions); body-mass index; peak-flow variability; **FEV1** bronchodilator response (forced expiratory volume in one second — the standard lung-function measurement); **sputum eosinophil** count (eosinophils are immune cells whose presence in coughed-up airway secretions signals allergic-type inflammation); and exhaled nitric oxide.
 
-Two clusters showed up in both the primary-care and the refractory cohorts: **early-onset atopic** asthma and **obese non-eosinophilic** asthma. Two additional clusters appeared only in the refractory cohort and were *discordant* — symptoms and inflammation moved in opposite directions: a **symptom-predominant** group (lots of symptoms, little eosinophilic inflammation) and an **inflammation-predominant** group (eosinophilic, few symptoms).
+Three cohorts ran through the analysis: a primary-care sample (n = 184), a refractory secondary-care sample (n = 187), and a longitudinal randomized trial (n = 68). The method ran in two stages — Ward's hierarchical clustering (a bottom-up agglomerative algorithm) on the first cohort to pick $k$, then k-means with that $k$ for the analysis on the subsequent cohorts.
 
-The validation was a randomized trial. Patients in the inflammation-predominant cluster were assigned to be managed either by symptoms (the standard of care) or by inflammation markers. The inflammation-managed arm cut exacerbations from roughly 3.5 to 0.4 per patient per year. Symptom-predominant patients managed by symptoms received substantially less inhaled steroid than they would have under inflammation-marker management. Cluster membership predicted *which treatment helped which patient*. That's a harder test than "the clusters look biologically interpretable": different treatments worked in different clusters, so the clusters mapped onto a real joint in the disease.
+Two clusters showed up in both the primary-care and the refractory cohorts: **early-onset atopic** asthma and **obese non-eosinophilic** asthma. Two additional clusters appeared only in the refractory cohort and were *discordant* — symptoms and inflammation moved in opposite directions. A **symptom-predominant** group had many symptoms but little eosinophilic inflammation; an **inflammation-predominant** group had eosinophilic inflammation but few symptoms.
+
+The validation was a randomized trial. Patients in the inflammation-predominant cluster were assigned either to management by symptoms (the standard of care) or to management by inflammation markers. The inflammation-managed arm cut exacerbations from roughly 3.5 to 0.4 per patient per year. Symptom-predominant patients managed by symptoms received substantially less inhaled steroid than they would have under inflammation-marker management. Cluster membership predicted *which treatment helped which patient* — a harder test than "the clusters look biologically interpretable." Different treatments worked in different clusters, so the clusters mapped onto a real joint in the disease.
 
 ![Haldar et al. 2008: hierarchical clustering of asthma patients on 8 clinical features. The discordant inflammation-predominant cluster drove a treatment-by-cluster interaction in the follow-on randomized trial.](images/lec15/case-haldar-real.png){fig-align="center" width="80%"}
 
@@ -793,13 +795,11 @@ The validation was a randomized trial. Patients in the inflammation-predominant 
 
 ### Drysdale: beautiful clusters, no replication
 
-The Tabula Muris and Haldar studies show what success looks like. The next study shows what failure looks like — and it published first.
+Drysdale and colleagues claimed to discover **four biotypes of depression** in 2017.[^drysdale] Their pipeline ran canonical correlation analysis (CCA — a method for finding linear combinations of two feature sets that correlate maximally) on resting-state fMRI (functional MRI) connectivity features and clinical symptom scores from 1,188 patients, then hierarchical clustering on the CCA-projected fMRI scores. The authors reported that the four biotypes were diagnosable from fMRI alone with 82–93% sensitivity and specificity and that they predicted response to transcranial magnetic stimulation (TMS) therapy.
 
-Drysdale and colleagues claimed to discover **four biotypes of depression** in 2017.[^drysdale] The pipeline: canonical correlation analysis (CCA) linking resting-state fMRI connectivity features to clinical symptom scores in 1,188 patients, then hierarchical clustering on the CCA-projected fMRI scores. The four resulting biotypes were claimed to be diagnosable from fMRI alone with 82–93% sensitivity and specificity, and to predict response to transcranial magnetic stimulation (TMS) therapy.
+Two years later, Dinga and colleagues attempted to replicate the pipeline on an independent sample of 187 patients.[^dinga] The replication tests came in three layers, all consistent. First, under a null of no association between the two feature sets, permutation tests on the canonical correlations returned p-values of 0.64 and 0.99 — well above any reasonable threshold. Second, the canonical correlations recomputed on held-out data — a CCA-specific analog of the train/test split from Chapter 6 — dropped to about zero, so Drysdale's correlations did not generalize. Third, under a null of no cluster structure, both the Calinski-Harabasz statistic (a between-vs-within cluster scatter ratio) and the silhouette score returned non-significant p-values (0.45 and 0.19) — the four-cluster solution was no better than chance. And leaving one subject out at a time changed cluster assignments for a substantial fraction of subjects, far more than a stable clustering would produce.
 
-Two years later, Dinga and colleagues attempted to replicate the pipeline on an independent sample of 187 patients.[^dinga] Permutation tests on the canonical correlations — the same correlations that Drysdale's pipeline pivoted on — returned p-values of 0.64 and 0.99. Cross-validated correlations on held-out data dropped to about zero. The four-cluster solution itself was no better than chance on standard cluster-validity tests (Calinski-Harabasz p = 0.45, silhouette p = 0.19 under the null). Cluster assignments were unstable: leaving one subject out at a time changed which cluster many subjects got assigned to.
-
-The mechanism: CCA can always find linear combinations of two high-dimensional feature sets that look correlated in the data they were fit on, even when no structure exists in the population. With enough features and not enough samples, the optimization step *manufactures* apparent structure. Without a permutation test or out-of-sample replication, you cannot tell that structure from a real signal. Drysdale's original analysis didn't do either step. Dinga's did, and the structure dissolved.
+The mechanism is general. CCA can always find linear combinations of two high-dimensional feature sets that look correlated *in the data they were fit on*, even when no relationship exists in the population. With enough features and not enough samples — the features-to-samples ratio Drysdale ran is far into that regime — the optimization step *manufactures* apparent structure. Without a permutation test or out-of-sample replication, that manufactured structure cannot be distinguished from a real signal. Drysdale's original analysis ran neither step. Dinga's ran both, and the structure dissolved.
 
 ![Drysdale et al. 2017: four claimed depression "biotypes" from CCA on fMRI connectivity. Dinga et al. 2019 ran the same pipeline on an independent cohort and the structure failed every replication test.](images/lec15/case-drysdale-real.png){fig-align="center" width="80%"}
 
@@ -809,11 +809,11 @@ The mechanism: CCA can always find linear combinations of two high-dimensional f
 
 ### APOGEE: the same lesson, in physics
 
-Garcia-Dias and colleagues ran k-means on 153,847 stellar spectra from the APOGEE survey (resolution $R \approx 22{,}500$), using the normalized flux at each wavelength as the input features — the raw spectra, not derived astrophysical parameters like temperature, surface gravity, or metallicity.[^garcia-dias]
+Garcia-Dias and colleagues ran k-means on 153,847 stellar spectra from the APOGEE survey — the Apache Point Observatory Galactic Evolution Experiment, a high-resolution near-infrared spectroscopic survey of Milky Way stars.[^garcia-dias] The input features were the normalized flux at each wavelength — the raw spectra — not derived astrophysical parameters like temperature, surface gravity, or metallicity.
 
-The result was mixed. Some known stellar populations came back: dwarfs vs. giants, red-clump and red-giant-branch stars, bulge vs. halo. But the recovery was partial, the algorithm was sensitive to initialization, and the authors flagged the core limitation themselves: *"a discrete classification in flux space does not result in a neat organisation in the parameters' space."*
+The result came out mixed. Some broad stellar-population classes were recovered: high-luminosity giants vs. low-luminosity dwarfs, substructure within the giant branch, and an inner-galaxy vs. outer-galaxy split. But the recovery was partial, the algorithm was sensitive to initialization, and the authors flagged the core limitation themselves: *"a discrete classification in flux space does not result in a neat organisation in the parameters' space."*
 
-The lesson: the underlying objects — distinct stellar populations differing in mass, age, and chemical composition — are physically real. Yet k-means in raw-flux space only partially recovered them, because Euclidean distance between two spectra is not the same notion of similarity as distance between two stars in the parameter space astronomers actually care about. The clustering algorithm did its job correctly; the *similarity metric* — encoded by the feature choice — was the wrong one for the question.
+The underlying objects — distinct stellar populations differing in mass, age, and chemical composition — are physically real. Yet k-means in raw-flux space only partially recovered them, because Euclidean distance between two spectra is not the same notion of similarity as distance between two stars in the parameter space astronomers actually care about. The clustering algorithm did its job correctly; the *similarity metric* — encoded by the feature choice — was the wrong one for the question.
 
 ![Garcia-Dias et al. 2018: k-means on 153,847 APOGEE stellar spectra. Some real populations appeared, but the partition in flux space did not align with the physical-parameter space that defines what astronomers call a "type" of star.](images/lec15/case-apogee-real.png){fig-align="center" width="80%"}
 
@@ -821,14 +821,12 @@ The lesson: the underlying objects — distinct stellar populations differing in
 
 ### Same lesson, four fields
 
-Four cases, four fields, four verdicts.
-
 - **Tabula Muris (good).** The clustering organized the data; a curated external standard (marker genes) confirmed each group's identity.
 - **Haldar (good).** A follow-on randomized trial showed that cluster membership predicted which treatment worked. Validation came from a *new experiment*, not from the data the clusters were fit on.
-- **Drysdale → Dinga (bad).** Pretty clusters in a high-dimensional, small-sample CCA pipeline failed every check an independent group could think to apply.
-- **APOGEE (mixed).** The objects were real; the features encoded the wrong notion of similarity. The clustering algorithm wasn't broken; the choice of distance was.
+- **Drysdale → Dinga (bad).** A CCA pipeline with too many features per sample produced four visually sharp clusters that failed every check an independent group could think to apply.
+- **APOGEE (mixed).** The objects were real; the features encoded the wrong notion of similarity. The algorithm wasn't broken; the choice of distance was.
 
-All four turn on the same axis. The algorithm always returns groups. Whether to trust those groups depends on what you can check *outside* the clustering: a curated reference, a follow-on experiment, a replication on independent data, or a known set of objects whose structure you can compare to. Cluster-validity statistics measured on the same data the clusters were fit on don't qualify.
+All four come down to the same question. The algorithm always returns groups. Whether to trust those groups depends on what you can check *outside* the clustering: a curated reference, a follow-on experiment, a replication on independent data, or a known set of objects whose structure you can compare to. Cluster-validity statistics measured on the same data the clusters were fit on are not sufficient evidence on their own.
 
 ## Key takeaways
 
