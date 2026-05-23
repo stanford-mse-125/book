@@ -10,6 +10,14 @@ The course is organized in three acts:
 - **Act 2: Trust Models** (Lectures 8--12) — Statistical inference and diagnostics
 - **Act 3: See Further** (Lectures 13--19) — Classification, dimensionality reduction, causality, and the frontier
 
+## A note on AI
+
+This book was written using large language models, Claude in particular. AI drafted prose, proposed examples, generated figures and code, and critiqued chapters along several dimensions — rigor, narrative, pedagogy, accessibility.
+
+The shape of the book is mine. Every chapter opens with a hook framing a consequential decision. Every dataset is real and tied to a decision someone actually faces. Concepts arrive through examples and code before abstraction. Within those conventions I curated what to feed the model, decided what was interesting and what was important, and judged when a draft example or dataset wasn't strong enough — when to search for a better one.
+
+I ask my students to disclose how they used AI on their work. I owe them the same.
+
 ## How to cite this book
 
 Udell, M. (2026). *MS&E 125: Applied Statistics*. Stanford University. Available at [https://stanford-mse-125.github.io/book/](https://stanford-mse-125.github.io/book/).
