@@ -67,7 +67,14 @@ The folk theory of fair machine learning is: don't let the model see race. If ra
 Before reading further: on a dataset where ZIP code is correlated with both race and the outcome, will a model that has no `race` column produce predictions whose distribution differs across racial groups?
 :::
 
-A small simulation makes the answer visible. We'll build a tiny *structural causal model* (SCM) --- the explicit data-generating version of a Chapter 18 DAG, where every arrow in the diagram corresponds to one line of code that writes a child variable as a function of its parents plus a noise term. The recipe: a *latent* attribute $z$ drives the outcome (think: actual repayment ability), a proxy variable $p$ is correlated with both $z$ and the protected attribute $a$ (think: ZIP code in a residentially segregated city), and the outcome $y$ depends on $z$ plus a modest effect of $a$:
+A small simulation makes the answer visible. The vehicle is a *structural causal model*:
+
+:::{.callout-important}
+## Definition: structural causal model (SCM)
+A *structural causal model* is a directed acyclic graph (Chapter 18) together with a *generating recipe* that writes each child variable as an explicit function of its causal parents plus a noise term. The DAG names which variables can influence which others; the recipe says *how*. An SCM is what you write down when you want to simulate the data the DAG describes.
+:::
+
+For the simulation, the recipe has three lines. A *latent* attribute $z$ drives the outcome (think: actual repayment ability). A *proxy* variable $p$ is correlated with both $z$ and the protected attribute $a$ (think: ZIP code in a residentially segregated city). The outcome $y$ depends on $z$ plus a modest effect of $a$:
 
 ```{python}
 rng = np.random.default_rng(0)
@@ -100,8 +107,12 @@ sim['p_aware'] = aware.predict_proba(sim[['a','z','proxy']])[:,1]
 unaware = LogisticRegression().fit(sim[['proxy']], sim['y'])
 sim['p_unaware'] = unaware.predict_proba(sim[['proxy']])[:,1]
 
+means = sim.groupby('a')[['p_aware', 'p_unaware']].mean()
+gaps = means.diff().iloc[-1]
 print('Mean predicted P(y=1) by a:')
-print(sim.groupby('a')[['p_aware','p_unaware']].mean().round(3))
+print(means.round(3))
+print(f"\nAware model:   between-group gap = {gaps['p_aware']:+.3f}")
+print(f"Unaware model: between-group gap = {gaps['p_unaware']:+.3f}")
 ```
 
 Drop $a$ from the inputs and the per-group prediction gap does not shrink. In this simulation it actually *widens*, because the unaware model has to lean harder on the proxy to reconstruct the signal that $a$ would have carried directly. A regulator inspecting the unaware model would find no `a` column. An auditor inspecting its outputs would find predictions that depend on `a` anyway.
@@ -192,15 +203,7 @@ A predictor satisfies *equality of opportunity* if the true-positive rate alone 
 
 Both definitions condition on the truth. They ask: among people who actually have the outcome being predicted, does the algorithm treat them the same way? Demographic parity ignored $y$; equalized odds builds it in.
 
-Some terminology before the code. The fairness literature uses a tight family of conditional rates for any binary classifier and any group $a$:
-
-- *True-positive rate* (TPR) = $P(\hat y = 1 \mid y = 1, a)$ --- the share of actual positives flagged. Chapter 7 called this *recall* or *sensitivity*.
-- *False-positive rate* (FPR) = $P(\hat y = 1 \mid y = 0, a)$ --- the share of actual negatives wrongly flagged.
-- *False-negative rate* (FNR) = $P(\hat y = 0 \mid y = 1, a) = 1 - \text{TPR}$ --- positives missed.
-- *True-negative rate* (TNR) = $P(\hat y = 0 \mid y = 0, a) = 1 - \text{FPR}$ --- negatives correctly cleared.
-- *Positive predictive value* (PPV) = $P(y = 1 \mid \hat y = 1, a)$ --- the share of *flagged* people who are actually positive. Chapter 7 called this *precision*. We'll use it in the next section.
-
-We compute the four error rates per group on COMPAS:
+Quick notation. For any binary classifier and any group $a$, the fairness literature uses four conditional rates --- the *true-positive rate* $\text{TPR}_a = P(\hat y = 1 \mid y = 1, a)$ (Chapter 7's *recall*), the *false-positive rate* $\text{FPR}_a = P(\hat y = 1 \mid y = 0, a)$, and their complements $\text{FNR}_a = 1 - \text{TPR}_a$ and $\text{TNR}_a = 1 - \text{FPR}_a$. The next section adds the *positive predictive value* $\text{PPV}_a = P(y = 1 \mid \hat y = 1, a)$ (Chapter 7's *precision*). We compute the four conditional rates per group on COMPAS:
 
 ```{python}
 def group_rates(g):
@@ -256,11 +259,15 @@ So far the definitions have conditioned on the truth $y$ and asked whether the p
 
 :::{.callout-important}
 ## Definition: predictive parity and calibration
-A predictor satisfies *predictive parity* if the positive predictive value is equal across groups:
+A binary classifier satisfies *predictive parity* if its positive predictive value is equal across groups:
 $$
-P(y = 1 \mid \hat y = 1, a)
+P(y = 1 \mid \hat y = 1, a) \text{ does not depend on } a.
 $$
-does not depend on $a$. When the predictor outputs a real-valued score $s$ rather than a binary label, the analogous condition is *calibration within groups*: at each score value $s$, $P(y = 1 \mid s, a)$ does not depend on $a$.
+A real-valued score $s$ satisfies *calibration within groups* if at each score level, the conditional outcome rate is the same across groups:
+$$
+P(y = 1 \mid s, a) \text{ does not depend on } a.
+$$
+The two are related: a score that is calibrated within groups satisfies predictive parity at every threshold used to binarize it.
 :::
 
 Predictive parity is the criterion that says "a score of 7 means the same thing about the future, regardless of which group the score is about." It is the criterion Northpointe invoked when responding to the *ProPublica* investigation.
@@ -332,9 +339,7 @@ The result has two versions, on two different objects, both motivated by the COM
 The two results are companion theorems on different objects. The binary version is the form most directly applicable to COMPAS (whose decile score becomes a binary detain/release decision via a threshold); the score version is the more general statement about probabilistic risk scores.
 :::
 
-The intuition is shorter than the statement. Imagine two groups with base rates $p_A$ and $p_B$ that differ. Calibration says that among the people the model labels positive, the same fraction in each group should actually be positive: $\text{PPV}_A = \text{PPV}_B$. Bayes' rule then ties the false-positive rate, the true-positive rate, the base rate, and the PPV together so that you cannot fix any two of them across groups without the third moving. When the base rates differ, holding PPV equal across groups forces FPR (and FNR) to differ. There is no algorithm that can equalize all of them at once.
-
-On COMPAS, this constraint plays out exactly as the algebra predicts. PPV is approximately equal across groups (calibration roughly holds). Base rates differ by about 13 percentage points. Under those two conditions, the binary theorem says the false-positive and false-negative rates *cannot both* be equal across groups --- at least one must differ. On COMPAS both do, and the direction is the one the algebra requires: the higher-base-rate group has the higher FPR; the lower-base-rate group has the higher FNR. A different algorithm cannot eliminate the constraint. Any algorithm can only choose which error to equalize at the cost of the others.
+On COMPAS, this constraint plays out exactly as the binary theorem predicts. PPV is approximately equal across groups (calibration roughly holds). Base rates differ by about 13 percentage points. The theorem then says the false-positive and false-negative rates *cannot both* be equal across groups --- at least one must differ. On COMPAS both do, and the direction is the one the algebra requires: the higher-base-rate group has the higher FPR; the lower-base-rate group has the higher FNR. A different algorithm cannot eliminate the constraint. Any algorithm can only choose which error to equalize at the cost of the others.
 
 ::: {.callout-note collapse="true"}
 ## Going deeper: the base-rate algebra
@@ -364,9 +369,9 @@ The impossibility theorem ruled out *jointly* satisfying the four group-level cr
 
 :::{.callout-important}
 ## Definition: counterfactual fairness
-A predictor $\hat y$ is *counterfactually fair* with respect to a protected attribute $a$ if the prediction it would produce in the counterfactual world where the individual's protected attribute was $a$ is the same as the prediction it would produce in the counterfactual world where it was $a'$, holding the latent (non-descendant-of-$a$) features fixed in both worlds. Formally, for every individual with features $x$ and attribute $a$, and every alternative value $a'$,
+Write $A$ for the protected-attribute variable in the causal model and $a$, $a'$ for two possible values it could take. A predictor $\hat y$ is *counterfactually fair* if, for every individual whose factual attribute is $A = a$, the prediction we would get by intervening to set $A := a$ (the factual world) equals the prediction we would get by intervening to set $A := a'$ (the counterfactual world), with the intervention propagated through the structural causal model in both cases:
 $$
-\hat y_{a \leftarrow a}(x) \;=\; \hat y_{a \leftarrow a'}(x).
+\hat y_{A \leftarrow a}(x) \;=\; \hat y_{A \leftarrow a'}(x).
 $$
 The definition is due to Kusner, Loftus, Russell, and Silva.^[Kusner, M. J., Loftus, J. R., Russell, C., & Silva, R. (2017). "Counterfactual Fairness." *Advances in Neural Information Processing Systems 30 (NeurIPS 2017)*, pp. 4066--4076. arXiv:1703.06856.]
 :::
