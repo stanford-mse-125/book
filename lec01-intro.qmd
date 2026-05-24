@@ -64,7 +64,7 @@ A decision is **consequential** when getting it wrong has serious impact — and
 ## The fairness impossibility
 The COMPAS controversy reveals a deep mathematical constraint, not just a software bug. ProPublica found that Black defendants who did *not* reoffend were nearly twice as likely to be flagged high-risk (false positive rate: 45% vs. 23%). Northpointe, the algorithm's maker, countered that among defendants *scored* as high-risk, the actual recidivism rate was similar across races (~60%). Both were correct — but they measured fairness differently.
 
-It turns out that when two groups have different base rates of reoffending, it is *mathematically impossible* to equalize both false positive rates and predictive values at the same time (Chouldechova 2017; Kleinberg, Mullainathan, and Raghavan 2016). This constraint isn't a bug to fix — it's a tradeoff to navigate. Which fairness criterion to prioritize is a values question, not a statistical one. We'll formalize this in Act 3.
+It turns out that when two groups have different base rates of reoffending, it is *mathematically impossible* to equalize both false positive rates and predictive values at the same time (Chouldechova 2017; Kleinberg, Mullainathan, and Raghavan 2016). This constraint isn't a bug to fix — it's a tradeoff to navigate. Which fairness criterion to prioritize is a values question, not a statistical one. We formalize this in [Chapter 20](lec20-fairness.qmd).
 :::
 
 **Scale.** The World Food Programme's reallocation model affects 2 million people simultaneously. Netflix's recommendation algorithm shapes what 200 million users watch. When a decision affects many people at once, even small errors can be consequential.
@@ -76,7 +76,7 @@ Look back at the ten questions in the table above. Pick three from different dom
 
 MS&E graduates will make exactly these kinds of decisions. 
 This course is designed to teach you the tools — building models, quantifying uncertainty, reasoning about causation — to make these decisions with data.
-By the end of this course, you will know when *not* to trust a model's output — when the data is insufficient, when the assumptions are violated, when the metric is misleading, and when a confident prediction should be met with skepticism. Chapter 17 distills these instincts into a 15-item checklist — a portable tool you can apply to any analysis, in any domain, for the rest of your career. The rest you can learn online.
+By the end of this course, you will know when *not* to trust a model's output — when the data is insufficient, when the assumptions are violated, when the metric is misleading, and when a confident prediction should be met with skepticism. [Chapter 17](lec17-working-with-ai.qmd) distills these instincts into a short critical-evaluation checklist organized around five questions — a portable tool you can apply to any analysis, in any domain, for the rest of your career. The rest you can learn online.
 
 ## What is applied statistics?
 

@@ -861,7 +861,7 @@ PCA and k-means solve the same matrix-approximation problem with different const
 
 Chapter 16 takes the next step: when a model's predictions feed back into the world it measures, even careful validation can mislead.
 
-Chapter 17 returns to feature choice from the AI angle: what happens when a language model picks features for you? Chapters 18-19 ask a different question: when can we move from "are these features associated with the outcome?" to "do these features *cause* the outcome?" Clustering revealed structure; causal inference asks whether the structure is the kind we can intervene on.
+[Chapter 17](lec17-working-with-ai.qmd) returns to model and feature choice from the AI angle — what an AutoML system searches over, what a tabular foundation model assumes, what an LLM agent will (and will not) check on your behalf. [Chapters 18-19](lec18-causal-inference-1.qmd) ask a different question: when can we move from "are these features associated with the outcome?" to "do these features *cause* the outcome?" Clustering revealed structure; causal inference asks whether the structure is the kind we can intervene on. [Chapter 20](lec20-fairness.qmd) — enrichment — picks up the "feature choice is a values choice" thread in algorithmic decisions about people, where the values-choice character is sharpest.
 
 ## Study guide
 

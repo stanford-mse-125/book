@@ -53,5 +53,5 @@ df = df[df['score_text'] != 'N/A']
 ## Notes
 
 - **Duplicate column names.** The CSV header lists `decile_score` and `priors_count` twice each (positions 11/39 and 14/48). `pd.read_csv` silently renames the second occurrence to `decile_score.1` and `priors_count.1`. For the general recidivism score and prior count, use the unsuffixed column name; the suffixed columns appear to be ProPublica's join keys from the raw scores file.
-- ProPublica's analysis has been discussed and re-analyzed across many follow-up papers (Flores, Bechtel, Lowenkamp 2016; Chouldechova 2017; Corbett-Davies et al. 2017). Our Lec15 use of this dataset is illustrative of a clustering feature-choice lesson, not a definitive claim about whether COMPAS itself is biased.
+- ProPublica's analysis has been discussed and re-analyzed across many follow-up papers (Flores, Bechtel, Lowenkamp 2016; Chouldechova 2017; Corbett-Davies et al. 2017). The dataset is used in Chapter 20 (Fairness) to demonstrate the group-fairness metrics and the Kleinberg-Mullainathan-Raghavan / Chouldechova impossibility theorem numerically; the chapter does not adjudicate whether COMPAS itself is biased, only what each side's claim is and isn't saying.
 - Defendant names are kept in the file (they were already public records) but should not be quoted in chapter prose.

@@ -594,7 +594,7 @@ Why does the model fail even when yesterday's AQI was itself extreme? The learne
 **Distribution shift** is when future data comes from a different regime than the training data. It's a severe form of non-stationarity: a qualitative change the training set never captured.
 :::
 
-Training data covers normal conditions. The events that matter most — wildfires, pandemics, crashes — are the ones your model has never seen. No cross-validation strategy fixes this; it holds out observations that *look like* the training ones, so it guards against in-distribution noise, not against a future that breaks the pattern. [Chapter 17](lec17-automl-llms.qmd) returns to this: AutoML tools default to standard cross-validation and don't know your data is temporal.
+Training data covers normal conditions. The events that matter most — wildfires, pandemics, crashes — are the ones your model has never seen. No cross-validation strategy fixes this; it holds out observations that *look like* the training ones, so it guards against in-distribution noise, not against a future that breaks the pattern. [Chapter 17](lec17-working-with-ai.qmd) returns to this: AutoML tools default to standard cross-validation and don't know your data is temporal.
 
 > "Prediction is very difficult, especially about the future." — attr. Niels Bohr
 
@@ -731,7 +731,7 @@ Three failure modes, one defensive recipe.
 2. **Hold out a control.** Reserve a random sample where the model doesn't decide — baseline, human, or coin flip. The control shows what would have happened.
 3. **A/B test major changes.** Randomizing decisions to measure the model's impact causally is the single most effective defense against feedback-loop failures ([Chapter 19](lec19-causal-inference-2.qmd) develops the machinery).
 
-[Chapter 17](lec17-automl-llms.qmd) closes with a 15-item checklist for evaluating an analysis; items #13 (Goodhart) and #14 (feedback loops) point back here.
+[Chapter 17](lec17-working-with-ai.qmd) closes with a five-cluster checklist for evaluating an analysis; the "incentives and dynamics" cluster — Goodhart, feedback loops, and who paid for the analysis — points back here.
 
 ## Key takeaways
 

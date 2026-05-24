@@ -637,7 +637,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Objectives addressed:** 15 (k-means, evaluate cluster quality)
 
-**Dataset:** NBA shot zones 2023-24 (`data/nba/shot_zones_2023-24.csv`) — 317 players with ≥200 FGA, shot-mix percentages by court zone. Secondary: ProPublica COMPAS recidivism (`data/compas/compas-scores-two-years.csv`) — 6,172 Broward County defendants after ProPublica's standard filter.
+**Dataset:** NBA shot zones 2023-24 (`data/nba/shot_zones_2023-24.csv`) — 317 players with ≥200 FGA, shot-mix percentages by court zone. Four published case studies in "Clustering in the wild" carry their own datasets (Tabula Muris cell atlas; Haldar asthma cohorts; Drysdale/Dinga fMRI depression; Garcia-Dias APOGEE stellar spectra).
 
 **Key concepts:**
 - Unsupervised learning: finding structure without labels
@@ -645,10 +645,16 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Standardization is the default for distance-based methods like k-means — same reason as PCA
 - Elbow and silhouette plots rule out bad k choices; they don't uniquely pick the right one
 - Given cluster profiles (shot-mix archetypes), name interpretable types and identify players who cross traditional position lines
-- Feature selection changes which clusters emerge — no feature set is "neutral" when stakes involve people (COMPAS cautionary case)
+- Feature selection changes which clusters emerge — feature choice is a values judgment, not a neutral preprocessing step
 - Assessing cluster stability across random seeds using ARI; k-means++ initialization reduces sensitivity
 - Hierarchical clustering as a complement to k-means when the right k is unclear; Ward linkage is the SSE-consistent choice
 - ARI as a comparison metric: across seeds, across feature sets, across algorithms
+- **PCA → k-means as a common pipeline:** standardize → PCA to a small orthogonal basis (Ch 14) → k-means on the PC scores. Stabilizes distance computation in high-dimensional / collinear settings. Tabula Muris is the marquee published example.
+- **Four published case studies (good / bad / mixed):**
+  - *Tabula Muris* (Nature 2018) — PCA + graph-based clustering on n=100,605 cells × 20 mouse organs, validated against curated marker genes (the success case).
+  - *Haldar et al.* (AJRCCM 2008) — Ward's hierarchical → k-means on three asthma cohorts; discordance changed which drug patients should get.
+  - *Drysdale 2017 / Dinga 2019* (Nat Med / NeuroImage Clin) — four "biotypes" of depression failed independent replication; chapter's new cautionary case.
+  - *Garcia-Dias et al.* (A&A 2018) — k-means on n=153,847 APOGEE stellar spectra; mixed result — the similarity metric matters as much as the algorithm.
 
 **Key vocabulary:**
 - Unsupervised learning
@@ -663,6 +669,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - Hierarchical clustering
 - Dendrogram
 - Ward linkage
+- PCA → k-means pipeline
 
 **Key formulas:**
 - K-means objective: minimize Σ_k Σ_{i∈C_k} ||x_i − μ_k||² (SSE)
@@ -671,13 +678,13 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 - `sklearn.cluster.KMeans`, `sklearn.metrics.silhouette_score`, `sklearn.metrics.silhouette_samples`, `sklearn.metrics.adjusted_rand_score`
 - `scipy.cluster.hierarchy.linkage`, `scipy.cluster.hierarchy.dendrogram`, `scipy.cluster.hierarchy.fcluster`
 
-**Prerequisites:** Lec 2 (EDA), Lec 4 (regression — for SSE intuition), Lec 14 (PCA — for unsupervised framing and standardization)
+**Prerequisites:** Lec 2 (EDA), Lec 4 (regression — for SSE intuition), Lec 14 (PCA — for unsupervised framing, standardization, and the PCA→k-means pipeline)
 
 **Connections:**
-- Backward: Lec 2 (EDA), Lec 4 (SSE), Lec 14 (PCA, standardization, unsupervised framing)
-- Forward: Lec 17 (working with AI — feature-choice stakes revisited), Lec 18-19 (causal inference — when correlational groupings mislead)
+- Backward: Lec 2 (EDA), Lec 4 (SSE), Lec 14 (PCA, standardization, unsupervised framing; PCA→k-means recipe)
+- Forward: Lec 17 (working with AI — feature-choice stakes revisited), Lec 18-19 (causal inference — when correlational groupings mislead), Lec 20 (algorithmic fairness builds on the "feature choice is values choice" thread)
 
-**Surprise moment(s):** (1) Clustered shot profiles reveal players who defy traditional position labels — analytics archetypes cut across PG/SG/SF/PF/C. (2) Changing which features enter k-means shifts cluster membership substantially — pairwise ARI between shot-mix / volume / efficiency clusterings drops near zero (≈0.05), an order of magnitude below the cross-seed mean (≈0.62), so feature choice scrambles membership *more* than random initialization does. (3) On COMPAS data, clustering by COMPAS risk-score features vs. criminal-history features produces systematically different racial compositions, illustrating that no feature set is neutral.
+**Surprise moment(s):** (1) Clustered shot profiles reveal players who defy traditional position labels — analytics archetypes cut across PG/SG/SF/PF/C. (2) Changing which features enter k-means shifts cluster membership substantially — pairwise ARI between shot-mix / volume / efficiency clusterings drops near zero (≈0.05), an order of magnitude below the cross-seed mean (≈0.62), so feature choice scrambles membership *more* than random initialization does. (3) The Drysdale 2017 fMRI "biotypes" of depression — four visually compelling clusters with claimed 82–93% sensitivity/specificity — failed independent replication in Dinga 2019: canonical-correlation permutation p-values of 0.64 and 0.99, held-out cross-validated correlations near zero.
 
 ---
 
@@ -686,7 +693,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Objectives addressed:** 11 (train/test/validate — temporal version), 12 (lag features), 20 (AI failure modes — feedback loops + Goodhart), plus new: recognize when a validated model will fail in deployment
 
 **Key concepts:**
-- Three deployment-failure modes: temporal leakage, feedback loops, Goodhart's law
+- Four deployment-failure modes: temporal leakage, distribution shift, feedback loops, Goodhart's law
 - Temporal structure means random train/test split leaks future information
 - Temporal split (backtesting): train on past, test on future
 - Lag features: use past values as features for the present
@@ -717,7 +724,7 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Connections:**
 - Backward: Lec 5 (feature engineering), Lec 6 (train/test, cross-validation, overfitting as Goodhart, distribution shift preview), Lec 10 (p-hacking as Goodhart)
-- Forward: Lec 17 (15-item checklist items #13 and #14 refer back here), Lec 18 (feedback loops as causal structure — the DAG view)
+- Forward: Lec 17 (the "incentives and dynamics" cluster of the critical-evaluation checklist — Goodhart and feedback loops — points back here), Lec 18 (feedback loops as causal structure — the DAG view)
 - FPP3 Ch 5 (the forecasting toolbox — train/test for time series)
 - Cathy O'Neil, *Weapons of Math Destruction* — feedback loops + WMD framework
 - ORIE 4741: feature_engineering.tex (AR, ARMA); train-test-validate.tex ("can't randomly split time series"); fairness.tex (COMPAS, feedback loops in social contexts)
@@ -732,40 +739,52 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 
 **Objectives addressed:** 3 (evaluate AI analyses), 19 (AI coding assistants), 20 (AI failure modes), 21 (prompt decomposition)
 
+**Datasets:** Airbnb (TabPFN demo); College Scorecard (selection bias worked example); NBA rest days (Simpson's paradox worked example).
+
 **Key concepts:**
-- **How trees and forests work** (deepening the practical introduction from Lec 13) — Students learned trees and forests in Lec 13 — now they see the bigger picture:
-  - Decision trees: recursive partitioning of feature space (split on one feature at a time)
-  - Why trees handle missing values naturally (can split on "is this value missing?")
-  - Why trees handle nonlinearities without feature engineering
-  - Overfitting: deep trees memorize; shallow trees underfit
-  - Random forests: grow many trees on bootstrap samples, average predictions → reduces variance
-  - Gradient boosting: train weak learners sequentially, each correcting the previous one's errors (connects to gradient descent from Lec 7)
-- AutoML: automated model selection and hyperparameter tuning
-- What AutoML does well (trying many models, cross-validation) and what it cannot do (framing the question, evaluating assumptions, causal reasoning)
-- LLM-generated data analyses: impressive but systematically flawed
-- Selection bias from naively dropping missing data
-- The human role: question formulation, assumption checking, interpretation, communication
-- Comparing LLM analysis vs. course-trained analysis on the same problem
-- Brief mention: additive models / splines / NAMs as "what's under the hood" in some AutoML systems
+- **Gradient boosting** as the workhorse model AutoML reaches for first. Sequential error-correction = gradient descent in function space (bridge to Ch 7); the algorithm behind XGBoost / LightGBM / CatBoost. (Ch 13 owns trees/forests/bagging and explicitly defers gradient boosting here; lec13:495.)
+- **CASH** (combined algorithm selection and hyperparameter optimization) — fold "which algorithm" into a top-level categorical hyperparameter; minimize cross-validated loss. Frame: "AutoML automates the model+hyperparameter loop you already do by hand." (Auto-WEKA, Thornton et al. KDD 2013.)
+- **AutoGluon wins tabular benchmarks by ensembling + multi-layer stacking, not by cleverer search** (AMLB, Gijsbers et al. JMLR 2024; vindicates Caruana ICML 2004).
+- **Tabular foundation models.** TabPFN v2 (Hollmann et al. *Nature* 2025): pretrained on synthetic data; predicts via **in-context learning** with no per-dataset tuning; beats tuned XGBoost / CatBoost on small data (≤ ~10K rows, ~500 features). TabICL (Qu et al. ICML 2025) pushes the row cap higher.
+- **LLM agents that write analysis pipelines.** CAAFE (LLM feature engineering, NeurIPS 2023); AIDE; AutoKaggle; Data Interpreter. Evaluated by **MLE-bench** (Chan et al. ICLR 2025; ~16.9% bronze-medal level for the best setup) and **DABStep** (Egg et al. 2025; ~76% Easy vs. ~15% Hard splits the failure profile).
+- **OBOE → TabPFN through-line.** OBOE (Yang, Akimoto, Kim, Udell, KDD 2019): the model-performance matrix is low-rank → recommend models via matrix completion. TabPFN takes the same shared-structure bet and pushes it into a pretrained transformer.
+- **One-shot vs tool-using agent distinction.** Execution + iteration kills the *crash class* of errors (a fabricated p-value can't survive being computed); it does not kill the *judgment class* — wrong test, leakage, causal misattribution run cleanly and return wrong-but-plausible answers.
+- **Honest capability boundaries**, framed as *mistakes anyone can make that you must check for*, NOT as motives or strawman LLM behavior. Calibration framing: recoverable-but-degraded (Tian 2023 on verbalized confidence; Kadavath 2022 on base-model calibration), not "they don't calibrate." Best-documented failure is *omission of assumption checks* unless prompted (Ordak 2023; Ruta et al. 2025) — measured, not motivational.
+- **Selection bias from naively dropping missing data** (College Scorecard worked example).
+- **Simpson's paradox in within-player NBA rest data** (worked example).
+- **Prompt decomposition** — break an analysis into small, verifiable steps so you can catch errors before they propagate (the Ruta 2025 32.5% → 92.5% prompt-specificity gradient is the empirical case).
+- **The critical-evaluation checklist, regrouped into 5 clusters** — delivering the [Chapter 1](lec01-intro.qmd) promise:
+  1. **The data** — source/dictionary, who's missing/MNAR/survivorship, types
+  2. **The model** — right metric for the decision, truly held-out / temporal split, no leakage, same population / distribution shift
+  3. **The signal** — base rate vs. "99% accuracy", multiple testing, uncertainty / CI width, effect large enough to matter
+  4. **The claim** — correlation or causation? what's the DAG?
+  5. **The incentives and dynamics** — Goodhart / gaming, feedback loops, who paid for it
 
 **Key vocabulary:**
-- Decision tree, split, leaf, node
-- Random forest, bagging (bootstrap aggregation)
-- Gradient boosting
+- Gradient boosting (function-space gradient descent)
+- CASH (combined algorithm selection and hyperparameter optimization)
 - AutoML
+- Ensembling, stacking
+- Tabular foundation model
+- In-context learning
+- LLM agent (data analysis)
+- MLE-bench, DABStep
+- One-shot vs tool-using agent
+- Shared-structure principle (OBOE → TabPFN)
 - Selection bias
-- LLM (Large Language Model)
+- 5-cluster critical-evaluation checklist (data; model; signal; claim; incentives and dynamics)
+- Prompt decomposition
 
-**Prerequisites:** All prior lectures (this is the synthesis); Lec 7 (gradient descent), Lec 13 (trees and forests), Lec 16 (feedback loops + Goodhart, referenced by checklist items #13 and #14)
+**Prerequisites:** Ch 6 (validation / cross-validation — the loss AutoML searches over), Ch 13 (decision trees and random forests — gradient boosting builds on these); selected back-references to Ch 7 (gradient descent), Ch 11 (multiple testing), Ch 16 (Goodhart, feedback loops), Ch 18 (DAGs / confounding — for the "claim" cluster forward-reference).
 
 **Connections:**
-- Backward: **Lec 13 (trees and forests — now students see the deeper mechanics)**, Lec 3 (AI gotchas established early), Lec 7 (gradient descent → gradient boosting), Lec 16 (Goodhart + feedback loops — checklist items #13 and #14 point here)
-- Ties a bow on the AI theme threaded throughout the course
-- ORIE 4741: trees.tex — decision trees, bagging, random forests, gradient boosting, feature importance
+- Backward: Ch 6 (validation), Ch 7 (gradient descent → gradient boosting), Ch 11 (multiple testing — referenced in checklist item 3), Ch 13 (trees / forests — defers gradient boosting here), Ch 16 (Goodhart + feedback loops — referenced in checklist item 5)
+- Forward: Ch 20 (fairness as the marquee case where judgment automation cannot make the call)
+- Ties together the AI theme threaded throughout the course; delivers the Ch 1 promise
 
 **Aphorism:** "Far better an approximate answer to the right question..." (Tukey) — revisited at course end
 
-**Surprise moment:** Side-by-side comparison — LLM analysis of NBA rest data vs. what the course taught students to check (multiple testing, Simpson's paradox, practical significance)
+**Surprise moment:** A frontier AI agent scores ~76% on DABStep Easy and ~15% on DABStep Hard. Same agent, same dataset — the Easy/Hard gap *is* the failure profile (reliable on the mechanical step, unreliable on the judgment-laden workflow).
 
 ---
 
@@ -845,6 +864,70 @@ These memorable phrases anchor key ideas across the course. Each should appear i
 **Aphorism:** "Compared to what?" — every causal claim hides a counterfactual comparison
 
 **Surprise moment:** a single rule change (MLB's 1973 designated-hitter rule) creates a textbook natural experiment — Bradbury & Drinen showed AL pitchers hit batters ~15% more often than NL pitchers after 1973, explained causally by moral hazard (they no longer had to bat themselves)
+
+---
+
+## Lecture 20: Fairness in Algorithmic Decision-Making (enrichment)
+
+**Status:** Enrichment material — reading-only. Not on the final exam. No quiz problems.
+
+**Objectives addressed:** beyond the original 23 — gives students the vocabulary to read a fairness debate (newsroom story, court filing, tech-company report) and tell what each side is and isn't claiming.
+
+**Dataset:** ProPublica COMPAS recidivism (`data/compas/compas-scores-two-years.csv`) — 6,172 Broward County defendants after the standard ProPublica filter (days_b_screening_arrest within ±30 days; non-ordinary charge; non-N/A score; race in {African-American, Caucasian}); decile_score ≥ 5 thresholded for the binary classifier. Synthetic SCM (5,000 samples, `np.random.default_rng(0)`) for the unawareness-fails and counterfactual-flip demos.
+
+**Key concepts:**
+- **Lead with the COMPAS dispute, not definitions.** ProPublica (2016) vs. Northpointe — two analyses, same data, opposite conclusions about whether the algorithm was fair. Each chose a different mathematical definition; the definitions are mutually incompatible.
+- **Protected attributes are legally specified** (Title VII, ECOA, Fair Housing Act, ADA in the US; EU AI Act 2024/1689; NYC Local Law 144; Colorado SB 24-205). Barocas & Selbst (*Cal. L. Rev.* 2016) is the standard reference for how US antidiscrimination doctrine maps onto algorithmic decisions.
+- **Fairness through unawareness fails.** Dropping the protected attribute is not enough — correlated proxies leak the signal back in. Demonstrated on a synthetic SCM where the proxy = z + 0.8·a + noise.
+- **Four group-fairness criteria, four different intuitions:**
+  - *Demographic parity*: $P(\hat y = 1 \mid a)$ equal across groups; $\hat y \perp a$
+  - *Equalized odds* (Hardt-Price-Srebro NeurIPS 2016): TPR and FPR equal across groups; $\hat y \perp a \mid y$
+  - *Equality of opportunity*: TPR alone equal (the qualified-group-focused relaxation of equalized odds)
+  - *Predictive parity / calibration within groups*: PPV equal across groups; per-decile re-arrest rates match across race in the calibration plot
+- **The impossibility theorem** (Kleinberg-Mullainathan-Raghavan, ITCS 2017, LIPIcs vol 67 paper 43, arXiv:1609.05807; Chouldechova *Big Data* 2017 5(2)). When group base rates differ, no non-trivial classifier can simultaneously satisfy predictive parity and equalized odds. COMPAS demonstrates this numerically — base rates differ by ~13 percentage points, PPV is approximately equal, and the FPR/FNR gap follows.
+- **Counterfactual fairness** (Kusner, Loftus, Russell, Silva, NeurIPS 2017) — the causal-inference bridge. A classifier is counterfactually fair if its prediction is unchanged when the protected attribute is flipped and the flip is propagated through the assumed structural causal model. The criterion is the most demanding of the four and the most dependent on a structural model the modeler has to commit to.
+- **For COMPAS there is no credible SCM** — we can compute the group-fairness metrics but not counterfactual fairness in good faith.
+- **The counterfactual frame itself is contested** (Kohler-Hausmann 2019; Hu & Kohler-Hausmann FAccT 2020) — flipping a socially-constructed attribute while fixing the features it is constitutive of describes a person who does not exist. Acknowledged in one paragraph, not a deep dive.
+- **Practice has moved beyond "pick a metric"** to four ideas working together: sociotechnical reframing (Selbst et al. FAT* 2019); auditing as a discipline (NYC LL 144, OMB M-24-10, EU AI Act); participatory design with affected communities; compliance-language framing.
+- **Three cases since COMPAS** (with primary-source documentation): Optum healthcare risk score (Obermeyer et al. *Science* 2019 — wrong label, not wrong metric); Dutch SyRI (Hague Court Feb 2020 — first European court ruling on algorithmic discrimination); UK Ofqual A-level grades (Aug 2020 — public-pressure reversal).
+- **Tooling pointer:** Fairlearn (Microsoft, scikit-learn-style API); AIF360 (IBM); Aequitas (DSAPP, audit-report deliverable); HolisticAI (covers EU AI Act high-risk obligations more broadly).
+
+**Key vocabulary:**
+- Protected attribute
+- Fairness through unawareness
+- Demographic parity (statistical parity)
+- Equalized odds
+- Equality of opportunity
+- Predictive parity
+- Calibration within groups
+- Impossibility theorem (KMR / Chouldechova)
+- Counterfactual fairness
+- Structural causal model (SCM)
+
+**Key formulas / notation:**
+- $\hat y \perp a$ (demographic parity)
+- $\hat y \perp a \mid y$ (equalized odds)
+- $P(y=1 \mid \hat y = 1, a)$ equal across $a$ (predictive parity)
+- $\hat Y_{a \leftarrow a'}(U) = \hat Y_{a \leftarrow a}(U)$ for all $a, a'$ (counterfactual fairness)
+
+**Computational tools:**
+- `sklearn.linear_model.LogisticRegression` — to demonstrate proxy leakage under unawareness
+- `df.groupby(a)['y_hat'].mean()` — positive-rate by group
+- Per-group confusion-table rates (TPR, FPR, PPV) — usually shown as a grouped bar chart and a small table
+- Per-decile calibration plot across groups
+- The standard ProPublica COMPAS filter (codified in the chapter for reproducibility)
+- `fairlearn.metrics.MetricFrame`; `fairlearn.postprocessing.ThresholdOptimizer` — production tooling pointer
+
+**Prerequisites:** Ch 7 (logistic regression, confusion matrix, FPR/TPR/PPV — predictive parity is just precision-per-group); Ch 11 (multiple testing — for the base-rate / Bayes-rule arithmetic); Ch 18–19 (DAGs, counterfactuals — needed to define counterfactual fairness honestly).
+
+**Connections:**
+- Backward: Ch 1 (fulfills the "formalize this in Act 3" promise about COMPAS — lec01:67); Ch 7 (confusion-matrix rates per group); Ch 11 (correlation ≠ causation, base rates); Ch 15 (the feature-choice-is-a-values-choice thread, applied to a new domain); Ch 17 (the fifth checklist cluster: incentives and dynamics — fairness is the marquee case where judgment automation cannot make the call); Ch 18-19 (DAGs, counterfactuals)
+- Forward: none (final chapter)
+- ORIE 4741: fairness.tex — COMPAS, fairness metrics, impossibility theorem, feedback loops in social contexts
+
+**Aphorism:** none directly — the course thesis ("taste is the bottleneck") lands as the chapter's closing line: fairness is the case where the criteria are mathematically incompatible, the data does not pick between them, and the choice belongs to whoever is responsible for the decision.
+
+**Surprise moment:** Both ProPublica's claim (unequal FPR/FNR across groups) and Northpointe's claim (approximately equal PPV and per-decile calibration) are correct on the same COMPAS data — the disagreement is not about the arithmetic but about which definition of fairness should govern. The impossibility theorem says no clever algorithm escapes the constraint.
 
 ---
 

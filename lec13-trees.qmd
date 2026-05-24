@@ -464,7 +464,7 @@ A bootstrap sample of size $n$ from $n$ rows includes ~63% of distinct rows; the
 A random forest is one instance of an **ensemble**: a model built by aggregating many weaker learners into a stronger predictor. Two strategies dominate, distinguished by how the learners are produced:
 
 - **Bagging** (parallel) — train learners independently on bootstrap samples; average. Mechanism: *variance reduction*.
-- **Boosting** (sequential) — train learners one at a time, each focused on previous mistakes; combine as a weighted sum. Mechanism: *bias reduction*. *Gradient boosting* — fits each new learner to the residuals — is treated in [Chapter 17](lec17-automl-llms.qmd).
+- **Boosting** (sequential) — train learners one at a time, each focused on previous mistakes; combine as a weighted sum. Mechanism: *bias reduction*. *Gradient boosting* — fits each new learner to the residuals — is treated in [Chapter 17](lec17-working-with-ai.qmd).
 
 Ensembling turns a moderately good model into a much better one without hand-engineering features. It is the reason "use a random forest" is the strong tabular-data default.
 
@@ -621,7 +621,7 @@ The variance of an average of $B$ trees, where $\sigma^2$ is one tree's predicti
 
 $$\text{Var}(\bar f_B) = \rho \sigma^2 + \frac{1-\rho}{B}\sigma^2.$$
 
-The $1-\rho$ term shrinks like $1/B$ (so the standard deviation shrinks like $1/\sqrt{B}$ — what the bottom panel plots). The $\rho \sigma^2$ floor does not depend on $B$; feature subsampling beats it down by lowering $\rho$. Returns in [Chapter 17](lec17-automl-llms.qmd).
+The $1-\rho$ term shrinks like $1/B$ (so the standard deviation shrinks like $1/\sqrt{B}$ — what the bottom panel plots). The $\rho \sigma^2$ floor does not depend on $B$; feature subsampling beats it down by lowering $\rho$. Returns in [Chapter 17](lec17-working-with-ai.qmd).
 :::
 
 Averaging shrinks the *spread* of the prediction without shifting its center. A random forest keeps each tree deep (low bias) and reduces variance by averaging, replacing the U-curve in `max_depth` with a one-sided staircase in `n_estimators`.
@@ -892,7 +892,7 @@ Modern tree implementations — including the popular gradient-boosting librarie
 :::{.callout-note collapse="true"}
 ## Going deeper: XGBoost vs. LightGBM
 
-Both XGBoost and LightGBM fit *gradient-boosted* trees (rather than the bagged trees that make up a random forest — see [Chapter 17](lec17-automl-llms.qmd)). Both handle missing values natively. Both win Kaggle leaderboards. They differ in *how* they grow each tree.
+Both XGBoost and LightGBM fit *gradient-boosted* trees (rather than the bagged trees that make up a random forest — see [Chapter 17](lec17-working-with-ai.qmd)). Both handle missing values natively. Both win Kaggle leaderboards. They differ in *how* they grow each tree.
 
 - **XGBoost** grows trees *level by level* (balanced trees, predictable training time, forgiving defaults). The conservative default — start here.
 - **LightGBM** grows trees *leaf by leaf* (asymmetric, deeper trees, more aggressive fitting) and bins continuous features into histograms — dramatically faster on large datasets.

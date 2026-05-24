@@ -34,6 +34,7 @@ book:
         - lec17-working-with-ai.qmd
         - lec18-causal-inference-1.qmd
         - lec19-causal-inference-2.qmd
+        - lec20-fairness.qmd
     - part: "Appendices"
       chapters:
         - appendix-probability.qmd

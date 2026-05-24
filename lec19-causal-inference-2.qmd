@@ -742,7 +742,7 @@ The DiD estimate is credible only if no *other* change hit the AL differently at
 
 We began this course asking how to predict --- building models from data, measuring how well they generalize, and learning when to trust their answers. We moved from prediction to inference, asking not just "what will happen?" but "how confident are we?" and "does the evidence support this claim?" In this final act, we confronted the hardest question of all: "did this *cause* that?" The progression mirrors how data analysis works in practice. You start by describing what you see, then quantify your uncertainty, and only then --- carefully, with the right design --- attempt causal claims. The tools change, but the discipline remains the same: let the data speak, understand what it cannot say, and resist the temptation to claim more than the evidence supports.
 
-When you encounter a causal claim in your career — in a vendor pitch, a paper, a colleague's slide deck, an LLM's confident summary — pull out the [15-question checklist from Chapter 17](lec17-automl-llms.qmd) and run through it. Draw the DAG. Ask: compared to what? Where's the variation that identifies the effect? What confounders aren't measured? Causal claims are expensive. Treat them with the respect they deserve.
+When you encounter a causal claim in your career — in a vendor pitch, a paper, a colleague's slide deck, an AI tool's confident summary — pull out the [critical-evaluation checklist from Chapter 17](lec17-working-with-ai.qmd) and run through its five clusters. Draw the DAG. Ask: compared to what? Where's the variation that identifies the effect? What confounders aren't measured? Causal claims are expensive. Treat them with the respect they deserve.
 
 ## Key takeaways
 
