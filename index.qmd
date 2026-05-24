@@ -12,11 +12,13 @@ The course is organized in three acts:
 
 ## A note on AI
 
-This book was written using large language models, Claude in particular. AI drafted prose, proposed examples, generated figures and code, and critiqued chapters along several dimensions — rigor, narrative, pedagogy, accessibility.
+This book was written almost entirely by large language models, Claude in particular. AI drafted prose, proposed examples, generated figures and code, and critiqued chapters along several dimensions — rigor, narrative, pedagogy, accessibility.
 
-The shape of the book is mine. Every chapter opens with a hook framing a consequential decision. Every dataset is real and tied to a decision someone actually faces. Concepts arrive through examples and code before abstraction. Within those conventions I curated what to feed the model, decided what was interesting and what was important, and judged when a draft example or dataset wasn't strong enough — when to search for a better one.
+The shape of the book is mine. Every chapter opens with a hook framing a consequential decision. Every dataset is real and tied to a decision someone actually faces. Concepts arrive through examples and code before abstraction. Within those conventions I curated what to feed the model, decided what was interesting and what was important, and judged when a draft example or dataset wasn't strong enough and when to search for a better one. The model's contributions are substantial, but the human role is still central. I hope this book is a useful case study in how to use AI as a tool for writing and teaching.
 
-I ask my students to disclose how they used AI on their work. I owe them the same.
+This approach offered several advantages over a traditional writing process. It was faster, allowing me to iterate quickly on drafts and explore more examples than I could have generated myself. As a result, I was able to fulfill my promise of introducing each concept through real-world applications. The model's ability to critique its own work and suggest improvements led to a polished and consistent final product. The model's ability to follow rules I had set (e.g. "introduce concepts through examples and code") helped ensure the book delivered on my pedagogical goals. It also allowed me to color the course with modern material drawn from the latest research literature, showcasing examples of these methods and insights on best-practices. A curated set of Claude skills (as well as my own close reading) provided guardrails to ensure the model's contributions stay accurate, relevant, and aligned with the course's style and learning objectives.
+
+Perhaps most importantly, from the student's perspective, the model consistently curated the "for the quiz" blocks to match my focus in the chapters and lectures. These served as a contract between me and the students about what to expect on quizzes and exams. While I, as a mere human, am fallible and often choose quiz questions based on my own interests, the model can focus on the core concepts we pre-registered before embarking on the course, ensuring that the quizzes are fair and aligned with the learning objectives of each chapter. 
 
 ## How to cite this book
 

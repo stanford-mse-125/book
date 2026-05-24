@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>PCA — Dimensionality Reduction (alternative: text embeddings)</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="lec14alt-pca-embedding_files/libs/clipboard/clipboard.min.js"></script>
+<script src="lec14alt-pca-embedding_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="lec14alt-pca-embedding_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="lec14alt-pca-embedding_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="lec14alt-pca-embedding_files/libs/quarto-html/popper.min.js"></script>
+<script src="lec14alt-pca-embedding_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="lec14alt-pca-embedding_files/libs/quarto-html/anchor.min.js"></script>
+<link href="lec14alt-pca-embedding_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="lec14alt-pca-embedding_files/libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="lec14alt-pca-embedding_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="lec14alt-pca-embedding_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="lec14alt-pca-embedding_files/libs/bootstrap/bootstrap-d6a003b94517c951b2d65075d42fb01b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<meta name="quarto:status" content="draft">
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent quarto-light"><div id="quarto-draft-alert" class="alert alert-warning"><i class="bi bi-pencil-square"></i>Draft</div>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">PCA — Dimensionality Reduction (alternative: text embeddings)</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>This is an alternative version of the PCA chapter.</strong> The canonical Lec 14 uses S&amp;P 100 equity returns and portfolio construction as its killer-app. This alternative version uses Airbnb listing descriptions, sentence-transformer embeddings, and price prediction — a useful parallel workflow that demonstrates PCA on learned representations. It is not part of the book TOC; it is preserved for instructors and curious readers who want to see the embedding-based approach. Cross-referenced from the canonical chapter’s “Going deeper” callout.</p>
+</div>
+</div>
+<section id="columns.-can-we-get-away-with-5" class="level2">
+<h2 class="anchored" data-anchor-id="columns.-can-we-get-away-with-5">96 columns. Can we get away with 5?</h2>
+<p>The Airbnb dataset has 96 columns. Bedrooms, bathrooms, price, review scores, availability, latitude, longitude… it’s a lot. If you’re building a model or a dashboard, feeding in 96 columns is slow, noisy, and expensive.</p>
+<p>Can we compress all of this into just 5 numbers per listing — without losing what matters? <strong>PCA</strong> (<strong>Principal Component Analysis</strong>) finds the “best” 5-dimensional summary, and the linear algebra we learned tells us exactly what “best” means.</p>
+<div id="67fd39cf" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(<span class="st">'ignore'</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>sns.set_style(<span class="st">'whitegrid'</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">'figure.figsize'</span>] <span class="op">=</span> (<span class="dv">7</span>, <span class="fl">4.5</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">'font.size'</span>] <span class="op">=</span> <span class="dv">12</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>np.random.seed(<span class="dv">42</span>)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.decomposition <span class="im">import</span> PCA</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.preprocessing <span class="im">import</span> StandardScaler</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Load data</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>DATA_DIR <span class="op">=</span> <span class="st">'data'</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="the-picture-behind-pca" class="level2">
+<h2 class="anchored" data-anchor-id="the-picture-behind-pca">The picture behind PCA</h2>
+<p>The idea behind PCA is more than a century old. Karl Pearson described it in 1901 in a paper called <em>On Lines and Planes of Closest Fit to Systems of Points in Space</em> (Pearson, <em>Philosophical Magazine</em>, 1901). The picture in his paper is essentially the picture below: a cloud of points, an ellipse summarizing their spread, and a line through the long axis of that ellipse. That line is the first principal component.</p>
+<div id="7a61ef02" class="cell" data-execution_count="2">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># A 2D Gaussian cloud with clear elliptical structure</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>rng <span class="op">=</span> np.random.default_rng(<span class="dv">0</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="dv">200</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>cov <span class="op">=</span> np.array([[<span class="fl">3.0</span>, <span class="fl">1.6</span>], [<span class="fl">1.6</span>, <span class="fl">1.2</span>]])</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>X_demo <span class="op">=</span> rng.multivariate_normal([<span class="fl">0.0</span>, <span class="fl">0.0</span>], cov, size<span class="op">=</span>n)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>pca_demo <span class="op">=</span> PCA(n_components<span class="op">=</span><span class="dv">2</span>).fit(X_demo)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>center <span class="op">=</span> pca_demo.mean_</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>comps <span class="op">=</span> pca_demo.components_</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>svals <span class="op">=</span> np.sqrt(pca_demo.explained_variance_)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="fl">6.5</span>, <span class="dv">5</span>))</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>ax.scatter(X_demo[:, <span class="dv">0</span>], X_demo[:, <span class="dv">1</span>], s<span class="op">=</span><span class="dv">18</span>, alpha<span class="op">=</span><span class="fl">0.55</span>,</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>           color<span class="op">=</span><span class="st">'#4a6fa5'</span>, edgecolor<span class="op">=</span><span class="st">'white'</span>, linewidth<span class="op">=</span><span class="fl">0.4</span>)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>arrow_scale <span class="op">=</span> <span class="fl">2.4</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i, c <span class="kw">in</span> <span class="bu">enumerate</span>([<span class="st">'#c44e52'</span>, <span class="st">'#55a868'</span>]):</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    v <span class="op">=</span> comps[i] <span class="op">*</span> svals[i] <span class="op">*</span> arrow_scale</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    ax.annotate(<span class="st">''</span>, xy<span class="op">=</span>center <span class="op">+</span> v, xytext<span class="op">=</span>center,</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>                arrowprops<span class="op">=</span><span class="bu">dict</span>(arrowstyle<span class="op">=</span><span class="st">'-&gt;'</span>, color<span class="op">=</span>c, lw<span class="op">=</span><span class="fl">2.4</span>))</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    offset <span class="op">=</span> v <span class="op">/</span> np.linalg.norm(v) <span class="op">*</span> <span class="fl">0.6</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    ax.text(center[<span class="dv">0</span>] <span class="op">+</span> v[<span class="dv">0</span>] <span class="op">+</span> offset[<span class="dv">0</span>],</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>            center[<span class="dv">1</span>] <span class="op">+</span> v[<span class="dv">1</span>] <span class="op">+</span> offset[<span class="dv">1</span>],</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f'PC</span><span class="sc">{</span>i<span class="op">+</span><span class="dv">1</span><span class="sc">}</span><span class="ss">'</span>, color<span class="op">=</span>c, fontsize<span class="op">=</span><span class="dv">14</span>, fontweight<span class="op">=</span><span class="st">'bold'</span>,</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>            ha<span class="op">=</span><span class="st">'center'</span>, va<span class="op">=</span><span class="st">'center'</span>)</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Highlight one point and its perpendicular projection onto PC1</span></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>p <span class="op">=</span> X_demo[<span class="dv">7</span>]</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>pc1 <span class="op">=</span> comps[<span class="dv">0</span>]</span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>p_proj <span class="op">=</span> center <span class="op">+</span> np.dot(p <span class="op">-</span> center, pc1) <span class="op">*</span> pc1</span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>ax.scatter([p[<span class="dv">0</span>]], [p[<span class="dv">1</span>]], s<span class="op">=</span><span class="dv">90</span>, color<span class="op">=</span><span class="st">'black'</span>, zorder<span class="op">=</span><span class="dv">4</span>,</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>           edgecolor<span class="op">=</span><span class="st">'white'</span>, linewidth<span class="op">=</span><span class="fl">1.0</span>)</span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>ax.plot([p[<span class="dv">0</span>], p_proj[<span class="dv">0</span>]], [p[<span class="dv">1</span>], p_proj[<span class="dv">1</span>]],</span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>        color<span class="op">=</span><span class="st">'black'</span>, lw<span class="op">=</span><span class="fl">1.4</span>, ls<span class="op">=</span><span class="st">'--'</span>, zorder<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>ax.scatter([p_proj[<span class="dv">0</span>]], [p_proj[<span class="dv">1</span>]], s<span class="op">=</span><span class="dv">55</span>, color<span class="op">=</span><span class="st">'black'</span>,</span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>           marker<span class="op">=</span><span class="st">'x'</span>, zorder<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>ax.annotate(<span class="st">'reconstruction</span><span class="ch">\n</span><span class="st">error'</span>,</span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>            xy<span class="op">=</span>((p[<span class="dv">0</span>]<span class="op">+</span>p_proj[<span class="dv">0</span>])<span class="op">/</span><span class="dv">2</span>, (p[<span class="dv">1</span>]<span class="op">+</span>p_proj[<span class="dv">1</span>])<span class="op">/</span><span class="dv">2</span>),</span>
+<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>            xytext<span class="op">=</span>(p[<span class="dv">0</span>]<span class="op">+</span><span class="fl">1.6</span>, p[<span class="dv">1</span>]<span class="op">+</span><span class="fl">0.9</span>),</span>
+<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>            fontsize<span class="op">=</span><span class="dv">10</span>, ha<span class="op">=</span><span class="st">'left'</span>,</span>
+<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a>            arrowprops<span class="op">=</span><span class="bu">dict</span>(arrowstyle<span class="op">=</span><span class="st">'-'</span>, color<span class="op">=</span><span class="st">'black'</span>, lw<span class="op">=</span><span class="fl">0.8</span>))</span>
+<span id="cb2-42"><a href="#cb2-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-43"><a href="#cb2-43" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">'$x_1$'</span>)</span>
+<span id="cb2-44"><a href="#cb2-44" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">'$x_2$'</span>)</span>
+<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">'After Pearson (1901): the long axis of the cloud is PC1'</span>)</span>
+<span id="cb2-46"><a href="#cb2-46" aria-hidden="true" tabindex="-1"></a>ax.set_aspect(<span class="st">'equal'</span>)</span>
+<span id="cb2-47"><a href="#cb2-47" aria-hidden="true" tabindex="-1"></a>ax.grid(<span class="va">True</span>, alpha<span class="op">=</span><span class="fl">0.25</span>)</span>
+<span id="cb2-48"><a href="#cb2-48" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb2-49"><a href="#cb2-49" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="lec14alt-pca-embedding_files/figure-html/cell-3-output-1.png" width="608" height="360" class="figure-img"></p>
+<figcaption>After Pearson (1901). The cloud of points has an obvious long axis (PC1) and a shorter perpendicular axis (PC2). The dashed segment shows the perpendicular distance from one point to PC1 — its reconstruction error if we summarize this point by its PC1 score alone.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>PCA returns the direction in which the cloud is most spread out, then the direction of maximum remaining spread orthogonal to that, and so on. The names follow the order of spread.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Definition: Principal Component Analysis (PCA)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>PCA finds the directions of maximum variance.</strong> The first <strong>principal component</strong> (PC1) is the direction of maximum spread. PC2 is the direction of maximum spread <em>orthogonal</em> (perpendicular) to PC1. And so on.</p>
+<p>PCA finds the best <span class="math inline">k</span>-dimensional subspace to project your data onto. “Best” means it minimizes the total squared distance between the original points and their projections — the same idea as regression minimizing squared residuals, but now the residuals are <em>perpendicular</em> to the fitted subspace, not vertical.</p>
+</div>
+</div>
+<p>There are two equivalent ways to describe what PCA does — and they give the same answer:</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Two views of PCA
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ol type="1">
+<li><strong>Maximize variance captured along the chosen axis.</strong> Among all unit directions, PC1 is the one along which the projected points have the largest variance.</li>
+<li><strong>Minimize squared perpendicular distance from points to the axis.</strong> Among all lines through the data, PC1 is the one with the smallest total squared distance from points to the line.</li>
+</ol>
+<p>These two views are equivalent — the <em>same</em> line solves both problems. The formal statement is the Eckart-Young-Mirsky theorem, which we’ll meet when we get to the SVD.</p>
+</div>
+</div>
+<p>A short contrast with regression keeps the geometry straight. Regression (Chapter 5) minimizes the <em>vertical</em> distance from points to a fitted line — the gap between <span class="math inline">y_i</span> and its prediction. PCA minimizes the <em>perpendicular</em> distance. Different objectives, different lines: the regression line of <span class="math inline">x_2</span> on <span class="math inline">x_1</span> is not the same as PC1.</p>
+</section>
+<section id="loading-and-preparing-the-data" class="level2">
+<h2 class="anchored" data-anchor-id="loading-and-preparing-the-data">Loading and preparing the data</h2>
+<p>Let’s load the Airbnb data and select the numeric columns that make sense for PCA. We’ll drop IDs, URLs, and columns that are mostly missing.</p>
+<div id="d9c00e03" class="cell" data-execution_count="3">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># low_memory=False avoids mixed-type warnings on large CSVs</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>airbnb <span class="op">=</span> pd.read_csv(<span class="ss">f'</span><span class="sc">{</span>DATA_DIR<span class="sc">}</span><span class="ss">/airbnb/listings.csv'</span>, low_memory<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Raw data: </span><span class="sc">{</span>airbnb<span class="sc">.</span>shape[<span class="dv">0</span>]<span class="sc">:,}</span><span class="ss"> rows x </span><span class="sc">{</span>airbnb<span class="sc">.</span>shape[<span class="dv">1</span>]<span class="sc">}</span><span class="ss"> columns"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Raw data: 29,142 rows x 96 columns</code></pre>
+</div>
+</div>
+<p>Before selecting numeric columns, we clean the price and bathrooms columns, which require type conversion.</p>
+<div id="b6ed5dae" class="cell" data-execution_count="4">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clean price column (stored as string like "$150.00" in many Airbnb exports)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> airbnb[<span class="st">'price'</span>].dtype <span class="op">==</span> <span class="bu">object</span>:</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    airbnb[<span class="st">'price'</span>] <span class="op">=</span> airbnb[<span class="st">'price'</span>].replace(<span class="st">'[</span><span class="ch">\\</span><span class="st">$,]'</span>, <span class="st">''</span>, regex<span class="op">=</span><span class="va">True</span>).astype(<span class="bu">float</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Handle bathrooms column (newer Airbnb exports use bathrooms_text instead)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="st">'bathrooms'</span> <span class="kw">not</span> <span class="kw">in</span> airbnb.columns <span class="kw">and</span> <span class="st">'bathrooms_text'</span> <span class="kw">in</span> airbnb.columns:</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    airbnb[<span class="st">'bathrooms'</span>] <span class="op">=</span> (</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>        airbnb[<span class="st">'bathrooms_text'</span>]</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>        .<span class="bu">str</span>.extract(<span class="vs">r'</span><span class="kw">(</span><span class="dv">\d</span><span class="op">+</span><span class="ch">\.</span><span class="op">?</span><span class="dv">\d</span><span class="op">*</span><span class="kw">)</span><span class="vs">'</span>)[<span class="dv">0</span>]</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>        .astype(<span class="bu">float</span>)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Now we select the 23 numeric columns and drop rows with missing values. Note that <code>.dropna()</code> silently removes any row with at least one NaN — we print the count so the loss is visible.</p>
+<div id="bf1ecd22" class="cell" data-execution_count="5">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Select numeric columns suitable for PCA</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>numeric_cols <span class="op">=</span> [</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">'accommodates'</span>, <span class="st">'bathrooms'</span>, <span class="st">'bedrooms'</span>, <span class="st">'beds'</span>, <span class="st">'price'</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">'minimum_nights'</span>, <span class="st">'maximum_nights'</span>, <span class="st">'number_of_reviews'</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">'reviews_per_month'</span>, <span class="st">'review_scores_rating'</span>, <span class="st">'review_scores_accuracy'</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">'review_scores_cleanliness'</span>, <span class="st">'review_scores_checkin'</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">'review_scores_communication'</span>, <span class="st">'review_scores_location'</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">'review_scores_value'</span>, <span class="st">'availability_30'</span>, <span class="st">'availability_60'</span>,</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">'availability_90'</span>, <span class="st">'availability_365'</span>,</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">'calculated_host_listings_count'</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">'latitude'</span>, <span class="st">'longitude'</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> airbnb[numeric_cols].dropna()</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"After selecting </span><span class="sc">{</span><span class="bu">len</span>(numeric_cols)<span class="sc">}</span><span class="ss"> numeric columns and dropping NaN:"</span>)</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span><span class="bu">len</span>(df)<span class="sc">:,}</span><span class="ss"> rows x </span><span class="sc">{</span><span class="bu">len</span>(numeric_cols)<span class="sc">}</span><span class="ss"> columns"</span>)</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  (Dropped </span><span class="sc">{</span><span class="bu">len</span>(airbnb) <span class="op">-</span> <span class="bu">len</span>(df)<span class="sc">:,}</span><span class="ss"> rows with missing values)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>After selecting 23 numeric columns and dropping NaN:
+  29,125 rows x 23 columns
+  (Dropped 17 rows with missing values)</code></pre>
+</div>
+</div>
+<p>We went from 96 columns to 23 numeric ones. But 23 dimensions is still a lot. Can we find a smaller set of “super-features” that captures most of the information?</p>
+</section>
+<section id="first-attempt-pca-without-standardization" class="level2">
+<h2 class="anchored" data-anchor-id="first-attempt-pca-without-standardization">First attempt: PCA without standardization</h2>
+<p>Let’s see what happens if we run PCA on the raw (unstandardized) data — the fastest path, and an easy default to fall into.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Think About It
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Before looking at the output — which feature do you think PC1 will pick up, and why?</p>
+</div>
+</div>
+<div id="47280ea3" class="cell" data-execution_count="6">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># PCA without standardization</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>pca_raw <span class="op">=</span> PCA()</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>scores_raw <span class="op">=</span> pca_raw.fit_transform(df)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co"># What does PC1 look like?</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>loadings_raw <span class="op">=</span> pd.Series(pca_raw.components_[<span class="dv">0</span>], index<span class="op">=</span>numeric_cols)</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"PC1 loadings (unstandardized data) — top 5 by absolute value:"</span>)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(loadings_raw.<span class="bu">abs</span>().sort_values(ascending<span class="op">=</span><span class="va">False</span>).head())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PC1 loadings (unstandardized data) — top 5 by absolute value:
+maximum_nights          1.000000e+00
+availability_365        6.916299e-08
+availability_90         1.746638e-08
+availability_60         1.092507e-08
+review_scores_rating    9.654232e-09
+dtype: float64</code></pre>
+</div>
+</div>
+<p>PC1 explains almost all the variance — suspiciously so. Let’s check which features have the largest raw variance.</p>
+<div id="8c423af7" class="cell" data-execution_count="7">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Variance explained</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"PC1 explains </span><span class="sc">{</span>pca_raw<span class="sc">.</span>explained_variance_ratio_[<span class="dv">0</span>]<span class="op">*</span><span class="dv">100</span><span class="sc">:.1f}</span><span class="ss">% of all variance"</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"PC2 explains </span><span class="sc">{</span>pca_raw<span class="sc">.</span>explained_variance_ratio_[<span class="dv">1</span>]<span class="op">*</span><span class="dv">100</span><span class="sc">:.1f}</span><span class="ss">% of all variance"</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"What's going on? Let's look at the raw feature variances:"</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>()</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>raw_var <span class="op">=</span> df.var().sort_values(ascending<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> col <span class="kw">in</span> raw_var.head(<span class="dv">5</span>).index:</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span>col<span class="sc">:&gt;35s}</span><span class="ss">: variance = </span><span class="sc">{</span>raw_var[col]<span class="sc">:&gt;15,.1f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PC1 explains 100.0% of all variance
+PC2 explains 0.0% of all variance
+
+What's going on? Let's look at the raw feature variances:
+
+                       maximum_nights: variance = 166,708,795,415,534.9
+                     availability_365: variance =        18,350.1
+                                price: variance =        10,734.9
+                    number_of_reviews: variance =         1,477.5
+                      availability_90: variance =         1,153.8</code></pre>
+</div>
+</div>
+<p><strong>There it is.</strong> <code>maximum_nights</code> has a variance in the trillions — some listings allow stays of 1,000+ nights, creating enormous outliers. <code>availability_365</code> ranges up to 365. Meanwhile, <code>bathrooms</code> ranges from 0 to 10.</p>
+<p>PCA on unstandardized data just picks up whichever column has the biggest numbers. PC1 is basically “maximum_nights” — that’s not a useful summary of anything.</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>PCA is dominated by scale
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Without standardization, PCA is dominated by whichever feature has the largest scale.</p>
+</div>
+</div>
+</section>
+<section id="the-fix-standardize-first" class="level2">
+<h2 class="anchored" data-anchor-id="the-fix-standardize-first">The fix: standardize first</h2>
+<p>We need every feature on the same scale before PCA can find meaningful directions. <strong>Standardization</strong> (subtracting the mean and dividing by the standard deviation — the <strong>z-score</strong> transformation) puts all features on equal footing.</p>
+<p>Here’s why this matters at a deeper level: PCA on raw centered data decomposes the <strong>covariance matrix</strong>. PCA on standardized data decomposes the <strong>correlation matrix</strong>. Since correlation puts all features on equal footing, this is usually what we want.</p>
+<div id="2d4a398c" class="cell" data-execution_count="8">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Standardize</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>scaler <span class="op">=</span> StandardScaler()</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>X_scaled <span class="op">=</span> scaler.fit_transform(df)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="co"># PCA on standardized data</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>pca <span class="op">=</span> PCA()</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>scores <span class="op">=</span> pca.fit_transform(X_scaled)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>How much variance does each PC capture now?</p>
+<div id="3b3b0c00" class="cell" data-execution_count="9">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Variance explained by each PC (standardized):"</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">5</span>):</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  PC</span><span class="sc">{</span>i<span class="op">+</span><span class="dv">1</span><span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>pca<span class="sc">.</span>explained_variance_ratio_[i]<span class="op">*</span><span class="dv">100</span><span class="sc">:.1f}</span><span class="ss">%"</span>)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  ...total for first 5: </span><span class="sc">{</span>pca<span class="sc">.</span>explained_variance_ratio_[:<span class="dv">5</span>]<span class="sc">.</span><span class="bu">sum</span>()<span class="op">*</span><span class="dv">100</span><span class="sc">:.1f}</span><span class="ss">%"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Variance explained by each PC (standardized):
+  PC1: 19.5%
+  PC2: 15.4%
+  PC3: 13.3%
+  PC4: 6.8%
+  PC5: 5.3%
+  ...total for first 5: 60.3%</code></pre>
+</div>
+</div>
+</section>
+<section id="the-scree-plot-how-many-components-do-we-need" class="level2">
+<h2 class="anchored" data-anchor-id="the-scree-plot-how-many-components-do-we-need">The scree plot: how many components do we need?</h2>
+<p>The <strong>scree plot</strong> shows how much variance each PC explains. We look for an <strong>elbow</strong> — the point where adding more PCs doesn’t help much. This heuristic is called the <strong>elbow method</strong>.</p>
+<div id="441782ba" class="cell" data-execution_count="10">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Scree plot: individual and cumulative variance explained</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">11</span>, <span class="dv">4</span>))</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].bar(<span class="bu">range</span>(<span class="dv">1</span>, <span class="bu">len</span>(pca.explained_variance_ratio_)<span class="op">+</span><span class="dv">1</span>),</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>            pca.explained_variance_ratio_ <span class="op">*</span> <span class="dv">100</span>,</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>            color<span class="op">=</span><span class="st">'steelblue'</span>, edgecolor<span class="op">=</span><span class="st">'white'</span>)</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_xlabel(<span class="st">'Principal Component'</span>)</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="st">'Variance Explained (%)'</span>)</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'Scree Plot'</span>)</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_xlim(<span class="fl">0.5</span>, <span class="fl">15.5</span>)</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>cumvar <span class="op">=</span> np.cumsum(pca.explained_variance_ratio_) <span class="op">*</span> <span class="dv">100</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].plot(<span class="bu">range</span>(<span class="dv">1</span>, <span class="bu">len</span>(cumvar)<span class="op">+</span><span class="dv">1</span>), cumvar, <span class="st">'o-'</span>, color<span class="op">=</span><span class="st">'steelblue'</span>)</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].axhline(y<span class="op">=</span><span class="dv">80</span>, color<span class="op">=</span><span class="st">'red'</span>, linestyle<span class="op">=</span><span class="st">'--'</span>, alpha<span class="op">=</span><span class="fl">0.5</span>, label<span class="op">=</span><span class="st">'80% threshold'</span>)</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].axhline(y<span class="op">=</span><span class="dv">90</span>, color<span class="op">=</span><span class="st">'orange'</span>, linestyle<span class="op">=</span><span class="st">'--'</span>, alpha<span class="op">=</span><span class="fl">0.5</span>, label<span class="op">=</span><span class="st">'90% threshold'</span>)</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlabel(<span class="st">'Number of Components'</span>)</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_ylabel(<span class="st">'Cumulative Variance Explained (%)'</span>)</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'Cumulative Variance Explained'</span>)</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].legend()</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlim(<span class="fl">0.5</span>, <span class="fl">15.5</span>)</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec14alt-pca-embedding_files/figure-html/cell-11-output-1.png" width="1024" height="367" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>How many PCs do we need to reach common variance thresholds?</p>
+<div id="68f536da" class="cell" data-execution_count="11">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># How many PCs for various thresholds?</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> threshold <span class="kw">in</span> [<span class="fl">0.7</span>, <span class="fl">0.8</span>, <span class="fl">0.9</span>]:</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    n_needed <span class="op">=</span> np.argmax(cumvar <span class="op">&gt;=</span> threshold<span class="op">*</span><span class="dv">100</span>) <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span>threshold<span class="op">*</span><span class="dv">100</span><span class="sc">:.0f}</span><span class="ss">% variance: need </span><span class="sc">{</span>n_needed<span class="sc">}</span><span class="ss"> PCs (out of </span><span class="sc">{</span><span class="bu">len</span>(numeric_cols)<span class="sc">}</span><span class="ss">)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  70% variance: need 8 PCs (out of 23)
+  80% variance: need 10 PCs (out of 23)
+  90% variance: need 14 PCs (out of 23)</code></pre>
+</div>
+</div>
+<p>We need a handful of PCs to capture most of the variance — a real reduction from 23 columns, though not as dramatic as “just 5 PCs capture everything.” Real data is messy, and the variance is spread out.</p>
+<p>Still, the first few PCs do capture meaningful structure. Let’s interpret them.</p>
+</section>
+<section id="interpreting-the-principal-components" class="level2">
+<h2 class="anchored" data-anchor-id="interpreting-the-principal-components">Interpreting the principal components</h2>
+<p>Each PC is a weighted combination of the original features. The <strong>loadings</strong> — the weights — tell us what each PC represents.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Think About It
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Now that we’ve standardized, what groupings of features do you expect PCA to find? Think about which Airbnb features tend to be correlated with each other.</p>
+</div>
+</div>
+<div id="161517bb" class="cell" data-execution_count="12">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># PC loadings heatmap for first 5 PCs</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>loadings <span class="op">=</span> pd.DataFrame(</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    pca.components_[:<span class="dv">5</span>].T,</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>numeric_cols,</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    columns<span class="op">=</span>[<span class="ss">f'PC</span><span class="sc">{</span>i<span class="op">+</span><span class="dv">1</span><span class="sc">}</span><span class="ss">'</span> <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">5</span>)]</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">10</span>))</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>sns.heatmap(loadings, annot<span class="op">=</span><span class="va">True</span>, fmt<span class="op">=</span><span class="st">'.2f'</span>, cmap<span class="op">=</span><span class="st">'RdBu_r'</span>, center<span class="op">=</span><span class="dv">0</span>,</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>            ax<span class="op">=</span>ax, linewidths<span class="op">=</span><span class="fl">0.5</span>)</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">'PCA Loadings — What Does Each Component Represent?'</span>)</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec14alt-pca-embedding_files/figure-html/cell-13-output-1.png" width="925" height="944" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Let’s look at the strongest contributors to PC1 and PC2.</p>
+<div id="f506ad47" class="cell" data-execution_count="13">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Interpret PC1: show top positive and negative loadings</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"PC1: Top loadings"</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>pc1 <span class="op">=</span> loadings[<span class="st">'PC1'</span>].sort_values()</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"  Most negative:"</span>)</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> feat, val <span class="kw">in</span> pc1.head(<span class="dv">3</span>).items():</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"    </span><span class="sc">{</span>feat<span class="sc">:&gt;35s}</span><span class="ss">: </span><span class="sc">{</span>val<span class="sc">:+.3f}</span><span class="ss">"</span>)</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"  Most positive:"</span>)</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> feat, val <span class="kw">in</span> pc1.tail(<span class="dv">3</span>).items():</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"    </span><span class="sc">{</span>feat<span class="sc">:&gt;35s}</span><span class="ss">: </span><span class="sc">{</span>val<span class="sc">:+.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PC1: Top loadings
+  Most negative:
+                        availability_60: -0.208
+                        availability_90: -0.208
+                        availability_30: -0.197
+  Most positive:
+                 review_scores_accuracy: +0.367
+                    review_scores_value: +0.371
+                   review_scores_rating: +0.392</code></pre>
+</div>
+</div>
+<p>Now PC2:</p>
+<div id="9c4042ff" class="cell" data-execution_count="14">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"PC2: Top loadings"</span>)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>pc2 <span class="op">=</span> loadings[<span class="st">'PC2'</span>].sort_values()</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"  Most negative:"</span>)</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> feat, val <span class="kw">in</span> pc2.head(<span class="dv">3</span>).items():</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"    </span><span class="sc">{</span>feat<span class="sc">:&gt;35s}</span><span class="ss">: </span><span class="sc">{</span>val<span class="sc">:+.3f}</span><span class="ss">"</span>)</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"  Most positive:"</span>)</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> feat, val <span class="kw">in</span> pc2.tail(<span class="dv">3</span>).items():</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"    </span><span class="sc">{</span>feat<span class="sc">:&gt;35s}</span><span class="ss">: </span><span class="sc">{</span>val<span class="sc">:+.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PC2: Top loadings
+  Most negative:
+                               latitude: -0.026
+                         minimum_nights: -0.015
+                         maximum_nights: -0.013
+  Most positive:
+                        availability_30: +0.401
+                        availability_60: +0.421
+                        availability_90: +0.421</code></pre>
+</div>
+</div>
+<p><strong>Telling the story of each PC:</strong></p>
+<ul>
+<li><p><strong>PC1</strong> contrasts review scores (positive: rating, value, accuracy) against availability windows (negative: availability_30, _60, _90). Listings that score high on PC1 have strong reviews but low availability — popular, booked-up places. Listings that score low on PC1 have lots of open dates but weaker reviews.</p></li>
+<li><p><strong>PC2</strong> loads heavily on availability_30, _60, and _90 (all positive), with weak negative loadings on latitude, minimum_nights, and maximum_nights. This component captures a “calendar openness” factor — listings with many available dates in the near term score high on PC2, regardless of review quality.</p></li>
+</ul>
+<p>Notice how PCA automatically discovered these natural groupings. We didn’t tell it about “review quality” or “calendar availability” — it found these dimensions by following the variance.</p>
+<section id="tracing-one-listing-through-pca" class="level3">
+<h3 class="anchored" data-anchor-id="tracing-one-listing-through-pca">Tracing one listing through PCA</h3>
+<p>Let’s pick one listing and trace it through the entire PCA pipeline. This exercise makes the loadings concrete.</p>
+<div id="e539de0e" class="cell" data-execution_count="15">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Pick a listing and show its original features and PC scores</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>example_idx <span class="op">=</span> df.index[<span class="dv">0</span>]</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>example_features <span class="op">=</span> df.loc[example_idx]</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>example_scores <span class="op">=</span> scores[<span class="dv">0</span>]</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Listing #</span><span class="sc">{</span>example_idx<span class="sc">}</span><span class="ss">:"</span>)</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Original features (a few):"</span>)</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> col <span class="kw">in</span> [<span class="st">'accommodates'</span>, <span class="st">'bedrooms'</span>, <span class="st">'review_scores_rating'</span>,</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>            <span class="st">'review_scores_cleanliness'</span>, <span class="st">'price'</span>]:</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span>col<span class="sc">:&gt;30s}</span><span class="ss">: </span><span class="sc">{</span>example_features[col]<span class="sc">:&gt;8.1f}</span><span class="ss">"</span>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">PC scores:"</span>)</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">3</span>):</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  PC</span><span class="sc">{</span>i<span class="op">+</span><span class="dv">1</span><span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>example_scores[i]<span class="sc">:+.2f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Listing #0:
+
+Original features (a few):
+                    accommodates:      1.0
+                        bedrooms:      1.0
+            review_scores_rating:     90.0
+       review_scores_cleanliness:      8.0
+                           price:     45.0
+
+PC scores:
+  PC1: +0.70
+  PC2: -2.09
+  PC3: -0.88</code></pre>
+</div>
+</div>
+<p>What do those scores tell us about this listing?</p>
+<div id="0dd9b903" class="cell" data-execution_count="16">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># What does this listing's PC1 score mean?</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"PC1 is the 'popular &amp; booked-up' factor (high reviews, low availability)."</span>)</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"This listing's PC1 score = </span><span class="sc">{</span>example_scores[<span class="dv">0</span>]<span class="sc">:+.2f}</span><span class="ss">"</span>)</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> example_scores[<span class="dv">0</span>] <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"  → Positive: strong reviews, limited availability."</span>)</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span>:</span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"  → Negative: weaker reviews or lots of open dates."</span>)</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">PC2 is the 'calendar openness' factor (high near-term availability)."</span>)</span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"This listing's PC2 score = </span><span class="sc">{</span>example_scores[<span class="dv">1</span>]<span class="sc">:+.2f}</span><span class="ss">"</span>)</span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> example_scores[<span class="dv">1</span>] <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"  → Positive: many available dates in the next 30-90 days."</span>)</span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span>:</span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"  → Negative: fewer available dates in the near term."</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PC1 is the 'popular &amp; booked-up' factor (high reviews, low availability).
+This listing's PC1 score = +0.70
+  → Positive: strong reviews, limited availability.
+
+PC2 is the 'calendar openness' factor (high near-term availability).
+This listing's PC2 score = -2.09
+  → Negative: fewer available dates in the near term.</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="the-math-behind-pca-svd" class="level2">
+<h2 class="anchored" data-anchor-id="the-math-behind-pca-svd">The math behind PCA: SVD</h2>
+<p>To understand what the SVD produces, two definitions from linear algebra are needed. These definitions build on the vector and span concepts from Chapter 4.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Definition: Basis and Orthonormal Basis
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A <strong>basis</strong> for a subspace is a minimal set of linearly independent vectors that spans it. The number of vectors in any basis equals the <strong>dimension</strong> of the subspace.</p>
+<p>An <strong>orthonormal basis</strong> is a basis where every vector has norm 1 and every pair of vectors is orthogonal (inner product = 0). Orthonormal bases are especially convenient: to find the coordinates of a point, you just take dot products — no matrix inversion needed. PCA finds an orthonormal basis aligned with the directions of maximum variance.</p>
+</div>
+</div>
+<p>Now that you’ve seen PCA work, let’s look under the hood. PCA is powered by the <strong>SVD</strong> (<strong>Singular Value Decomposition</strong>). The assigned reading (VanderPlas Ch 5.09) covers the sklearn implementation. For a deeper linear-algebra treatment, see Strang (<em>Introduction to Linear Algebra</em>, 6th ed., §7.3) or Hastie, Tibshirani &amp; Friedman (<em>Elements of Statistical Learning</em>, §14.5).</p>
+<p>The exact SVD of the standardized (centered and scaled) data matrix is:</p>
+<p><span class="math display">X = U S V^T</span></p>
+<p>PCA keeps only the first <span class="math inline">k</span> components, giving a rank-<span class="math inline">k</span> approximation:</p>
+<p><span class="math display">X \approx U_k S_k V_k^T</span></p>
+<ul>
+<li>The columns of <span class="math inline">V</span> are the <strong>principal component directions</strong> (the new axes)</li>
+<li>The diagonal of <span class="math inline">S</span> contains the <strong>singular values</strong> — the fraction of total variance captured by PC<span class="math inline">i</span> is <span class="math inline">\sigma_i^2 / \sum_j \sigma_j^2</span></li>
+<li>The rows of <span class="math inline">US</span> are the <strong>PC scores</strong> — row <span class="math inline">i</span> gives listing <span class="math inline">i</span>’s coordinates in the new basis</li>
+</ul>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Definition: Eckart-Young-Mirsky Theorem
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Among all rank-<span class="math inline">k</span> approximations to <span class="math inline">X</span>, the truncated SVD has the smallest total squared error (Frobenius norm). No other <span class="math inline">k</span>-dimensional summary can do better.</p>
+</div>
+</div>
+</section>
+<section id="pca-as-regression-onto-optimal-covariates" class="level2">
+<h2 class="anchored" data-anchor-id="pca-as-regression-onto-optimal-covariates">PCA as regression onto optimal covariates</h2>
+<p>Here’s the key insight that connects PCA to everything we’ve learned.</p>
+<p>In regression (Chapter 5), we had a fixed set of features <span class="math inline">X</span> and found the best weights <span class="math inline">w</span> to minimize <span class="math inline">\|y - Xw\|^2</span>. We chose the features; the math found the coefficients.</p>
+<p>PCA is the same optimization, except we also get to choose <span class="math inline">X</span>. We’re minimizing <span class="math inline">\|Y - XW\|_F^2</span> over <em>both</em> the scores <span class="math inline">X</span> (<span class="math inline">= U_k S_k</span>) and the directions <span class="math inline">W</span> (<span class="math inline">= V_k^T</span>) simultaneously. PCA finds the best covariates AND the best coefficients.</p>
+<p>These two views — maximizing variance captured and minimizing reconstruction error — are mathematically equivalent. This equivalence explains why PCA feels like a natural extension of regression: it IS regression, but with the freedom to pick the best possible features.</p>
+</section>
+<section id="the-payoff-predicting-price-from-listing-descriptions" class="level2">
+<h2 class="anchored" data-anchor-id="the-payoff-predicting-price-from-listing-descriptions">The payoff: predicting price from listing descriptions</h2>
+<p>So far we’ve used PCA to summarize 23 numeric columns. That’s a reasonable tour of the mechanics, but it isn’t a case where PCA is <em>necessary</em> — a determined student could keep all 23 columns and lose little. The pressure to compress only really shows up when a feature space is huge compared to the number of examples we have.</p>
+<p>Every Airbnb listing comes with a free-text <code>description</code> field that we’ve been ignoring. The description carries a lot of information — words like <em>“luxury”</em>, <em>“quiet”</em>, <em>“walk to subway”</em>, <em>“renovated”</em>, <em>“shared bathroom”</em> are informative about price. To use these words in a regression we need to turn each description into a vector of numbers.</p>
+<p>A <strong>text embedding model</strong> is a neural network that maps a piece of text to a fixed-length numeric vector. Distances between vectors approximate semantic similarity: two descriptions about “quiet East Village studios” sit close together; a description of a “luxury Tribeca loft” sits far away. The dimensions of the vector are individually meaningless — they’re internal features of the model — but the geometry of distances is meaningful.</p>
+<p>We precomputed embeddings for every listing in our working dataframe using <strong>all-mpnet-base-v2</strong>, an open-source sentence embedding model from the sentence-transformers library. Each description becomes a vector of 768 numbers. The vectors are L2-normalized (unit length).</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Going deeper: how the embeddings were computed
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The precompute script lives at <code>scripts/compute_description_embeddings.py</code>. It loads the model once on a local GPU, runs every description through it, and saves the resulting matrix. You don’t need to run it — the .npy file is already on disk. Model details and a hash of the run are stored in <code>data/airbnb/description_embeddings_meta.json</code> so future regenerations are traceable.</p>
+</div>
+</div>
+<p>Let’s load the embeddings and align them to our working dataframe.</p>
+<div id="6fc89284" class="cell" data-execution_count="17">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load precomputed description embeddings</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>emb_all <span class="op">=</span> np.load(<span class="ss">f'</span><span class="sc">{</span>DATA_DIR<span class="sc">}</span><span class="ss">/airbnb/description_embeddings.npy'</span>)</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>emb_index <span class="op">=</span> pd.read_csv(<span class="ss">f'</span><span class="sc">{</span>DATA_DIR<span class="sc">}</span><span class="ss">/airbnb/description_embeddings_index.csv'</span>)</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Embedding matrix: </span><span class="sc">{</span>emb_all<span class="sc">.</span>shape[<span class="dv">0</span>]<span class="sc">:,}</span><span class="ss"> rows x </span><span class="sc">{</span>emb_all<span class="sc">.</span>shape[<span class="dv">1</span>]<span class="sc">}</span><span class="ss"> dims"</span>)</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"L2-normalized: first three norms = </span><span class="sc">{</span>np<span class="sc">.</span>linalg<span class="sc">.</span>norm(emb_all[:<span class="dv">3</span>], axis<span class="op">=</span><span class="dv">1</span>)<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Embedding matrix: 29,124 rows x 768 dims
+L2-normalized: first three norms = [1. 1. 1.]</code></pre>
+</div>
+</div>
+<p>Now align embeddings to the rows of <code>df</code> (our filtered numeric dataframe) using listing <code>id</code>.</p>
+<div id="596ef3ef" class="cell" data-execution_count="18">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Map listing_id -&gt; row index in the embedding matrix</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>id_to_emb_row <span class="op">=</span> {lid: i <span class="cf">for</span> i, lid <span class="kw">in</span> <span class="bu">enumerate</span>(emb_index[<span class="st">'listing_id'</span>].values)}</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="co"># For each row in df, find the matching embedding</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>df_ids <span class="op">=</span> airbnb.loc[df.index, <span class="st">'id'</span>].values</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>emb_rows <span class="op">=</span> np.array([id_to_emb_row.get(lid, <span class="op">-</span><span class="dv">1</span>) <span class="cf">for</span> lid <span class="kw">in</span> df_ids])</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>keep_mask <span class="op">=</span> emb_rows <span class="op">&gt;=</span> <span class="dv">0</span></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>df_emb <span class="op">=</span> df.loc[keep_mask].copy()</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>E <span class="op">=</span> emb_all[emb_rows[keep_mask]]</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Listings with both numeric features and an embedding: </span><span class="sc">{</span><span class="bu">len</span>(df_emb)<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Embedding feature matrix shape: </span><span class="sc">{</span>E<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Listings with both numeric features and an embedding: 29,124
+Embedding feature matrix shape: (29124, 768)</code></pre>
+</div>
+</div>
+<section id="why-naive-regression-fails-on-this-feature-space" class="level3">
+<h3 class="anchored" data-anchor-id="why-naive-regression-fails-on-this-feature-space">Why naive regression fails on this feature space</h3>
+<p>We have 768 embedding features per listing. To make the failure mode of running regression on too-wide a feature space visible, we work with a small training set — a realistic size for a niche subset of the data (think: a single neighborhood, or a single host’s portfolio). We sample 700 listings and hold out 30% as a final test set.</p>
+<div id="7557933d" class="cell" data-execution_count="19">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> train_test_split</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>rng <span class="op">=</span> np.random.default_rng(<span class="dv">42</span>)</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>sample_idx <span class="op">=</span> rng.choice(<span class="bu">len</span>(df_emb), size<span class="op">=</span><span class="dv">700</span>, replace<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>df_s <span class="op">=</span> df_emb.iloc[sample_idx].copy()</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>E_s <span class="op">=</span> E[sample_idx]</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>y_s <span class="op">=</span> np.log(df_s[<span class="st">'price'</span>].clip(lower<span class="op">=</span><span class="dv">1</span>).values)</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>X_num <span class="op">=</span> df_s.drop(columns<span class="op">=</span>[<span class="st">'price'</span>]).values  <span class="co"># numeric features minus price</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>(X_num_tr, X_num_te,</span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a> E_tr, E_te,</span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a> y_tr, y_te) <span class="op">=</span> train_test_split(</span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a>    X_num, E_s, y_s, test_size<span class="op">=</span><span class="fl">0.30</span>, random_state<span class="op">=</span><span class="dv">0</span></span>
+<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Train: </span><span class="sc">{</span><span class="bu">len</span>(y_tr)<span class="sc">}</span><span class="ss"> listings, Test: </span><span class="sc">{</span><span class="bu">len</span>(y_te)<span class="sc">}</span><span class="ss"> listings"</span>)</span>
+<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Numeric features: </span><span class="sc">{</span>X_num<span class="sc">.</span>shape[<span class="dv">1</span>]<span class="sc">}</span><span class="ss">, Embedding features: </span><span class="sc">{</span>E_s<span class="sc">.</span>shape[<span class="dv">1</span>]<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Train: 490 listings, Test: 210 listings
+Numeric features: 22, Embedding features: 768</code></pre>
+</div>
+</div>
+<p>Our training set has 490 listings and 768 embedding features. We have <em>more features than examples</em>. In this regime, ordinary least squares isn’t even uniquely defined — there are infinitely many solutions that fit the training data exactly. Predictive models trained here overfit dramatically: they memorize the training set and fail on new listings.</p>
+<p>The target is <code>log(price)</code>. We use the log because price is heavily right-skewed and prediction errors are multiplicative — a $20 error on a $50 listing matters more than a $20 error on a $500 listing. Working in log-space makes RMSE a sensible thing to compare across listings.</p>
+</section>
+<section id="four-models" class="level3">
+<h3 class="anchored" data-anchor-id="four-models">Four models</h3>
+<p>We compare four ways to predict log-price.</p>
+<ol type="1">
+<li><strong>Numerics only.</strong> Linear regression on the 22 numeric features (price excluded). The honest baseline.</li>
+<li><strong>Raw embeddings.</strong> Linear regression on all 768 embedding features plus the 22 numerics. Demonstrates overfitting when the feature space is wider than the training set.</li>
+<li><strong>Random projection.</strong> Project the 768 embeddings to <span class="math inline">k</span> dimensions via a fixed Gaussian random matrix, then regress. This shows whether <em>any</em> dimensionality reduction helps — or whether PCA’s specific choice of directions matters.</li>
+<li><strong>PCA reduction.</strong> Project the embeddings to <span class="math inline">k</span> principal components, then regress.</li>
+</ol>
+<p>We pick <span class="math inline">k</span> for the PCA and random-projection models by 5-fold cross-validation on the training set.</p>
+<div id="b32085ca" class="cell" data-execution_count="20">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> LinearRegression</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.preprocessing <span class="im">import</span> StandardScaler</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.random_projection <span class="im">import</span> GaussianRandomProjection</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> KFold</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> rmse(a, b):</span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="bu">float</span>(np.sqrt(np.mean((a <span class="op">-</span> b)<span class="op">**</span><span class="dv">2</span>)))</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Standardize numeric features (fit on train only)</span></span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>num_scaler <span class="op">=</span> StandardScaler().fit(X_num_tr)</span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>X_num_tr_s <span class="op">=</span> num_scaler.transform(X_num_tr)</span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>X_num_te_s <span class="op">=</span> num_scaler.transform(X_num_te)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Baseline: numerics-only linear regression.</strong></p>
+<div id="05f67ae9" class="cell" data-execution_count="21">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>lr_num <span class="op">=</span> LinearRegression().fit(X_num_tr_s, y_tr)</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>rmse_baseline_tr <span class="op">=</span> rmse(y_tr, lr_num.predict(X_num_tr_s))</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>rmse_baseline_te <span class="op">=</span> rmse(y_te, lr_num.predict(X_num_te_s))</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Numerics-only:    train RMSE = </span><span class="sc">{</span>rmse_baseline_tr<span class="sc">:.3f}</span><span class="ss">, "</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"test RMSE = </span><span class="sc">{</span>rmse_baseline_te<span class="sc">:.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Numerics-only:    train RMSE = 0.436, test RMSE = 0.439</code></pre>
+</div>
+</div>
+<p><strong>Raw embeddings (plus numerics).</strong> Predicting log-price from 768 embedding features plus the 22 numerics.</p>
+<div id="ebb9ef67" class="cell" data-execution_count="22">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>X_raw_tr <span class="op">=</span> np.hstack([X_num_tr_s, E_tr])</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>X_raw_te <span class="op">=</span> np.hstack([X_num_te_s, E_te])</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>lr_raw <span class="op">=</span> LinearRegression().fit(X_raw_tr, y_tr)</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>rmse_raw_tr <span class="op">=</span> rmse(y_tr, lr_raw.predict(X_raw_tr))</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>rmse_raw_te <span class="op">=</span> rmse(y_te, lr_raw.predict(X_raw_te))</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Raw embeddings:   train RMSE = </span><span class="sc">{</span>rmse_raw_tr<span class="sc">:.3f}</span><span class="ss">, "</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"test RMSE = </span><span class="sc">{</span>rmse_raw_te<span class="sc">:.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Raw embeddings:   train RMSE = 0.000, test RMSE = 0.838</code></pre>
+</div>
+</div>
+<p>Look at the train vs.&nbsp;test gap. The raw-embedding model fits the training set far tighter than the baseline does — but its test error tells a different story.</p>
+</section>
+<section id="choosing-k-by-cross-validation" class="level3">
+<h3 class="anchored" data-anchor-id="choosing-k-by-cross-validation">Choosing <span class="math inline">k</span> by cross-validation</h3>
+<p>The PCA and random-projection models both need a choice of <span class="math inline">k</span> — how many dimensions to keep. We pick <span class="math inline">k</span> using 5-fold cross-validation on the training set: for each candidate <span class="math inline">k</span>, fit the pipeline on 4 folds, predict the 5th, average across folds. The best <span class="math inline">k</span> minimizes mean CV RMSE.</p>
+<div id="f65f1f60" class="cell" data-execution_count="23">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>ks <span class="op">=</span> [<span class="dv">2</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">200</span>]</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>kf <span class="op">=</span> KFold(n_splits<span class="op">=</span><span class="dv">5</span>, shuffle<span class="op">=</span><span class="va">True</span>, random_state<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cv_rmse(reduce_fn, k):</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Return mean CV RMSE for the pipeline that reduces embeddings to k</span></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a><span class="co">    via reduce_fn(k), concatenates with numerics, and fits linear regression."""</span></span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>    fold_rmses <span class="op">=</span> []</span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> tr_idx, va_idx <span class="kw">in</span> kf.split(X_num_tr_s):</span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>        num_tr, num_va <span class="op">=</span> X_num_tr_s[tr_idx], X_num_tr_s[va_idx]</span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a>        emb_tr, emb_va <span class="op">=</span> E_tr[tr_idx], E_tr[va_idx]</span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a>        ytr, yva <span class="op">=</span> y_tr[tr_idx], y_tr[va_idx]</span>
+<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a>        reducer <span class="op">=</span> reduce_fn(k)</span>
+<span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a>        emb_tr_r <span class="op">=</span> reducer.fit_transform(emb_tr)</span>
+<span id="cb38-14"><a href="#cb38-14" aria-hidden="true" tabindex="-1"></a>        emb_va_r <span class="op">=</span> reducer.transform(emb_va)</span>
+<span id="cb38-15"><a href="#cb38-15" aria-hidden="true" tabindex="-1"></a>        X_tr_full <span class="op">=</span> np.hstack([num_tr, emb_tr_r])</span>
+<span id="cb38-16"><a href="#cb38-16" aria-hidden="true" tabindex="-1"></a>        X_va_full <span class="op">=</span> np.hstack([num_va, emb_va_r])</span>
+<span id="cb38-17"><a href="#cb38-17" aria-hidden="true" tabindex="-1"></a>        m <span class="op">=</span> LinearRegression().fit(X_tr_full, ytr)</span>
+<span id="cb38-18"><a href="#cb38-18" aria-hidden="true" tabindex="-1"></a>        fold_rmses.append(rmse(yva, m.predict(X_va_full)))</span>
+<span id="cb38-19"><a href="#cb38-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="bu">float</span>(np.mean(fold_rmses))</span>
+<span id="cb38-20"><a href="#cb38-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-21"><a href="#cb38-21" aria-hidden="true" tabindex="-1"></a>pca_cv <span class="op">=</span> [cv_rmse(<span class="kw">lambda</span> k: PCA(n_components<span class="op">=</span>k, random_state<span class="op">=</span><span class="dv">0</span>), k) <span class="cf">for</span> k <span class="kw">in</span> ks]</span>
+<span id="cb38-22"><a href="#cb38-22" aria-hidden="true" tabindex="-1"></a>rp_cv  <span class="op">=</span> [cv_rmse(<span class="kw">lambda</span> k: GaussianRandomProjection(n_components<span class="op">=</span>k,</span>
+<span id="cb38-23"><a href="#cb38-23" aria-hidden="true" tabindex="-1"></a>                                                    random_state<span class="op">=</span><span class="dv">0</span>), k)</span>
+<span id="cb38-24"><a href="#cb38-24" aria-hidden="true" tabindex="-1"></a>          <span class="cf">for</span> k <span class="kw">in</span> ks]</span>
+<span id="cb38-25"><a href="#cb38-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-26"><a href="#cb38-26" aria-hidden="true" tabindex="-1"></a>k_pca <span class="op">=</span> ks[<span class="bu">int</span>(np.argmin(pca_cv))]</span>
+<span id="cb38-27"><a href="#cb38-27" aria-hidden="true" tabindex="-1"></a>k_rp  <span class="op">=</span> ks[<span class="bu">int</span>(np.argmin(rp_cv))]</span>
+<span id="cb38-28"><a href="#cb38-28" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"PCA: best k = </span><span class="sc">{</span>k_pca<span class="sc">}</span><span class="ss"> (CV RMSE = </span><span class="sc">{</span><span class="bu">min</span>(pca_cv)<span class="sc">:.3f}</span><span class="ss">)"</span>)</span>
+<span id="cb38-29"><a href="#cb38-29" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Random projection: best k = </span><span class="sc">{</span>k_rp<span class="sc">}</span><span class="ss"> (CV RMSE = </span><span class="sc">{</span><span class="bu">min</span>(rp_cv)<span class="sc">:.3f}</span><span class="ss">)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PCA: best k = 50 (CV RMSE = 0.465)
+Random projection: best k = 5 (CV RMSE = 0.489)</code></pre>
+</div>
+</div>
+<p>Now fit each method at its CV-chosen <span class="math inline">k</span> on the full training set and evaluate on the held-out test set.</p>
+<div id="b6250bbd" class="cell" data-execution_count="24">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># PCA at chosen k</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>pca_red <span class="op">=</span> PCA(n_components<span class="op">=</span>k_pca, random_state<span class="op">=</span><span class="dv">0</span>).fit(E_tr)</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>X_pca_tr <span class="op">=</span> np.hstack([X_num_tr_s, pca_red.transform(E_tr)])</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>X_pca_te <span class="op">=</span> np.hstack([X_num_te_s, pca_red.transform(E_te)])</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>lr_pca <span class="op">=</span> LinearRegression().fit(X_pca_tr, y_tr)</span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>rmse_pca_tr <span class="op">=</span> rmse(y_tr, lr_pca.predict(X_pca_tr))</span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>rmse_pca_te <span class="op">=</span> rmse(y_te, lr_pca.predict(X_pca_te))</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Random projection at chosen k</span></span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>rp_red <span class="op">=</span> GaussianRandomProjection(n_components<span class="op">=</span>k_rp, random_state<span class="op">=</span><span class="dv">0</span>).fit(E_tr)</span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a>X_rp_tr <span class="op">=</span> np.hstack([X_num_tr_s, rp_red.transform(E_tr)])</span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a>X_rp_te <span class="op">=</span> np.hstack([X_num_te_s, rp_red.transform(E_te)])</span>
+<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a>lr_rp <span class="op">=</span> LinearRegression().fit(X_rp_tr, y_tr)</span>
+<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a>rmse_rp_tr <span class="op">=</span> rmse(y_tr, lr_rp.predict(X_rp_tr))</span>
+<span id="cb40-15"><a href="#cb40-15" aria-hidden="true" tabindex="-1"></a>rmse_rp_te <span class="op">=</span> rmse(y_te, lr_rp.predict(X_rp_te))</span>
+<span id="cb40-16"><a href="#cb40-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-17"><a href="#cb40-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"PCA (k=</span><span class="sc">{</span>k_pca<span class="sc">}</span><span class="ss">):         train = </span><span class="sc">{</span>rmse_pca_tr<span class="sc">:.3f}</span><span class="ss">, test = </span><span class="sc">{</span>rmse_pca_te<span class="sc">:.3f}</span><span class="ss">"</span>)</span>
+<span id="cb40-18"><a href="#cb40-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Random proj (k=</span><span class="sc">{</span>k_rp<span class="sc">}</span><span class="ss">): train = </span><span class="sc">{</span>rmse_rp_tr<span class="sc">:.3f}</span><span class="ss">, test = </span><span class="sc">{</span>rmse_rp_te<span class="sc">:.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PCA (k=50):         train = 0.371, test = 0.440
+Random proj (k=5): train = 0.428, test = 0.439</code></pre>
+</div>
+</div>
+</section>
+<section id="the-plot" class="level3">
+<h3 class="anchored" data-anchor-id="the-plot">The plot</h3>
+<p>A two-panel figure makes the comparison visible. The left panel is the CV curve: mean CV RMSE versus <span class="math inline">k</span> for PCA and random projection, with the baseline and the raw-embedding test RMSE as horizontal references. The right panel is a bar chart of train vs.&nbsp;test RMSE for the four final models.</p>
+<div id="360cb9ff" class="cell" data-execution_count="25">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">11</span>, <span class="fl">4.2</span>))</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> axes[<span class="dv">0</span>]</span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>ax.plot(ks, pca_cv, <span class="st">'o-'</span>, color<span class="op">=</span><span class="st">'#c44e52'</span>, label<span class="op">=</span><span class="st">'PCA (CV RMSE)'</span>)</span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>ax.plot(ks, rp_cv,  <span class="st">'s-'</span>, color<span class="op">=</span><span class="st">'#4a6fa5'</span>, label<span class="op">=</span><span class="st">'random projection (CV RMSE)'</span>)</span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>ax.axhline(rmse_baseline_te, color<span class="op">=</span><span class="st">'gray'</span>, linestyle<span class="op">=</span><span class="st">'--'</span>,</span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a>           label<span class="op">=</span><span class="ss">f'numerics-only test RMSE = </span><span class="sc">{</span>rmse_baseline_te<span class="sc">:.2f}</span><span class="ss">'</span>)</span>
+<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a>ax.axhline(rmse_raw_te, color<span class="op">=</span><span class="st">'black'</span>, linestyle<span class="op">=</span><span class="st">':'</span>,</span>
+<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a>           label<span class="op">=</span><span class="ss">f'raw-embedding test RMSE = </span><span class="sc">{</span>rmse_raw_te<span class="sc">:.2f}</span><span class="ss">'</span>)</span>
+<span id="cb42-10"><a href="#cb42-10" aria-hidden="true" tabindex="-1"></a>ax.scatter([k_pca], [<span class="bu">min</span>(pca_cv)], s<span class="op">=</span><span class="dv">140</span>, facecolors<span class="op">=</span><span class="st">'none'</span>,</span>
+<span id="cb42-11"><a href="#cb42-11" aria-hidden="true" tabindex="-1"></a>           edgecolors<span class="op">=</span><span class="st">'#c44e52'</span>, linewidths<span class="op">=</span><span class="fl">2.0</span>, zorder<span class="op">=</span><span class="dv">5</span>,</span>
+<span id="cb42-12"><a href="#cb42-12" aria-hidden="true" tabindex="-1"></a>           label<span class="op">=</span><span class="ss">f'PCA chose k=</span><span class="sc">{</span>k_pca<span class="sc">}</span><span class="ss">'</span>)</span>
+<span id="cb42-13"><a href="#cb42-13" aria-hidden="true" tabindex="-1"></a>ax.scatter([k_rp], [<span class="bu">min</span>(rp_cv)], s<span class="op">=</span><span class="dv">140</span>, facecolors<span class="op">=</span><span class="st">'none'</span>,</span>
+<span id="cb42-14"><a href="#cb42-14" aria-hidden="true" tabindex="-1"></a>           edgecolors<span class="op">=</span><span class="st">'#4a6fa5'</span>, linewidths<span class="op">=</span><span class="fl">2.0</span>, zorder<span class="op">=</span><span class="dv">5</span>,</span>
+<span id="cb42-15"><a href="#cb42-15" aria-hidden="true" tabindex="-1"></a>           label<span class="op">=</span><span class="ss">f'RP chose k=</span><span class="sc">{</span>k_rp<span class="sc">}</span><span class="ss">'</span>)</span>
+<span id="cb42-16"><a href="#cb42-16" aria-hidden="true" tabindex="-1"></a>ax.set_xscale(<span class="st">'log'</span>)</span>
+<span id="cb42-17"><a href="#cb42-17" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">'k (number of components)'</span>)</span>
+<span id="cb42-18"><a href="#cb42-18" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">'RMSE (log price)'</span>)</span>
+<span id="cb42-19"><a href="#cb42-19" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">'5-fold CV: pick k to minimize held-out error'</span>)</span>
+<span id="cb42-20"><a href="#cb42-20" aria-hidden="true" tabindex="-1"></a>ax.legend(fontsize<span class="op">=</span><span class="dv">8</span>, loc<span class="op">=</span><span class="st">'upper left'</span>)</span>
+<span id="cb42-21"><a href="#cb42-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-22"><a href="#cb42-22" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> axes[<span class="dv">1</span>]</span>
+<span id="cb42-23"><a href="#cb42-23" aria-hidden="true" tabindex="-1"></a>labels <span class="op">=</span> [<span class="st">'numerics</span><span class="ch">\n</span><span class="st">only'</span>, <span class="st">'raw</span><span class="ch">\n</span><span class="st">embeddings'</span>,</span>
+<span id="cb42-24"><a href="#cb42-24" aria-hidden="true" tabindex="-1"></a>          <span class="ss">f'random proj</span><span class="ch">\n</span><span class="ss">(k=</span><span class="sc">{</span>k_rp<span class="sc">}</span><span class="ss">)'</span>, <span class="ss">f'PCA</span><span class="ch">\n</span><span class="ss">(k=</span><span class="sc">{</span>k_pca<span class="sc">}</span><span class="ss">)'</span>]</span>
+<span id="cb42-25"><a href="#cb42-25" aria-hidden="true" tabindex="-1"></a>trains <span class="op">=</span> [rmse_baseline_tr, rmse_raw_tr, rmse_rp_tr, rmse_pca_tr]</span>
+<span id="cb42-26"><a href="#cb42-26" aria-hidden="true" tabindex="-1"></a>tests  <span class="op">=</span> [rmse_baseline_te, rmse_raw_te, rmse_rp_te, rmse_pca_te]</span>
+<span id="cb42-27"><a href="#cb42-27" aria-hidden="true" tabindex="-1"></a>xpos <span class="op">=</span> np.arange(<span class="bu">len</span>(labels))</span>
+<span id="cb42-28"><a href="#cb42-28" aria-hidden="true" tabindex="-1"></a>w <span class="op">=</span> <span class="fl">0.38</span></span>
+<span id="cb42-29"><a href="#cb42-29" aria-hidden="true" tabindex="-1"></a>ax.bar(xpos <span class="op">-</span> w<span class="op">/</span><span class="dv">2</span>, trains, w, label<span class="op">=</span><span class="st">'train'</span>, color<span class="op">=</span><span class="st">'#9bc4e2'</span>)</span>
+<span id="cb42-30"><a href="#cb42-30" aria-hidden="true" tabindex="-1"></a>ax.bar(xpos <span class="op">+</span> w<span class="op">/</span><span class="dv">2</span>, tests,  w, label<span class="op">=</span><span class="st">'test'</span>,  color<span class="op">=</span><span class="st">'#c44e52'</span>)</span>
+<span id="cb42-31"><a href="#cb42-31" aria-hidden="true" tabindex="-1"></a>ax.set_xticks(xpos)</span>
+<span id="cb42-32"><a href="#cb42-32" aria-hidden="true" tabindex="-1"></a>ax.set_xticklabels(labels, fontsize<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb42-33"><a href="#cb42-33" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">'RMSE (log price)'</span>)</span>
+<span id="cb42-34"><a href="#cb42-34" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">'Train vs. test RMSE — overfitting visible'</span>)</span>
+<span id="cb42-35"><a href="#cb42-35" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
+<span id="cb42-36"><a href="#cb42-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-37"><a href="#cb42-37" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb42-38"><a href="#cb42-38" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec14alt-pca-embedding_files/figure-html/cell-26-output-1.png" width="1040" height="384" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>A few things to read off this figure.</p>
+<p>The <strong>raw-embedding</strong> bar pair on the right panel shows the classic overfitting signature: a near-zero train RMSE next to a much larger test RMSE. With 768 features and a few hundred training listings, ordinary least squares fits the training data <em>exactly</em> and predicts new listings worse than the numerics-only baseline.</p>
+<p>The <strong>random-projection</strong> and <strong>PCA</strong> models both undo this damage. Reducing dimension at all — even with a random matrix — is the dominant fix: it caps the model’s capacity below the size of the training set. PCA does this with a smaller test RMSE in CV and tolerates a larger <span class="math inline">k</span> on the training set, because PCA’s directions are aligned with where the variance actually lives. Random projection has to stop sooner before it lets too many noisy directions in.</p>
+<p>In this experiment, the dimension-reduced models roughly <em>match</em> the numerics-only baseline on test — they don’t beat it. The 22 numeric features were already doing most of the work; the text adds little once the wide-feature overfit is cured. That outcome is honest: PCA didn’t unlock new signal here, but it did rescue a regression that the raw embeddings would have ruined. And we know what happened because we measured held-out test error — not by inspecting variance or loadings.</p>
+</section>
+<section id="the-loadings-detour-components-are-anonymous" class="level3">
+<h3 class="anchored" data-anchor-id="the-loadings-detour-components-are-anonymous">The loadings detour: components are anonymous</h3>
+<p>Earlier we found that PC1 of the numeric features had an interpretable meaning — “review quality vs availability.” We told a story about it. Now let’s look at the top features (by absolute loading) of PC1 of the embedding matrix.</p>
+<div id="4a655db5" class="cell" data-execution_count="26">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>emb_pca_full <span class="op">=</span> PCA(n_components<span class="op">=</span><span class="dv">10</span>, random_state<span class="op">=</span><span class="dv">0</span>).fit(E_tr)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>top_dims <span class="op">=</span> np.argsort(np.<span class="bu">abs</span>(emb_pca_full.components_[<span class="dv">0</span>]))[::<span class="op">-</span><span class="dv">1</span>][:<span class="dv">8</span>]</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"PC1 of embeddings — top 8 feature dimensions by |loading|:"</span>)</span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> d <span class="kw">in</span> top_dims:</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  emb_</span><span class="sc">{</span>d<span class="sc">:&gt;3d}</span><span class="ss">: loading = </span><span class="sc">{</span>emb_pca_full<span class="sc">.</span>components_[<span class="dv">0</span>, d]<span class="sc">:+.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>PC1 of embeddings — top 8 feature dimensions by |loading|:
+  emb_186: loading = +0.119
+  emb_319: loading = +0.118
+  emb_684: loading = +0.117
+  emb_395: loading = -0.101
+  emb_138: loading = +0.100
+  emb_609: loading = +0.099
+  emb_465: loading = -0.098
+  emb_516: loading = -0.095</code></pre>
+</div>
+</div>
+<p>Anonymous dimension numbers. There is no human-readable meaning here — these are internal coordinates of the neural network that produced the embeddings. The component itself tells us nothing about what makes a listing’s description predictive of price.</p>
+<p>So how did we know PCA helped? Not by inspecting the components. We knew because the <strong>downstream test error</strong> got better.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Unsupervised learning is judged by the supervised task it enables
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>PCA, k-means, and other unsupervised methods cannot be judged on their own. Variance explained, cluster compactness, and “what the loadings look like” all depend on choices of scaling, metric, and what we happen to find interpretable.</p>
+<p>The honest test of a dimensionality reduction is whether <strong>held-out predictions on a downstream supervised task improve</strong>. The choice of <span class="math inline">k</span> is made by cross-validation against that downstream task, not by reading a scree-plot elbow.</p>
+<p>Unsupervised learning is a means to an end. The end is the supervised task.</p>
+</div>
+</div>
+<p>One caveat keeps the lesson honest. PCA doesn’t always <em>add</em> signal — and in our experiment it didn’t. The numeric Airbnb features were already strong predictors of price; the text embedding contributed little new information once we cured the overfit. PCA still <em>helped</em>, in the sense that the regularized prediction was no worse than the baseline despite using a 768-dimensional feature space. In other applications — where the text is the only signal — the same recipe wins outright. The right way to find out is the same: measure held-out test error.</p>
+</section>
+</section>
+<section id="biplot-visualizing-listings-in-pc-space" class="level2">
+<h2 class="anchored" data-anchor-id="biplot-visualizing-listings-in-pc-space">Biplot: visualizing listings in PC space</h2>
+<p>Let’s project every listing into the first two PCs of the <em>numeric</em> features and see if patterns emerge. We’ll color by room type to see if PCA captures that distinction.</p>
+<div id="87c54bd3" class="cell" data-execution_count="27">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a dataframe with PC scores and metadata</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Use neighbourhood_group_cleansed (or neighbourhood_group as fallback)</span></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>borough_col <span class="op">=</span> (<span class="st">'neighbourhood_group_cleansed'</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>               <span class="cf">if</span> <span class="st">'neighbourhood_group_cleansed'</span> <span class="kw">in</span> airbnb.columns</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>               <span class="cf">else</span> <span class="st">'neighbourhood_group'</span>)</span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a>plot_df <span class="op">=</span> pd.DataFrame({</span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">'PC1'</span>: scores[:, <span class="dv">0</span>],</span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">'PC2'</span>: scores[:, <span class="dv">1</span>],</span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">'room_type'</span>: airbnb.loc[df.index, <span class="st">'room_type'</span>].values,</span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">'borough'</span>: airbnb.loc[df.index, borough_col].values</span>
+<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a>})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Let’s plot every listing in PC space, coloring by room type and borough.</p>
+<div id="985f9541" class="cell" data-execution_count="28">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">11</span>, <span class="dv">5</span>))</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Color by room type</span></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> rt <span class="kw">in</span> plot_df[<span class="st">'room_type'</span>].unique():</span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>    mask <span class="op">=</span> plot_df[<span class="st">'room_type'</span>] <span class="op">==</span> rt</span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>    axes[<span class="dv">0</span>].scatter(plot_df.loc[mask, <span class="st">'PC1'</span>], plot_df.loc[mask, <span class="st">'PC2'</span>],</span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a>                    alpha<span class="op">=</span><span class="fl">0.4</span>, s<span class="op">=</span><span class="dv">10</span>, label<span class="op">=</span>rt)</span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_xlabel(<span class="ss">f"PC1 (</span><span class="sc">{</span>pca<span class="sc">.</span>explained_variance_ratio_[<span class="dv">0</span>]<span class="op">*</span><span class="dv">100</span><span class="sc">:.1f}</span><span class="ss">% var)"</span>)</span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_ylabel(<span class="ss">f"PC2 (</span><span class="sc">{</span>pca<span class="sc">.</span>explained_variance_ratio_[<span class="dv">1</span>]<span class="op">*</span><span class="dv">100</span><span class="sc">:.1f}</span><span class="ss">% var)"</span>)</span>
+<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">'Listings in PC Space — by Room Type'</span>)</span>
+<span id="cb46-11"><a href="#cb46-11" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].legend(markerscale<span class="op">=</span><span class="dv">5</span>)</span>
+<span id="cb46-12"><a href="#cb46-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-13"><a href="#cb46-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Color by borough</span></span>
+<span id="cb46-14"><a href="#cb46-14" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> b <span class="kw">in</span> [<span class="st">'Manhattan'</span>, <span class="st">'Brooklyn'</span>, <span class="st">'Queens'</span>, <span class="st">'Bronx'</span>, <span class="st">'Staten Island'</span>]:</span>
+<span id="cb46-15"><a href="#cb46-15" aria-hidden="true" tabindex="-1"></a>    mask <span class="op">=</span> plot_df[<span class="st">'borough'</span>] <span class="op">==</span> b</span>
+<span id="cb46-16"><a href="#cb46-16" aria-hidden="true" tabindex="-1"></a>    axes[<span class="dv">1</span>].scatter(plot_df.loc[mask, <span class="st">'PC1'</span>], plot_df.loc[mask, <span class="st">'PC2'</span>],</span>
+<span id="cb46-17"><a href="#cb46-17" aria-hidden="true" tabindex="-1"></a>                    alpha<span class="op">=</span><span class="fl">0.4</span>, s<span class="op">=</span><span class="dv">10</span>, label<span class="op">=</span>b)</span>
+<span id="cb46-18"><a href="#cb46-18" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_xlabel(<span class="ss">f"PC1 (</span><span class="sc">{</span>pca<span class="sc">.</span>explained_variance_ratio_[<span class="dv">0</span>]<span class="op">*</span><span class="dv">100</span><span class="sc">:.1f}</span><span class="ss">% var)"</span>)</span>
+<span id="cb46-19"><a href="#cb46-19" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_ylabel(<span class="ss">f"PC2 (</span><span class="sc">{</span>pca<span class="sc">.</span>explained_variance_ratio_[<span class="dv">1</span>]<span class="op">*</span><span class="dv">100</span><span class="sc">:.1f}</span><span class="ss">% var)"</span>)</span>
+<span id="cb46-20"><a href="#cb46-20" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">'Listings in PC Space — by Borough'</span>)</span>
+<span id="cb46-21"><a href="#cb46-21" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].legend(markerscale<span class="op">=</span><span class="dv">5</span>)</span>
+<span id="cb46-22"><a href="#cb46-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-23"><a href="#cb46-23" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb46-24"><a href="#cb46-24" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="lec14alt-pca-embedding_files/figure-html/cell-29-output-1.png" width="1040" height="463" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Room types show some separation along the first two PCs, but there’s a lot of overlap — PCA captures broad trends, not clean clusters.</p>
+<p>Boroughs show less separation in these first two PCs. Geography isn’t the dominant source of variance in the standardized data — review patterns and availability matter more.</p>
+</section>
+<section id="pca-vs.-feature-selection" class="level2">
+<h2 class="anchored" data-anchor-id="pca-vs.-feature-selection">PCA vs.&nbsp;feature selection</h2>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Think About It
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Couldn’t we just pick the 5 most important features instead of doing PCA? When would PCA be better than, say, Lasso (Chapter 6)?</p>
+</div>
+</div>
+<p>PCA creates <em>new</em> features that are combinations of the originals — it’s <strong>dimensionality reduction</strong>. Lasso picks a subset of existing features — that’s <strong>feature selection</strong>. PCA is especially useful when your original features are correlated (like the six review scores): it creates uncorrelated summaries that capture more information per component.</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>PCA on mixed data
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>We only used numeric columns. PCA requires numeric input — if you one-hot encode categoricals and run PCA, you’re mixing binary (0/1) columns with continuous columns. The geometry of binary data is very different (all points land on vertices of a hypercube), so standard PCA doesn’t handle this well.</p>
+<p>For this course, just use the numeric columns. If you’re curious about mixed data, look up Multiple Correspondence Analysis — but that’s beyond our scope.</p>
+</div>
+</div>
+</section>
+<section id="key-takeaways" class="level2">
+<h2 class="anchored" data-anchor-id="key-takeaways">Key Takeaways</h2>
+<ul>
+<li><p><strong>PCA finds the directions of maximum variance</strong> in your data. Each principal component is a weighted combination of the original features.</p></li>
+<li><p><strong>Unsupervised learning is judged by the supervised task it enables — not by variance explained, not by loadings interpretability, not by intrinsic merit.</strong> Variance and loadings depend on scaling and metric choices. The only honest test of a dimensionality-reduction step is whether held-out predictions improve.</p></li>
+<li><p><strong>The scree plot</strong> tells you how many PCs you need <em>for variance coverage</em>. But when PCA is a preprocessing step for prediction, choose <span class="math inline">k</span> by cross-validation against the downstream task, not by reading an elbow.</p></li>
+<li><p><strong>Interpret the components — when you can.</strong> With the 23 numeric features, PC1 had a story (“review quality vs availability”). With 768-d text embeddings, the components are anonymous. Whether the loadings tell a story is a property of the original feature space, not of PCA.</p></li>
+<li><p><strong>Always standardize first.</strong> Without standardization, PCA is dominated by whichever feature has the largest scale.</p></li>
+<li><p><strong>PCA finds the best <em>linear</em> summary.</strong> If your data lies on a curved surface or has complex cluster shapes, PCA’s linear approximation may miss important structure.</p></li>
+</ul>
+</section>
+<section id="coming-up-next" class="level2">
+<h2 class="anchored" data-anchor-id="coming-up-next">Coming up next</h2>
+<p>In <strong>Chapter 15</strong>, we’ll move from summarizing data to <em>grouping</em> data. <strong>K-means clustering</strong> tries to automatically discover market segments in the Airbnb listings — budget, mid-range, luxury — without being told the categories. A natural approach: cluster the PC scores from today’s analysis rather than the original 23 features. PCA and K-means are cousins — same optimization framework, different constraints. The eval principle from today’s chapter carries over: a clustering is judged by whether it helps a downstream decision, not by inspecting its centroids.</p>
+</section>
+<section id="study-guide" class="level2">
+<h2 class="anchored" data-anchor-id="study-guide">Study guide</h2>
+<section id="key-ideas" class="level3">
+<h3 class="anchored" data-anchor-id="key-ideas">Key ideas</h3>
+<ul>
+<li><strong>PCA (Principal Component Analysis)</strong> finds the directions of maximum variance in high-dimensional data, producing a lower-dimensional summary.</li>
+<li><strong>Principal component</strong>: a new axis (direction) found by PCA. Each PC is a weighted combination of the original features.</li>
+<li><strong>Loading</strong>: the weight of an original feature in a principal component. High loadings tell you which features drive that PC — <em>when</em> the original features are individually meaningful.</li>
+<li><strong>SVD (Singular Value Decomposition)</strong>: the matrix factorization <span class="math inline">X = USV^T</span> that powers PCA. The columns of <span class="math inline">V</span> are the PC directions, the diagonal of <span class="math inline">S</span> holds the singular values, and the rows of <span class="math inline">US</span> give the PC scores.</li>
+<li><strong>Singular value</strong>: the <span class="math inline">i</span>-th diagonal entry of <span class="math inline">S</span>. Its square is proportional to the variance explained by PC<span class="math inline">i</span>.</li>
+<li><strong>Explained variance ratio</strong>: the fraction of total variance captured by a given PC. Sum of all ratios = 1.</li>
+<li><strong>Scree plot</strong>: bar chart of explained variance by component, used as a quick check on how much variance the first few PCs cover.</li>
+<li><strong>Elbow method</strong>: choosing the number of PCs at the “elbow” where the scree plot levels off. A heuristic, not a substitute for held-out evaluation.</li>
+<li><strong>Standardization (z-score)</strong>: subtracting the mean and dividing by the standard deviation so all features have mean 0 and variance 1.</li>
+<li><strong>Text embedding (preview)</strong>: a language model maps a free-text field to a fixed-length numeric vector capturing semantic content. Each dimension is not individually meaningful, but distances between vectors approximate semantic similarity.</li>
+<li><strong>PCA as a preprocessing step</strong>: PCA is most useful when it enables a downstream supervised task. Use held-out test error to decide whether it helped, and cross-validation on the training set to choose <span class="math inline">k</span>.</li>
+<li><strong>Random projection</strong>: an alternative dimensionality reduction that uses a random matrix (not data-driven). Helpful as a baseline — it tells you whether reducing dimension <em>at all</em> is the dominant fix, or whether PCA’s choice of directions matters.</li>
+<li>PCA finds the best low-dimensional linear summary of your data by maximizing captured variance (equivalently, minimizing reconstruction error).</li>
+<li>PCA is regression where you also get to choose the features — it finds the optimal covariates AND coefficients simultaneously.</li>
+<li>Always standardize before PCA, or the result is dominated by whichever column has the biggest numbers.</li>
+<li>The Eckart-Young-Mirsky theorem guarantees that the SVD gives the best rank-<span class="math inline">k</span> approximation — no other <span class="math inline">k</span>-dimensional summary can do better.</li>
+<li>PCA creates new combined features (dimensionality reduction), while Lasso selects a subset of existing features (feature selection).</li>
+</ul>
+</section>
+<section id="computational-tools" class="level3">
+<h3 class="anchored" data-anchor-id="computational-tools">Computational tools</h3>
+<ul>
+<li><code>StandardScaler()</code> — standardizes features to mean 0 and variance 1</li>
+<li><code>PCA()</code> — creates a PCA model; use <code>PCA(n_components=k)</code> to keep only <span class="math inline">k</span> components</li>
+<li><code>.fit_transform(X)</code> — fit the model and transform the data in one step</li>
+<li><code>.explained_variance_ratio_</code> — array of variance fractions for each PC</li>
+<li><code>.components_</code> — matrix of loadings (each row is a PC, each column is a feature)</li>
+<li><code>GaussianRandomProjection(n_components=k)</code> — random-projection baseline for dimensionality reduction</li>
+<li><code>KFold(n_splits=5)</code> — cross-validation splitter used to pick <span class="math inline">k</span> against a downstream task</li>
+</ul>
+</section>
+<section id="for-the-quiz" class="level3">
+<h3 class="anchored" data-anchor-id="for-the-quiz">For the quiz</h3>
+<ul>
+<li>Know what standardization does and why it matters for PCA (covariance vs.&nbsp;correlation matrix).</li>
+<li>Be able to read a scree plot and estimate how many PCs capture a given fraction of variance.</li>
+<li>Be able to interpret loadings: given a loadings table of <em>individually meaningful</em> features, describe what a PC represents in plain language.</li>
+<li>Understand that running regression on more features than examples (e.g., 768 embeddings on a few hundred training listings) overfits — and that PCA is a standard fix.</li>
+<li>Know that the “right” number of PCs for a downstream prediction task is chosen by cross-validation, not by reading a scree-plot elbow.</li>
+<li>Know that PCA and random projection both reduce dimension, but PCA picks variance-aligned directions and typically does better.</li>
+<li>Understand the difference between PCA (dimensionality reduction) and Lasso (feature selection).</li>
+<li>Know the Eckart-Young-Mirsky theorem by name: SVD gives the best rank-<span class="math inline">k</span> approximation.</li>
+</ul>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
