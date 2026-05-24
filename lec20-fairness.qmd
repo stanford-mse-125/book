@@ -21,7 +21,9 @@ DATA_DIR = 'data'
 np.random.seed(42)
 ```
 
-In 2016, two teams of analysts looked at the same dataset and reached opposite conclusions about whether the algorithm scoring it was fair. Both teams did the arithmetic correctly. Both teams were right. They had chosen different mathematical definitions of fairness --- and the definitions were mutually incompatible.
+> *Both teams did the arithmetic correctly. Both teams were right.*
+
+In 2016, two teams of analysts looked at the same dataset and reached opposite conclusions about whether the algorithm scoring it was fair. They had chosen different mathematical definitions of fairness --- and the definitions were mutually incompatible.
 
 This chapter is about that fact. There are several reasonable mathematical definitions of "fair," they disagree on real data, and which one to satisfy is a values choice no algorithm makes for you. Chapters 1--19 built a toolkit for turning data into decisions. Fairness is where the limits of the toolkit become impossible to look away from.
 
@@ -33,9 +35,17 @@ Judges in Broward County, Florida set bail using a recidivism risk score called 
 
 The COMPAS dispute is one instance of a larger pattern. Algorithmic decisions about people now sit inside choices about who is offered a job interview (résumé screening), who gets a loan (credit scoring), who is flagged for a welfare-fraud investigation, what a student's grade should be when the exam is cancelled (the UK's 2020 A-level algorithm), and what dose of pain medication a hospital patient is offered. The cost of a mistake is no longer "the regression has an $R^2$ of 0.78." It is whether someone goes to jail awaiting trial, sees a mortgage offer, gets a callback.
 
-The legal and regulatory frame has caught up in the past few years. In the US, the Civil Rights Act, the Equal Credit Opportunity Act, the Fair Housing Act, and the Americans with Disabilities Act define *protected attributes* on which a hiring, lending, or housing decision is forbidden to discriminate; the 1978 Uniform Guidelines on Employee Selection Procedures established the *four-fifths rule* (a selection rate for any group at least 80% of the rate for the top-selecting group) as a screening benchmark, and the EEOC's 2023 guidance reaffirmed that it applies to algorithmic selection.^[U.S. Equal Employment Opportunity Commission (2023). "Select Issues: Assessing Adverse Impact in Software, Algorithms, and Artificial Intelligence Used in Employment Selection Procedures Under Title VII of the Civil Rights Act of 1964." 18 May 2023.] The European Union's AI Act --- Regulation 2024/1689, in force from August 2024 --- prohibits some uses outright (social scoring by public authorities; real-time remote biometric identification in public spaces, with narrow exceptions) and subjects "high-risk" systems in employment, credit, insurance, education, and law enforcement to bias-monitoring, data-governance, and human-oversight obligations.^[Regulation (EU) 2024/1689 of the European Parliament and of the Council of 13 June 2024 laying down harmonised rules on artificial intelligence (Artificial Intelligence Act). <https://eur-lex.europa.eu/eli/reg/2024/1689/oj>] In the US, state and municipal laws have moved faster than federal ones: New York City's Local Law 144 (in force January 2023) requires an independent bias audit before an automated employment-decision tool can be used, and Colorado's SB 24-205 (signed May 2024) became the first US state comprehensive AI statute.
+Existing US civil-rights statutes --- the Civil Rights Act, the Equal Credit Opportunity Act, the Fair Housing Act, the Americans with Disabilities Act --- define *protected attributes* on which a hiring, lending, or housing decision is forbidden to discriminate. The 2020s added algorithm-specific obligations on top of them: the EU AI Act (2024), New York City's bias-audit law for employment tools (2023), and the EEOC's 2023 guidance reaffirming the four-fifths rule for algorithmic selection.
 
-Protected attributes are *legally specified*. They are not the only attributes a person has. They are not always the ones driving the disparate outcome. But they are the ones the law tells you to check. Barocas and Selbst^[Barocas, S., & Selbst, A. D. (2016). "Big Data's Disparate Impact." *California Law Review*, 104(3), 671--732.] are the standard legal-framing reference for how US antidiscrimination doctrine maps (often awkwardly) onto algorithmic decisions.
+Protected attributes are *legally specified*. They are not the only attributes a person has. They are not always the ones driving the disparate outcome. But they are the ones the law tells you to check. Barocas and Selbst^[Barocas, S., & Selbst, A. D. (2016). "Big Data's Disparate Impact." *California Law Review*, 104(3), 671--732.] are the standard reference for how US antidiscrimination doctrine maps (often awkwardly) onto algorithmic decisions.
+
+:::{.callout-note collapse="true"}
+## Going deeper: the 2020s regulatory landscape
+
+- *US protected-class statutes (existing):* Civil Rights Act (Title VII, employment), Equal Credit Opportunity Act (credit), Fair Housing Act (housing), Americans with Disabilities Act. The 1978 Uniform Guidelines on Employee Selection Procedures established the *four-fifths rule* --- a selection rate for any group at least 80% of the rate for the top-selecting group --- as a screening benchmark. The EEOC's 2023 guidance^[U.S. Equal Employment Opportunity Commission (2023). "Select Issues: Assessing Adverse Impact in Software, Algorithms, and Artificial Intelligence Used in Employment Selection Procedures Under Title VII of the Civil Rights Act of 1964." 18 May 2023.] reaffirmed the rule's application to algorithmic selection.
+- *EU AI Act (Regulation 2024/1689, in force from August 2024).*^[Regulation (EU) 2024/1689 of the European Parliament and of the Council of 13 June 2024. <https://eur-lex.europa.eu/eli/reg/2024/1689/oj>] Prohibits some uses outright (social scoring by public authorities; real-time remote biometric identification in public spaces, with narrow exceptions). Subjects "high-risk" systems in employment, credit, insurance, education, and law enforcement to bias-monitoring, data-governance, and human-oversight obligations.
+- *US state and local.* New York City Local Law 144 (in force January 2023) requires an independent bias audit before an automated employment-decision tool can be used. Colorado SB 24-205 (signed May 2024) became the first US state comprehensive AI statute. The federal executive-branch picture is in flux.
+:::
 
 When told an algorithm produces racial disparities, a first instinct is to remove race from the model. We will see in a moment why that does not accomplish what it sounds like it does --- but first, some notation.
 
@@ -50,21 +60,14 @@ An attribute on which a decision is legally forbidden to discriminate. In the US
 
 ## Fairness through unawareness, and why dropping the protected attribute isn't enough
 
-The folk theory of fair machine learning is: don't let the model see race. If race is not an input, the model cannot discriminate on race.
-
-:::{.callout-important}
-## Definition: fairness through unawareness
-A predictor satisfies *fairness through unawareness* if the protected attribute $a$ is not an input feature. The prediction depends only on $x$, with $a$ withheld at training and at prediction time.
-:::
-
-Fairness through unawareness is the easiest condition to check (look at the feature list) and the hardest to defend. The problem is that other features carry information about $a$. ZIP code carries race because US neighborhoods are residentially segregated. First name carries sex, and in some datasets ethnicity. Browsing history carries age. Even when the protected attribute is dropped, models routinely learn it back from correlated inputs.
+The folk theory of fair machine learning is: don't let the model see race. If race is not an input, the model cannot discriminate on race. The check is the easiest one to do --- look at the feature list --- and the hardest to defend.
 
 :::{.callout-tip}
 ## Think about it
 Before reading further: on a dataset where ZIP code is correlated with both race and the outcome, will a model that has no `race` column produce predictions whose distribution differs across racial groups?
 :::
 
-A small simulation makes the leakage visible. We'll build a tiny *structural causal model* (SCM) --- a generative recipe that writes each variable as a function of its causal parents plus a noise term, the same kind of generative recipe Chapter 18 used to draw a DAG. The recipe: a *latent* attribute $z$ drives the outcome (think: actual repayment ability), a proxy variable $p$ is correlated with both $z$ and the protected attribute $a$ (think: ZIP code in a residentially segregated city), and the outcome $y$ depends on $z$ plus a modest effect of $a$.
+A small simulation makes the answer visible. We'll build a tiny *structural causal model* (SCM) --- the explicit data-generating version of a Chapter 18 DAG, where every arrow in the diagram corresponds to one line of code that writes a child variable as a function of its parents plus a noise term. The recipe: a *latent* attribute $z$ drives the outcome (think: actual repayment ability), a proxy variable $p$ is correlated with both $z$ and the protected attribute $a$ (think: ZIP code in a residentially segregated city), and the outcome $y$ depends on $z$ plus a modest effect of $a$:
 
 ```{python}
 rng = np.random.default_rng(0)
@@ -86,7 +89,7 @@ print('Marginal outcome rate by a:')
 print(sim.groupby('a')['y'].mean().round(3))
 ```
 
-Now fit two logistic regressions: an *aware* model that sees $a$ explicitly, and an *unaware* model that uses only the proxy.
+The marginal outcome rate differs across groups, exactly as the SCM specifies. We use `sklearn.linear_model.LogisticRegression` to fit two models: an *aware* one that sees $a$ explicitly, and an *unaware* one that uses only the proxy.
 
 ```{python}
 from sklearn.linear_model import LogisticRegression
@@ -103,28 +106,24 @@ print(sim.groupby('a')[['p_aware','p_unaware']].mean().round(3))
 
 Drop $a$ from the inputs and the per-group prediction gap does not shrink. In this simulation it actually *widens*, because the unaware model has to lean harder on the proxy to reconstruct the signal that $a$ would have carried directly. A regulator inspecting the unaware model would find no `a` column. An auditor inspecting its outputs would find predictions that depend on `a` anyway.
 
-The deeper problem is not that the simulation was rigged. It is that real datasets in real decision pipelines look like this. ZIP code predicts race because the country is residentially segregated. Education and prior employment predict sex because labor-market sorting is sex-stratified. Removing the protected attribute from the input list does not remove its signal from the data.
+The rule the unaware model satisfies has a name:
+
+:::{.callout-important}
+## Definition: fairness through unawareness
+A predictor satisfies *fairness through unawareness* if the protected attribute $a$ is not an input feature. The prediction depends only on $x$, with $a$ withheld at training and at prediction time.
+:::
+
+The simulation showed that satisfying the definition does not guarantee that predictions are independent of $a$. Other features carry the signal: ZIP code carries race because US neighborhoods are residentially segregated, first name carries sex, browsing history carries age. The deeper problem is not that this simulation was rigged. It is that real datasets in real decision pipelines look like the simulation.
 
 Fairness through unawareness is sometimes mandatory --- credit-scoring models in the US are *required* by ECOA not to use protected attributes as inputs. The point is not that unawareness is a bad rule. The point is that unawareness is not a sufficient definition of fairness. To check whether an algorithm treats groups equitably, we have to look at the outputs, not just the input list.
 
 ## Demographic parity
 
-The first output-side definition is the simplest one: ask whether the algorithm says "yes" at the same rate for each group.
+The folk-theory rule was an input-side check. The four output-side criteria the rest of the chapter develops all read group-level summaries off the model's predictions. The simplest one starts with COMPAS itself.
 
-:::{.callout-important}
-## Definition: demographic parity
-A predictor satisfies *demographic parity* (also called *statistical parity*) if its positive prediction rate is equal across groups:
-$$
-P(\hat y = 1 \mid a = 0) \;=\; P(\hat y = 1 \mid a = 1).
-$$
-Equivalently, $\hat y$ is statistically independent of $a$.
-:::
+A note on the demographic lens before any race breakdown. COMPAS scores defendants on a 1--10 risk-of-recidivism scale that informs bail decisions in Broward County. The *ProPublica* investigation argued the score's errors fell differently on Black and White defendants in a way that mattered for who was held pretrial. The protected attribute we will examine here and in the next two sections is race, because race is what the protected-attribute statutes name, what the journalists studied, and what Northpointe responded about. The chapter does not claim race is the only relevant axis --- the same defendant has a sex, an age, a class background --- only that race is the axis the legal and journalistic record built up around this case.
 
-Demographic parity is the criterion implicit in the four-fifths rule. It is the closest mathematical analogue to "the algorithm advantaged group A and group B at the same rate."
-
-Let's load COMPAS and check it.
-
-Before we do, a note on the demographic lens. COMPAS scores defendants on a 1--10 risk-of-recidivism scale that informs bail decisions in Broward County. The *ProPublica* investigation argued the score's errors fell differently on Black and White defendants in a way that mattered for who was held pretrial. The protected attribute we will examine in this section and the next two is race, because race is what the protected-attribute statutes name, what the journalists studied, and what Northpointe responded about. The chapter does not claim race is the only relevant axis (the same defendant has a sex, an age, a class background) --- only that race is the axis the legal and journalistic record built up around this case. We apply the standard ProPublica filter and binarize the COMPAS decile score at 5 (i.e., "Medium" or "High" risk):
+We apply the standard ProPublica filter (defendants screened within 30 days of arrest; non-ordinary charges; race in $\{$African-American, Caucasian$\}$) and binarize the COMPAS decile score at 5 (i.e., "Medium" or "High" risk):
 
 ```{python}
 compas = pd.read_csv(f'{DATA_DIR}/compas/compas-scores-two-years.csv')
@@ -147,18 +146,32 @@ print('\nBase rate (two-year recidivism) by race:')
 print(compas.groupby('race')['y'].mean().round(3))
 ```
 
-Two facts are visible already. First, the dataset has two groups of roughly comparable size. Second, the *base rates* --- the actual recidivism rates --- differ across groups. The base-rate difference will turn out to matter for every fairness definition that follows.
+Two facts are visible already. The dataset has two groups of roughly comparable size. The *base rates* --- the actual two-year re-arrest rates --- differ across groups. The base-rate gap will turn out to matter for every fairness definition that follows.
 
-Now the demographic-parity check: what fraction of each group does the COMPAS-derived classifier label high risk?
+:::{.callout-tip}
+## Think about it
+What fraction of each group do you think the COMPAS-derived classifier labels high risk? If it matched the base rates exactly, the rates would be ~52% and ~39%; if the classifier corrected for the gap, they would be closer; if the classifier amplified the gap, further apart.
+:::
 
 ```{python}
 print('Predicted-positive rate by race:')
 print(compas.groupby('race')['y_hat'].mean().round(3))
 ```
 
-The classifier labels Black defendants high risk at noticeably higher rate than White defendants. Demographic parity is not satisfied.
+The classifier labels Black defendants high risk at noticeably higher rate than White defendants. The criterion this fails has a name:
 
-Whether the failure is a fairness problem depends on what is driving the difference. The two-year re-arrest rates differ across groups in the data, and prior arrests and criminal-history features --- which COMPAS uses as inputs --- predict future re-arrest. Re-arrest itself reflects more than offending: it reflects the policing and surveillance patterns the criminal-justice literature has documented as racially unequal, even when these are not features the model sees directly. Forcing the prediction rates to be equal across groups therefore requires *deliberately suppressing predictions* for the group with the higher re-arrest base rate: telling the model "give a lower score than the data warrants, because we want the rates to match." Corbett-Davies, Pierson, Feller, Goel, and Huq^[Corbett-Davies, S., Pierson, E., Feller, A., Goel, S., & Huq, A. (2017). "Algorithmic Decision Making and the Cost of Fairness." *Proceedings of KDD '17*, pp. 797--806. arXiv:1701.08230.] formalize the suppression as a constrained-optimization problem: different fairness constraints translate into different group-specific thresholds, with measurable utility costs. The cost falls on a different set of people than the cost of the current asymmetry --- defendants who would have been correctly flagged as high re-arrest risk are more likely to be released, and any subsequent harm is borne by their potential victims.
+:::{.callout-important}
+## Definition: demographic parity
+A predictor satisfies *demographic parity* (also called *statistical parity*) if its positive prediction rate is equal across groups:
+$$
+P(\hat y = 1 \mid a = 0) \;=\; P(\hat y = 1 \mid a = 1).
+$$
+Equivalently, $\hat y$ is statistically independent of $a$.
+:::
+
+Demographic parity is the criterion implicit in the four-fifths rule. It is the closest mathematical analogue to "the algorithm advantaged group A and group B at the same rate."
+
+Whether the failure is a fairness problem depends on what is driving the difference. The two-year re-arrest rates differ across groups in the data, and prior arrests and criminal-history features --- which COMPAS uses as inputs --- predict future re-arrest. Re-arrest itself reflects more than offending: it reflects the policing and surveillance patterns the criminal-justice literature has documented as racially unequal, even when these are not features the model sees directly. Forcing the prediction rates to be equal across groups therefore requires *deliberately suppressing predictions* for the group with the higher re-arrest base rate: telling the model "give a lower score than the data warrants, because we want the rates to match." Corbett-Davies, Pierson, Feller, Goel, and Huq^[Corbett-Davies, S., Pierson, E., Feller, A., Goel, S., & Huq, A. (2017). "Algorithmic Decision Making and the Cost of Fairness." *Proceedings of KDD '17*, pp. 797--806. arXiv:1701.08230.] formalize the suppression as a constrained-optimization problem: different fairness constraints translate into different group-specific thresholds, with measurable utility costs. The cost falls on a different set of people than the cost of the current asymmetry --- defendants who would have been correctly flagged as high re-arrest risk are more likely to be released, and the cost of any subsequent re-arrest falls on third parties rather than on the defendants the suppression was meant to protect.
 
 Demographic parity is the easiest fairness criterion to state and the hardest to satisfy without that suppression move when base rates genuinely differ. Whether the suppression is the right move depends on whether you think the base-rate difference itself reflects an injustice you are entitled to correct for at the prediction step. The question is normative, not statistical.
 
@@ -191,17 +204,21 @@ We compute the four error rates per group on COMPAS:
 
 ```{python}
 def group_rates(g):
-    y = g['y'].values; yh = g['y_hat'].values
-    P = (y == 1).sum(); N = (y == 0).sum()
+    y = g['y'].values
+    yh = g['y_hat'].values
+    n_pos = (y == 1).sum()
+    n_neg = (y == 0).sum()
     return pd.Series({
         'n':   len(g),
-        'TPR': ((y == 1) & (yh == 1)).sum() / P,
-        'FPR': ((y == 0) & (yh == 1)).sum() / N,
-        'FNR': ((y == 1) & (yh == 0)).sum() / P,
-        'TNR': ((y == 0) & (yh == 0)).sum() / N,
+        'TPR': ((y == 1) & (yh == 1)).sum() / n_pos,
+        'FPR': ((y == 0) & (yh == 1)).sum() / n_neg,
+        'FNR': ((y == 1) & (yh == 0)).sum() / n_pos,
+        'TNR': ((y == 0) & (yh == 0)).sum() / n_neg,
     })
 
-rates = compas.groupby('race').apply(group_rates).round(3)
+rates = pd.DataFrame(
+    {race: group_rates(g) for race, g in compas.groupby('race')}
+).T.round(3)
 print(rates)
 ```
 
@@ -210,16 +227,23 @@ The headline numbers from the *ProPublica* analysis are here. Black defendants w
 A grouped bar chart makes the asymmetry visible:
 
 ```{python}
+#| fig-cap: "COMPAS error rates by race. ProPublica's headline is the FPR pair: Black non-reoffenders were flagged high-risk at nearly twice the rate of White non-reoffenders. The mirror image appears in FNR."
 fig, ax = plt.subplots(figsize=(7.5, 4))
-metrics = ['TPR','FPR','FNR','TNR']
-x = np.arange(len(metrics)); w = 0.35
+metrics = ['TPR', 'FPR', 'FNR', 'TNR']
+x = np.arange(len(metrics))
+w = 0.35
+palette = sns.color_palette('colorblind', 2)
 for i, (race, row) in enumerate(rates.iterrows()):
-    ax.bar(x + (i - 0.5)*w, row[metrics].values, w, label=race)
-ax.set_xticks(x); ax.set_xticklabels(metrics)
-ax.set_ylabel('rate'); ax.set_ylim(0, 1)
-ax.set_title('COMPAS error rates by race')
+    ax.bar(x + (i - 0.5) * w, row[metrics].values, w,
+           label=race, color=palette[i])
+ax.set_xticks(x)
+ax.set_xticklabels(metrics)
+ax.set_ylabel('rate per group')
+ax.set_ylim(0, 1)
+ax.set_title('COMPAS conditional rates by race')
 ax.legend(loc='upper right', fontsize=10)
-plt.tight_layout(); plt.show()
+plt.tight_layout()
+plt.show()
 ```
 
 Reading the chart from left to right: COMPAS catches more of the people who do reoffend when they are Black (higher TPR), and falsely flags more of the people who do not when they are Black (higher FPR). The errors do not fall the same way on the two groups.
@@ -245,15 +269,20 @@ Compute it on COMPAS:
 
 ```{python}
 def ppv_npv(g):
-    y = g['y'].values; yh = g['y_hat'].values
-    tp = ((y==1)&(yh==1)).sum(); fp = ((y==0)&(yh==1)).sum()
-    tn = ((y==0)&(yh==0)).sum(); fn = ((y==1)&(yh==0)).sum()
+    y = g['y'].values
+    yh = g['y_hat'].values
+    tp = ((y == 1) & (yh == 1)).sum()
+    fp = ((y == 0) & (yh == 1)).sum()
+    tn = ((y == 0) & (yh == 0)).sum()
+    fn = ((y == 1) & (yh == 0)).sum()
     return pd.Series({
-        'PPV': tp/(tp+fp) if tp+fp else np.nan,
-        'NPV': tn/(tn+fn) if tn+fn else np.nan,
+        'PPV': tp / (tp + fp) if tp + fp else np.nan,
+        'NPV': tn / (tn + fn) if tn + fn else np.nan,
     })
 
-pp = compas.groupby('race').apply(ppv_npv).round(3)
+pp = pd.DataFrame(
+    {race: ppv_npv(g) for race, g in compas.groupby('race')}
+).T.round(3)
 print(pp)
 ```
 
@@ -262,17 +291,25 @@ The positive predictive value --- the share of people labeled high risk who actu
 The full per-decile picture is the one Northpointe published: at each decile score, the realized two-year recidivism rate is close across groups.
 
 ```{python}
-calib = (compas.groupby(['decile_score','race'])['y']
+#| fig-cap: "Per-decile calibration on COMPAS by race. The two curves track each other across the score range: at any decile, the realized re-arrest rate is similar regardless of race. Northpointe pointed to this figure to argue the score is not biased."
+calib = (compas.groupby(['decile_score', 'race'])['y']
                .mean().unstack())
 fig, ax = plt.subplots(figsize=(7.5, 4.5))
-for race in calib.columns:
-    ax.plot(calib.index, calib[race], marker='o', label=race)
+palette = sns.color_palette('colorblind', 2)
+linestyles = ['-', '--']
+markers = ['o', 's']
+for i, race in enumerate(calib.columns):
+    ax.plot(calib.index, calib[race],
+            marker=markers[i], linestyle=linestyles[i],
+            color=palette[i], label=race)
 ax.set_xlabel('decile score (1 = low risk, 10 = high risk)')
 ax.set_ylabel('realized two-year recidivism rate')
 ax.set_title('Per-decile calibration on COMPAS')
-ax.set_ylim(0, 1); ax.set_xticks(range(1, 11))
+ax.set_ylim(0, 1)
+ax.set_xticks(range(1, 11))
 ax.legend(fontsize=10)
-plt.tight_layout(); plt.show()
+plt.tight_layout()
+plt.show()
 ```
 
 The two curves track each other across the score range. A defendant assigned decile 7 has approximately the same actual two-year recidivism rate regardless of race. The plot is the figure Northpointe pointed to in arguing the algorithm was not biased.
@@ -281,7 +318,7 @@ Both *ProPublica*'s claim (unequal FPR and FNR across groups) and Northpointe's 
 
 ## The impossibility: you cannot satisfy them all
 
-The next result is the technical core of the chapter, and the reason the COMPAS dispute did not have a resolution.
+The next result is the technical core of the chapter, and the reason the COMPAS dispute did not have a resolution. The intuition first: imagine two groups whose base rates differ. Calibration says the score has to mean the same thing in both groups --- the fraction of "high risk" labels that actually become positives has to match. Now pick anyone the model labeled positive in the higher-base-rate group; their re-arrest probability is fixed by calibration. The same labeled-positive in the lower-base-rate group has the *same* calibrated probability, but a *lower* prior odds of being a true positive. Bayes' rule then forces the false-positive rate (a likelihood ratio scaled by prior odds) to differ. Equalizing PPV across groups when base rates differ pulls the FPR and FNR apart. There is no clever algorithm that escapes the constraint.
 
 :::{.callout-important}
 ## Result: impossibility of joint fairness
@@ -323,7 +360,7 @@ The choice depends on whose harm you are most committed to bounding, and on whos
 
 ## Counterfactual fairness, the causal bridge
 
-Every criterion above is *statistical*: it conditions on the joint distribution of $(\hat y, y, a)$ and computes a marginal. Chapters 18 and 19 introduced a different vocabulary for talking about the relationship between attributes and outcomes --- the language of causal models, directed acyclic graphs, and counterfactuals. The causal vocabulary supplies a fifth fairness criterion that is in some ways more demanding than the four above.
+The impossibility theorem ruled out *jointly* satisfying the four group-level criteria. It did not rule out a criterion of a different kind. Every metric so far has been a *group-level* one --- it conditions on the joint distribution of $(\hat y, y, a)$ and computes a marginal. Chapters 18 and 19 supplied the vocabulary --- causal models, directed acyclic graphs, counterfactuals --- for asking the fairness question at the *individual* level: would the model's prediction for *this person* change if their protected attribute were different, holding all the legitimate causes of the outcome fixed?
 
 :::{.callout-important}
 ## Definition: counterfactual fairness
@@ -336,7 +373,14 @@ The definition is due to Kusner, Loftus, Russell, and Silva.^[Kusner, M. J., Lof
 
 Computing the counterfactual prediction means flipping $a$ and *propagating the flip through the causal model*: features the model treats as caused by $a$ (descendants of $a$ in the DAG) get updated under the flip; features the model treats as causes of $a$ (non-descendants) do not. Counterfactual fairness asks: under that propagation, would the prediction stay the same?
 
-To make this concrete, return to the simulated structural causal model from the unawareness section. There, the proxy was generated as $\text{proxy} = 0.8\,z + 0.8\,a + \varepsilon$ --- so the protected attribute $a$ was an ancestor of the proxy. To compute the counterfactual prediction for an individual, we flip $a$ and *recompute* the proxy under the flipped $a$, holding the noise term $\varepsilon$ fixed at the value that individual realized:
+To make this concrete, return to the simulated structural causal model from the unawareness section. There, the proxy was generated as $\text{proxy} = 0.8\,z + 0.8\,a + \varepsilon$, so $a$ was a parent of $\text{proxy}$ in the DAG.
+
+:::{.callout-tip}
+## Think about it
+The unaware model uses only the proxy as an input --- $a$ never appears. If we flip $a$ for every individual and re-derive their proxy (using the same noise the individual realized), how much do you think the unaware model's predictions move? Zero (since $a$ was never an input), small, or large?
+:::
+
+To compute the counterfactual prediction for an individual, we flip $a$ and *recompute* the proxy under the flipped $a$, holding the noise term $\varepsilon$ fixed at the value that individual realized:
 
 ```{python}
 # Counterfactual world: flip a, recompute proxy with the same noise
@@ -372,24 +416,9 @@ Two important caveats.
 A unified causal-fairness framework due to Plečko and Bareinboim^[Plečko, D., & Bareinboim, E. (2024). "Causal Fairness Analysis: A Causal Toolkit for Fair Machine Learning." *Foundations and Trends in Machine Learning*, 17(3), 304--589. arXiv:2207.11385.] generalizes counterfactual fairness from a single yes/no criterion to a *decomposition*: the total observed disparity between groups is split into a direct effect of the protected attribute on the outcome, indirect effects through *legitimate* mediators (e.g., earned qualifications), and spurious effects through confounders. The decomposition organizes existing fairness definitions --- demographic parity, equalized odds, counterfactual fairness, path-specific fairness --- into a single *Fairness Map* hierarchy, with logical implications and incompatibilities made explicit. The R package `faircause` implements the decomposition; there is no first-party Python equivalent as of 2026. Plečko and Bareinboim is the natural graduate-level next step for this material.
 :::
 
-## What to do in practice
+## Cases since COMPAS
 
-The chapter has spent most of its length on the technical question: what does fairness mean, and what does it imply about the choices a modeler can make. The practical question is broader. The published consensus in 2024--2026 has moved beyond "pick a metric and report it alongside accuracy" toward a four-part frame.
-
-**Fairness is a property of a sociotechnical system, not of a model.** Selbst, boyd, Friedler, Venkatasubramanian, and Vertesi^[Selbst, A. D., boyd, d., Friedler, S. A., Venkatasubramanian, S., & Vertesi, J. (2019). "Fairness and Abstraction in Sociotechnical Systems." *Proceedings of the 2nd ACM Conference on Fairness, Accountability, and Transparency (FAT\* 2019)*, pp. 59--68.] identify five common abstraction "traps" --- modeling only the algorithm and not the institution it enters; assuming a fair model in one jurisdiction will be fair in another; assuming the formal definitions exhaust the meaning of fairness; ignoring how the algorithm itself reshapes the system; and assuming a technical fix exists at all. Metric choice is one input to a fairness assessment, not the assessment itself.
-
-**Auditing is now a discipline.** External and internal audits --- by journalists, by ombudspeople, by regulators, by independent contractors --- have produced the most credible findings of algorithmic discrimination on record. The EU AI Act, NYC Local Law 144, and the OMB M-24-10 directive (March 2024) all build mandatory audit obligations into the regulatory frame, so audits will continue to be produced whether or not the field's metric-of-the-month converges.
-
-**Some design choices belong to the affected community.** The label being predicted, the features that are admissible inputs, the threshold at which the score becomes an action, the recourse a person has after a bad prediction --- these are not metric choices and they are not engineering choices alone. A growing literature in HCI and public-sector design argues that these choices benefit from participation by the people the model will be applied to.
-
-**Compliance frames the work.** Many real fairness work-products in industry are now framed in compliance language --- "Annex III high-risk Art. 10 data-governance obligation" --- rather than research-paper language. The compliance frame is unsentimental: it forces the organization to write down who is harmed and how, regardless of which technical metric is chosen.
-
-If you have to do the technical work yourself, four open-source tools are in active maintenance and cover most of the practical landscape:
-
-- **Fairlearn** (Microsoft, now independent open-source). `MetricFrame` disaggregates any scikit-learn metric by a sensitive attribute; `ThresholdOptimizer` post-processes a classifier to satisfy equalized odds, equality of opportunity, or demographic parity. The cleanest scikit-learn-style API; the first tool to reach for.
-- **AIF360** (IBM / Linux Foundation AI). The broadest catalog of fairness metrics and mitigation algorithms. Heavier API; useful when you want to inspect the menu.
-- **Aequitas** (DSAPP / University of Chicago). Built around the *bias-audit report* deliverable rather than retraining. Closest to what a municipal auditor would produce.
-- **HolisticAI**. Newer; covers bias plus explainability, robustness, and other dimensions of trustworthy ML in one library --- closer in shape to what the EU AI Act's broader high-risk-system obligations actually require.
+The COMPAS dispute was not the only one. Three later cases, with primary-source documentation, show what the same lesson looks like in three other domains.
 
 :::{.callout-note}
 ## Three cases since COMPAS
@@ -402,6 +431,25 @@ If you have to do the technical work yourself, four open-source tools are in act
 :::
 
 The pattern across these cases is not "the metric was wrong." It is that the choice of *what to measure* --- recidivism, cost, fraud probability, the cohort distribution to anchor a grade to --- and the *system in which the score becomes an action* turn out to be the load-bearing design decisions. The 2016--2017 fairness canon gives you the vocabulary to talk about those choices. The decisions themselves are human.
+
+## What to do in practice
+
+The chapter has spent most of its length on the technical question: what does fairness mean, and what does it imply about the choices a modeler can make. The practical question is broader. The published consensus in 2024--2026 has moved beyond "pick a metric and report it alongside accuracy" toward four ideas that work together rather than in competition.
+
+The first is that fairness is a property of a *sociotechnical system*, not of a model. Selbst, boyd, Friedler, Venkatasubramanian, and Vertesi^[Selbst, A. D., boyd, d., Friedler, S. A., Venkatasubramanian, S., & Vertesi, J. (2019). "Fairness and Abstraction in Sociotechnical Systems." *Proceedings of the 2nd ACM Conference on Fairness, Accountability, and Transparency (FAT\* 2019)*, pp. 59--68.] identify five common abstraction "traps": modeling only the algorithm and not the institution it enters; assuming a fair model in one jurisdiction will be fair in another; assuming the formal definitions exhaust the meaning of fairness; ignoring how the algorithm itself reshapes the system; and assuming a technical fix exists at all. Metric choice is one input to a fairness assessment, not the assessment itself.
+
+The second is that *auditing* has matured into a discipline. External and internal audits --- by journalists, by ombudspeople, by regulators, by independent contractors --- have produced the most credible findings of algorithmic discrimination on record. The EU AI Act, NYC Local Law 144, and the OMB M-24-10 directive (March 2024) all build mandatory audit obligations into the regulatory frame, so audits will continue to be produced whether or not the field's metric-of-the-month converges.
+
+The third is that several design choices belong, at least in part, to the *affected community*. The label being predicted, the features that are admissible inputs, the threshold at which the score becomes an action, the recourse a person has after a bad prediction --- these are not metric choices and they are not engineering choices alone. A growing literature in HCI and public-sector design argues that these choices benefit from participation by the people the model will be applied to.
+
+The fourth is that *compliance language* increasingly frames the technical work. Real fairness work-products in industry are now phrased as "Annex III high-risk Art. 10 data-governance obligation" rather than as research-paper claims. The compliance frame is unsentimental: it forces the organization to write down who is harmed and how, regardless of which metric is chosen.
+
+If you have to do the technical work yourself, four open-source tools are in active maintenance and cover most of the practical landscape:
+
+- **Fairlearn** (Microsoft, now independent open-source). `MetricFrame` disaggregates any scikit-learn metric by a sensitive attribute; `ThresholdOptimizer` post-processes a classifier to satisfy equalized odds, equality of opportunity, or demographic parity. The cleanest scikit-learn-style API; the first tool to reach for.
+- **AIF360** (IBM / Linux Foundation AI). The broadest catalog of fairness metrics and mitigation algorithms. Heavier API; useful when you want to inspect the menu.
+- **Aequitas** (DSAPP / University of Chicago). Built around the *bias-audit report* deliverable rather than retraining. Closest to what a municipal auditor would produce.
+- **HolisticAI**. Newer; covers bias plus explainability, robustness, and other dimensions of trustworthy ML in one library --- closer in shape to what the EU AI Act's broader high-risk-system obligations actually require.
 
 The course has argued throughout that taste --- the skill of recognizing what a model is and isn't telling you --- is the bottleneck. Fairness is the case where that argument is most pointed. The criteria are mathematically incompatible. The data does not pick between them. The choice belongs to whoever is responsible for the decision.
 
