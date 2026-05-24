@@ -7,19 +7,7 @@ jupyter: python3
 
 You can give a dataset to an AI tool today — a chat interface with a code interpreter, a notebook agent, an AutoML pipeline — and get a fitted model and a written analysis back in seconds. When should you trust the result? What is the human still responsible for?
 
-This chapter covers three classes of 2026 automation: AutoML for model selection, tabular foundation models that skip per-dataset training, and LLM agents that write analysis pipelines. For each, we examine what published benchmarks say it does well, where it still fails, and what the human contributes that the tool cannot. The chapter closes with a checklist for evaluating any analysis — a colleague's, a vendor's, or an AI's — delivering the promise from [Chapter 1](lec01-intro.qmd).
-
-:::{.callout-tip}
-## Roadmap
-
-The chapter has one throughline: **AI tools have automated the mechanical step, not the judgment step.** Read it in three passes:
-
-1. **What the tools do.** Gradient boosting → AutoML (CASH) → AutoGluon → TabPFN → LLM agents (CAAFE, AIDE). Each generalizes the last; together they cover the 2026 frontier.
-2. **Where they fail.** The 76% / 15% gap on DABStep (easy vs. hard), execution removes the arithmetic class of errors but not the judgment class, output quality scales sharply with prompt specificity. The failure mode is *omission*, not malice.
-3. **What you do.** Two worked audits (College Scorecard MNAR, NBA Simpson's paradox) show how course concepts catch errors no AutoML or agent will flag. The five-question checklist at the end is the portable version.
-
-If at any point you lose the thread, the question to come back to is: *what arithmetic did the tool do, and what judgment is still mine?*
-:::
+The chapter's throughline: **AI tools have automated the mechanical step, not the judgment step.** We cover three classes of 2026 automation — AutoML for model selection, tabular foundation models that skip per-dataset training, and LLM agents that write analysis pipelines. For each, we examine what published benchmarks say it does well, where it still fails, and what the human contributes that the tool cannot. The chapter closes with a checklist for evaluating any analysis — a colleague's, a vendor's, or an AI's — delivering the promise from [Chapter 1](lec01-intro.qmd).
 
 ```{python}
 import numpy as np
