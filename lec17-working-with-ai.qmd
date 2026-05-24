@@ -100,47 +100,45 @@ plt.show()
 :::{.callout-note collapse="true"}
 ## Going deeper: gradient boosting as gradient descent in function space
 
-"Fitting the negative gradient" means: at each training point $x_i$, compute the partial derivative of the loss with respect to the current ensemble prediction $F(x_i)$, take the *negative* of those derivatives (the **pseudo-residuals**), and fit a regression tree to predict them from $x$. Add a scaled copy of that tree to the ensemble and repeat. Gradient descent ([Chapter 7](lec07-classification.qmd)) takes steps in *parameter* space; gradient boosting takes steps in *function* space — adding a function (the new tree) that points in the negative-gradient direction.
+Let $F(x)$ denote the current ensemble's prediction. The **pseudo-residual** at training point $x_i$ is the negative partial derivative of the loss with respect to $F(x_i)$:
+$$r_i = -\frac{\partial L_i}{\partial F(x_i)}.$$
+Each gradient-boosting step fits a regression tree to predict the pseudo-residuals from $x$, and adds (a scaled copy of) that tree to the ensemble. Where gradient descent ([Chapter 7](lec07-classification.qmd)) updates *parameters* against a loss gradient, gradient boosting updates a *function*.
 
-Two specific cases make this concrete.
+**Squared-error loss.** $L_i = \tfrac{1}{2}(y_i - F(x_i))^2$, so $r_i = y_i - F(x_i)$ — the ordinary prediction error. Each tree fits the previous ensemble's mistakes.
 
-**Squared-error loss.** With $L_i = \tfrac{1}{2}(y_i - F(x_i))^2$, the partial derivative is
-$$\frac{\partial L_i}{\partial F(x_i)} = -\bigl(y_i - F(x_i)\bigr),$$
-so the negative gradient is the prediction error $y_i - F(x_i)$. The pseudo-residual *is* the ordinary residual — each tree literally fits the previous ensemble's mistakes.
-
-**Logistic loss** (binary classification with $y_i \in \{0, 1\}$ and $F(x_i)$ the predicted *logit*, so the predicted probability is $p_i = \sigma(F(x_i)) = 1/(1+e^{-F(x_i)})$). With $L_i = -y_i \log p_i - (1-y_i) \log(1-p_i)$, the chain rule through $\sigma$ collapses neatly:
-$$\frac{\partial L_i}{\partial F(x_i)} = p_i - y_i,$$
-so the negative gradient is $y_i - p_i$ — the gap between observed label and predicted probability. Each tree fits *how wrong was the previous probability estimate?*
-
-In both cases the next tree is a correction to the current ensemble; the loss determines the exact form of that correction.
+**Logistic loss** ($y_i \in \{0,1\}$, $F(x_i)$ the logit, $p_i = \sigma(F(x_i))$). $L_i = -y_i \log p_i - (1-y_i)\log(1-p_i)$, and the chain rule through $\sigma$ gives $r_i = y_i - p_i$ — the gap between observed label and predicted probability.
 :::
 
 ```{python}
-# Load College Scorecard data and fit a forest + a boosted ensemble
-scorecard = pd.read_csv(f'{DATA_DIR}/college-scorecard/scorecard.csv')
+# Predict Airbnb listing price from numeric + one-hot categorical features
+listings = pd.read_csv(f'{DATA_DIR}/airbnb/listings.csv', low_memory=False)
+listings['price'] = pd.to_numeric(
+    listings['price'].astype(str).str.replace(r'[$,]', '', regex=True),
+    errors='coerce')
+listings = listings[listings['price'].between(10, 500)]
 
-feature_cols = ['SAT_AVG', 'UGDS', 'PCTPELL', 'PCTFLOAN', 'RET_FT4',
-                'C150_4_POOLED_SUPP', 'CONTROL']
-target_col = 'MD_EARN_WNE_P10'
+num_cols = ['bedrooms', 'bathrooms', 'accommodates', 'number_of_reviews',
+            'latitude', 'longitude']
+cat_cols = ['room_type', 'neighbourhood_group_cleansed']
+listings_clean = listings[num_cols + cat_cols + ['price']].dropna()
 
-for col in feature_cols + [target_col]:
-    scorecard[col] = pd.to_numeric(scorecard[col], errors='coerce')
+X = pd.concat([
+    listings_clean[num_cols],
+    pd.get_dummies(listings_clean[cat_cols], drop_first=True)
+], axis=1)
+y = listings_clean['price']
 
-model_data = scorecard[feature_cols + [target_col]].dropna()
-earnings_features = model_data[feature_cols]
-earnings_target = model_data[target_col]
+forest = RandomForestRegressor(n_estimators=200, random_state=42)
+forest_cv = cross_val_score(forest, X, y, cv=5, scoring='r2')
 
-forest = RandomForestRegressor(n_estimators=100, random_state=42)
-forest_cv = cross_val_score(forest, earnings_features, earnings_target, cv=5, scoring='r2')
-
-gboost = GradientBoostingRegressor(n_estimators=100, random_state=42)
-gboost_cv = cross_val_score(gboost, earnings_features, earnings_target, cv=5, scoring='r2')
+gboost = GradientBoostingRegressor(n_estimators=200, max_depth=4, random_state=42)
+gboost_cv = cross_val_score(gboost, X, y, cv=5, scoring='r2')
 
 print(f"Random Forest:     CV R-sq = {forest_cv.mean():.3f}")
 print(f"Gradient Boosting: CV R-sq = {gboost_cv.mean():.3f}")
 ```
 
-On this College Scorecard target the forest outperforms scikit-learn's gradient booster by about three percentage points of CV R-sq — small in absolute terms, and the ordering often reverses on other tabular problems. Production gradient-boosting libraries (XGBoost, LightGBM, CatBoost) add learning-rate shrinkage, second-order gradients, regularization, and refined splitting rules that scikit-learn's reference implementation lacks. A 2022 benchmark across 45 datasets settled a long-running debate: tree-based models still outperform deep neural networks on typical tabular data, because tabular features are heterogeneous and tabular targets are non-smooth in ways that the rotational invariance of neural networks does not handle well.^[Grinsztajn, Oyallon, & Varoquaux. *Why do tree-based models still outperform deep learning on typical tabular data?* NeurIPS 2022 Datasets and Benchmarks Track. arXiv:2207.08815.] Trees and forests are the default tabular model family for AutoML.
+On this Airbnb pricing task gradient boosting outperforms the random forest. Sequential error-correction picks up the feature interactions and price discontinuities that the forest's bagging averages over. Production gradient-boosting libraries (XGBoost, LightGBM, CatBoost) add learning-rate shrinkage, second-order gradients, regularization, and refined splitting rules that scikit-learn's reference implementation lacks; with those, the gap typically widens. A 2022 benchmark across 45 datasets settled a long-running debate: tree-based models still outperform deep neural networks on typical tabular data, because tabular features are heterogeneous and tabular targets are non-smooth in ways that the rotational invariance of neural networks does not handle well.^[Grinsztajn, Oyallon, & Varoquaux. *Why do tree-based models still outperform deep learning on typical tabular data?* NeurIPS 2022 Datasets and Benchmarks Track. arXiv:2207.08815.] Trees and forests are the default tabular model family for AutoML.
 
 ## The AutoML loop
 
@@ -151,19 +149,19 @@ On this College Scorecard target the forest outperforms scikit-learn's gradient 
 
 ### CASH: combined algorithm selection and hyperparameter optimization
 
-You have probably already done AutoML by hand: try logistic regression, then a random forest, then gradient boosting; tune `max_depth` or `learning_rate`; pick the configuration with the best cross-validated score. The task the field calls **CASH** — Combined Algorithm Selection and Hyperparameter optimization — is exactly this loop, automated and searched systematically. Auto-WEKA introduced the name in 2013 by folding "which algorithm" into a single top-level categorical hyperparameter, turning algorithm choice and hyperparameter tuning into one optimization problem.^[Thornton, Hutter, Hoos, & Leyton-Brown. *Auto-WEKA: Combined Selection and Hyperparameter Optimization of Classification Algorithms.* KDD 2013. arXiv:1208.3719.]
+In [Chapter 13](lec13-trees.qmd) you swept candidate tree depths, scored each by 5-fold cross-validation, and picked the depth with the best score — the same recipe [Chapter 6](lec06-validation.qmd) used for polynomial degree and lasso $\alpha$. AutoML scales that recipe up: instead of sweeping one hyperparameter inside one model family, it searches over *algorithm choices* and all their hyperparameters at once. The task the field calls **CASH** — Combined Algorithm Selection and Hyperparameter optimization — is exactly this loop, automated and searched systematically. Auto-WEKA introduced the name in 2013 by folding "which algorithm" into a single top-level categorical hyperparameter, turning algorithm choice and hyperparameter tuning into one optimization problem.^[Thornton, Hutter, Hoos, & Leyton-Brown. *Auto-WEKA: Combined Selection and Hyperparameter Optimization of Classification Algorithms.* KDD 2013. arXiv:1208.3719.]
 
 A minimal AutoML in a few sklearn lines: try three model families — linear regression, a random forest, and gradient boosting — with cross-validation, and select the best. The `Pipeline` wrap on the linear model — `Pipeline([('scaler', StandardScaler()), ('model', LinearRegression())])` — fits `StandardScaler` only on each training fold, so the scaler never sees the held-out fold's mean and standard deviation. This is the same loop AutoML automates at larger scale.
 
 ```{python}
-# Poor man's AutoML: try 3 models, pick the best by 5-fold CV.
+# Poor man's AutoML on the Airbnb data: try 3 models, pick the best by 5-fold CV.
 # Pipeline keeps the scaler from leaking test-fold info into training.
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
 models = {
     'Linear Regression': Pipeline([('scaler', StandardScaler()), ('model', LinearRegression())]),
-    'Random Forest\n(100 trees)': RandomForestRegressor(n_estimators=100, random_state=42),
-    'Gradient Boosting\n(100 trees)': GradientBoostingRegressor(n_estimators=100, random_state=42),
+    'Random Forest\n(200 trees)': RandomForestRegressor(n_estimators=200, random_state=42),
+    'Gradient Boosting\n(200 trees)': GradientBoostingRegressor(n_estimators=200, max_depth=4, random_state=42),
 }
 
 cv_results = {}
@@ -173,13 +171,11 @@ best_score = -np.inf
 best_name = None
 
 for name, model in models.items():
-    features = model_data[feature_cols].values
-    target = model_data[target_col].values
-    r2_scores = cross_val_score(model, features, target, cv=kf, scoring='r2')
-    mae_scores = -cross_val_score(model, features, target, cv=kf, scoring='neg_mean_absolute_error')
+    r2_scores = cross_val_score(model, X, y, cv=kf, scoring='r2')
+    mae_scores = -cross_val_score(model, X, y, cv=kf, scoring='neg_mean_absolute_error')
     cv_results[name] = r2_scores
     display_name = name.replace('\n', ' ')
-    print(f"{display_name:<35} {r2_scores.mean():>10.3f} {r2_scores.std():>8.3f} {mae_scores.mean():>10.0f}")
+    print(f"{display_name:<35} {r2_scores.mean():>10.3f} {r2_scores.std():>8.3f} {mae_scores.mean():>10.1f}")
     if r2_scores.mean() > best_score:
         best_score = r2_scores.mean()
         best_name = display_name
@@ -198,13 +194,13 @@ for patch, color in zip(bp['boxes'], colors):
     patch.set_facecolor(color)
     patch.set_alpha(0.7)
 ax.set_ylabel('R-squared (5-fold CV)')
-ax.set_title('Mini AutoML shootout: predicting graduate earnings')
+ax.set_title('Mini AutoML shootout: predicting Airbnb listing price')
 ax.grid(axis='y', alpha=0.3)
 plt.tight_layout()
 plt.show()
 ```
 
-Notice how much the per-fold scores overlap. The difference in *mean* CV R-sq between the best and second model is small compared with the spread across folds, so on a different sample of folds the ordering could easily reverse. Real AutoML systems address this both by searching a much larger configuration space and by combining several configurations rather than selecting a single one.
+Notice how much the per-fold scores overlap. The difference in *mean* CV R-sq between configurations is often small compared with the spread across folds, so on a different sample of folds the ordering could easily reverse. Real AutoML systems handle this with the same idea a random forest already uses: average the predictions from several configurations — a numeric average for regression, a majority vote for classification — instead of picking just one. That **ensemble** step turns out to be the lever the next subsection cares about.
 
 Beyond grid search, the modern toolkit is random search,^[Bergstra & Bengio. *Random Search for Hyper-Parameter Optimization.* JMLR 13:281–305 (2012).] Bayesian optimization with model-based surrogates, and bandit-style early stopping that drops the lowest-performing configurations on cheap evaluations before the expensive ones — Hyperband is the standard reference.^[Li, Jamieson, DeSalvo, Rostamizadeh, & Talwalkar. *Hyperband: A Novel Bandit-Based Approach to Hyperparameter Optimization.* JMLR 18(185):1–52 (2018). arXiv:1603.06560.]
 
@@ -231,6 +227,20 @@ Foundation models — single large pretrained networks adapted to many downstrea
 This is **in-context learning** — the same mechanism that lets large language models produce a sensible answer from a few examples in a prompt, applied to tables. The result was first published at ICLR 2023^[Hollmann, Müller, Eggensperger, & Hutter. *TabPFN: A Transformer That Solves Small Tabular Classification Problems in a Second.* ICLR 2023. arXiv:2207.01848 (preprint 2022).] and substantially expanded in *Nature* in January 2025:^[Hollmann, Müller, Purucker, Krishnakumar, Körfer, Hoo, Schirrmeister, & Hutter. *Accurate predictions on small data with a tabular foundation model.* Nature 637, 319–326 (2025). DOI 10.1038/s41586-024-08328-6.] a single pretrained model with no per-dataset fitting outperforms tuned XGBoost and CatBoost on small tabular problems. The version-2 release adds regression alongside classification, and **TabICL** (ICML 2025) extends the same approach to datasets with hundreds of thousands of rows.^[Qu, Holzmüller, Varoquaux, & Le Morvan. *TabICL: A Tabular Foundation Model for In-Context Learning on Large Data.* ICML 2025. arXiv:2502.05564.]
 
 For twelve years the unstated assumption in AutoML was *search for the right model on each new dataset.* A pretrained tabular foundation model breaks that assumption: the same model serves every dataset, and what changes is the example table placed in the context window. TabPFN v2 needs a GPU for inference, so it does not replace AutoML on every problem. It currently leads on small datasets, where pretraining across datasets helps most.
+
+:::{.callout-note}
+## TabPFN on the Airbnb data, head-to-head
+
+On a 10,000-row subsample of the Airbnb pricing task above (TabPFN v2's row cap), TabPFN with **no hyperparameter search at all** beats the tuned gradient booster on the same subsample:
+
+| Model | 5-fold CV R² |
+|---|---|
+| Random forest (`n_estimators=200`) | 0.636 |
+| Gradient boosting (`n_estimators=200`, `max_depth=4`) | 0.652 |
+| **TabPFN v2 (defaults)** | **0.668** |
+
+The chapter does not run TabPFN at render time — it adds a GPU-leaning dependency outside the book's CI environment. Reproduce the numbers above with `scripts/lec17-tabpfn-benchmark.py`.
+:::
 
 ## LLM agents writing data-analysis pipelines
 
@@ -313,21 +323,32 @@ Two analyses make this concrete. The first is about who the data *omits*; the se
 
 ### Example 1: silent data loss on the College Scorecard
 
-Every fit in this chapter has been run on `model_data` — the College Scorecard rows with complete entries on every feature. Filtering to complete cases looks routine. It is not.
+Consider a different dataset — the College Scorecard, one row per US institution with information on enrollment, financial aid, and graduate earnings. A standard analysis predicts ten-year graduate earnings from a handful of school characteristics; the simple recipe is "drop the rows with missing values, then fit a model." Look at what that drops.
 
 ```{python}
-# What did the complete-case filter throw away?
+# Load College Scorecard and apply the standard complete-case filter
+scorecard = pd.read_csv(f'{DATA_DIR}/college-scorecard/scorecard.csv')
+
+scorecard_features = ['SAT_AVG', 'UGDS', 'PCTPELL', 'PCTFLOAN', 'RET_FT4',
+                      'C150_4_POOLED_SUPP', 'CONTROL']
+scorecard_target = 'MD_EARN_WNE_P10'
+
+for col in scorecard_features + [scorecard_target]:
+    scorecard[col] = pd.to_numeric(scorecard[col], errors='coerce')
+
+scorecard_complete = scorecard[scorecard_features + [scorecard_target]].dropna()
+
 print("Institutions with complete data vs. all institutions:")
 print(f"  All institutions:    {len(scorecard):,}")
 print(f"  With SAT_AVG:        {scorecard['SAT_AVG'].notna().sum():,}")
-print(f"  With earnings data:  {pd.to_numeric(scorecard[target_col], errors='coerce').notna().sum():,}")
-print(f"  Complete cases:      {len(model_data):,}")
+print(f"  With earnings data:  {scorecard[scorecard_target].notna().sum():,}")
+print(f"  Complete cases:      {len(scorecard_complete):,}")
 ```
 
 ```{python}
 # Which kinds of schools survive the filter?
 scorecard_analysis = scorecard.copy()
-scorecard_analysis['has_data'] = scorecard.index.isin(model_data.index)
+scorecard_analysis['has_data'] = scorecard.index.isin(scorecard_complete.index)
 control_labels = {1: 'Public', 2: 'Private nonprofit', 3: 'Private for-profit'}
 scorecard_analysis['control_label'] = pd.to_numeric(scorecard_analysis['CONTROL'], errors='coerce').map(control_labels)
 
