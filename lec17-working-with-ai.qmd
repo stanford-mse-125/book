@@ -262,10 +262,6 @@ How well do they actually do? OpenAI's **MLE-bench** measures this directly: 75 
 
 The trend across all three classes — AutoML, foundation models, agents — is convergence. AIDE's tree search over code is CASH over programs. CAAFE is an LLM feeding features into a downstream tabular model. Agents increasingly *call* AutoGluon, XGBoost, or TabPFN as tools rather than reimplementing them.
 
-## A common idea: OBOE → TabPFN
-
-The "exploit structure across datasets" idea has an older form. **OBOE** in 2019 built a matrix whose rows are models and columns are datasets, with entries equal to the cross-validated error of that model on that dataset.^[Yang, Akimoto, Kim, & Udell. *OBOE: Collaborative Filtering for AutoML Model Selection.* KDD 2019. arXiv:1808.03233.] The matrix is approximately *low rank* — most of the variation across (model, dataset) pairs can be explained by a few latent factors. Run a few cheap *probe* models on a new dataset and *complete the matrix* to predict which untried models are likely to do well: collaborative filtering, applied to model selection. TabPFN extends the same idea, replacing the low-rank fit with a transformer pretrained across millions of synthetic datasets and queried in-context. The same idea, two generations of method.
-
 ## Honest capability boundaries
 
 Where do these tools still fail? The 2026 benchmark picture is fairly consistent.
@@ -618,7 +614,7 @@ The goal of this course was never to make you compute faster than a machine. It 
 - **MLE-bench / DABStep:** the two benchmarks of record for AI data-analysis tools. MLE-bench scores AI agents against Kaggle leaderboards; DABStep splits multi-step tasks into easy and hard tiers and exposes the Easy/Hard gap.
 - **Selection bias:** systematic exclusion of certain groups from an analysis. AutoML, foundation models, and LLM agents all fit on the rows that remain after filters; none of them flags the rows you lost.
 - **Prompt decomposition:** breaking an analysis into small, verifiable steps so you can catch AI errors before they propagate. The Ruta 2025 32.5% → 81.3% → 92.5% gradient is the empirical case for this.
-- **Shared-structure principle:** AutoML, foundation models, and matrix-completion meta-learning (OBOE → TabPFN) all assume that the structure of "what works on a tabular dataset" is shared across datasets. AutoGluon ensembles many models already fit; TabPFN pretrains once across millions of synthetic datasets; OBOE used low-rank matrix completion to recommend models — collaborative filtering applied to model selection.
+- **Shared-structure principle:** AutoML and tabular foundation models assume that the structure of "what works on a tabular dataset" is shared across datasets. AutoGluon ensembles many models already fit; TabPFN pretrains once across millions of synthetic datasets.
 
 ### Computational tools
 
